@@ -44,8 +44,9 @@ button{font:inherit;color:inherit}
 .ib:focus-visible,.modes button:focus-visible,.btn:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .spacer{flex:1}
 /* side panel */
-#panel{position:absolute;left:12px;top:calc(62px + env(safe-area-inset-top,0px));bottom:12px;width:300px;overflow:auto;z-index:10;display:flex;flex-direction:column}
-#panel .sec{padding:14px 14px;border-bottom:1px solid var(--line)}
+#panel{position:absolute;left:12px;top:calc(62px + env(safe-area-inset-top,0px));max-height:calc(100% - 74px);width:292px;overflow:auto;z-index:10;display:flex;flex-direction:column}
+#panel .sec{padding:14px 14px}
+#panel .sec+.sec{border-top:1px solid var(--line)}
 #panel .sec:last-child{border-bottom:0}
 .h{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;display:flex;align-items:center;gap:6px}
 .h .grow{flex:1}
@@ -71,7 +72,7 @@ button{font:inherit;color:inherit}
 .seg{display:flex;flex-wrap:wrap;gap:2px;padding:2px;background:var(--well);border-radius:7px}
 .seg button{flex:1;border:0;background:transparent;padding:6px 6px;border-radius:5px;cursor:pointer;font-size:12px;font-weight:500;white-space:nowrap}
 .seg button.on{background:var(--panel);box-shadow:0 1px 2px rgba(0,0,0,.12);font-weight:600}
-.field{display:grid;grid-template-columns:92px 1fr;gap:8px;align-items:center;margin:8px 0}
+.field{display:grid;grid-template-columns:52px 1fr;gap:8px;align-items:center;margin:8px 0}
 .field>span{color:var(--muted);font-size:12px}
 .sl{display:grid;grid-template-columns:92px 1fr 52px;gap:8px;align-items:center;margin:6px 0}
 .sl>span{color:var(--muted);font-size:12px}
@@ -111,7 +112,7 @@ input[type=color]{width:26px;height:24px;border:1px solid var(--line);border-rad
 .chk input{accent-color:var(--accent);width:15px;height:15px;margin:0}
 select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
 /* floor stack */
-#stack{position:absolute;right:12px;top:calc(62px + env(safe-area-inset-top,0px));width:176px;z-index:10;display:flex;flex-direction:column;max-height:calc(100% - 140px)}
+#stack{position:absolute;right:12px;top:calc(62px + env(safe-area-inset-top,0px));width:164px;z-index:10;display:flex;flex-direction:column;max-height:calc(100% - 140px)}
 #stack .hd{padding:10px 10px 8px;border-bottom:1px solid var(--line)}
 #stack .cnt{display:flex;align-items:center;gap:4px;margin-top:6px}
 #stack .cnt input{width:100%;min-width:0;text-align:center;font:600 16px var(--mono);border:1px solid var(--line);border-radius:6px;background:var(--well);color:var(--ink);padding:4px 0}
@@ -135,7 +136,7 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 .hd-v{width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:var(--panel);border:3px solid var(--accent);box-sizing:border-box;cursor:grab;box-shadow:0 1px 3px rgba(0,0,0,.35)}
 .hd-v::after{content:"";position:absolute;inset:-10px}
 .hd-v.sel{background:var(--accent)}
-.hd-m{width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:rgba(255,255,255,.85);color:#DD5A12;display:grid;place-items:center;font:700 14px/1 var(--sans);cursor:copy;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.hd-m{opacity:.8;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:rgba(255,255,255,.85);color:#DD5A12;display:grid;place-items:center;font:700 14px/1 var(--sans);cursor:copy;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 .hd-m::after{content:"";position:absolute;inset:-8px}
 .hd-c{width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:8px;background:var(--ink);color:var(--panel);display:grid;place-items:center;cursor:move;box-shadow:0 1px 4px rgba(0,0,0,.35)}
 .hd-s{width:30px;height:30px;margin:-30px 0 0 -15px;cursor:move;display:grid;place-items:center}
@@ -173,6 +174,36 @@ select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 #modal td:first-child{white-space:nowrap;width:40%}
 kbd{font:600 11px var(--mono);background:var(--well);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 5px}
 #modal textarea{width:100%;box-sizing:border-box;height:260px;font:12px var(--mono);border:1px solid var(--line);border-radius:8px;background:var(--well);color:var(--ink);padding:8px}
+
+.bsw{padding:10px 10px 12px!important}
+.bswb{width:100%;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:9px 10px;cursor:pointer;text-align:left;margin-bottom:10px}
+.bswb:hover{border-color:var(--muted)}
+.bswb .sw{width:12px;height:12px;border-radius:3px;flex:none;border:1px solid rgba(0,0,0,.15)}
+.bswb .nm{flex:1;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bswb .fl{color:var(--muted);font-size:11.5px}
+.bswb .chev{color:var(--muted);flex:none}
+.menu .name{margin:0 0 4px}
+.sub-h{display:block;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
+.sec>.sub-h:first-child,.menu>.sub-h:first-child{margin-top:4px}
+.lead{margin:0 0 4px;color:var(--muted);font-size:12.5px;text-wrap:pretty}
+.tstrip{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:3px;background:var(--well);border-radius:9px}
+.tstrip button{border:0;background:transparent;height:36px;border-radius:7px;display:grid;place-items:center;cursor:pointer;color:var(--ink);padding:0}
+.tstrip button:hover{background:var(--panel)}
+.tstrip button.on{background:var(--ink);color:var(--panel)}
+.tstrip button:focus-visible,.seg button:focus-visible,.shape:focus-visible,.preset:focus-visible,.bswb:focus-visible,.frow button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.toolname{display:flex;align-items:center;justify-content:space-between;margin:10px 2px 0;font-size:13px}
+details.more{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+details.more summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);padding:2px 0;list-style:none;display:flex;align-items:center;gap:6px}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary::before{content:"";width:0;height:0;border:4px solid transparent;border-left:5px solid currentColor;transition:transform .15s}
+details.more[open] summary::before{transform:rotate(90deg);transform-origin:2px 4px}
+details.more[open] summary{margin-bottom:6px}
+#stack.compact{max-height:none}
+#stack.compact .hd{border-bottom:0}
+.field .sws{flex-wrap:nowrap}
+.swb{width:21px;height:21px}
+.len{display:none}
+#ov.dragging .len{display:block}
 #panelToggle{display:none;width:100%;border:0;border-bottom:1px solid var(--line);background:var(--well);padding:8px 14px;font-weight:600;cursor:pointer;text-align:left;align-items:center;gap:8px;position:sticky;top:0;z-index:2;color:var(--ink)}
 .brand span{white-space:nowrap}
 #occ .h{cursor:pointer;user-select:none}
@@ -180,7 +211,7 @@ kbd{font:600 11px var(--mono);background:var(--well);border:1px solid var(--line
 #occ.closed .h{margin:0}
 #occ.closed{width:auto}
 @media (max-width:760px){
-  .brand small,.modes .lbl{display:none}
+  .brand small,.modes .lbl,.brand span{display:none}
   .brand{padding:0 8px}
   #panel{top:auto;left:8px;right:8px;bottom:8px;width:auto;max-height:44%}
   #panel.collapsed{max-height:40px;overflow:hidden}
@@ -217,8 +248,7 @@ kbd{font:600 11px var(--mono);background:var(--well);border:1px solid var(--line
     </div>
     <div class="spacer"></div>
     <div class="card tb">
-      <button class="ib" id="bData" title="Export / import layout JSON">JSON</button>
-      <button class="ib" id="bHelp" title="Shortcuts" aria-label="Keyboard shortcuts">?</button>
+      <button class="ib" id="bHelp" title="Shortcuts and layout data" aria-label="Shortcuts and layout data">?</button>
     </div>
   </div>
 
@@ -267,7 +297,7 @@ const STYLES = {
   warehouse:{label:'Warehouse', wall:'#56645F', trim:'#E0DBCF', interior:'#E6E3DC', floor:'#8F8B82', roof:'#4E5552', core:'#BDB9B0', glass:'#9BB4BE', windows:'tall', winW:1.6, bay:4.2, ground:'solid', bands:false, parapet:false, units:2},
 };
 const PALETTE = {
-  wall:['#9A4B38','#B8674A','#E4B59B','#EAD9B8','#B8B4AB','#56645F','#C3CCD0','#2F3B45','#6F8F7A','#D9D4C7'],
+  wall:['#9A4B38','#E4B59B','#EAD9B8','#B8B4AB','#56645F','#C3CCD0','#6F8F7A'],
   trim:['#ECE5D8','#FBF4E8','#33414A','#7F7B73','#1F2622','#C9A36A'],
   roof:['#6E716B','#4E5552','#A7725D','#8C8E89','#7F888D'],
   interior:['#EFECE5','#F6F1E9','#E6E3DC','#DDE6E4','#F2E3D3'],
@@ -320,7 +350,7 @@ function rectInside(fp, x, z, hx, hz){ const pts=[[-1,-1],[1,-1],[1,1],[-1,1],[0
 /* =========================================================================
    State, undo, persistence
    ========================================================================= */
-const LS_KEY = 'storey-builder-v2';
+const LS_KEY = 'storey-builder-v3';
 let state;
 const undoStack=[], redoStack=[];
 function pushUndo(){ undoStack.push(JSON.stringify(state)); if(undoStack.length>150) undoStack.shift(); redoStack.length=0; updateUndoBtns(); }
@@ -332,7 +362,7 @@ const nid = p => p + (state.seq++);
 function makeBuilding(shape, pos, styleKey, name){
   const st = clone(STYLES[styleKey]); st.preset = styleKey;
   return { id:nid('b'), name: name || nextName(), pos:P(pos.x,pos.z), footprint:FOOTPRINTS[shape]().map(([x,z])=>P(x,z)),
-    floors:[{walls:[],props:[]}], groundHeight:3.6, floorHeight:3.0, shafts:[], entrances:[{edge:0,t:0.5}], blank:[], style:st };
+    floors:[{walls:[],props:[]}], groundHeight:3.6, floorHeight:3.0, shafts:[], entrances:[{edge:0,t:0.5}], blank:[], style:st, interior:true };
 }
 function nextName(){ const names=['Alder','Birch','Cedar','Dogwood','Elm','Fir','Ginkgo','Hazel','Ironwood','Juniper','Kauri','Larch','Maple']; for(const n of names){ const nm=n+' House'; if(!state.buildings.some(b=>b.name===nm)) return nm; } return 'Building '+state.seq; }
 const W = (ax,az,bx,bz,doors=[]) => ({a:P(ax,az), b:P(bx,bz), doors:doors.map(t=>({t}))});
@@ -370,6 +400,15 @@ function demoState(){
   C.floors[0] = { walls:[], props:[ PP('counter',3,2.2), PP('sofa',9.8,2.4,1), PP('plant',1.2,5.4), PP('plant',10.8,5.6) ] };
   for(let i=1;i<7;i++) C.floors.push(clone(office));
   state.buildings.push(C);
+
+  // Background blocks: many floors, no interior
+  const D = makeBuilding('rect', P(-40,2), 'concrete', 'Westgate Tower');
+  D.footprint = [[0,0],[14,0],[14,11],[0,11]].map(([x,z])=>P(x,z)); D.interior=false;
+  for(let i=1;i<9;i++) D.floors.push(blankFloor());
+  state.buildings.push(D);
+  const E = makeBuilding('rect', P(28,-6), 'warehouse', 'Dockside Store');
+  E.footprint = [[0,0],[13,0],[13,10],[0,10]].map(([x,z])=>P(x,z)); E.interior=false; E.floors.push(blankFloor());
+  state.buildings.push(E);
   return state;
 }
 function loadState(){ try{ const s=localStorage.getItem(LS_KEY); if(s){ const o=JSON.parse(s); if(o && o.v===2 && Array.isArray(o.buildings)) return o; } }catch(e){} return demoState(); }
@@ -379,7 +418,7 @@ function loadState(){ try{ const s=localStorage.getItem(LS_KEY); if(s){ const o=
    ========================================================================= */
 const ui = {
   mode:'edit', sel:null, tab:'shape', facadeTool:null, tool:'select', propType:'sofa', placeRot:0,
-  floors:{}, sub:null, occOpen: innerWidth>760, copyOnAdd:true, snap:true, vsel:-1,
+  floors:{}, sub:null, occOpen:false, bmenu:false, moreOpen:false, copyOnAdd:true, snap:true, vsel:-1,
   occ:{mode:'both', cutH:1.0, coneR:2.6, silhouette:true},
 };
 const selB = () => ui.sel ? bById(ui.sel) : null;
@@ -399,7 +438,7 @@ const scene = new THREE.Scene();
 const SKY = new THREE.Color('#CBD8DC');
 scene.background = SKY;
 scene.fog = new THREE.Fog(SKY, 120, 320);
-const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 600);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.3, 600);   // near 0.3 keeps depth precision ~2 mm at 100 m
 scene.add(new THREE.HemisphereLight('#E4EDF2', '#6E6656', 1.35));
 const sun = new THREE.DirectionalLight('#FFF1DC', 2.3);
 sun.castShadow = true;
@@ -459,7 +498,7 @@ function makeMats(){
 
 /* ---- geometry builder: boxes & polygons with per-vertex colour + occlusion data ---- */
 class GB {
-  constructor(){ this.p=[]; this.n=[]; this.c=[]; this.w=[]; this.k=[]; this.i=[]; this.W=Z4; this.K=0; }
+  constructor(){ this.p=[]; this.n=[]; this.c=[]; this.w=[]; this.k=[]; this.i=[]; this.W=Z4; this.K=0; this.solids=null; }
   ctx(W,K){ this.W=W||Z4; this.K=K||0; return this; }
   poly(pts, nr, c){
     const [a,b,d]=pts; const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2], vx=d[0]-a[0],vy=d[1]-a[1],vz=d[2]-a[2];
@@ -469,7 +508,7 @@ class GB {
     for(let j=1;j<pts.length-1;j++) this.i.push(base, base+j, base+j+1);
   }
   obox(O,u,w,u0,u1,y0,y1,w0,w1,c,cIn){
-    if(u1-u0<1e-4||y1-y0<1e-4||w1-w0<1e-4) return; cIn=cIn||c;
+    if(u1-u0<1e-4||y1-y0<1e-4||w1-w0<1e-4) return; cIn=cIn||c; if(this.solids) this.solids.push({O,u,w,u0,u1,y0,y1,w0,w1});
     const Pt=(a,y,b)=>[O[0]+u[0]*a+w[0]*b, y, O[1]+u[1]*a+w[1]*b];
     const nu=[u[0],0,u[1]], nw=[w[0],0,w[1]];
     this.poly([Pt(u0,y0,w1),Pt(u1,y0,w1),Pt(u1,y1,w1),Pt(u0,y1,w1)], nw, c);
@@ -478,6 +517,21 @@ class GB {
     this.poly([Pt(u0,y0,w0),Pt(u0,y0,w1),Pt(u0,y1,w1),Pt(u0,y1,w0)], [-nu[0],0,-nu[2]], c);
     this.poly([Pt(u0,y1,w0),Pt(u1,y1,w0),Pt(u1,y1,w1),Pt(u0,y1,w1)], [0,1,0], c);
     this.poly([Pt(u0,y0,w0),Pt(u1,y0,w0),Pt(u1,y0,w1),Pt(u0,y0,w1)], [0,-1,0], c);
+  }
+  // box whose start/end faces are slanted: u_start(w)=sA+kA*w, u_end(w)=eB+kB*w (w measured from the footprint line)
+  mbox(O,u,w,sA,kA,eB,kB,y0,y1,w0,w1,c,cIn){
+    const s0=sA+kA*w0, s1=sA+kA*w1, e0=eB+kB*w0, e1=eB+kB*w1;
+    if(e0-s0<1e-4 || e1-s1<1e-4 || y1-y0<1e-4 || w1-w0<1e-4) return; cIn=cIn||c;
+    if(this.solids) this.solids.push({O,u,w,sA,kA,eB,kB,y0,y1,w0,w1});
+    const Pt=(a,y,b)=>[O[0]+u[0]*a+w[0]*b, y, O[1]+u[1]*a+w[1]*b];
+    const nw=[w[0],0,w[1]];
+    const endN=(a0,a1,sign)=>{ const dx=u[0]*(a1-a0)+w[0]*(w1-w0), dz=u[1]*(a1-a0)+w[1]*(w1-w0); let nx=dz, nz=-dx; const l=Math.hypot(nx,nz)||1; nx/=l; nz/=l; if((nx*u[0]+nz*u[1])*sign<0){nx=-nx;nz=-nz;} return [nx,0,nz]; };
+    this.poly([Pt(s1,y0,w1),Pt(e1,y0,w1),Pt(e1,y1,w1),Pt(s1,y1,w1)], nw, c);
+    this.poly([Pt(s0,y0,w0),Pt(e0,y0,w0),Pt(e0,y1,w0),Pt(s0,y1,w0)], [-nw[0],0,-nw[2]], cIn);
+    this.poly([Pt(e0,y0,w0),Pt(e1,y0,w1),Pt(e1,y1,w1),Pt(e0,y1,w0)], endN(e0,e1,1), c);
+    this.poly([Pt(s0,y0,w0),Pt(s1,y0,w1),Pt(s1,y1,w1),Pt(s0,y1,w0)], endN(s0,s1,-1), c);
+    this.poly([Pt(s0,y1,w0),Pt(e0,y1,w0),Pt(e1,y1,w1),Pt(s1,y1,w1)], [0,1,0], c);
+    this.poly([Pt(s0,y0,w0),Pt(e0,y0,w0),Pt(e1,y0,w1),Pt(s1,y0,w1)], [0,-1,0], c);
   }
   geo(){
     const g=new THREE.BufferGeometry();
@@ -518,31 +572,56 @@ function winSpec(kind,h,st){
     default: return null;
   }
 }
-function facadeOps(b,k,i,L){
-  const st=b.style, h=floorH(b,k), ops=[];
-  if(k===0) for(const e of b.entrances) if(e.edge===i && L>DOOR_EXT+0.6){ const c=clamp(e.t*L, DOOR_EXT/2+0.3, L-DOOR_EXT/2-0.3); ops.push({u0:c-DOOR_EXT/2, u1:c+DOOR_EXT/2, y0:0, y1:Math.min(2.6,h-0.4), door:true}); }
+function facadeOps(b,k,i,L,uS,uE){
+  const st=b.style, h=floorH(b,k), ops=[], span=uE-uS;
+  if(k===0) for(const e of b.entrances) if(e.edge===i && span>DOOR_EXT+0.6){ const c=clamp(e.t*L, uS+DOOR_EXT/2+0.3, uE-DOOR_EXT/2-0.3); ops.push({u0:c-DOOR_EXT/2, u1:c+DOOR_EXT/2, y0:0, y1:Math.min(2.6,h-0.4), door:true}); }
   if(!b.blank.includes(i)){
     const kind = k===0 ? (st.ground==='match' ? st.windows : st.ground==='solid' ? 'none' : 'storefront') : st.windows;
     const ws = winSpec(kind,h,st);
-    if(ws && ws.y1-ws.y0>0.4 && L>1.2){
-      const n=Math.max(1,Math.round(L/ws.sp)), bay=L/n;
-      for(let j=0;j<n;j++){ const c=(j+0.5)*bay; const ww = ws.full!=null ? bay-ws.full : Math.min(ws.w, bay-0.5); if(ww<0.45) continue;
-        const u0=c-ww/2, u1=c+ww/2; if(ops.some(o=>o.door && u1>o.u0-0.3 && u0<o.u1+0.3)) continue; ops.push({u0,u1,y0:ws.y0,y1:ws.y1}); }
+    if(ws && ws.y1-ws.y0>0.4 && span>1.2){
+      const n=Math.max(1,Math.round(span/ws.sp)), bay=span/n;
+      for(let j=0;j<n;j++){ const c=uS+(j+0.5)*bay; const ww = ws.full!=null ? bay-ws.full : Math.min(ws.w, bay-0.5); if(ww<0.45) continue;
+        const u0=c-ww/2, u1=c+ww/2; if(ops.some(o=>o.door && u1>o.u0-0.3 && u0<o.u1+0.3)) continue; ops.push({u0,u1,y0:ws.y0,y1:ws.y1,full:ws.full!=null}); }
     }
   }
   return ops.sort((a,c)=>a.u0-c.u0);
 }
 
-function buildSlab(op,b,k,Wp,C){
+/* Corner rule: every strip along an edge (wall, band, plinth, parapet, cap) ends on the corner's
+   bisector plane, so neighbouring edges meet face-to-face and never overlap or share a plane. */
+function corners(fp, ccw){ const n=fp.length; return fp.map((p,i)=>{ const a=fp[(i-1+n)%n], c=fp[(i+1)%n]; const ax=p.x-a.x, az=p.z-a.z, cx=c.x-p.x, cz=c.z-p.z; const la=Math.hypot(ax,az)||1, lc=Math.hypot(cx,cz)||1; const cr=ax*cz-az*cx; const cs=clamp((ax*cx+az*cz)/(la*lc),-1,1); const convex = ccw ? cr>1e-9 : cr<-1e-9; return {sg:convex?1:-1, t:Math.min(1.5, Math.sqrt(Math.max(0,1-cs)/(1+cs+1e-9)))}; }); }
+function miter(cor,i,L){ const c0=cor[i], c1=cor[(i+1)%cor.length]; return {S:{s:0,k:-c0.sg*c0.t}, E:{s:L,k:c1.sg*c1.t}}; }
+const mAt = (m,w) => m.s+m.k*w;
+function span(m,wa,wb){ return [Math.max(mAt(m.S,wa),mAt(m.S,wb)), Math.min(mAt(m.E,wa),mAt(m.E,wb))]; }
+// a strip split into pieces at [a,b] ranges; the first/last piece take the mitered ends
+function stripPieces(gb,O,u,w,m,ranges,y0,y1,wa,wb,c,cIn){
+  const [s0,e0]=span(m,wa,wb);
+  for(const [a,b] of ranges){ const ms = a<=s0+1e-6, me = b>=e0-1e-6;
+    gb.mbox(O,u,w, ms?m.S.s:a, ms?m.S.k:0, me?m.E.s:b, me?m.E.k:0, y0,y1,wa,wb,c,cIn); }
+}
+function wallOpsM(gb,O,u,w,m,y0,h,w0,w1,ops,c,cIn){
+  let cur=null;
+  const pier=(a,b)=>gb.mbox(O,u,w, a===null?m.S.s:a, a===null?m.S.k:0, b===null?m.E.s:b, b===null?m.E.k:0, y0,y0+h,w0,w1,c,cIn);
+  for(const o of ops){
+    if(cur===null || o.u0>cur) pier(cur,o.u0);
+    const a=cur===null?o.u0:Math.max(o.u0,cur), e=o.u1;
+    if(e>a){ if(o.y0>0.001) gb.obox(O,u,w,a,e,y0,y0+o.y0,w0,w1,c,cIn); if(o.y1<h-0.001) gb.obox(O,u,w,a,e,y0+o.y1,y0+h,w0,w1,c,cIn); }
+    cur=cur===null?o.u1:Math.max(cur,o.u1);
+  }
+  pier(cur,null);
+}
+
+function buildSlab(op,b,k,Wp,C,shell){
   const y=floorBase(b,k), N=b.floors.length;
   const holes=[];
-  for(const s of b.shafts) if(stairHoleAt(b,s,k)){ const f=frame(b,s); const Pt=(lx,lz)=>new THREE.Vector2(f.O[0]+f.u[0]*lx+f.w[0]*lz, f.O[1]+f.u[1]*lx+f.w[1]*lz); holes.push([Pt(-1.3,-1.6),Pt(1.3,-1.6),Pt(1.3,2.6),Pt(-1.3,2.6)]); }
+  if(!shell) for(const s of b.shafts) if(stairHoleAt(b,s,k)){ const f=frame(b,s); const Pt=(lx,lz)=>new THREE.Vector2(f.O[0]+f.u[0]*lx+f.w[0]*lz, f.O[1]+f.u[1]*lx+f.w[1]*lz); holes.push([Pt(-1.3,-1.6),Pt(1.3,-1.6),Pt(1.3,2.6),Pt(-1.3,2.6)]); }
   const contour=Wp.map(p=>new THREE.Vector2(p[0],p[1]));
   let tris; try{ tris = THREE.ShapeUtils.triangulateShape(contour.slice(), holes.map(h=>h.slice())); }catch(e){ tris=[]; }
   const all=[...contour, ...holes.flat()];
   const top = k===N ? col(b.style.roof) : col(b.style.floor), bot=col('#F3F2EE'), side=shade(b.style.core,0.85);
   op.ctx(Z4,0);
   const yb = k===0 ? y-0.05 : y-SLAB;
+  if(op.solids) op.solids.push({prism:Wp.map(p=>({x:p[0],z:p[1]})), y0:yb, y1:y});
   for(const t of tris){ const [p,q,r]=t.map(i=>all[i]); op.poly([[p.x,y,p.y],[q.x,y,q.y],[r.x,y,r.y]],[0,1,0],top); if(k>0) op.poly([[p.x,yb,p.y],[q.x,yb,q.y],[r.x,yb,r.y]],[0,-1,0],bot); }
   const ring=(pts,inward)=>{ const cx=pts.reduce((s,p)=>s+p.x,0)/pts.length, cz=pts.reduce((s,p)=>s+p.y,0)/pts.length;
     for(let i=0;i<pts.length;i++){ const a=pts[i], c=pts[(i+1)%pts.length]; const dx=c.x-a.x, dz=c.y-a.y, L=Math.hypot(dx,dz)||1; let nx=dz/L, nz=-dx/L; const mx=(a.x+c.x)/2-cx, mz=(a.y+c.y)/2-cz; if((nx*mx+nz*mz>0)===inward){nx=-nx;nz=-nz;}
@@ -550,55 +629,60 @@ function buildSlab(op,b,k,Wp,C){
   for(const h of holes) ring(h,true);
 }
 
-function buildFacade(op,gl,sg,b,k,Wp,ccw,convex,C){
-  const n=Wp.length, h=floorH(b,k), y=floorBase(b,k), N=b.floors.length;
+function buildFacade(op,gl,sg,b,k,Wp,ccw,cor,C,shell){
+  const n=Wp.length, h=floorH(b,k), y=floorBase(b,k), N=b.floors.length, T=T_EXT;
+  const G2 = shell ? op : gl, glassC = shell ? shade(b.style.glass,0.42) : C.glass;
   for(let i=0;i<n;i++){
     const {a,L,u,w}=edgeInfo(Wp,i,ccw);
-    const e0=convex[i]?T_EXT:0, e1=convex[(i+1)%n]?T_EXT:0;
-    const ops=facadeOps(b,k,i,L);
+    const m=miter(cor,i,L), [ws,we]=span(m,0,T);
+    const ops=facadeOps(b,k,i,L,Math.max(0,ws)+0.14,Math.min(L,we)-0.14);   // keep window trims clear of the neighbouring wall
     op.ctx([a[0],a[1],w[0],w[1]],1); gl.ctx([a[0],a[1],w[0],w[1]],1);
-    wallOps(op,a,u,w,-e0,L+e1,y,h,0,T_EXT,ops,C.wall,C.inner);
+    wallOpsM(op,a,u,w,m,y,h,0,T,ops,C.wall,C.inner);
     for(const o of ops){
       if(o.door){
-        op.obox(a,u,w,o.u0-0.08,o.u0,y,y+o.y1+0.08,T_EXT-0.02,T_EXT+0.06,C.trim);
-        op.obox(a,u,w,o.u1,o.u1+0.08,y,y+o.y1+0.08,T_EXT-0.02,T_EXT+0.06,C.trim);
-        op.obox(a,u,w,o.u0-0.35,o.u1+0.35,y+o.y1+0.1,y+o.y1+0.24,T_EXT,T_EXT+1.1,C.trim);
+        op.obox(a,u,w,o.u0-0.08,o.u0,y,y+o.y1+0.08,T,T+0.06,C.trim);
+        op.obox(a,u,w,o.u1,o.u1+0.08,y,y+o.y1+0.08,T,T+0.06,C.trim);
+        op.obox(a,u,w,o.u0-0.35,o.u1+0.35,y+o.y1+0.1,y+o.y1+0.24,T,T+1.1,C.trim);
+        if(shell) op.obox(a,u,w,o.u0,o.u1,y,y+o.y1,T*0.4,T*0.5,col('#3B3129'));
       } else {
-        gl.obox(a,u,w,o.u0,o.u1,y+o.y0,y+o.y1,T_EXT*0.4,T_EXT*0.5,C.glass);
-        const full = (o.u1-o.u0) > 1.7;
-        op.obox(a,u,w,o.u0-0.06,o.u1+0.06,y+o.y0-0.07,y+o.y0,T_EXT,T_EXT+0.07,C.trim);
-        op.obox(a,u,w,o.u0-0.04,o.u1+0.04,y+o.y1,y+o.y1+0.06,T_EXT,T_EXT+0.04,C.trim);
-        if(full){ const m=(o.u0+o.u1)/2; op.obox(a,u,w,m-0.03,m+0.03,y+o.y0,y+o.y1,T_EXT*0.3,T_EXT*0.6,C.trim); }
+        G2.obox(a,u,w,o.u0,o.u1,y+o.y0,y+o.y1,T*0.4,T*0.5,glassC);
+        const ex=o.full?0:0.06, eh=o.full?0:0.04;
+        op.obox(a,u,w,o.u0-ex,o.u1+ex,y+o.y0-0.07,y+o.y0,T,T+0.07,C.trim);
+        op.obox(a,u,w,o.u0-eh,o.u1+eh,y+o.y1,y+o.y1+0.06,T,T+0.04,C.trim);
+        if((o.u1-o.u0)>1.7){ const m=(o.u0+o.u1)/2; op.obox(a,u,w,m-0.03,m+0.03,y+o.y0,y+o.y1,T*0.3,T*0.6,C.trim); }
       }
     }
-    if(b.style.bands && k<N-1) op.obox(a,u,w,-e0-(e0?0.06:0),L+e1+(e1?0.06:0),y+h-0.22,y+h,T_EXT,T_EXT+0.06,C.trim);
-    if(k===0){ for(const [s,e] of solidRanges(-e0,L+e1,ops)) op.obox(a,u,w,s,e,0,0.45,T_EXT,T_EXT+0.04,C.plinth); }
-    for(const [s,e] of solidRanges(-e0,L+e1,ops)) pushSeg(sg,a,u,w,s,e,T_EXT/2,T_EXT/2);
+    if(b.style.bands && k<N-1) stripPieces(op,a,u,w,m,[span(m,T,T+0.06)],y+h-0.22,y+h,T,T+0.06,C.trim);
+    if(k===0){ const [s0,e0]=span(m,T,T+0.04); stripPieces(op,a,u,w,m,solidRanges(s0,e0,ops.map(o=>o.door?{...o,u0:o.u0-0.08,u1:o.u1+0.08}:o)),0,0.45,T,T+0.04,C.plinth); }
+    const [cs,ce]=span(m,T/2,T/2);
+    for(const [s1,e1] of (shell ? [[cs,ce]] : solidRanges(cs,ce,ops))) pushSeg(sg,a,u,w,s1,e1,T/2,T/2);
   }
 }
 
 function buildInterior(op,sg,b,k,C){
-  const y=floorBase(b,k), h=floorH(b,k), ox=b.pos.x, oz=b.pos.z;
+  const y=floorBase(b,k), hh=floorH(b,k)-SLAB, ox=b.pos.x, oz=b.pos.z, E=T_INT/2-0.02, t=T_INT/2+0.025;
   for(const wl of b.floors[k].walls){
     const a=[wl.a.x+ox, wl.a.z+oz], c=[wl.b.x+ox, wl.b.z+oz]; const dx=c[0]-a[0], dz=c[1]-a[1], L=Math.hypot(dx,dz); if(L<0.05) continue;
     const u=[dx/L,dz/L], w=[-u[1],u[0]];
     const ops=wl.doors.map(d=>{ const m=clamp(d.t*L, DOOR_INT/2+0.1, L-DOOR_INT/2-0.1); return {u0:m-DOOR_INT/2,u1:m+DOOR_INT/2,y0:0,y1:2.2,door:true}; }).sort((p,q)=>p.u0-q.u0);
     op.ctx([a[0],a[1],w[0],w[1]],1);
-    wallOps(op,a,u,w,-T_INT/2,L+T_INT/2,y,h,-T_INT/2,T_INT/2,ops,C.inner,C.inner);
-    for(const o of ops){ const t=T_INT/2+0.025;
-      op.obox(a,u,w,o.u0-0.07,o.u0,y,y+2.27,-t,t,C.doorTrim); op.obox(a,u,w,o.u1,o.u1+0.07,y,y+2.27,-t,t,C.doorTrim); op.obox(a,u,w,o.u0-0.07,o.u1+0.07,y+2.2,y+2.27,-t,t,C.doorTrim); }
-    for(const [s,e] of solidRanges(-T_INT/2,L+T_INT/2,ops)) pushSeg(sg,a,u,w,s,e,0,T_INT/2);
+    wallOps(op,a,u,w,-E,L+E,y,hh,-T_INT/2,T_INT/2,ops,C.inner,C.inner);
+    for(const o of ops){
+      op.obox(a,u,w,o.u0-0.07,o.u0+0.01,y,y+2.19,-t,t,C.doorTrim); op.obox(a,u,w,o.u1-0.01,o.u1+0.07,y,y+2.19,-t,t,C.doorTrim);
+      op.obox(a,u,w,o.u0-0.07,o.u1+0.07,y+2.19,y+2.27,-t,t,C.doorTrim); }
+    for(const [s0,e0] of solidRanges(-E,L+E,ops)) pushSeg(sg,a,u,w,s0,e0,0,T_INT/2);
   }
 }
 
+/* Props: boxes only touch face-to-face, never share a plane in the same direction */
 const PROP_BUILD = {
-  sofa(bx){ bx(-1,1,0.08,0.42,-0.45,0.4,'#4F6D7A'); bx(-1,1,0.08,0.88,0.22,0.45,'#46616D'); bx(-1,-0.8,0.08,0.62,-0.45,0.45,'#46616D'); bx(0.8,1,0.08,0.62,-0.45,0.45,'#46616D'); bx(-0.78,0.78,0.42,0.52,-0.42,0.2,'#6C8C99'); bx(-0.95,-0.85,0,0.08,-0.4,-0.3,'#2A2A2A'); bx(0.85,0.95,0,0.08,-0.4,-0.3,'#2A2A2A'); bx(-0.95,-0.85,0,0.08,0.35,0.42,'#2A2A2A'); bx(0.85,0.95,0,0.08,0.35,0.42,'#2A2A2A'); },
+  sofa(bx){ bx(-0.8,0.8,0.08,0.42,-0.43,0.22,'#4F6D7A'); bx(-0.8,0.8,0.08,0.88,0.22,0.45,'#46616D'); bx(-1,-0.8,0.08,0.62,-0.45,0.45,'#46616D'); bx(0.8,1,0.08,0.62,-0.45,0.45,'#46616D'); bx(-0.78,0.78,0.42,0.52,-0.41,0.2,'#6C8C99'); bx(-0.95,-0.85,0,0.08,-0.4,-0.3,'#2A2A2A'); bx(0.85,0.95,0,0.08,-0.4,-0.3,'#2A2A2A'); bx(-0.95,-0.85,0,0.08,0.32,0.42,'#2A2A2A'); bx(0.85,0.95,0,0.08,0.32,0.42,'#2A2A2A'); },
   table(bx){ bx(-0.8,0.8,0.71,0.77,-0.45,0.45,'#8A6446'); for(const [x,z] of [[-0.72,-0.37],[0.66,-0.37],[-0.72,0.31],[0.66,0.31]]) bx(x,x+0.06,0,0.71,z,z+0.06,'#5E4330'); bx(-0.3,0.1,0,0.45,-0.85,-0.5,'#D9D2C3'); bx(-0.3,0.1,0.45,0.95,-0.9,-0.84,'#D9D2C3'); },
-  bed(bx){ bx(-0.8,0.8,0,0.42,-1.05,1.0,'#6B5A4A'); bx(-0.76,0.76,0.42,0.6,-1.0,0.98,'#F1EFE9'); bx(-0.78,0.78,0.48,0.64,-1.02,0.3,'#C0685A'); bx(-0.8,0.8,0,1.05,0.95,1.05,'#5A4A3C'); bx(-0.6,-0.05,0.6,0.72,0.55,0.9,'#FFFFFF'); bx(0.05,0.6,0.6,0.72,0.55,0.9,'#FFFFFF'); },
-  shelf(bx){ bx(-0.6,-0.56,0,2.1,-0.22,0.22,'#7A5C44'); bx(0.56,0.6,0,2.1,-0.22,0.22,'#7A5C44'); bx(-0.6,0.6,0,2.1,0.18,0.22,'#6A4F3A'); for(const y of [0.02,0.52,1.02,1.52,2.06]) bx(-0.56,0.56,y,y+0.04,-0.2,0.18,'#7A5C44');
-    const bk=['#3D5A80','#C1666B','#E0B34D','#5B8C5A','#3A3A3A','#98C1D9']; let s=1; for(const y of [0.06,0.56,1.06,1.56]){ let x=-0.52; while(x<0.45){ s=(s*9301+49297)%233280; const wd=0.05+0.06*(s/233280); const ht=0.26+0.14*((s%97)/97); bx(x,x+wd,y,y+ht,-0.16,0.14,bk[s%bk.length]); x+=wd+0.01; } } },
+  bed(bx){ bx(-0.8,0.8,0,0.42,-1.05,0.95,'#6B5A4A'); bx(-0.76,0.76,0.42,0.6,-1.0,0.95,'#F1EFE9'); bx(-0.78,0.78,0.48,0.64,-1.02,0.3,'#C0685A'); bx(-0.8,0.8,0,1.05,0.95,1.05,'#5A4A3C'); bx(-0.6,-0.05,0.6,0.72,0.55,0.9,'#FFFFFF'); bx(0.05,0.6,0.6,0.72,0.55,0.9,'#FFFFFF'); },
+  shelf(bx){ bx(-0.6,-0.56,0,2.1,-0.22,0.22,'#7A5C44'); bx(0.56,0.6,0,2.1,-0.22,0.22,'#7A5C44'); bx(-0.56,0.56,0,2.1,0.18,0.22,'#6A4F3A'); for(const y of [0.02,0.52,1.02,1.52,2.06]) bx(-0.56,0.56,y,y+0.04,-0.2,0.18,'#7A5C44');
+    const bk=['#3D5A80','#C1666B','#E0B34D','#5B8C5A','#3A3A3A','#98C1D9']; let s=1; for(const y of [0.06,0.56,1.06,1.56]){ let x=-0.52; while(x<0.42){ s=(s*9301+49297)%233280; const wd=0.05+0.06*(s/233280); const ht=0.26+0.14*((s%97)/97); bx(x,Math.min(x+wd,0.54),y,y+ht,-0.16,0.14,bk[s%bk.length]); x+=wd+0.01; } } },
   plant(bx){ bx(-0.22,0.22,0,0.4,-0.22,0.22,'#B5673F'); bx(-0.3,0.3,0.4,0.95,-0.3,0.3,'#4E7A45'); bx(-0.2,0.2,0.95,1.3,-0.2,0.2,'#5F8F52'); bx(-0.12,0.12,1.3,1.5,-0.12,0.12,'#6FA062'); },
-  desk(bx){ bx(-0.7,0.7,0.72,0.76,-0.35,0.35,'#E9E5DC'); bx(-0.7,-0.66,0,0.72,-0.33,0.33,'#5B5F61'); bx(0.66,0.7,0,0.72,-0.33,0.33,'#5B5F61'); bx(-0.25,0.25,0.76,1.08,0.1,0.14,'#23282B'); bx(-0.25,0.25,0,0.48,-0.75,-0.3,'#3E6B89'); bx(-0.25,0.25,0.48,1.0,-0.8,-0.74,'#3E6B89'); },
+  desk(bx){ bx(-0.7,0.7,0.72,0.76,-0.35,0.35,'#E9E5DC'); bx(-0.69,-0.65,0,0.72,-0.33,0.33,'#5B5F61'); bx(0.65,0.69,0,0.72,-0.33,0.33,'#5B5F61'); bx(-0.25,0.25,0.76,1.08,0.1,0.14,'#23282B'); bx(-0.25,0.25,0,0.48,-0.75,-0.3,'#3E6B89'); bx(-0.24,0.24,0.48,1.0,-0.8,-0.74,'#3E6B89'); },
   counter(bx){ bx(-1.2,1.2,0,0.9,-0.35,0.35,'#D8D3C8'); bx(-1.22,1.22,0.9,0.95,-0.37,0.37,'#3D3F41'); bx(0.6,0.95,0.95,1.2,-0.1,0.2,'#2B2E30'); },
   crate(bx){ bx(-0.5,0.5,0,1,-0.5,0.5,'#B08D5A'); bx(-0.52,0.52,0.1,0.2,-0.52,0.52,'#8C6B40'); bx(-0.52,0.52,0.8,0.9,-0.52,0.52,'#8C6B40'); },
 };
@@ -613,28 +697,27 @@ function buildProps(op,sg,b,k){
 }
 function segFrom(f,p,q,r){ const X=(l)=>[f.O[0]+f.u[0]*l[0]+f.w[0]*l[1], f.O[1]+f.u[1]*l[0]+f.w[1]*l[1]]; const a=X(p), c=X(q); return {ax:a[0],az:a[1],bx:c[0],bz:c[1],r}; }
 
-function buildRoof(op,sg,b,Wp,ccw,convex,C){
-  const y=roofY(b), n=Wp.length;
+function buildRoof(op,sg,b,Wp,ccw,cor,C){
+  const y=roofY(b), n=Wp.length, T=T_EXT;
   for(let i=0;i<n;i++){
-    const {a,L,u,w}=edgeInfo(Wp,i,ccw); const e0=convex[i]?T_EXT:0, e1=convex[(i+1)%n]?T_EXT:0;
+    const {a,L,u,w}=edgeInfo(Wp,i,ccw); const m=miter(cor,i,L);
     op.ctx([a[0],a[1],w[0],w[1]],1);
-    if(b.style.parapet){ op.obox(a,u,w,-e0,L+e1,y,y+1.0,0,T_EXT,C.wall,C.inner); op.obox(a,u,w,-e0-(e0?0.05:0),L+e1+(e1?0.05:0),y+1.0,y+1.1,-0.04,T_EXT+0.05,C.trim); }
-    else { op.obox(a,u,w,-e0,L+e1,y,y+0.3,0,T_EXT,C.trim); }
-    pushSeg(sg,a,u,w,-e0,L+e1,T_EXT/2,T_EXT/2);
+    if(b.style.parapet){ stripPieces(op,a,u,w,m,[span(m,0,T)],y,y+1.0,0,T,C.wall,C.inner); stripPieces(op,a,u,w,m,[span(m,-0.04,T+0.05)],y+1.0,y+1.1,-0.04,T+0.05,C.trim); }
+    else stripPieces(op,a,u,w,m,[span(m,0,T)],y,y+0.3,0,T,C.trim);
+    const [cs,ce]=span(m,T/2,T/2); pushSeg(sg,a,u,w,cs,ce,T/2,T/2);
   }
-  // rooftop units, placed deterministically on free roof area
   const units=b.style.units|0; if(!units) return;
   const bb=bbox(b.footprint), cand=[];
   for(let x=bb.x0+1.6;x<=bb.x1-1.6;x+=2.6) for(let z=bb.z0+1.6;z<=bb.z1-1.6;z+=2.6){
     if(!rectInside(b.footprint,x,z,1.3,1.1)) continue;
-    if(b.shafts.some(s=>itemContains(s,x,z,1.6))) continue;
+    if(b.interior!==false && b.shafts.some(s=>itemContains(s,x,z,1.6))) continue;
     cand.push([x,z]);
   }
   for(let j=0;j<Math.min(units,cand.length);j++){
     const [x,z]=cand[Math.floor((j+0.5)*cand.length/Math.min(units,cand.length))];
     const f={O:[b.pos.x+x,b.pos.z+z],u:[1,0],w:[0,1]}; op.ctx([f.O[0],f.O[1],0,0],2);
     const bx=(x0,x1,y0,y1,z0,z1,c)=>op.obox(f.O,f.u,f.w,x0,x1,y+y0,y+y1,z0,z1,c);
-    bx(-0.7,0.7,0,0.12,-0.5,0.5,shade('#6F7478',1)); bx(-0.65,0.65,0.12,1.05,-0.45,0.45,col('#B9BEC0')); bx(-0.45,0.45,1.05,1.1,-0.3,0.3,col('#3B3F42'));
+    bx(-0.7,0.7,0,0.12,-0.5,0.5,col('#6F7478')); bx(-0.65,0.65,0.12,1.05,-0.45,0.45,col('#B9BEC0')); bx(-0.45,0.45,1.05,1.1,-0.3,0.3,col('#3B3F42'));
     for(const [p,q] of [[[-0.7,-0.5],[0.7,-0.5]],[[0.7,-0.5],[0.7,0.5]],[[0.7,0.5],[-0.7,0.5]],[[-0.7,0.5],[-0.7,-0.5]]]) sg.push(segFrom(f,p,q,0.02));
   }
 }
@@ -648,11 +731,11 @@ function buildShafts(op,sg,b,k,C){
     const bx=(x0,x1,y0,y1,z0,z1,c,ci)=>op.obox(O,u,w,x0,x1,y0,y1,z0,z1,c,ci);
     const S=(p,q,r)=>sg.push(segFrom(f,p,q,r));
     if(s.type==='stairs'){
-      const h = atRoof ? 2.7 : floorH(b,k);
-      op.ctx(Wl(-1.3,0,-1,0),1); bx(-1.45,-1.3,y,y+h,-2.6,2.75,C.core,C.coreIn);
-      op.ctx(Wl(1.3,0,1,0),1);  bx(1.3,1.45,y,y+h,-2.6,2.75,C.core,C.coreIn);
+      const h = atRoof ? 2.7 : floorH(b,k)-SLAB;   // walls stop under the slab above
+      op.ctx(Wl(-1.3,0,-1,0),1); bx(-1.45,-1.3,y,y+h,-2.6,2.6,C.core,C.coreIn);
+      op.ctx(Wl(1.3,0,1,0),1);  bx(1.3,1.45,y,y+h,-2.6,2.6,C.core,C.coreIn);
       op.ctx(Wl(0,2.6,0,1),1);  bx(-1.45,1.45,y,y+h,2.6,2.75,C.core,C.coreIn);
-      op.ctx(Wl(0,0,1,0),1);    bx(-0.05,0.05,y,y+Math.min(h,atRoof?1.1:h),-1.6,1.6,C.coreIn);
+      op.ctx(Wl(0,0,1,0),1);    bx(-0.05,0.05,y,y+(atRoof?1.1:h),-1.6,1.6,C.coreIn);
       S([-1.375,-2.6],[-1.375,2.6],0.075); S([1.375,-2.6],[1.375,2.6],0.075); S([-1.45,2.675],[1.45,2.675],0.075); S([0,-1.6],[0,1.6],0.05);
       if(atRoof){
         op.ctx(Wl(0,-2.6,0,-1),1);
@@ -664,47 +747,48 @@ function buildShafts(op,sg,b,k,C){
       op.ctx(Z4,0);
       if(hasFlight(b,s,k)){
         const fh=floorH(b,k), half=fh/2, n=10, run=3.2/n;
-        for(let i=0;i<n;i++){ const z0=-1.6+i*run, t=y+(i+1)*half/n; bx(-1.25,-0.05,t-0.2,t,z0,z0+run+0.02,C.step); }
+        for(let i=0;i<n;i++){ const z0=-1.6+i*run, t=y+(i+1)*half/n; bx(-1.25,-0.05,t-0.2,t,z0,z0+run,C.step); }
         bx(-1.3,1.3,y+half-0.22,y+half,1.6,2.6,C.step);
-        for(let i=0;i<n;i++){ const z1=1.6-i*run, t=y+half+(i+1)*half/n; bx(0.05,1.25,t-0.2,t,z1-run-0.02,z1,C.step); }
+        for(let i=0;i<n;i++){ const z1=1.6-i*run, t=y+half+(i+1)*half/n; bx(0.05,1.25,t-0.2,t,z1-run,z1,C.step); }
       }
-      const rail=(x0,x1)=>{ bx(x0,x1,y+0.95,y+1.02,-1.64,-1.56,C.rail); bx(x0,x0+0.04,y,y+0.95,-1.62,-1.58,C.rail); bx(x1-0.04,x1,y,y+0.95,-1.62,-1.58,C.rail); S([x0,-1.6],[x1,-1.6],0.04); };
+      const rail=(x0,x1)=>{ bx(x0+0.04,x1-0.04,y+0.95,y+1.02,-1.64,-1.56,C.rail); bx(x0,x0+0.04,y,y+1.02,-1.62,-1.58,C.rail); bx(x1-0.04,x1,y,y+1.02,-1.62,-1.58,C.rail); S([x0,-1.6],[x1,-1.6],0.04); };
       const T=shaftTop(b,s);
       if(atRoof || (k===T && !shaftRoof(b,s))) rail(-1.3,-0.05);
       if(k===s.bottom) rail(0.05,1.3);
     } else {
-      const h = atRoof ? 2.9 : floorH(b,k);
-      op.ctx(Wl(-1.2,0,-1,0),1); bx(-1.35,-1.2,y,y+h,-1.35,1.35,C.core,C.coreIn);
-      op.ctx(Wl(1.2,0,1,0),1);  bx(1.2,1.35,y,y+h,-1.35,1.35,C.core,C.coreIn);
+      const h = atRoof ? 2.9 : floorH(b,k)-SLAB;
+      op.ctx(Wl(-1.2,0,-1,0),1); bx(-1.35,-1.2,y,y+h,-1.2,1.2,C.core,C.coreIn);
+      op.ctx(Wl(1.2,0,1,0),1);  bx(1.2,1.35,y,y+h,-1.2,1.2,C.core,C.coreIn);
       op.ctx(Wl(0,1.2,0,1),1);  bx(-1.35,1.35,y,y+h,1.2,1.35,C.core,C.liftIn);
       op.ctx(Wl(0,-1.2,0,-1),1);
       const ops=[{u0:-0.6,u1:0.6,y0:0,y1:2.3,door:true}];
       wallOps(op,O,u,w,-1.35,1.35,y,h,-1.35,-1.2,ops,C.core,C.coreIn);
-      bx(-0.68,-0.6,y,y+2.38,-1.4,-1.18,C.metal); bx(0.6,0.68,y,y+2.38,-1.4,-1.18,C.metal); bx(-0.68,0.68,y+2.3,y+2.38,-1.4,-1.18,C.metal);
+      bx(-0.68,-0.59,y,y+2.29,-1.4,-1.18,C.metal); bx(0.59,0.68,y,y+2.29,-1.4,-1.18,C.metal); bx(-0.68,0.68,y+2.29,y+2.38,-1.4,-1.18,C.metal);
       bx(0.8,0.92,y+1.0,y+1.3,-1.42,-1.35,col('#FFB36B'));
       S([-1.275,-1.35],[-1.275,1.35],0.075); S([1.275,-1.35],[1.275,1.35],0.075); S([-1.35,1.275],[1.35,1.275],0.075);
       for(const [a,e] of solidRanges(-1.35,1.35,ops)) S([a,-1.275],[e,-1.275],0.075);
-      op.ctx(Z4,0); bx(-1.2,1.2,y,y+0.03,-1.2,1.2,C.metal);
+      op.ctx(Z4,0); bx(-1.2,1.2,y,y+0.03,-1.2,-1.18,C.metal); bx(-1.2,1.2,y,y+0.03,-1.18,1.2,C.metal);
       if(atRoof) bx(-1.45,1.45,y+h,y+h+0.2,-1.45,1.45,col(b.style.roof));
     }
   }
 }
 
+let DEBUG_SOLIDS=false;
 function buildGeometry(b){
-  const N=b.floors.length, fp=b.footprint, n=fp.length;
+  const N=b.floors.length, fp=b.footprint, shell=b.interior===false;
   const ccw = area2(fp) > 0;
   const Wp = fp.map(p=>[p.x+b.pos.x, p.z+b.pos.z]);
-  const convex = fp.map((p,i)=>{ const a=fp[(i-1+n)%n], c=fp[(i+1)%n]; const cr=(p.x-a.x)*(c.z-p.z)-(p.z-a.z)*(c.x-p.x); return ccw ? cr>0 : cr<0; });
+  const cor = corners(fp, ccw);
   const st=b.style;
   const C = { wall:col(st.wall), trim:col(st.trim), inner:col(st.interior), core:col(st.core), coreIn:shade(st.core,1.08), liftIn:col('#8E9A9E'),
     step:shade(st.core,0.82), glass:col(st.glass), metal:col('#A3ABAE'), rail:col('#3D4448'), doorTrim:shade(st.interior,0.72), plinth:shade(st.wall,0.72) };
   const levels=[], segs=[];
   for(let k=0;k<=N;k++){
-    const op=new GB(), gl=new GB(), sg=[];
-    buildSlab(op,b,k,Wp,C);
-    if(k<N){ buildFacade(op,gl,sg,b,k,Wp,ccw,convex,C); buildInterior(op,sg,b,k,C); buildProps(op,sg,b,k); }
-    else buildRoof(op,sg,b,Wp,ccw,convex,C);
-    buildShafts(op,sg,b,k,C);
+    const op=new GB(), gl=new GB(), sg=[]; if(DEBUG_SOLIDS) op.solids=[];
+    if(!shell || k===0 || k===N) buildSlab(op,b,k,Wp,C,shell);
+    if(k<N){ buildFacade(op,gl,sg,b,k,Wp,ccw,cor,C,shell); if(!shell){ buildInterior(op,sg,b,k,C); buildProps(op,sg,b,k); } }
+    else buildRoof(op,sg,b,Wp,ccw,cor,C);
+    if(!shell) buildShafts(op,sg,b,k,C);
     levels.push({op,gl}); segs.push(sg);
   }
   return {levels, segs};
@@ -738,16 +822,16 @@ function touch(b){ if(b) dirty.add(b.id); else state.buildings.forEach(x=>dirty.
 /* ---- the world around the buildings ---- */
 function buildWorld(){
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(600,600), new THREE.MeshStandardMaterial({color:'#A9AE9F', roughness:1}));
-  ground.rotation.x=-Math.PI/2; ground.position.y=-0.02; ground.receiveShadow=true; scene.add(ground);
+  ground.rotation.x=-Math.PI/2; ground.position.y=-0.09; ground.receiveShadow=true; scene.add(ground);
   const road=new THREE.Mesh(new THREE.PlaneGeometry(600,7), new THREE.MeshStandardMaterial({color:'#55595B', roughness:0.95}));
-  road.rotation.x=-Math.PI/2; road.position.set(0,-0.012,-14.5); road.receiveShadow=true; scene.add(road);
+  road.rotation.x=-Math.PI/2; road.position.set(0,-0.07,-14.5); road.receiveShadow=true; scene.add(road);
   const walk=new THREE.Mesh(new THREE.PlaneGeometry(600,4.6), new THREE.MeshStandardMaterial({color:'#C9C6BC', roughness:0.95}));
-  walk.rotation.x=-Math.PI/2; walk.position.set(0,-0.008,-8.7); walk.receiveShadow=true; scene.add(walk);
+  walk.rotation.x=-Math.PI/2; walk.position.set(0,-0.03,-8.7); walk.receiveShadow=true; scene.add(walk);
   const gb=new GB();
-  for(let x=-120;x<120;x+=4) gb.obox([x,-14.55],[1,0],[0,1],0,2,-0.005,0.0,0,0.1,col('#E8E4D8'));
+  for(let x=-120;x<120;x+=4) gb.obox([x,-14.55],[1,0],[0,1],0,2,-0.08,-0.055,0,0.1,col('#E8E4D8'));
   for(const x of [-13,-5,5.5,11,19,27]){
     const f=[x,-10.3]; gb.ctx([x,-10.3,0,0],2);
-    gb.obox(f,[1,0],[0,1],-0.12,0.12,0,2.2,-0.12,0.12,col('#6B5443'));
+    gb.obox(f,[1,0],[0,1],-0.12,0.12,-0.04,2.2,-0.12,0.12,col('#6B5443'));
     gb.obox(f,[1,0],[0,1],-1.1,1.1,2.0,3.6,-1.1,1.1,col('#5E8A4F'));
     gb.obox(f,[1,0],[0,1],-0.75,0.75,3.6,4.5,-0.75,0.75,col('#6E9C5C'));
     gb.ctx(Z4,0);
@@ -756,7 +840,6 @@ function buildWorld(){
   const m=new THREE.Mesh(gb.geo(), wm.opaque); m.castShadow=true; m.receiveShadow=true; m.customDepthMaterial=wm.depth; scene.add(m);
 }
 let worldMats;
-const edGrid = new THREE.GridHelper(240, 240, '#7F877E', '#98A094'); edGrid.material.transparent=true; edGrid.material.opacity=0.28; edGrid.position.y=0.004; scene.add(edGrid);
 const flGrid = new THREE.GridHelper(1,1,'#DD5A12','#8E968C'); flGrid.material.transparent=true; flGrid.material.opacity=0.35; flGrid.visible=false; scene.add(flGrid);
 let flGridKey='';
 
@@ -872,7 +955,7 @@ function applyView(){
     cut = ui.occ.mode==='both'||ui.occ.mode==='cut'; cone = ui.occ.mode==='both'||ui.occ.mode==='cone';
     G.uFocus.value.set(player.x, player.y+1.2, player.z); G.uFeetY.value=player.y;
   } else {
-    const b=selB(); if(b && ui.tab==='interior'){ bid=b.id; floor=activeFloor(b); cut=true; }
+    const b=selB(); if(b && ui.tab==='interior' && !isShell(b)){ bid=b.id; floor=activeFloor(b); cut=true; }
     G.uFocus.value.copy(camEdit.target); G.uFeetY.value=-1e9;
   }
   G.uCam.value.copy(camera.position); G.uConeOn.value=cone?1:0; G.uConeR.value=ui.occ.coneR; G.uCutH.value=ui.occ.cutH;
@@ -1000,11 +1083,12 @@ function enterPlay(spawn){
   ui.mode='play'; wallChain=null; hideHL(); $('#tip').hidden=true;
   camPlay.yaw = spawn ? camEdit.yaw : Math.PI; camPlay.pitch=0.78; camPlay.dist=13;
   pGroup.visible=true; hudKey=''; liftKey='';
+  const ph=$('#phint'); ph.hidden=false; clearTimeout(enterPlay.t); enterPlay.t=setTimeout(()=>{ ph.hidden=true; }, 6000);
   refreshChrome();
 }
 function exitPlay(){ if(ui.mode!=='play') return; ui.mode='edit'; pGroup.visible=false; pSil.visible=false; if(carMesh) carMesh.visible=false; keys.ShiftLeft=false; refreshChrome(); }
 function playHere(){
-  const b=selB(); if(!b) return; const k=Math.min(activeFloor(b), b.floors.length); const y=floorBase(b,k);
+  const b=selB(); if(!b) return; if(isShell(b)){ enterPlay(); return; } const k=Math.min(activeFloor(b), b.floors.length); const y=floorBase(b,k);
   const s=b.shafts.find(s=>shaftLevels(b,s).includes(k));
   let x,z;
   if(s){ const f=frame(b,s); const d = s.type==='stairs' ? -3.4 : -2.2; x=f.O[0]+f.w[0]*d; z=f.O[1]+f.w[1]*d; }
@@ -1033,7 +1117,7 @@ function snapWallPt(b,k,p,from){
 function wallPreview(b,k,a,c,e){
   const y=floorBase(b,k), h=floorH(b,k), dx=c.x-a.x, dz=c.z-a.z, L=Math.hypot(dx,dz);
   if(L<0.05){ showHL(a.x+b.pos.x,y+h/2,a.z+b.pos.z,0.2,h,0.2,[1,0]); return; }
-  showHL((a.x+c.x)/2+b.pos.x, y+h/2, (a.z+c.z)/2+b.pos.z, L+T_INT, h, T_INT+0.04, [dx/L,dz/L]);
+  const hh=h-SLAB; showHL((a.x+c.x)/2+b.pos.x, y+hh/2+0.02, (a.z+c.z)/2+b.pos.z, L+T_INT+0.02, hh+0.02, T_INT+0.06, [dx/L,dz/L]);
   if(e) showTip(e, L.toFixed(2)+' m');
 }
 function placingType(){ return ui.tool==='stairs'?'stairs' : ui.tool==='lift'?'lift' : ui.tool==='prop'?ui.propType : null; }
@@ -1047,7 +1131,8 @@ function placementAt(b,k,p){
 }
 function ghostItem(b,k,it,ok){
   const s=itemSize(it), y=floorBase(b,k); const tall = it.type==='stairs'||it.type==='lift' ? floorH(b,k) : 1.0; const f=frame(b,it);
-  showHL(f.O[0], y+tall/2, f.O[1], s.W, tall, s.D, f.u, ok?'#DD5A12':'#C0392B');
+  const pad = it.type==='stairs'||it.type==='lift' ? 0.42 : 0.1;
+  showHL(f.O[0], y+tall/2+0.02, f.O[1], s.W+pad, tall+0.04, s.D+pad, f.u, ok?'#DD5A12':'#C0392B');
 }
 function hoverTarget(b,k,p){
   const pi=propAt(b,k,p); if(pi>=0) return {kind:'prop',i:pi};
@@ -1063,9 +1148,9 @@ function showTarget(b,k,t,color){
   if(t.kind==='shaft'){ ghostItem(b,k,t.s,true); hlMat.color.set(color); return; }
   if(t.kind==='wall'||t.kind==='door'){ const w=b.floors[k].walls[t.wi]; const dx=w.b.x-w.a.x, dz=w.b.z-w.a.z, L=Math.hypot(dx,dz), u=[dx/L,dz/L];
     if(t.kind==='wall') showHL((w.a.x+w.b.x)/2+ox,y+h/2,(w.a.z+w.b.z)/2+oz,L+T_INT,h+0.05,T_INT+0.08,u,color);
-    else { const m=w.doors[t.di].t; showHL(w.a.x+dx*m+ox,y+1.1,w.a.z+dz*m+oz,DOOR_INT,2.2,T_INT+0.1,u,color); } return; }
+    else { const m=w.doors[t.di].t; showHL(w.a.x+dx*m+ox,y+1.08,w.a.z+dz*m+oz,DOOR_INT-0.05,2.13,T_INT+0.1,u,color); } return; }
   if(t.kind==='entrance'){ const e=b.entrances[t.ei]; const a=b.footprint[e.edge], c=b.footprint[(e.edge+1)%b.footprint.length]; const dx=c.x-a.x, dz=c.z-a.z, L=Math.hypot(dx,dz);
-    showHL(a.x+dx*e.t+ox,1.3,a.z+dz*e.t+oz,DOOR_EXT,2.6,T_EXT*2.2,[dx/L,dz/L],color); }
+    showHL(a.x+dx*e.t+ox,1.27,a.z+dz*e.t+oz,DOOR_EXT-0.05,2.5,T_EXT*2.2,[dx/L,dz/L],color); }
 }
 function doorAt(b,k,p){
   const w=nearestWall(b,k,p,0.6);
@@ -1076,8 +1161,8 @@ function doorAt(b,k,p){
 }
 function showDoorGhost(b,k,d){
   if(!d){ hideHL(); return; } const ox=b.pos.x, oz=b.pos.z, y=floorBase(b,k);
-  if(d.kind==='int'){ const w=d.w, dx=w.b.x-w.a.x, dz=w.b.z-w.a.z; showHL(w.a.x+dx*d.t+ox,y+1.1,w.a.z+dz*d.t+oz,DOOR_INT,2.2,T_INT+0.12,[dx/d.L,dz/d.L], d.di>=0?'#C0392B':'#DD5A12'); }
-  else { const a=b.footprint[d.edge], c=b.footprint[(d.edge+1)%b.footprint.length], dx=c.x-a.x, dz=c.z-a.z; showHL(a.x+dx*d.t+ox,1.3,a.z+dz*d.t+oz,DOOR_EXT,2.6,T_EXT*2.2,[dx/d.L,dz/d.L], d.ei>=0?'#C0392B':'#DD5A12'); }
+  if(d.kind==='int'){ const w=d.w, dx=w.b.x-w.a.x, dz=w.b.z-w.a.z; showHL(w.a.x+dx*d.t+ox,y+1.08,w.a.z+dz*d.t+oz,DOOR_INT-0.05,2.13,T_INT+0.12,[dx/d.L,dz/d.L], d.di>=0?'#C0392B':'#DD5A12'); }
+  else { const a=b.footprint[d.edge], c=b.footprint[(d.edge+1)%b.footprint.length], dx=c.x-a.x, dz=c.z-a.z; showHL(a.x+dx*d.t+ox,1.27,a.z+dz*d.t+oz,DOOR_EXT-0.05,2.5,T_EXT*2.2,[dx/d.L,dz/d.L], d.ei>=0?'#C0392B':'#DD5A12'); }
 }
 function facadeEdgeAt(e,b){
   const h=pickBuilding(e); let p=null, y=0;
@@ -1095,7 +1180,7 @@ function toolDown(e){
       commit(()=>{ if(d.ei>=0) b.entrances.splice(d.ei,1); else b.entrances.push({edge:d.edge,t:d.t}); }, d.ei>=0?'Entrance removed':'Entrance added', b); }
     return true;
   }
-  if(ui.tab!=='interior') return false;
+  if(ui.tab!=='interior' || isShell(b)) return false;
   const k=activeFloor(b); const p=floorHit(e); if(!p) return false;
   if(k===b.floors.length && ui.tool!=='select'){ toast('Pick a floor below the roof to edit the interior'); return true; }
   switch(ui.tool){
@@ -1122,7 +1207,7 @@ function toolMove(e, pressed){
     else { const d=doorAt(b,0,P(a.x+dx*ed.t,a.z+dz*ed.t)); if(d&&d.kind==='ext') showDoorGhost(b,0,d); else hideHL(); }
     return;
   }
-  if(ui.tab!=='interior') return;
+  if(ui.tab!=='interior' || isShell(b)) return;
   const k=activeFloor(b); const p=floorHit(e); if(!p){ hideHL(); return; }
   if(k===b.floors.length){ hideHL(); return; }
   switch(ui.tool){
@@ -1249,7 +1334,7 @@ addEventListener('keydown', e=>{
   if(mod) return;
   const k=e.key;
   if(k==='Escape'){ if(wallChain){ wallChain=null; hideHL(); tip.hidden=true; } else if(ui.sub){ ui.sub=null; hideHL(); renderPanel(); } else if(ui.tab==='interior' && ui.tool!=='select'){ setTool('select'); } return; }
-  if(k==='p'||k==='P'){ enterPlay(); return; }
+  if(k==='p'||k==='P'){ smartPlay(); return; }
   if(!b) return;
   if(k==='1') setTab('shape'); else if(k==='2') setTab('facade'); else if(k==='3') setTab('interior');
   else if(k===']'||k==='PageUp'){ e.preventDefault(); stepFloor(b,1); }
@@ -1263,7 +1348,7 @@ addEventListener('keydown', e=>{
 });
 addEventListener('keyup', e=>{ keys[e.code]=false; });
 addEventListener('blur', ()=>{ for(const k in keys) keys[k]=false; });
-function stepFloor(b,d){ setTab('interior', true); setActive(b, activeFloor(b)+d); refreshChrome(); }
+function stepFloor(b,d){ if(isShell(b)) return; setTab('interior', true); setActive(b, activeFloor(b)+d); refreshChrome(); }
 
 /* =========================================================================
    Commands: undo/redo/commit, building ops
@@ -1301,6 +1386,7 @@ const I = {
   dup:'<svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><rect x="4.5" y="1.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9.5 12.5h-7a1 1 0 0 1-1-1v-7" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>',
   del:'<svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.7" fill="none"/></svg>',
   play:'<svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 2v10l8-5z" fill="currentColor"/></svg>',
+  up:'<svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 12V3M3 6.5 7 2.5l4 4M2 12.5h10" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
 };
 const TOOL_ICONS = {
   select:'<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4 2.5v11.5l3-3 2.2 4.5 2-1-2.2-4.4H13z" fill="currentColor"/></svg>',
@@ -1316,109 +1402,113 @@ const seg = (path, val, opts) => `<div class="seg">${opts.map(([v,l])=>`<button 
 const slider = (path, label, val, min, max, step, unit, dec=1) => `<label class="sl"><span>${label}</span><input type="range" id="in-${path.replace('.','-')}" data-num="${path}" data-unit="${unit}" data-dec="${dec}" min="${min}" max="${max}" step="${step}" value="${val}"><output>${(+val).toFixed(dec)}${unit}</output></label>`;
 const swatches = (path, val) => `<div class="sws">${PALETTE[path.split('.')[1]].map(c=>`<button class="swb ${c.toLowerCase()===String(val).toLowerCase()?'on':''}" style="background:${c}" data-set="${path}" data-val="${c}" aria-label="${c}"></button>`).join('')}<input type="color" id="in-${path.replace('.','-')}" data-color="${path}" value="${val}" aria-label="Custom colour"></div>`;
 
+const isShell = b => b.interior===false;
+const TOOLS=[['select','Select','V','Move furniture, stairs and lifts · click a wall to select it'],['wall','Wall','W','Click to chain walls · drag for one wall · Esc to finish'],['door','Door','D','Click a wall to add or remove a doorway'],['erase','Erase','X','Click anything on this floor to remove it'],['stairs','Stairs','S','Click to place · runs to the top floor · R rotates'],['lift','Lift','L','Click to place · serves every floor above · R rotates'],['prop','Furnish','F','Click to place · R rotates']];
 function renderPanel(){
   if(ui.mode!=='edit') return;
   const b=selB();
-  let h=`<button id="panelToggle" data-act="ptoggle" aria-expanded="${!panel.classList.contains('collapsed')}">${panel.classList.contains('collapsed')?'▴ Show editor':'▾ Hide editor'}${b?' · '+esc(b.name):''}</button><div class="sec"><div class="h"><span class="grow">Buildings</span></div><div class="blist">`;
-  for(const x of state.buildings) h+=`<button class="brow ${x.id===ui.sel?'on':''}" data-act="sel" data-id="${x.id}"><span class="sw" style="background:${x.style.wall}"></span><span class="nm">${esc(x.name)}</span><span class="fl mono">${x.floors.length} fl</span></button>`;
-  h+=`</div><div class="h" style="margin-top:12px">New building</div><div class="shapes">${Object.keys(FOOTPRINTS).map(k=>`<button class="shape" data-act="new" data-shape="${k}" title="New ${SHAPE_LABEL[k]}-shaped building">${shapeIcon(k)}${SHAPE_LABEL[k]}</button>`).join('')}</div></div>`;
-  if(!b){ h+=`<div class="sec"><p class="note">Select a building in the list or click one in the view. Everything you do can be undone with <kbd>Ctrl</kbd>+<kbd>Z</kbd>.</p><div class="row" style="margin-top:10px"><button class="btn pri" data-act="play">${I.play} Play from street</button></div></div>`; panel.innerHTML=h; updateHint(); return; }
-  h+=`<div class="sec"><input class="name" id="bname" value="${esc(b.name)}" aria-label="Building name">
-    <div class="row" style="margin-bottom:10px"><button class="btn" data-act="dup" title="Ctrl+D">${I.dup} Duplicate</button><button class="btn" data-act="focus" title="C">Focus</button><button class="btn danger ghost" data-act="delB">${I.del} Delete</button></div>
-    <div class="tabs" role="tablist">${[['shape','Shape'],['facade','Facade'],['interior','Interior']].map(([t,l],i)=>`<button role="tab" class="${ui.tab===t?'on':''}" data-act="tab" data-tab="${t}" title="${i+1}">${l}</button>`).join('')}</div></div>`;
+  const collapsed=panel.classList.contains('collapsed');
+  let h=`<button id="panelToggle" data-act="ptoggle" aria-expanded="${!collapsed}">${collapsed?'▴ Show editor':'▾ Hide editor'}${b?' · '+esc(b.name):''}</button>`;
+  // building switcher: one line when closed, list + new building when open
+  const open = ui.bmenu || !b;
+  h+=`<div class="sec bsw">`;
+  if(b) h+=`<button class="bswb" data-act="bmenu" aria-expanded="${open}"><span class="sw" style="background:${b.style.wall}"></span><span class="nm">${esc(b.name)}</span><span class="fl mono">${b.floors.length} fl${isShell(b)?' · shell':''}</span><svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="${open?'M2 8l4-4 4 4':'M2 4l4 4 4-4'}" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>`;
+  else h+=`<div class="h">Buildings</div>`;
+  if(open){
+    h+=`<div class="menu">`;
+    if(b) h+=`<label class="sub-h" for="bname">Name</label><input class="name" id="bname" value="${esc(b.name)}">`;
+    const others=state.buildings.filter(x=>x.id!==ui.sel);
+    if(others.length) h+=`${b?'<div class="sub-h">Switch to</div>':''}<div class="blist">${others.map(x=>`<button class="brow" data-act="sel" data-id="${x.id}"><span class="sw" style="background:${x.style.wall}"></span><span class="nm">${esc(x.name)}</span><span class="fl mono">${x.floors.length} fl</span></button>`).join('')}</div>`;
+    h+=`<div class="sub-h">New building</div><div class="shapes">${Object.keys(FOOTPRINTS).map(k=>`<button class="shape" data-act="new" data-shape="${k}" title="New ${SHAPE_LABEL[k]}-shaped building">${shapeIcon(k)}${SHAPE_LABEL[k]}</button>`).join('')}</div>`;
+    if(b) h+=`<div class="row" style="margin-top:12px"><button class="btn" data-act="dup" title="Ctrl+D">${I.dup} Duplicate</button><button class="btn danger ghost" data-act="delB">${I.del} Delete</button></div>`;
+    h+=`</div></div>`;
+    panel.innerHTML=h; updateHint(); return;
+  }
+  h+=`<div class="tabs" role="tablist">${[['shape','Shape'],['facade','Facade'],['interior','Interior']].map(([t,l],i)=>`<button role="tab" aria-selected="${ui.tab===t}" class="${ui.tab===t?'on':''}" data-act="tab" data-tab="${t}" title="${l} (${i+1})">${l}</button>`).join('')}</div></div>`;
+
   if(ui.tab==='shape'){
-    const fp=b.footprint; let per=0; fp.forEach((p,i)=>{ const q=fp[(i+1)%fp.length]; per+=Math.hypot(q.x-p.x,q.z-p.z); });
-    h+=`<div class="sec"><div class="h">Footprint</div><p class="note" style="margin:0 0 10px">Drag the corner handles in the view. Click <b>+</b> on an edge to add a corner, double-click a corner to remove it. Corners snap to a 25 cm grid.</p>
-      <div class="shapes">${Object.keys(FOOTPRINTS).map(k=>`<button class="shape" data-act="shape" data-shape="${k}" title="Replace footprint with ${SHAPE_LABEL[k]}">${shapeIcon(k)}${SHAPE_LABEL[k]}</button>`).join('')}</div>
-      <div class="row" style="margin-top:10px"><button class="btn" data-act="rot90">Rotate 90°</button><label class="chk" style="margin:0 0 0 auto"><input type="checkbox" id="snapChk" ${ui.snap?'checked':''}> Snap</label></div>
-      <div class="stats"><div class="stat"><b>${(Math.abs(area2(fp))/2).toFixed(0)}</b><span>m² per floor</span></div><div class="stat"><b>${per.toFixed(0)}</b><span>m perimeter</span></div><div class="stat"><b>${roofY(b).toFixed(1)}</b><span>m tall</span></div></div></div>
-      <div class="sec"><div class="h">Storey heights</div>${slider('groundHeight','Ground floor',b.groundHeight,3,6,0.1,' m')}${slider('floorHeight','Upper floors',b.floorHeight,2.7,4.5,0.1,' m')}</div>`;
+    h+=`<div class="sec"><p class="lead">Drag the corners in the view. Drag a <b>+</b> to add a corner, double-click a corner to remove it.</p>
+      <div class="sub-h">Start from</div><div class="shapes">${Object.keys(FOOTPRINTS).map(k=>`<button class="shape" data-act="shape" data-shape="${k}" title="Replace footprint with ${SHAPE_LABEL[k]}">${shapeIcon(k)}${SHAPE_LABEL[k]}</button>`).join('')}</div>
+      <div class="sub-h">Storey height</div>${slider('groundHeight','Ground',b.groundHeight,3,6,0.1,' m')}${slider('floorHeight','Upper',b.floorHeight,2.7,4.5,0.1,' m')}
+      <div class="row" style="margin-top:10px"><button class="btn" data-act="rot90">Rotate 90°</button><label class="chk" style="margin:0 0 0 auto"><input type="checkbox" id="snapChk" ${ui.snap?'checked':''}> Snap to grid</label></div>
+      <p class="note mono">${(Math.abs(area2(b.footprint))/2).toFixed(0)} m² per floor · ${roofY(b).toFixed(1)} m tall</p></div>`;
   }
   if(ui.tab==='facade'){
     const st=b.style;
-    h+=`<div class="sec"><div class="h">Style presets</div><div class="presets">${Object.entries(STYLES).map(([k,s])=>`<button class="preset ${st.preset===k?'on':''}" data-act="style" data-style="${k}"><i><b style="background:${s.roof}"></b><b style="background:${s.wall};flex:3"></b><b style="background:${s.trim}"></b></i><span>${s.label}</span></button>`).join('')}</div></div>
-    <div class="sec"><div class="h">Place on facade</div><div class="row"><button class="btn ${ui.facadeTool==='entrance'?'pri':''}" data-act="ftool" data-t="entrance">Entrance</button><button class="btn ${ui.facadeTool==='blank'?'pri':''}" data-act="ftool" data-t="blank">Blank wall</button></div>
-      <p class="note">${ui.facadeTool==='entrance'?'Click a ground-floor wall to add an entrance; click an existing one to remove it.':ui.facadeTool==='blank'?'Click a wall to switch its windows off or back on.':'Pick a tool, then click walls in the view.'} ${b.entrances.length} entrance${b.entrances.length===1?'':'s'}.</p></div>
-    <div class="sec"><div class="h">Windows</div>${seg('style.windows',st.windows,[['none','None'],['punched','Punched'],['tall','Tall'],['ribbon','Ribbon'],['curtain','Curtain']])}
-      ${slider('style.winW','Width',st.winW,0.6,2.4,0.1,' m')}${slider('style.bay','Bay spacing',st.bay,1.4,5,0.1,' m')}
-      <div class="field"><span>Ground floor</span>${seg('style.ground',st.ground,[['storefront','Shopfront'],['match','Match'],['solid','Solid']])}</div>
-      <label class="chk"><input type="checkbox" data-bool="style.bands" id="bandsChk" ${st.bands?'checked':''}> Floor bands between storeys</label></div>
-    <div class="sec"><div class="h">Colours</div>
+    h+=`<div class="sec"><div class="presets">${Object.entries(STYLES).map(([k,x])=>`<button class="preset ${st.preset===k?'on':''}" data-act="style" data-style="${k}"><i><b style="background:${x.roof}"></b><b style="background:${x.wall};flex:3"></b><b style="background:${x.trim}"></b></i><span>${x.label}</span></button>`).join('')}</div>
+      <div class="sub-h">Windows</div>${seg('style.windows',st.windows,[['none','None'],['punched','Punched'],['tall','Tall'],['ribbon','Ribbon'],['curtain','Glass']])}
+      <div class="sub-h">Colours</div>
       <div class="field"><span>Walls</span>${swatches('style.wall',st.wall)}</div>
       <div class="field"><span>Trim</span>${swatches('style.trim',st.trim)}</div>
       <div class="field"><span>Roof</span>${swatches('style.roof',st.roof)}</div>
-      <div class="field"><span>Interior</span>${swatches('style.interior',st.interior)}</div>
-      <div class="field"><span>Floors</span>${swatches('style.floor',st.floor)}</div></div>
-    <div class="sec"><div class="h">Roof</div><label class="chk"><input type="checkbox" data-bool="style.parapet" id="parChk" ${st.parapet?'checked':''}> Parapet wall</label>${slider('style.units','Rooftop units',st.units,0,8,1,'',0)}</div>`;
+      <div class="sub-h">Click walls to add</div><div class="seg">${[['entrance','Entrance'],['blank','Blank wall']].map(([t,l])=>`<button data-act="ftool" data-t="${t}" class="${ui.facadeTool===t?'on':''}">${l}</button>`).join('')}</div>
+      <details class="more" ${ui.moreOpen?'open':''} id="moreFacade"><summary>More options</summary>
+        ${slider('style.winW','Window width',st.winW,0.6,2.4,0.1,' m')}${slider('style.bay','Bay spacing',st.bay,1.4,5,0.1,' m')}
+        <div class="field"><span>Ground floor</span>${seg('style.ground',st.ground,[['storefront','Shopfront'],['match','Match'],['solid','Solid']])}</div>
+        <label class="chk"><input type="checkbox" data-bool="style.bands" id="bandsChk" ${st.bands?'checked':''}> Floor bands</label>
+        <label class="chk"><input type="checkbox" data-bool="style.parapet" id="parChk" ${st.parapet?'checked':''}> Roof parapet</label>
+        ${slider('style.units','Roof units',st.units,0,8,1,'',0)}
+      </details></div>`;
   }
   if(ui.tab==='interior'){
-    const k=activeFloor(b), N=b.floors.length;
-    if(k===N){
-      h+=`<div class="sec"><div class="h">Roof</div><p class="note" style="margin:0 0 8px">Rooftop access comes from stairs or lifts that reach the top floor. Toggle which ones continue to the roof:</p>`;
-      if(!b.shafts.length) h+=`<p class="note">No stairs or lifts yet. Pick a floor, then use the Stairs or Lift tool.</p>`;
-      b.shafts.forEach((s,i)=>{ const reach=shaftTop(b,s)===N-1; h+=`<label class="chk"><input type="checkbox" data-act="shRoofI" data-id="${s.id}" ${s.roof?'checked':''} ${reach?'':'disabled'}> ${s.type==='stairs'?'Stairs':'Lift'} ${i+1} <span class="note" style="margin:0">(${floorShort(b,s.bottom)}–${floorShort(b,shaftTop(b,s))})</span></label>`; });
-      h+=`<label class="chk"><input type="checkbox" data-bool="style.parapet" id="parChk2" ${b.style.parapet?'checked':''}> Parapet wall</label>${slider('style.units','Rooftop units',b.style.units,0,8,1,'',0)}</div>`;
+    const k=activeFloor(b), N=b.floors.length, shell=isShell(b);
+    h+=`<div class="sec"><div class="seg" role="group" aria-label="Interior">${[['walk','Walk-in interior'],['shell','Shell only']].map(([v,l])=>`<button data-act="interior" data-v="${v}" class="${(v==='shell')===shell?'on':''}">${l}</button>`).join('')}</div>`;
+    if(shell){
+      h+=`<p class="lead" style="margin-top:12px">Facade only: windows are opaque, no floors or rooms inside, and the player can't enter. Use it for background blocks. Your floor layouts are kept if you switch back.</p></div>`;
+    } else if(k===N){
+      h+=`<div class="sub-h">Roof access</div>`;
+      if(!b.shafts.length) h+=`<p class="note">No stairs or lifts yet. Pick a floor on the right, then place stairs.</p>`;
+      b.shafts.forEach((x,i)=>{ const reach=shaftTop(b,x)===N-1; h+=`<label class="chk"><input type="checkbox" data-act="shRoofI" data-id="${x.id}" ${x.roof?'checked':''} ${reach?'':'disabled'}> ${x.type==='stairs'?'Stairs':'Lift'} ${i+1} <span class="note mono" style="margin:0">${floorShort(b,x.bottom)}–${floorShort(b,shaftTop(b,x))}</span></label>`; });
+      h+=`</div>`;
     } else {
-      const tools=[['select','Select','V'],['wall','Wall','W'],['door','Door','D'],['erase','Erase','X'],['stairs','Stairs','S'],['lift','Lift','L'],['prop','Furnish','F']];
-      h+=`<div class="sec"><div class="h"><span class="grow">Editing ${floorLabel(b,k)}</span><span class="mono" style="letter-spacing:0">${floorBase(b,k).toFixed(1)} m</span></div>
-        <div class="tools">${tools.map(([t,l,kb])=>`<button class="tool ${ui.tool===t?'on':''}" data-act="tool" data-t="${t}" title="${l} (${kb})">${TOOL_ICONS[t]}${l}<kbd>${kb}</kbd></button>`).join('')}<button class="tool" data-act="playHere" title="Walk this floor">${I.play}<span>Walk it</span></button></div>`;
-      if(ui.tool==='prop') h+=`<div class="chips" style="margin-top:10px">${Object.entries(PROPS).map(([t,p])=>`<button class="chip ${ui.propType===t?'on':''}" data-act="ptype" data-t="${t}">${p.label}</button>`).join('')}</div>`;
-      h+=`<p class="note">${toolNote()}</p>`;
+      const cur=TOOLS.find(t=>t[0]===ui.tool)||TOOLS[0];
+      h+=`<div class="tstrip" role="toolbar" aria-label="Interior tools">${TOOLS.map(([t,l,kb])=>`<button class="${ui.tool===t?'on':''}" data-act="tool" data-t="${t}" title="${l} (${kb})" aria-label="${l}" aria-pressed="${ui.tool===t}">${TOOL_ICONS[t]}</button>`).join('')}</div>
+        <div class="toolname"><b>${cur[1]}</b><kbd>${cur[2]}</kbd></div><p class="note" style="margin-top:2px">${cur[3]}</p>`;
+      if(ui.tool==='prop') h+=`<div class="chips" style="margin-top:8px">${Object.entries(PROPS).map(([t,p])=>`<button class="chip ${ui.propType===t?'on':''}" data-act="ptype" data-t="${t}">${p.label}</button>`).join('')}</div>`;
       if(ui.sub) h+=inspector(b);
-      h+=`</div><div class="sec"><div class="h">This floor</div><div class="row"><button class="btn" data-act="copyUp" ${k>=N-1?'disabled':''}>Copy layout to floors above</button><button class="btn" data-act="clearFloor">Clear floor</button></div>
-        <p class="note">${b.floors[k].walls.length} walls · ${b.floors[k].props.length} items · ${b.shafts.filter(s=>shaftLevels(b,s).includes(k)).length} stair/lift cores pass through</p></div>`;
+      h+=`<details class="more" ${ui.moreOpen?'open':''} id="moreInt"><summary>Interior colours</summary>
+        <div class="field"><span>Walls</span>${swatches('style.interior',b.style.interior)}</div>
+        <div class="field"><span>Floors</span>${swatches('style.floor',b.style.floor)}</div></details></div>`;
     }
   }
   panel.innerHTML=h; updateHint();
-}
-function toolNote(){
-  return ({select:'Drag furniture, stairs or lifts to move them. Click a wall to select it. R rotates, Delete removes.',
-    wall:'Click to start, keep clicking to chain walls, click the last point again or press Esc to finish. Drag for a single wall. Snaps to corners and walls.',
-    door:'Click a wall to cut a doorway, click a doorway to fill it. On the ground floor this also works on outside walls.',
-    erase:'Click walls, doorways, furniture, stairs or lifts to remove them.',
-    stairs:'Click to place a stair core. It runs from this floor to the top floor and grows when you add floors. R rotates.',
-    lift:'Click to place a lift. It serves this floor up to the top floor. R rotates.',
-    prop:'Pick an item, click to place it. R rotates.'})[ui.tool]||'';
 }
 function inspector(b){
   const s=ui.sub;
   if(s.kind==='shaft'){ const sh=b.shafts.find(x=>x.id===s.id); if(!sh) return ''; const N=b.floors.length;
     const opts=k=>Array.from({length:N},(_,i)=>`<option value="${i}" ${i===k?'selected':''}>${floorLabel(b,i)}</option>`).join('');
-    return `<div class="insp"><div class="t">${TOOL_ICONS[sh.type==='stairs'?'stairs':'lift']} ${sh.type==='stairs'?'Stair core':'Lift'}</div>
+    return `<div class="insp"><div class="t">${TOOL_ICONS[sh.type==='stairs'?'stairs':'lift']} ${sh.type==='stairs'?'Stairs':'Lift'}</div>
       <div class="field"><span>From</span><select id="shBottom" data-sh="bottom">${opts(sh.bottom)}</select></div>
-      <div class="field"><span>To</span><select id="shTop" data-sh="top"><option value="-1" ${sh.top<0?'selected':''}>Top floor (follows)</option>${opts(sh.top<0?-9:sh.top)}</select></div>
+      <div class="field"><span>To</span><select id="shTop" data-sh="top"><option value="-1" ${sh.top<0?'selected':''}>Top floor</option>${opts(sh.top<0?-9:sh.top)}</select></div>
       <label class="chk"><input type="checkbox" data-act="shRoof" ${sh.roof?'checked':''}> Continue to the roof</label>
-      <div class="row"><button class="btn" data-act="subRot">Rotate</button><button class="btn danger" data-act="subDel">${I.del} Remove</button></div></div>`; }
-  if(s.kind==='prop'){ const p=b.floors[s.floor]?.props[s.i]; if(!p) return ''; return `<div class="insp"><div class="t">${PROPS[p.type].label}</div><div class="row"><button class="btn" data-act="subRot">Rotate</button><button class="btn danger" data-act="subDel">${I.del} Remove</button></div></div>`; }
-  if(s.kind==='wall'){ const w=b.floors[s.floor]?.walls[s.i]; if(!w) return ''; const L=Math.hypot(w.b.x-w.a.x,w.b.z-w.a.z); return `<div class="insp"><div class="t">Wall · <span class="mono">${L.toFixed(2)} m</span></div><p class="note" style="margin:0 0 8px">${w.doors.length} doorway${w.doors.length===1?'':'s'}</p><div class="row"><button class="btn danger" data-act="subDel">${I.del} Remove</button></div></div>`; }
+      <div class="row"><button class="btn" data-act="subRot">Rotate</button><button class="btn danger ghost" data-act="subDel">${I.del} Remove</button></div></div>`; }
+  if(s.kind==='prop'){ const p=b.floors[s.floor]?.props[s.i]; if(!p) return ''; return `<div class="insp"><div class="t">${PROPS[p.type].label}</div><div class="row"><button class="btn" data-act="subRot">Rotate</button><button class="btn danger ghost" data-act="subDel">${I.del} Remove</button></div></div>`; }
+  if(s.kind==='wall'){ const w=b.floors[s.floor]?.walls[s.i]; if(!w) return ''; const L=Math.hypot(w.b.x-w.a.x,w.b.z-w.a.z); return `<div class="insp"><div class="t">Wall <span class="mono note" style="margin:0">${L.toFixed(2)} m</span></div><div class="row"><button class="btn danger ghost" data-act="subDel">${I.del} Remove</button></div></div>`; }
   return '';
 }
 function renderStack(){
   const b=selB();
-  if(ui.mode!=='edit' || !b){ stackEl.hidden=true; return; }
+  if(ui.mode!=='edit' || !b || ui.bmenu){ stackEl.hidden=true; return; }
   stackEl.hidden=false;
-  const N=b.floors.length, k=activeFloor(b), inInt=ui.tab==='interior';
-  const roofAcc=b.shafts.some(s=>shaftRoof(b,s));
-  let h=`<div class="hd"><div class="h" style="margin:0">Floors</div><div class="cnt"><button class="ib" data-act="fRemove" title="Remove top floor (−)" aria-label="Remove top floor" ${N<=1?'disabled':''}>${I.minus}</button><input id="fcount" type="number" min="1" max="40" value="${N}" aria-label="Number of floors"><button class="ib" data-act="fAdd" title="Add floor on top (+)" aria-label="Add floor">${I.plus}</button></div></div><div class="floors">`;
-  h+=`<div class="frow ${inInt&&k===N?'on':''}" data-act="fSel" data-k="${N}"><span class="num">R</span><span class="lb">Roof <em>${roofAcc?'· access':''}</em></span></div>`;
-  for(let i=N-1;i>=0;i--){
-    const cores=b.shafts.filter(s=>shaftLevels(b,s).includes(i)).map(s=>s.type==='stairs'?'S':'L').join('');
-    h+=`<div class="frow ${inInt&&k===i?'on':''}" data-act="fSel" data-k="${i}"><span class="num">${floorShort(b,i)}</span><span class="lb">${i===0?'Ground':'Floor '+i} <em class="mono">${cores}</em></span><span class="acts"><button data-act="fDup" data-k="${i}" title="Duplicate this floor above" aria-label="Duplicate floor">${I.dup}</button><button data-act="fDel" data-k="${i}" title="Delete this floor" aria-label="Delete floor" ${N<=1?'disabled':''}>${I.del}</button></span></div>`;
+  const N=b.floors.length, k=activeFloor(b), list = ui.tab==='interior' && !isShell(b);
+  stackEl.classList.toggle('compact', !list);
+  let h=`<div class="hd"><div class="h" style="margin:0">Floors</div><div class="cnt"><button class="ib" data-act="fRemove" title="Remove top floor (−)" aria-label="Remove top floor" ${N<=1?'disabled':''}>${I.minus}</button><input id="fcount" type="number" min="1" max="40" value="${N}" aria-label="Number of floors"><button class="ib" data-act="fAdd" title="Add a floor on top, copying the top floor (+)" aria-label="Add floor">${I.plus}</button></div></div>`;
+  if(list){
+    const roofAcc=b.shafts.some(x=>shaftRoof(b,x));
+    h+=`<div class="floors"><div class="frow ${k===N?'on':''}" data-act="fSel" data-k="${N}"><span class="num">R</span><span class="lb">Roof${roofAcc?' <em>· access</em>':''}</span></div>`;
+    for(let i=N-1;i>=0;i--) h+=`<div class="frow ${k===i?'on':''}" data-act="fSel" data-k="${i}"><span class="num">${floorShort(b,i)}</span><span class="lb">${i===0?'Ground':'Floor '+i}</span><span class="acts"><button data-act="fCopyUp" data-k="${i}" title="Copy this layout to every floor above" aria-label="Copy layout up" ${i>=N-1?'disabled':''}>${I.up}</button><button data-act="fDup" data-k="${i}" title="Duplicate this floor" aria-label="Duplicate floor">${I.dup}</button><button data-act="fDel" data-k="${i}" title="Delete this floor" aria-label="Delete floor" ${N<=1?'disabled':''}>${I.del}</button></span></div>`;
+    h+=`</div>`;
   }
-  h+=`</div><div class="ft"><label class="chk" style="margin:0"><input type="checkbox" id="copyChk" ${ui.copyOnAdd?'checked':''}> New floors copy the top layout</label></div>`;
   const sc=stackEl.querySelector('.floors')?.scrollTop||0;
   stackEl.innerHTML=h;
-  const fl=stackEl.querySelector('.floors'); fl.scrollTop=sc;
-  const on=fl.querySelector('.frow.on'); if(on){ const r=on.offsetTop, hh=fl.clientHeight; if(r<fl.scrollTop || r>fl.scrollTop+hh-30) fl.scrollTop=r-hh/2; }
+  const fl=stackEl.querySelector('.floors'); if(fl){ fl.scrollTop=sc; const on=fl.querySelector('.frow.on'); if(on){ const r=on.offsetTop, hh=fl.clientHeight; if(r<fl.scrollTop || r>fl.scrollTop+hh-30) fl.scrollTop=r-hh/2; } }
 }
 function updateHint(){
-  const b=selB(); let t;
-  if(!b) t='Click a building to edit it · drag to orbit · right-drag or Shift-drag to pan · scroll to zoom · double-click to focus';
-  else if(ui.tab==='shape') t='Drag corners · + adds a corner · double-click a corner to delete it · drag ✥ to move the building';
-  else if(ui.tab==='facade') t=ui.facadeTool?'Click walls in the view · right-drag to orbit':'Pick a style, then fine-tune windows and colours';
-  else t='[ and ] step through floors · + and − add or remove the top floor · right-drag to orbit';
-  $('#hint').textContent=t;
+  const b=selB(), el=$('#hint');
+  el.hidden = ui.mode!=='edit' || !!b;
+  el.textContent='Click a building to edit it · drag to orbit · Shift-drag to pan · scroll to zoom';
 }
+function smartPlay(){ const b=selB(); if(b && ui.tab==='interior' && !isShell(b) && activeFloor(b)<b.floors.length) playHere(); else enterPlay(); }
 function setTab(t, silent){ ui.tab=t; ui.sub=null; wallChain=null; hideHL(); tip.hidden=true; if(t!=='facade') ui.facadeTool=null; if(!silent) refreshChrome(); }
 function setTool(t){ ui.tool=t; wallChain=null; dragItem=null; hideHL(); tip.hidden=true; canvas.style.cursor = t==='select'?'':'crosshair'; renderPanel(); }
 
@@ -1432,17 +1522,19 @@ panel.addEventListener('click', e=>{
   const a=e.target.closest('[data-act]'); if(!a) return; const act=a.dataset.act;
   switch(act){
     case 'ptoggle': panel.classList.toggle('collapsed'); renderPanel(); break;
-    case 'sel': selectBuilding(a.dataset.id); focusBuilding(bById(a.dataset.id)); break;
-    case 'new': newBuilding(a.dataset.shape); break;
+    case 'bmenu': ui.bmenu=!ui.bmenu; renderPanel(); renderStack(); break;
+    case 'interior': { const sh=a.dataset.v==='shell'; if(sh!==isShell(b)){ commit(()=>{ b.interior=!sh; }, sh?'Shell only — facade with no interior':'Walk-in interior restored', b); ui.sub=null; refreshChrome(); } break; }
+    case 'sel': ui.bmenu=false; selectBuilding(a.dataset.id); focusBuilding(bById(a.dataset.id)); break;
+    case 'new': ui.bmenu=false; newBuilding(a.dataset.shape); break;
     case 'play': enterPlay(); break;
-    case 'dup': duplicateBuilding(b); break;
+    case 'dup': ui.bmenu=false; duplicateBuilding(b); break;
     case 'focus': focusBuilding(b); break;
-    case 'delB': deleteBuilding(b); break;
+    case 'delB': ui.bmenu=false; deleteBuilding(b); break;
     case 'tab': setTab(a.dataset.tab); break;
     case 'shape': commit(()=>applyShape(b,a.dataset.shape), 'Footprint replaced', b); overlayRebuild(); renderPanel(); break;
     case 'rot90': commit(()=>rotate90(b), 'Rotated', b); overlayRebuild(); break;
     case 'style': { const k=a.dataset.style; commit(()=>{ b.style={...clone(STYLES[k]), preset:k}; }, STYLES[k].label+' applied', b); renderPanel(); break; }
-    case 'ftool': ui.facadeTool = ui.facadeTool===a.dataset.t ? null : a.dataset.t; hideHL(); canvas.style.cursor=ui.facadeTool?'crosshair':''; renderPanel(); break;
+    case 'ftool': ui.facadeTool = ui.facadeTool===a.dataset.t ? null : a.dataset.t; hideHL(); canvas.style.cursor=ui.facadeTool?'crosshair':''; renderPanel(); if(ui.facadeTool) toast(ui.facadeTool==='entrance'?'Click a ground-floor wall to add or remove an entrance':'Click a wall to switch its windows off or on'); break;
     case 'tool': setTool(a.dataset.t); break;
     case 'ptype': ui.propType=a.dataset.t; renderPanel(); break;
     case 'playHere': playHere(); break;
@@ -1454,6 +1546,7 @@ panel.addEventListener('click', e=>{
     case 'shRoofI': { const sh=b.shafts.find(x=>x.id===a.dataset.id); if(sh) commit(()=>{ sh.roof=a.checked; }, null, b); renderStack(); break; }
   }
 });
+panel.addEventListener('toggle', e=>{ if(e.target.matches('details.more')) ui.moreOpen=e.target.open; }, true);
 panel.addEventListener('input', e=>{
   const b=selB(); if(!b) return; const t=e.target;
   if(t.dataset.num){ if(!sliding){ pushUndo(); sliding=true; } const v=+t.value; setPath(b,t.dataset.num,v); if(t.dataset.num==='style.winW'||t.dataset.num==='style.bay') b.style.preset=null; t.nextElementSibling.textContent=v.toFixed(+t.dataset.dec)+t.dataset.unit; touch(b); }
@@ -1475,6 +1568,7 @@ stackEl.addEventListener('click', e=>{
     case 'fAdd': commit(()=>addFloorTop(b), 'Floor '+b.floors.length+' added', b); setActive(b,b.floors.length-1); refreshChrome(); break;
     case 'fRemove': if(b.floors.length>1){ commit(()=>deleteFloor(b,b.floors.length-1), 'Top floor removed', b); refreshChrome(); } break;
     case 'fSel': e.stopPropagation(); setTab('interior',true); setActive(b,k); refreshChrome(); break;
+    case 'fCopyUp': e.stopPropagation(); { const n=b.floors.length-1-k; commit(()=>{ for(let j=k+1;j<b.floors.length;j++) b.floors[j]=clone(b.floors[k]); }, `${floorLabel(b,k)} copied to ${n} floor${n===1?'':'s'} above`, b); } break;
     case 'fDup': e.stopPropagation(); commit(()=>insertAbove(b,k), floorLabel(b,k)+' duplicated', b); setTab('interior',true); setActive(b,k+1); refreshChrome(); break;
     case 'fDel': e.stopPropagation(); if(b.floors.length>1){ const lbl=floorLabel(b,k); commit(()=>deleteFloor(b,k), lbl+' deleted — floors above moved down', b); setActive(b,Math.min(k,b.floors.length-1)); refreshChrome(); } break;
   }
@@ -1482,7 +1576,6 @@ stackEl.addEventListener('click', e=>{
 stackEl.addEventListener('change', e=>{
   const b=selB(); if(!b) return;
   if(e.target.id==='fcount'){ const n=clamp(parseInt(e.target.value)||1,1,40); if(n!==b.floors.length){ const was=b.floors.length; commit(()=>setFloorCount(b,n), `${n} floors (${n>was?'+':''}${n-was})`, b); refreshChrome(); } }
-  if(e.target.id==='copyChk') ui.copyOnAdd=e.target.checked;
 });
 
 /* =========================================================================
@@ -1493,10 +1586,12 @@ const tmp3=new THREE.Vector3();
 function overlayRebuild(){
   ov.innerHTML=''; ovItems=[];
   if(ui.mode!=='edit') return;
+  if(!selB()){
   const sp=document.createElement('div'); sp.className='hd-s'; sp.title='Play spawn point — drag to move';
   sp.innerHTML='<svg width="26" height="30" viewBox="0 0 26 30" aria-hidden="true"><path d="M13 29s10-9.5 10-17A10 10 0 0 0 3 12c0 7.5 10 17 10 17z" fill="#1C2320"/><circle cx="13" cy="9" r="3" fill="#FF8A3D"/><path d="M8 18a5 5 0 0 1 10 0" fill="#FF8A3D"/></svg>';
   ov.appendChild(sp); ovItems.push({el:sp, pos:()=>tmp3.set(state.spawn.x,0,state.spawn.z)});
   handleDrag(sp, ()=>pushUndo(), p=>{ state.spawn=P(snapG(p.x),snapG(p.z)); saveSoon(); });
+  }
   const b=selB(); if(!b || ui.tab!=='shape') return;
   const id=b.id;
   b.footprint.forEach((v,i)=>{
@@ -1526,9 +1621,9 @@ function overlayRebuild(){
 }
 function handleDrag(el, onStart, onMove, onEnd){
   let active=false;
-  el.addEventListener('pointerdown', e=>{ if(e.button!==0) return; e.stopPropagation(); e.preventDefault(); el.setPointerCapture(e.pointerId); active=true; onStart&&onStart(); });
+  el.addEventListener('pointerdown', e=>{ if(e.button!==0) return; e.stopPropagation(); e.preventDefault(); el.setPointerCapture(e.pointerId); active=true; ov.classList.add('dragging'); onStart&&onStart(); });
   el.addEventListener('pointermove', e=>{ if(!active) return; const v=rayY(e,0); if(v) onMove(v,e); });
-  const end=()=>{ if(!active) return; active=false; saveSoon(); onEnd&&onEnd(); };
+  const end=()=>{ if(!active) return; active=false; ov.classList.remove('dragging'); saveSoon(); onEnd&&onEnd(); };
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
 }
 function overlayUpdate(){
@@ -1545,21 +1640,21 @@ function refreshChrome(){
   const play=ui.mode==='play';
   $('#mEdit').classList.toggle('on',!play); $('#mPlay').classList.toggle('on',play);
   $('#mEdit').setAttribute('aria-selected',!play); $('#mPlay').setAttribute('aria-selected',play);
-  panel.hidden=play; $('#hint').hidden=play; $('#editTb').hidden=play; $('#hud').hidden=!play;
-  edGrid.visible=!play && !(selB() && ui.tab==='interior');
+  panel.hidden=play; $('#editTb').hidden=play; $('#hud').hidden=!play; updateHint();
+  { const b=selB(); $('#mPlay').title = !play && b && ui.tab==='interior' && !isShell(b) && activeFloor(b)<b.floors.length ? 'Play from '+floorLabel(b,activeFloor(b))+' (P)' : 'Play from the street (P)'; }
   if(play){ stackEl.hidden=true; renderOcc(); ov.innerHTML=''; ovItems=[]; }
   else { renderPanel(); renderStack(); overlayRebuild(); canvas.style.cursor=(ui.tab==='interior'&&ui.tool!=='select')||(ui.tab==='facade'&&ui.facadeTool)?'crosshair':''; }
   updateUndoBtns();
 }
-$('#mEdit').onclick=exitPlay; $('#mPlay').onclick=()=>enterPlay();
+$('#mEdit').onclick=exitPlay; $('#mPlay').onclick=smartPlay;
 $('#bUndo').onclick=undo; $('#bRedo').onclick=redo;
 function openModal(html){ const m=$('#modal'); m.innerHTML=`<div class="card" role="dialog" aria-modal="true">${html}</div>`; m.hidden=false; }
 function closeModal(){ $('#modal').hidden=true; }
 $('#modal').addEventListener('click', e=>{ if(e.target.id==='modal'||e.target.closest('[data-close]')) closeModal(); });
-$('#bHelp').onclick=()=>openModal(`<h2>Shortcuts</h2><table>
+$('#bHelp').onclick=()=>{ openModal(`<h2>Shortcuts & data</h2><table>
 <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Shape · Facade · Interior</td></tr>
 <tr><td><kbd>[</kbd> <kbd>]</kbd> or PgDn/PgUp</td><td>Step down / up through floors</td></tr>
-<tr><td><kbd>+</kbd> <kbd>−</kbd></td><td>Add a floor on top (copies the top layout) / remove the top floor</td></tr>
+<tr><td><kbd>+</kbd> <kbd>−</kbd></td><td>Add a floor on top (copies the top floor) / remove the top floor</td></tr>
 <tr><td><kbd>V</kbd> <kbd>W</kbd> <kbd>D</kbd> <kbd>X</kbd></td><td>Select · Wall · Door · Erase</td></tr>
 <tr><td><kbd>S</kbd> <kbd>L</kbd> <kbd>F</kbd></td><td>Stairs · Lift · Furnish</td></tr>
 <tr><td><kbd>R</kbd></td><td>Rotate the item being placed or the selection</td></tr>
@@ -1568,17 +1663,17 @@ $('#bHelp').onclick=()=>openModal(`<h2>Shortcuts</h2><table>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Undo / redo</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicate building</td></tr>
 <tr><td><kbd>C</kbd> / double-click</td><td>Focus the camera on a building</td></tr>
-<tr><td><kbd>P</kbd></td><td>Play from the spawn point · <kbd>Esc</kbd> to stop</td></tr>
+<tr><td><kbd>P</kbd></td><td>Play: from the floor you're editing in Interior, otherwise from the street · <kbd>Esc</kbd> to stop</td></tr>
 <tr><td>Mouse</td><td>Left-drag empty space or right-drag to orbit · Shift or middle-drag to pan · wheel to zoom</td></tr>
 <tr><td>Touch</td><td>One finger orbits (or uses the tool) · two fingers pinch, twist and pan</td></tr>
 <tr><td>Play</td><td>WASD / arrows or joystick · Shift to run · drag to orbit</td></tr>
-</table><div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn pri" data-close>Close</button></div>`);
-$('#bData').onclick=()=>{ openModal(`<h2>Layout data</h2><p class="note" style="margin:0 0 10px">This is the full editor state — the same shape the Unity data model is specced against. Copy it to share a layout, or paste one in and load it.</p><textarea id="jsonTa" spellcheck="false">${esc(JSON.stringify(state,null,1))}</textarea>
+</table><div class="row" style="margin-top:14px"><button class="btn" id="hData">Layout JSON…</button><span style="flex:1"></span><button class="btn pri" data-close>Close</button></div>`); $('#hData').onclick=openData; };
+function openData(){ openModal(`<h2>Layout data</h2><p class="note" style="margin:0 0 10px">This is the full editor state — the same shape the Unity data model is specced against. Copy it to share a layout, or paste one in and load it.</p><textarea id="jsonTa" spellcheck="false">${esc(JSON.stringify(state,null,1))}</textarea>
   <div class="row" style="margin-top:12px"><button class="btn" id="jCopy">Copy</button><button class="btn" id="jLoad">Load pasted JSON</button><button class="btn danger ghost" id="jReset">Reset to demo</button><span class="spacer" style="flex:1"></span><button class="btn pri" data-close>Close</button></div>`);
   $('#jCopy').onclick=()=>{ const ta=$('#jsonTa'); navigator.clipboard?.writeText(ta.value).then(()=>toast('Copied'),()=>{ ta.select(); toast('Press Ctrl+C to copy'); }) ?? (ta.select(), toast('Press Ctrl+C to copy')); };
   $('#jLoad').onclick=()=>{ try{ const o=JSON.parse($('#jsonTa').value); if(!o||!Array.isArray(o.buildings)) throw 0; pushUndo(); state=o; state.v=2; state.seq=Math.max(state.seq||1, 1000); afterRestore('Layout loaded'); closeModal(); }catch(e){ toast('That JSON is not a layout — check it starts with {"v":2'); } };
   $('#jReset').onclick=()=>{ pushUndo(); demoState(); afterRestore('Demo restored'); closeModal(); };
-};
+}
 
 /* =========================================================================
    Main loop
@@ -1591,12 +1686,11 @@ function tick(now){
   for(const id of dirty){ const b=bById(id); if(b) rebuild(b); } dirty.clear();
   if(ui.mode==='play'){ updatePlayer(dt); updateHUD(); updateLiftUI(); applyCam(camPlay); }
   else {
-    const b=selB(); const desY = b && ui.tab==='interior' ? floorBase(b,activeFloor(b)) : 0;
+    const b=selB(); const inInt = b && ui.tab==='interior' && !isShell(b); const desY = inInt ? floorBase(b,activeFloor(b)) : 0;
     camEdit.target.y += (desY-camEdit.target.y)*Math.min(1,dt*8); applyCam(camEdit);
-    if(b && ui.tab==='interior'){ const bb=bbox(b.footprint); const sx=Math.ceil((bb.x1-bb.x0)+2), sz=Math.ceil((bb.z1-bb.z0)+2), s=Math.max(sx,sz); const key=b.id+s; if(key!==flGridKey){ scene.remove(flGrid); flGrid.geometry.dispose(); const g=new THREE.GridHelper(s, s*2, '#DD5A12', '#8E968C'); flGrid.geometry=g.geometry; flGrid.material=g.material; flGrid.material.transparent=true; flGrid.material.opacity=0.3; scene.add(flGrid); flGridKey=key; }
-      flGrid.visible = activeFloor(b)<b.floors.length; flGrid.position.set((bb.x0+bb.x1)/2+b.pos.x, floorBase(b,activeFloor(b))+0.015, (bb.z0+bb.z1)/2+b.pos.z); }
+    if(inInt){ const bb=bbox(b.footprint); const sx=Math.ceil((bb.x1-bb.x0)+2), sz=Math.ceil((bb.z1-bb.z0)+2), s=Math.max(sx,sz); const key=b.id+s; if(key!==flGridKey){ scene.remove(flGrid); flGrid.geometry.dispose(); const g=new THREE.GridHelper(s, s*2, '#DD5A12', '#8E968C'); flGrid.geometry=g.geometry; flGrid.material=g.material; flGrid.material.transparent=true; flGrid.material.opacity=0.3; flGrid.material.depthWrite=false; scene.add(flGrid); flGridKey=key; }
+      flGrid.visible = activeFloor(b)<b.floors.length; flGrid.position.set((bb.x0+bb.x1)/2+b.pos.x, floorBase(b,activeFloor(b))+0.03, (bb.z0+bb.z1)/2+b.pos.z); }
     else flGrid.visible=false;
-    edGrid.visible = !(b && ui.tab==='interior');
     if(ui.sub && b && ui.tab==='interior' && !dragItem && ui.tool==='select'){ const k=activeFloor(b); const s=ui.sub; if(s.kind==='shaft'){ const sh=b.shafts.find(x=>x.id===s.id); if(sh && shaftLevels(b,sh).includes(k)) showTarget(b,k,{kind:'shaft',s:sh},'#2F7D4F'); } else if(s.floor===k){ if(s.kind==='prop') showTarget(b,k,{kind:'prop',i:s.i},'#2F7D4F'); if(s.kind==='wall') showTarget(b,k,{kind:'wall',wi:s.i},'#2F7D4F'); } }
     overlayUpdate();
   }
@@ -1613,5 +1707,5 @@ touch();
 ui.sel = state.buildings[0]?.id || null;
 refreshChrome();
 requestAnimationFrame(tick);
-window.__sb = { bench:()=>{ const b=state.buildings[0]; const t=performance.now(); for(let i=0;i<10;i++) buildGeometry(b); return (performance.now()-t)/10; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); } };
+window.__sb = { geo:(i)=>{ const b=state.buildings[i]; DEBUG_SOLIDS=true; const g=buildGeometry(b); DEBUG_SOLIDS=false; return g.levels.map(L=>({p:L.op.p,n:L.op.n,c:L.op.c,i:L.op.i,solids:L.op.solids})); }, nb:()=>state.buildings.length, bench:()=>{ const b=state.buildings[0]; const t=performance.now(); for(let i=0;i<10;i++) buildGeometry(b); return (performance.now()-t)/10; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); } };
 </script>
