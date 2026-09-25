@@ -257,7 +257,7 @@ details.more[open] summary{margin-bottom:6px}
   <div id="hint" class="card"></div>
 
   <div id="hud" hidden>
-    <div id="loc" class="card"><div class="d mono" id="locD">—</div><div class="t"><b id="locN">Street</b><span id="locS">Outside</span></div></div>
+    <div id="loc" class="card"><div class="d mono" id="locD">—</div><div class="t"><b id="locN">Outside</b><span id="locS">No building</span></div></div>
     <div id="phint" class="card">WASD or joystick to walk · drag to orbit · scroll or pinch to zoom · Esc to stop</div>
     <div id="occ" class="card"></div>
     <div id="joy" aria-label="Virtual joystick"><div class="k"></div></div>
@@ -823,23 +823,7 @@ function touch(b){ if(b) dirty.add(b.id); else state.buildings.forEach(x=>dirty.
 function buildWorld(){
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(600,600), new THREE.MeshStandardMaterial({color:'#A9AE9F', roughness:1}));
   ground.rotation.x=-Math.PI/2; ground.position.y=-0.09; ground.receiveShadow=true; scene.add(ground);
-  const road=new THREE.Mesh(new THREE.PlaneGeometry(600,7), new THREE.MeshStandardMaterial({color:'#55595B', roughness:0.95}));
-  road.rotation.x=-Math.PI/2; road.position.set(0,-0.07,-14.5); road.receiveShadow=true; scene.add(road);
-  const walk=new THREE.Mesh(new THREE.PlaneGeometry(600,4.6), new THREE.MeshStandardMaterial({color:'#C9C6BC', roughness:0.95}));
-  walk.rotation.x=-Math.PI/2; walk.position.set(0,-0.03,-8.7); walk.receiveShadow=true; scene.add(walk);
-  const gb=new GB();
-  for(let x=-120;x<120;x+=4) gb.obox([x,-14.55],[1,0],[0,1],0,2,-0.08,-0.055,0,0.1,col('#E8E4D8'));
-  for(const x of [-13,-5,5.5,11,19,27]){
-    const f=[x,-10.3]; gb.ctx([x,-10.3,0,0],2);
-    gb.obox(f,[1,0],[0,1],-0.12,0.12,-0.04,2.2,-0.12,0.12,col('#6B5443'));
-    gb.obox(f,[1,0],[0,1],-1.1,1.1,2.0,3.6,-1.1,1.1,col('#5E8A4F'));
-    gb.obox(f,[1,0],[0,1],-0.75,0.75,3.6,4.5,-0.75,0.75,col('#6E9C5C'));
-    gb.ctx(Z4,0);
-  }
-  const wm=makeMats(); worldMats=wm;
-  const m=new THREE.Mesh(gb.geo(), wm.opaque); m.castShadow=true; m.receiveShadow=true; m.customDepthMaterial=wm.depth; scene.add(m);
 }
-let worldMats;
 const flGrid = new THREE.GridHelper(1,1,'#DD5A12','#8E968C'); flGrid.material.transparent=true; flGrid.material.opacity=0.35; flGrid.visible=false; scene.add(flGrid);
 let flGridKey='';
 
@@ -1053,7 +1037,7 @@ let hudKey='';
 function updateHUD(){
   const loc=playerLoc(); const key = loc.b ? loc.b.id+':'+loc.floor : 'out';
   if(key===hudKey) return; hudKey=key;
-  if(!loc.b){ $('#locD').textContent='—'; $('#locN').textContent='Street'; $('#locS').textContent='Outside'; return; }
+  if(!loc.b){ $('#locD').textContent='—'; $('#locN').textContent='Outside'; $('#locS').textContent='No building'; return; }
   $('#locD').textContent=floorShort(loc.b,loc.floor).padStart(2,' '); $('#locN').textContent=loc.b.name; $('#locS').textContent=floorLabel(loc.b,loc.floor)+' of '+loc.b.floors.length;
 }
 function renderOcc(){
@@ -1641,7 +1625,7 @@ function refreshChrome(){
   $('#mEdit').classList.toggle('on',!play); $('#mPlay').classList.toggle('on',play);
   $('#mEdit').setAttribute('aria-selected',!play); $('#mPlay').setAttribute('aria-selected',play);
   panel.hidden=play; $('#editTb').hidden=play; $('#hud').hidden=!play; updateHint();
-  { const b=selB(); $('#mPlay').title = !play && b && ui.tab==='interior' && !isShell(b) && activeFloor(b)<b.floors.length ? 'Play from '+floorLabel(b,activeFloor(b))+' (P)' : 'Play from the street (P)'; }
+  { const b=selB(); $('#mPlay').title = !play && b && ui.tab==='interior' && !isShell(b) && activeFloor(b)<b.floors.length ? 'Play from '+floorLabel(b,activeFloor(b))+' (P)' : 'Play from the spawn point (P)'; }
   if(play){ stackEl.hidden=true; renderOcc(); ov.innerHTML=''; ovItems=[]; }
   else { renderPanel(); renderStack(); overlayRebuild(); canvas.style.cursor=(ui.tab==='interior'&&ui.tool!=='select')||(ui.tab==='facade'&&ui.facadeTool)?'crosshair':''; }
   updateUndoBtns();
@@ -1663,7 +1647,7 @@ $('#bHelp').onclick=()=>{ openModal(`<h2>Shortcuts & data</h2><table>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Undo / redo</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicate building</td></tr>
 <tr><td><kbd>C</kbd> / double-click</td><td>Focus the camera on a building</td></tr>
-<tr><td><kbd>P</kbd></td><td>Play: from the floor you're editing in Interior, otherwise from the street · <kbd>Esc</kbd> to stop</td></tr>
+<tr><td><kbd>P</kbd></td><td>Play: from the floor you're editing in Interior, otherwise from the spawn point · <kbd>Esc</kbd> to stop</td></tr>
 <tr><td>Mouse</td><td>Left-drag empty space or right-drag to orbit · Shift or middle-drag to pan · wheel to zoom</td></tr>
 <tr><td>Touch</td><td>One finger orbits (or uses the tool) · two fingers pinch, twist and pan</td></tr>
 <tr><td>Play</td><td>WASD / arrows or joystick · Shift to run · drag to orbit</td></tr>

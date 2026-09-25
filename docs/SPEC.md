@@ -101,7 +101,7 @@ Each layer runs every frame from a handful of global shader properties (`Shader.
 | **Ceiling clip** | Discard fragments above `floorBase + floorH` of the active floor. | Removes stair flights, lift cars and tall props poking into the floor above. |
 | **Cutaway** | For kind = wall on the active floor, above `stubHeight`: discard if the wall's line separates camera and player: `sign(dot(cam - p, n)) != sign(dot(player - p, n))`. For props, discard above the stub if the prop is on the camera side of the player. | "Sims-style" walls-down: works for any wall orientation and any camera yaw with no raycasts. |
 | **Section cap** | Back faces render as a flat dark colour. | Cut walls read as solid sections, not hollow shells. |
-| **See-through cone** | Discard (4×4 Bayer dither) fragments inside a cone from camera to the player's chest, above the player's feet. Applies to all buildings and world props. | Handles other buildings, trees, and edge cases the cutaway misses (for example the player hugging a wall). |
+| **See-through cone** | Discard (4×4 Bayer dither) fragments inside a cone from camera to the player's chest, above the player's feet. Applies to all buildings and world props. | Handles other buildings, scenery, and edge cases the cutaway misses (for example the player hugging a wall). |
 | **Silhouette** | Player drawn a second time with `ZTest Greater`. | The player is never lost. |
 | **Shadow pass** | The same discard logic runs in the ShadowCaster pass. | Cut-away walls must not cast shadows into the room. |
 
@@ -122,7 +122,7 @@ The player's floor comes from height, with a threshold 0.9 m below each floor li
 |---|---|---|
 | **1. Data + generation** | `BuildingData` model, footprint → slabs/walls/windows generator with the §4.1 rules, floor grouping, JSON import of prototype layouts, coplanar-face test | Prototype JSON loads in Unity and looks the same; coplanar test passes |
 | **2. Occlusion** | `BuildingOcclusion` shader include, floor toggling, cutaway, cone, section caps, shadow pass, silhouette. Tuning panel in play. | Walk every floor of a 10-floor building from any camera yaw without losing the character |
-| **3. Play-mode test rig** | Third-person controller, follow camera (orbit / zoom / pitch clamp), virtual joystick, stairs ramps, lift interaction. Only for testing authored buildings; game code may replace it. | Street → lobby → stairs → roof → lift down, on device |
+| **3. Play-mode test rig** | Third-person controller, follow camera (orbit / zoom / pitch clamp), virtual joystick, stairs ramps, lift interaction. Only for testing authored buildings; game code may replace it. | Outside → lobby → stairs → roof → lift down, on device |
 | **4. Editor: shape & facade** | Scene-view handles (footprint corners, insert, delete, move), facade inspector with presets, entrance and blank-wall tools, undo via `Undo.RecordObject`, shell-only toggle | Designer makes a styled 3-floor building in < 2 min |
 | **5. Editor: floors & interior** | Floor overlay (count, add/remove/duplicate/delete, copy layout up), wall/door/erase tools with snapping, core placement with range inspector, prop placement | 10 floors + rooftop access in < 5 min, remove floor 4 in one click |
 | **6. Polish** | Per-floor overrides (height, facade), prefab props, baked lighting strategy, perf pass (static batching per floor, LODs for distant buildings) | Perf budget met on target device |
