@@ -204,6 +204,18 @@ details.more[open] summary{margin-bottom:6px}
 .swb{width:21px;height:21px}
 .len{display:none}
 #ov.dragging .len{display:block}
+.ov-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.ol-halo{fill:none;stroke:rgba(255,255,255,.7);stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+.ol-foot{fill:none;stroke:#DD5A12;stroke-width:2.5;stroke-linejoin:round}
+.ol-wall{fill:none;stroke:#1C2320;stroke-width:2.5;stroke-linecap:round}
+.ol-wall.sel{stroke:#2F7D4F;stroke-width:3.5}
+.ol-guide{stroke:#DD5A12;stroke-width:1.5;stroke-dasharray:5 4}
+.ol-snap{fill:rgba(221,90,18,.18);stroke:#DD5A12;stroke-width:2.5}
+.hd-n{position:absolute;left:0;top:0;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;border:3px solid #1C2320;box-sizing:border-box;cursor:grab;pointer-events:auto;touch-action:none;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.hd-n::after{content:"";position:absolute;inset:-9px}
+.hd-n.passive{pointer-events:none;width:10px;height:10px;margin:-5px 0 0 -5px;border-width:2px;opacity:.85}
+.hd-wm{position:absolute;left:0;top:0;width:15px;height:15px;margin:-7.5px 0 0 -7.5px;border-radius:50%;background:rgba(255,255,255,.9);color:#1C2320;display:grid;place-items:center;font:700 12px/1 var(--sans);cursor:copy;pointer-events:auto;touch-action:none;opacity:.8;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.hd-wm::after{content:"";position:absolute;inset:-7px}
 #perf{position:absolute;right:12px;bottom:12px;width:280px;padding:12px 14px;z-index:15}
 #perf .h{margin-bottom:6px}
 .pstats{display:grid;grid-template-columns:1fr auto;gap:3px 12px;font-size:12px;margin:2px 0 10px}
@@ -1479,16 +1491,54 @@ let wallChain=null;       // {start:{x,z}, fresh:bool}
 let dragItem=null;        // select-tool drag
 const tip=$('#tip');
 function showTip(e,text){ tip.hidden=false; tip.textContent=text; const r=$('#app').getBoundingClientRect(); tip.style.left=(e.clientX-r.left+16)+'px'; tip.style.top=(e.clientY-r.top+14)+'px'; }
-function snapWallPt(b,k,p,from){
-  const cands=[]; for(const w of b.floors[k].walls) cands.push(w.a,w.b); for(const v of b.footprint) cands.push(v);
-  let best=null, bd=0.45; for(const c of cands){ const d=Math.hypot(c.x-p.x,c.z-p.z); if(d<bd){bd=d;best=P(c.x,c.z);} }
-  if(best) return {...best, hard:true};
-  let q = ui.snap ? P(snapG(p.x),snapG(p.z)) : P(p.x,p.z);
-  if(from){ const dx=q.x-from.x, dz=q.z-from.z; if(Math.abs(dx)<Math.abs(dz)*0.3) q.x=from.x; else if(Math.abs(dz)<Math.abs(dx)*0.3) q.z=from.z; }
-  let eb=null, ed=0.3; const lines=[...b.floors[k].walls.map(w=>[w.a,w.b]), ...b.footprint.map((v,i)=>[v,b.footprint[(i+1)%b.footprint.length]])];
-  for(const [a,c] of lines){ const r=segDist(q.x,q.z,a.x,a.z,c.x,c.z); if(r.d<ed){ ed=r.d; eb=P(r.cx,r.cz); } }
-  if(eb){ if(from && q.x===from.x) eb.x=from.x; if(from && q.z===from.z) eb.z=from.z; return eb; }
+/* One snapping rule for drawing walls and dragging wall points: other wall points and footprint corners
+   first, then grid (with axis alignment to the anchor points), then onto a wall or footprint edge.
+   The result says what it snapped to, so the overlay can show a marker and guide lines. */
+let snapFx=null;   // {b,k,x,z,kind,guides:[{x,z}]} drawn by the overlay
+function snapPoint(b,k,p,o={}){
+  const walls=b.floors[k].walls, ex=o.ex||new Set(), exW=o.exW||new Set();
+  if(o.free) return {x:p.x, z:p.z, kind:'free', guides:[]};
+  let best=null, bd=0.45;
+  walls.forEach((w,wi)=>{ for(const end of ['a','b']){ if(ex.has(wi+':'+end)) continue; const c=w[end], d=Math.hypot(c.x-p.x,c.z-p.z); if(d<bd){ bd=d; best={x:c.x, z:c.z, kind:'node', guides:[]}; } } });
+  for(const v of b.footprint){ const d=Math.hypot(v.x-p.x,v.z-p.z); if(d<bd){ bd=d; best={x:v.x, z:v.z, kind:'node', guides:[]}; } }
+  if(best) return best;
+  const q={x: ui.snap?snapG(p.x):p.x, z: ui.snap?snapG(p.z):p.z, kind:'grid', guides:[]};
+  if(o.from){ const dx=q.x-o.from.x, dz=q.z-o.from.z; if(Math.abs(dx)<Math.abs(dz)*0.3){ q.x=o.from.x; q.guides.push(o.from); } else if(Math.abs(dz)<Math.abs(dx)*0.3){ q.z=o.from.z; q.guides.push(o.from); } }
+  for(const a of (o.anchors||[])){ if(Math.abs(q.x-a.x)<0.3){ q.x=a.x; q.guides.push(a); } if(Math.abs(q.z-a.z)<0.3){ q.z=a.z; q.guides.push(a); } }
+  let eb=null, ed=0.3;
+  walls.forEach((w,wi)=>{ if(exW.has(wi)) return; const r=segDist(q.x,q.z,w.a.x,w.a.z,w.b.x,w.b.z); if(r.d<ed){ ed=r.d; eb={x:r.cx, z:r.cz, kind:'edge', wi}; } });
+  b.footprint.forEach((v,i)=>{ const c=b.footprint[(i+1)%b.footprint.length], r=segDist(q.x,q.z,v.x,v.z,c.x,c.z); if(r.d<ed){ ed=r.d; eb={x:r.cx, z:r.cz, kind:'edge', wi:-1}; } });
+  if(eb){ for(const g of q.guides){ if(g.x===q.x && Math.abs(eb.x-q.x)<0.05) eb.x=q.x; if(g.z===q.z && Math.abs(eb.z-q.z)<0.05) eb.z=q.z; } eb.guides=q.guides.filter(g=>g.x===eb.x||g.z===eb.z); return eb; }
   return q;
+}
+function snapWallPt(b,k,p,from){ const q=snapPoint(b,k,p,{from}); snapFx={b:b.id,k,...q}; return P(q.x,q.z); }
+
+/* wall graph helpers: walls meeting at the same point form a joint that moves together */
+const ptKey = p => Math.round(p.x*100)+','+Math.round(p.z*100);
+function wallNodes(walls){ const m=new Map(); walls.forEach((w,wi)=>{ for(const end of ['a','b']){ const k=ptKey(w[end]); let n=m.get(k); if(!n) m.set(k, n={refs:[]}); n.refs.push([wi,end]); } }); return [...m.values()]; }
+function splitWall(f, wi, p){
+  const w=f.walls[wi], L=Math.hypot(w.b.x-w.a.x,w.b.z-w.a.z), t=clamp(segDist(p.x,p.z,w.a.x,w.a.z,w.b.x,w.b.z).t,0.01,0.99);
+  const w1={a:P(w.a.x,w.a.z), b:P(p.x,p.z), doors:[]}, w2={a:P(p.x,p.z), b:P(w.b.x,w.b.z), doors:[]};
+  for(const d of w.doors) (d.t<t ? w1.doors.push({t:d.t/t}) : w2.doors.push({t:(d.t-t)/(1-t)}));
+  f.walls.splice(wi,1,w1,w2); return L;
+}
+// a point landing on the middle of a wall splits that wall, so the two become a real joint
+function connectAt(f, p, skip=new Set()){
+  for(let i=0;i<f.walls.length;i++){ if(skip.has(f.walls[i])) continue; const w=f.walls[i], L=Math.hypot(w.b.x-w.a.x,w.b.z-w.a.z), r=segDist(p.x,p.z,w.a.x,w.a.z,w.b.x,w.b.z);
+    if(r.d<0.02 && r.t*L>0.05 && (1-r.t)*L>0.05){ splitWall(f,i,p); return true; } }
+  return false;
+}
+function cleanWalls(f){ const seen=new Set(); f.walls=f.walls.filter(w=>{ if(Math.hypot(w.b.x-w.a.x,w.b.z-w.a.z)<0.05) return false; const k=[ptKey(w.a),ptKey(w.b)].sort().join('|'); if(seen.has(k)) return false; seen.add(k); return true; }); }
+function addWall(b,k,s,q){ const f=b.floors[k]; connectAt(f,s); connectAt(f,q); f.walls.push({a:P(s.x,s.z), b:P(q.x,q.z), doors:[]}); cleanWalls(f); }
+// double-clicking a joint: two walls in a straight line merge into one; otherwise the walls ending there go
+function removeJoint(b,k,key){
+  const f=b.floors[k], n=wallNodes(f.walls).find(x=>ptKey(f.walls[x.refs[0][0]][x.refs[0][1]])===key); if(!n) return null;
+  if(n.refs.length===2){ const [[i1,e1],[i2,e2]]=n.refs, w1=f.walls[i1], w2=f.walls[i2], A=w1[e1==='a'?'b':'a'], B=w2[e2==='a'?'b':'a'], J=w1[e1];
+    const cr=Math.abs((J.x-A.x)*(B.z-A.z)-(J.z-A.z)*(B.x-A.x))/Math.max(1e-6,Math.hypot(B.x-A.x,B.z-A.z));
+    if(cr<0.05){ const nw={a:P(A.x,A.z), b:P(B.x,B.z), doors:[]}, L=Math.hypot(B.x-A.x,B.z-A.z);
+      for(const w of [w1,w2]){ const wl=Math.hypot(w.b.x-w.a.x,w.b.z-w.a.z); for(const d of w.doors){ const px=w.a.x+(w.b.x-w.a.x)*d.t, pz=w.a.z+(w.b.z-w.a.z)*d.t; nw.doors.push({t:segDist(px,pz,A.x,A.z,B.x,B.z).t}); } }
+      f.walls=f.walls.filter((w,i)=>i!==i1 && i!==i2); f.walls.push(nw); return 'Walls joined'; } }
+  const drop=new Set(n.refs.map(r=>r[0])); f.walls=f.walls.filter((w,i)=>!drop.has(i)); return drop.size===1 ? 'Wall removed' : drop.size+' walls removed';
 }
 function wallPreview(b,k,a,c,e){
   const y=floorBase(b,k), h=floorH(b,k), dx=c.x-a.x, dz=c.z-a.z, L=Math.hypot(dx,dz);
@@ -1611,8 +1661,8 @@ function toolUp(e){
     case 'wall': {
       if(!wallChain||!p) return; const q=snapWallPt(b,k,p,wallChain.start); const s=wallChain.start;
       const L=Math.hypot(q.x-s.x,q.z-s.z);
-      if(wallChain.fresh){ if(L>0.5){ commit(()=>b.floors[k].walls.push({a:P(s.x,s.z),b:P(q.x,q.z),doors:[]}), null, b); wallChain=null; tip.hidden=true; } }
-      else { if(L<0.3){ wallChain=null; tip.hidden=true; hideHL(); } else { commit(()=>b.floors[k].walls.push({a:P(s.x,s.z),b:P(q.x,q.z),doors:[]}), null, b); wallChain.start=q; } }
+      if(wallChain.fresh){ if(L>0.5){ commit(()=>addWall(b,k,s,q), null, b); ui.sub=null; wallChain=null; tip.hidden=true; snapFx=null; } }
+      else { if(L<0.3){ wallChain=null; tip.hidden=true; hideHL(); snapFx=null; } else { commit(()=>addWall(b,k,s,q), null, b); ui.sub=null; wallChain.start=q; } }
       break;
     }
     case 'stairs': case 'lift': case 'prop': {
@@ -1690,7 +1740,7 @@ const endPtr=e=>{
 canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
 canvas.addEventListener('wheel', e=>{ e.preventDefault(); const c=cam(); c.dist=clamp(c.dist*Math.exp(e.deltaY*0.0012), ui.mode==='play'?4:6, ui.mode==='play'?30:1100); }, {passive:false});
 canvas.addEventListener('dblclick', e=>{ if(ui.mode!=='edit') return; if(wallChain){ wallChain=null; hideHL(); tip.hidden=true; return; } const h=pickBuilding(e); if(h){ const b=bById(h.bid); selectBuilding(b.id); focusBuilding(b); } });
-canvas.addEventListener('pointerleave', ()=>{ if(!wallChain && !dragItem) { if(!(ui.sub && ui.tab==='interior')) hideHL(); } tip.hidden = !wallChain || tip.hidden; });
+canvas.addEventListener('pointerleave', ()=>{ if(!wallChain) snapFx=null; if(!wallChain && !dragItem) { if(!(ui.sub && ui.tab==='interior')) hideHL(); } tip.hidden = !wallChain || tip.hidden; });
 function clickSelect(e){
   const h=pickBuilding(e);
   if(h){ if(h.bid!==ui.sel) selectBuilding(h.bid); return; }
@@ -1824,7 +1874,7 @@ const slider = (path, label, val, min, max, step, unit, dec=1) => `<label class=
 const swatches = (path, val) => `<div class="sws">${PALETTE[path.split('.')[1]].map(c=>`<button class="swb ${c.toLowerCase()===String(val).toLowerCase()?'on':''}" style="background:${c}" data-set="${path}" data-val="${c}" aria-label="${c}"></button>`).join('')}<input type="color" id="in-${path.replace('.','-')}" data-color="${path}" value="${val}" aria-label="Custom colour"></div>`;
 
 const isShell = b => b.interior===false;
-const TOOLS=[['select','Select','V','Move furniture, stairs and lifts · click a wall to select it'],['wall','Wall','W','Click to chain walls · drag for one wall · Esc to finish'],['door','Door','D','Click a wall to add or remove a doorway'],['erase','Erase','X','Click anything on this floor to remove it'],['stairs','Stairs','S','Click to place · runs to the top floor · R rotates'],['lift','Lift','L','Click to place · serves every floor above · R rotates'],['prop','Furnish','F','Click to place · R rotates']];
+const TOOLS=[['select','Select','V','Drag wall points to reshape rooms · drag + to split a wall · double-click a point to join or remove · Alt: no snap'],['wall','Wall','W','Click to chain walls · snaps to points (ring) and walls (diamond) · Esc to finish'],['door','Door','D','Click a wall to add or remove a doorway'],['erase','Erase','X','Click anything on this floor to remove it'],['stairs','Stairs','S','Click to place · runs to the top floor · R rotates'],['lift','Lift','L','Click to place · serves every floor above · R rotates'],['prop','Furnish','F','Click to place · R rotates']];
 function renderPanel(){
   if(ui.mode!=='edit') return;
   const b=selB();
@@ -1935,7 +1985,7 @@ function updateHint(){
 }
 function smartPlay(){ const b=selB(); if(b && ui.tab==='interior' && !isShell(b) && activeFloor(b)<b.floors.length) playHere(); else enterPlay(); }
 function setTab(t, silent){ ui.tab=t; ui.sub=null; wallChain=null; hideHL(); tip.hidden=true; if(t!=='facade') ui.facadeTool=null; if(!silent) refreshChrome(); }
-function setTool(t){ ui.tool=t; wallChain=null; dragItem=null; hideHL(); tip.hidden=true; canvas.style.cursor = t==='select'?'':'crosshair'; renderPanel(); }
+function setTool(t){ ui.tool=t; wallChain=null; snapFx=null; dragItem=null; hideHL(); tip.hidden=true; canvas.style.cursor = t==='select'?'':'crosshair'; renderPanel(); }
 
 function setPath(b,path,val){ const parts=path.split('.'); let o=b; for(let i=0;i<parts.length-1;i++) o=o[parts[i]]; o[parts.at(-1)]=val; }
 function getPath(b,path){ return path.split('.').reduce((o,k)=>o[k], b); }
@@ -2009,9 +2059,13 @@ stackEl.addEventListener('change', e=>{
    ========================================================================= */
 const ov=$('#ov'); let ovItems=[];
 const tmp3=new THREE.Vector3();
+let ovLines=[], ovSvg=null, ovSig='';
+const SVGNS='http://www.w3.org/2000/svg';
 function overlayRebuild(){
-  ov.innerHTML=''; ovItems=[];
+  ov.innerHTML=''; ovItems=[]; ovLines=[]; ovSig=overlaySig();
+  ovSvg=document.createElementNS(SVGNS,'svg'); ovSvg.setAttribute('class','ov-svg'); ov.appendChild(ovSvg);
   if(ui.mode!=='edit') return;
+  if(interiorEditable()) buildWallOverlay();
   if(!selB()){
   const sp=document.createElement('div'); sp.className='hd-s'; sp.title='Play spawn point — drag to move';
   sp.innerHTML='<svg width="26" height="30" viewBox="0 0 26 30" aria-hidden="true"><path d="M13 29s10-9.5 10-17A10 10 0 0 0 3 12c0 7.5 10 17 10 17z" fill="#1C2320"/><circle cx="13" cy="9" r="3" fill="#FF8A3D"/><path d="M8 18a5 5 0 0 1 10 0" fill="#FF8A3D"/></svg>';
@@ -2020,6 +2074,8 @@ function overlayRebuild(){
   }
   const b=selB(); if(!b || ui.tab!=='shape') return;
   const id=b.id;
+  // outline between the corner handles
+  ovLines.push({cls:'ol-foot', closed:true, pts:()=>{ const bb=bById(id); return bb ? bb.footprint.map(q=>[q.x+bb.pos.x,0.02,q.z+bb.pos.z]) : []; }});
   b.footprint.forEach((v,i)=>{
     const el=document.createElement('div'); el.className='hd-v'+(ui.vsel===i?' sel':''); el.title='Drag to move · double-click to remove';
     ov.appendChild(el); ovItems.push({el, pos:()=>{ const bb=bById(id), q=bb?.footprint[i]; return q ? tmp3.set(q.x+bb.pos.x,0,q.z+bb.pos.z) : null; }});
@@ -2045,15 +2101,79 @@ function overlayRebuild(){
   let off=null;
   handleDrag(ce, ()=>{ pushUndo(bById(id)); off=null; }, (p)=>{ const bb=bById(id); if(!off) off=P(bb.pos.x-p.x,bb.pos.z-p.z); const nx=snapG(p.x+off.x), nz=snapG(p.z+off.z); if(nx!==bb.pos.x||nz!==bb.pos.z){ bb.pos=P(nx,nz); touch(bb); } });
 }
-function handleDrag(el, onStart, onMove, onEnd){
+function handleDrag(el, onStart, onMove, onEnd, planeY=()=>0){
   let active=false;
   el.addEventListener('pointerdown', e=>{ if(e.button!==0) return; e.stopPropagation(); e.preventDefault(); el.setPointerCapture(e.pointerId); active=true; ov.classList.add('dragging'); onStart&&onStart(); });
-  el.addEventListener('pointermove', e=>{ if(!active) return; const v=rayY(e,0); if(v) onMove(v,e); });
+  el.addEventListener('pointermove', e=>{ if(!active) return; const v=rayY(e,planeY()); if(v) onMove(v,e); });
   const end=()=>{ if(!active) return; active=false; ov.classList.remove('dragging'); saveSoon(); onEnd&&onEnd(); };
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
 }
+function interiorEditable(){ const b=selB(); return !!b && ui.mode==='edit' && ui.tab==='interior' && !isShell(b) && activeFloor(b)<b.floors.length; }
+function overlaySig(){ const b=selB(); if(!interiorEditable()) return ''; const k=activeFloor(b), f=b.floors[k]; return b.id+'|'+k+'|'+ui.tool+'|'+(ui.sub?.kind==='wall'?ui.sub.i:-1)+'|'+f.walls.map(w=>ptKey(w.a)+'~'+ptKey(w.b)).join(';'); }
+
+/* Interior walls as a graph: a line per wall, a point per joint (drag it and every wall meeting
+   there follows), and a + at each wall's middle (drag it to split the wall). */
+function buildWallOverlay(){
+  const b=selB(), id=b.id, k=activeFloor(b), f=b.floors[k], Y=()=>floorBase(bById(id),k)+0.02, W=()=>bById(id).floors[k].walls;
+  const at=(q)=>{ const bb=bById(id); return tmp3.set(q.x+bb.pos.x, Y(), q.z+bb.pos.z); };
+  f.walls.forEach((w,wi)=>{
+    ovLines.push({cls:'ol-wall'+(ui.sub?.kind==='wall'&&ui.sub.floor===k&&ui.sub.i===wi?' sel':''), pts:()=>{ const x=W()[wi], bb=bById(id); return x ? [[x.a.x+bb.pos.x,Y(),x.a.z+bb.pos.z],[x.b.x+bb.pos.x,Y(),x.b.z+bb.pos.z]] : []; }});
+    const len=document.createElement('div'); len.className='len'; ov.appendChild(len);
+    ovItems.push({el:len, pos:()=>{ const x=W()[wi]; if(!x) return null; const L=Math.hypot(x.b.x-x.a.x,x.b.z-x.a.z), t=L.toFixed(2)+' m'; if(len.textContent!==t) len.textContent=t; return at(P((x.a.x+x.b.x)/2,(x.a.z+x.b.z)/2)); }});
+  });
+  const editable = ui.tool==='select', passive = ui.tool==='wall';
+  if(!editable && !passive) return;
+  const toLocal = v => { const bb=bById(id); return P(v.x-bb.pos.x, v.z-bb.pos.z); };
+  let drag=null;   // {refs:[[wall,end]], anchors, snap}
+  const moveTo=(refs,q)=>{ for(const [w,end] of refs){ w[end].x=q.x; w[end].z=q.z; } };
+  const finish=()=>{ const bb=bById(id), ff=bb.floors[k]; snapFx=null;
+    if(drag && !drag.moved && !drag.split){ undoStack.pop(); updateUndoBtns(); drag=null; return; }   // a plain click: nothing changed
+    if(drag && drag.refs.length){ const p=drag.refs[0][0][drag.refs[0][1]]; connectAt(ff, p, new Set(drag.refs.map(r=>r[0]))); cleanWalls(ff); }
+    drag=null; ui.sub=null; touch(bb); overlayRebuild(); renderPanel(); };
+  const dragMove=(v,ev)=>{ if(!drag) return; const bb=bById(id), ff=bb.floors[k];
+    const ex=new Set(), exW=new Set(); for(const [w,end] of drag.refs){ const wi=ff.walls.indexOf(w); ex.add(wi+':'+end); exW.add(wi); }
+    const q=snapPoint(bb,k,toLocal(v),{ex, exW, anchors:drag.anchors, free:ev.altKey});
+    snapFx={b:id,k,...q}; moveTo(drag.refs,q); drag.moved=true; touch(bb); };
+  for(const n of wallNodes(f.walls)){
+    const el=document.createElement('div'); el.className='hd-n'+(passive?' passive':''); el.title='Drag to move · double-click to join or remove';
+    const refs0=n.refs.map(([wi,end])=>[f.walls[wi],end]);
+    ov.appendChild(el); ovItems.push({el, pos:()=>at(refs0[0][0][refs0[0][1]])});
+    if(passive) continue;
+    handleDrag(el, ()=>{ const bb=bById(id); pushUndo(bb); const ff=bb.floors[k];
+      const refs=n.refs.map(([wi,end])=>[ff.walls[wi],end]); drag={refs, anchors:refs.map(([w,end])=>w[end==='a'?'b':'a'])}; },
+      dragMove, finish, Y);
+    el.addEventListener('dblclick', ev=>{ ev.stopPropagation(); const bb=bById(id); let msg; commit(()=>{ msg=removeJoint(bb,k,ptKey(refs0[0][0][refs0[0][1]])); }, null, bb); if(msg) toast(msg); ui.sub=null; overlayRebuild(); renderPanel(); });
+    el.addEventListener('contextmenu', ev=>{ ev.preventDefault(); el.dispatchEvent(new MouseEvent('dblclick')); });
+  }
+  f.walls.forEach((w0,wi)=>{
+    const m=document.createElement('div'); m.className='hd-wm'; m.textContent='+'; m.title='Drag to split this wall';
+    ov.appendChild(m); ovItems.push({el:m, pos:()=>{ const x=W()[wi]; return x && Math.hypot(x.b.x-x.a.x,x.b.z-x.a.z)>1.2 ? at(P((x.a.x+x.b.x)/2,(x.a.z+x.b.z)/2)) : null; }});
+    handleDrag(m, ()=>{ const bb=bById(id); pushUndo(bb); const ff=bb.floors[k], x=ff.walls[wi], mid=P((x.a.x+x.b.x)/2,(x.a.z+x.b.z)/2);
+      splitWall(ff,wi,mid); const w1=ff.walls[wi], w2=ff.walls[wi+1]; drag={refs:[[w1,'b'],[w2,'a']], anchors:[w1.a,w2.b], split:true}; touch(bb); },
+      dragMove, finish, Y);
+  });
+}
+// snap marker (ring on a point, diamond on a wall) and dashed alignment guides
+function snapMarkup(project){
+  if(!snapFx) return ''; const b=bById(snapFx.b); if(!b || !b.floors[snapFx.k]) return '';
+  const y=floorBase(b,snapFx.k)+0.02, P0=project([snapFx.x+b.pos.x,y,snapFx.z+b.pos.z]); if(!P0) return '';
+  let h='';
+  for(const g of snapFx.guides||[]){ const G0=project([g.x+b.pos.x,y,g.z+b.pos.z]); if(G0) h+=`<line class="ol-guide" x1="${G0[0]}" y1="${G0[1]}" x2="${P0[0]}" y2="${P0[1]}"/>`; }
+  if(snapFx.kind==='node') h+=`<circle class="ol-snap" cx="${P0[0]}" cy="${P0[1]}" r="9"/>`;
+  else if(snapFx.kind==='edge') h+=`<rect class="ol-snap" x="${P0[0]-6}" y="${P0[1]-6}" width="12" height="12" transform="rotate(45 ${P0[0]} ${P0[1]})"/>`;
+  return h;
+}
 function overlayUpdate(){
   const w=canvas.clientWidth, h=canvas.clientHeight;
+  if(!ov.classList.contains('dragging') && overlaySig()!==ovSig) overlayRebuild();
+  if(ovSvg){
+    const pv=new THREE.Vector3(), project=(q)=>{ pv.set(q[0],q[1],q[2]).project(camera); return pv.z>1||pv.z<-1 ? null : [((pv.x+1)/2*w).toFixed(1), ((1-pv.y)/2*h).toFixed(1)]; };
+    let svg='';
+    for(const L of ovLines){ const pts=L.pts(); if(pts.length<2) continue; const pr=pts.map(project); if(pr.some(q=>!q)) continue;
+      const d='M'+pr.map(q=>q.join(' ')).join('L')+(L.closed?'Z':''); svg+=`<path class="ol-halo" d="${d}"/><path class="${L.cls}" d="${d}"/>`; }
+    svg+=snapMarkup(project);
+    if(ovSvg._last!==svg){ ovSvg.innerHTML=svg; ovSvg._last=svg; }
+  }
   for(const it of ovItems){ const v=it.pos(); if(!v){ it.el.style.display='none'; continue; } v.project(camera); if(v.z>1||v.z<-1){ it.el.style.display='none'; continue; } it.el.style.display=''; it.el.style.transform=`translate(${((v.x+1)/2*w).toFixed(1)}px,${((1-v.y)/2*h).toFixed(1)}px)`; }
 }
 
@@ -2183,5 +2303,6 @@ window.__sb = { geo:(i,lod=0)=>{ const b=state.buildings[i], r=recOf(b); DEBUG_S
   timeLOD:(n=20)=>{ const b=LODCFG.budgetMs; LODCFG.budgetMs=-1; const t=performance.now(); for(let i=0;i<n;i++) updateLOD(0, null); LODCFG.budgetMs=b; return (performance.now()-t)/n; },
   memBytes:()=>{ let by=0, m=0; scene.traverse(o=>{ if(o.isMesh && o.geometry){ m++; for(const a of Object.values(o.geometry.attributes)) by+=a.array.byteLength; if(o.geometry.index) by+=o.geometry.index.array.byteLength; } }); return {meshes:m, MB:+(by/1048576).toFixed(1)}; },
   timeCells:()=>{ const t=performance.now(); let n=0; for(const c of cells.values()){ c.dirty=true; rebuildCell(c); n++; } return {cells:n, msPerCell:+((performance.now()-t)/Math.max(1,n)).toFixed(3)}; },
+  snapFx:()=>snapFx, screenOf:(bi,k,x,z)=>{ const b=state.buildings[bi], v=new THREE.Vector3(x+b.pos.x, floorBase(b,k), z+b.pos.z).project(camera), r=canvas.getBoundingClientRect(); return [r.left+(v.x+1)/2*r.width, r.top+(1-v.y)/2*r.height]; },
   camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); } };
 </script>
