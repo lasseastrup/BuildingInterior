@@ -371,8 +371,9 @@ function centroid(fp){ let x=0,z=0; for(const p of fp){x+=p.x;z+=p.z;} return P(
 function bbox(fp){ let a=1e9,b=1e9,c=-1e9,d=-1e9; for(const p of fp){a=Math.min(a,p.x);b=Math.min(b,p.z);c=Math.max(c,p.x);d=Math.max(d,p.z);} return {x0:a,z0:b,x1:c,z1:d}; }
 
 /* Building-level queries (the same maths the Unity side needs) */
-const floorBase = (b,k) => k<=0 ? 0 : b.groundHeight + (k-1)*b.floorHeight;
-const floorH = (b,k) => k===0 ? b.groundHeight : b.floorHeight;
+// storey heights: a floor may override the building's ground / upper default (floor.h)
+const floorH = (b,k) => b.floors[k]?.h ?? (k===0 ? b.groundHeight : b.floorHeight);
+function floorBase(b,k){ if(k<=0) return 0; const n=Math.floor(k); let y=0; for(let j=0;j<n;j++) y+=floorH(b,j); return y+(k-n)*floorH(b,n); }
 const roofY = b => floorBase(b, b.floors.length);
 const shaftTop = (b,s) => s.top < 0 ? b.floors.length-1 : Math.min(s.top, b.floors.length-1);
 const shaftRoof = (b,s) => !!s.roof && shaftTop(b,s) === b.floors.length-1;
@@ -380,15 +381,32 @@ function shaftLevels(b,s){ const out=[]; for(let k=s.bottom;k<=shaftTop(b,s);k++
 function stairHoleAt(b,s,k){ return s.type==='stairs' && k>s.bottom && (k<=shaftTop(b,s) || (k===b.floors.length && shaftRoof(b,s))); }
 function hasFlight(b,s,k){ const T=shaftTop(b,s); return s.type==='stairs' && k>=s.bottom && (k<T || (k===T && shaftRoof(b,s))); }
 function floorAtY(b,y){ const N=b.floors.length; for(let k=N;k>0;k--) if(y >= floorBase(b,k)-0.9) return k; return 0; }
-function frame(b,it){ const a=it.rot*Math.PI/2; return {O:[b.pos.x+it.x, b.pos.z+it.z], u:[Math.cos(a),Math.sin(a)], w:[-Math.sin(a),Math.cos(a)]}; }
-function toItem(it, lx, lz){ const a=it.rot*Math.PI/2, dx=lx-it.x, dz=lz-it.z; return {x:dx*Math.cos(a)+dz*Math.sin(a), z:-dx*Math.sin(a)+dz*Math.cos(a)}; }
+// cores (stairs, lifts) turn freely: rot is an angle in degrees
+const rad = it => (it.rot||0)*Math.PI/180;
+function frame(b,it){ const a=rad(it); return {O:[b.pos.x+it.x, b.pos.z+it.z], u:[Math.cos(a),Math.sin(a)], w:[-Math.sin(a),Math.cos(a)]}; }
+function toItem(it, lx, lz){ const a=rad(it), dx=lx-it.x, dz=lz-it.z; return {x:dx*Math.cos(a)+dz*Math.sin(a), z:-dx*Math.sin(a)+dz*Math.cos(a)}; }
 function itemSize(it){ return it.type==='stairs' ? STAIR : LIFT; }
-function itemHalf(it, margin=0){ const s=itemSize(it); return it.rot%2 ? {hx:s.D/2+margin, hz:s.W/2+margin} : {hx:s.W/2+margin, hz:s.D/2+margin}; }
-function itemContains(it, lx, lz, m=0){ const h=itemHalf(it,m); return Math.abs(lx-it.x)<=h.hx && Math.abs(lz-it.z)<=h.hz; }
-function rectInside(fp, x, z, hx, hz){ const pts=[[-1,-1],[1,-1],[1,1],[-1,1],[0,-1],[1,0],[0,1],[-1,0]]; return pts.every(([a,c])=>pip(fp, x+a*(hx-0.01), z+c*(hz-0.01))); }
+function itemContains(it, lx, lz, m=0){ const s=itemSize(it), q=toItem(it,lx,lz); return Math.abs(q.x)<=s.W/2+m && Math.abs(q.z)<=s.D/2+m; }
+// the core's oriented rectangle (local coords), grown by a margin
+function itemRect(it, m=0, x=it.x, z=it.z, rot=it.rot){ const s=itemSize(it), a=(rot||0)*Math.PI/180; return {c:[x,z], u:[Math.cos(a),Math.sin(a)], w:[-Math.sin(a),Math.cos(a)], h:[s.W/2+m, s.D/2+m]}; }
+// a core fits an outline when its rectangle's corners and edge midpoints are inside and no outline corner pokes into it
+function coreFits(fp, it, m=0.16, x=it.x, z=it.z, rot=it.rot){
+  const R=itemRect(it,m-0.01,x,z,rot), at=(a,c)=>[R.c[0]+R.u[0]*a*R.h[0]+R.w[0]*c*R.h[1], R.c[1]+R.u[1]*a*R.h[0]+R.w[1]*c*R.h[1]];
+  for(const [a,c] of [[-1,-1],[1,-1],[1,1],[-1,1],[0,-1],[1,0],[0,1],[-1,0]]){ const q=at(a,c); if(!pip(fp,q[0],q[1])) return false; }
+  return !fp.some(p=>{ const dx=p.x-R.c[0], dz=p.z-R.c[1]; return Math.abs(dx*R.u[0]+dz*R.u[1])<R.h[0] && Math.abs(dx*R.w[0]+dz*R.w[1])<R.h[1]; });
+}
+// two cores closer than the gap (separating-axis test on the oriented rectangles)
+function itemsOverlap(a, b, gap=0.3, bx=b.x, bz=b.z, brot=b.rot){
+  const A=itemRect(a,gap/2), B=itemRect(b,gap/2,bx,bz,brot), ext=(Q,ax)=>Q.h[0]*Math.abs(Q.u[0]*ax[0]+Q.u[1]*ax[1])+Q.h[1]*Math.abs(Q.w[0]*ax[0]+Q.w[1]*ax[1]);
+  for(const ax of [A.u,A.w,B.u,B.w]){ const d=Math.abs((B.c[0]-A.c[0])*ax[0]+(B.c[1]-A.c[1])*ax[1]); if(d>=ext(A,ax)+ext(B,ax)) return false; }
+  return true;
+}
+// angle (degrees, 0..90) of the outline edge nearest to a point, so a new core lines up with the walls
+function wallAngle(fp, x, z){ let best=null, bd=1e9; fp.forEach((p,i)=>{ const q=fp[(i+1)%fp.length], r=segDist(x,z,p.x,p.z,q.x,q.z); if(r.d<bd){ bd=r.d; best=Math.atan2(q.z-p.z,q.x-p.x)*180/Math.PI; } }); return best==null ? 0 : Math.round(((best%90)+90)%90*10)/10; }
 
 /* Setbacks: any floor can start a new outline (floor.shape + floor.blank) that the floors above inherit.
-   An outline must fit inside the one below it; the uncovered roof of the lower storey becomes a terrace. */
+   Where it steps in, the uncovered roof of the lower storey becomes a terrace; where it steps out (an
+   overhang), the part over open air gets a soffit underneath and a fascia under its wall. */
 function tierStart(b,k){ for(let j=Math.min(k,b.floors.length-1); j>0; j--) if(b.floors[j].shape) return j; return 0; }
 const fpAt = (b,k) => { const j=tierStart(b,k); return j ? b.floors[j].shape : b.footprint; };
 const blankAt = (b,k) => { const j=tierStart(b,k); return j ? b.floors[j].blank : b.blank; };
@@ -400,36 +418,33 @@ const distToEdges = (fp,p) => { let d=1e9; for(let i=0;i<fp.length;i++){ const a
 // proper crossing of two segments (touching at an end, or overlapping along a shared line, does not count)
 function segCross(a,b,c,d){ const o=(p,q,r)=>(q.x-p.x)*(r.z-p.z)-(q.z-p.z)*(r.x-p.x), e=1e-6; const d1=o(c,d,a), d2=o(c,d,b), d3=o(a,b,c), d4=o(a,b,d); return ((d1>e&&d2<-e)||(d1<-e&&d2>e)) && ((d3>e&&d4<-e)||(d3<-e&&d4>e)); }
 function simplePoly(fp){ const n=fp.length; if(n<3 || Math.abs(area2(fp))<2) return false; for(let i=0;i<n;i++){ if(edgeLen(fp,i)<0.3) return false; for(let j=i+2;j<n;j++){ if(i===0&&j===n-1) continue; if(segCross(fp[i],fp[(i+1)%n],fp[j],fp[(j+1)%n])) return false; } } return true; }
-// inner lies inside outer (edges may run along outer's edges)
-function polyInside(inner, outer){
-  const n=inner.length;
-  for(let i=0;i<n;i++){ const a=inner[i], c=inner[(i+1)%n];
-    for(const t of [0,0.25,0.5,0.75]){ const x=a.x+(c.x-a.x)*t, z=a.z+(c.z-a.z)*t; if(!pip(outer,x,z) && distToEdges(outer,P(x,z))>0.01) return false; }
-    for(let j=0;j<outer.length;j++) if(segCross(a,c,outer[j],outer[(j+1)%outer.length])) return false; }
-  return true;
-}
 // every corner and edge of a setback either sits on the outline below or leaves a usable terrace in front of it
 const TERRACE_MIN = 0.8;
 function terraceClear(inner, outer){
   for(let i=0;i<inner.length;i++){ const a=inner[i], c=inner[(i+1)%inner.length], m=P((a.x+c.x)/2,(a.z+c.z)/2);
-    for(const q of [a,m]){ const d=distToEdges(outer,q); if(d>0.01 && d<TERRACE_MIN) return false; } }
+    for(const q of [a,m]){ if(!pip(outer,q.x,q.z)) continue; const d=distToEdges(outer,q); if(d>0.01 && d<TERRACE_MIN) return false; } }
   return true;
 }
+// area two outlines share (a setback must stand on the storey below)
+function sharedArea(a, b){ const PC=globalThis.polygonClipping; if(!PC) return Math.abs(area2(a))/2; try{ return PC.intersection([a.map(p=>[p.x,p.z])],[b.map(p=>[p.x,p.z])]).reduce((s,poly)=>s+poly.reduce((t,r,i)=>t+(i?-1:1)*Math.abs(area2(r.slice(0,-1).map(q=>P(q[0],q[1]))))/2,0),0); }catch(e){ return 0; } }
 // the terrace deck: the storey below minus the setback (polygons with holes, as [x,z] rings)
 function terracePolys(lower, upper){
   const PC=globalThis.polygonClipping; if(!PC) return [];
   try{ return PC.difference([lower.map(p=>[p.x,p.z])],[upper.map(p=>[p.x,p.z])]).map(poly=>poly.map(r=>r.slice(0,-1))).filter(poly=>poly[0].length>=3 && Math.abs(area2(poly[0].map(q=>P(q[0],q[1]))))>0.02); }catch(e){ return []; }
 }
-// parts of lower edge i that no edge of the setback covers: these get the terrace parapet
-function exposedRanges(lower, upper, i){
-  const a=lower[i], c=lower[(i+1)%lower.length], L=Math.hypot(c.x-a.x,c.z-a.z)||1e-6, ux=(c.x-a.x)/L, uz=(c.z-a.z)/L, cov=[];
-  for(let j=0;j<upper.length;j++){ const p=upper[j], q=upper[(j+1)%upper.length];
-    if(Math.abs((p.x-a.x)*uz-(p.z-a.z)*ux)>0.01 || Math.abs((q.x-a.x)*uz-(q.z-a.z)*ux)>0.01) continue;
-    const tp=(p.x-a.x)*ux+(p.z-a.z)*uz, tq=(q.x-a.x)*ux+(q.z-a.z)*uz, s0=Math.max(0,Math.min(tp,tq)), e0=Math.min(L,Math.max(tp,tq)); if(e0-s0>0.01) cov.push([s0,e0]); }
-  cov.sort((x,y)=>x[0]-y[0]); const out=[]; let cur=0;
-  for(const [s0,e0] of cov){ if(s0>cur+0.05) out.push([cur,s0]); cur=Math.max(cur,e0); }
-  if(L>cur+0.05) out.push([cur,L]);
-  return out;
+// parts of edge i of outline A that lie outside outline B (not on its edges, not inside it; or strictly inside
+// it with inside=true), as [s,e] along the edge. Lower edge vs setback: where the terrace parapet goes. Setback edge vs lower: where it overhangs.
+function exposedRanges(A, B, i, inside=false){
+  const a=A[i], c=A[(i+1)%A.length], dx=c.x-a.x, dz=c.z-a.z, L=Math.hypot(dx,dz)||1e-6, ts=[0,L];
+  for(let j=0;j<B.length;j++){ const p=B[j], q=B[(j+1)%B.length];
+    const r=segDist(p.x,p.z,a.x,a.z,c.x,c.z); if(r.d<0.01) ts.push(r.t*L);                   // a corner of B on this edge
+    const ex=q.x-p.x, ez=q.z-p.z, den=dx*ez-dz*ex; if(Math.abs(den)<1e-9) continue;
+    const t=((p.x-a.x)*ez-(p.z-a.z)*ex)/den, u=((p.x-a.x)*dz-(p.z-a.z)*dx)/den; if(t>0 && t<1 && u>=0 && u<=1) ts.push(t*L); }
+  ts.sort((x,y)=>x-y); const out=[];
+  for(let j=0;j<ts.length-1;j++){ const s0=ts[j], e0=ts[j+1]; if(e0-s0<0.02) continue; const m=(s0+e0)/2/L, x=a.x+dx*m, z=a.z+dz*m;
+    const on=distToEdges(B,P(x,z))<0.01, inB=!on && pip(B,x,z); if(inside ? !inB : (inB || on)) continue;
+    const l=out.at(-1); if(l && s0-l[1]<0.02) l[1]=e0; else out.push([s0,e0]); }
+  return out.filter(r=>r[1]-r[0]>0.05);
 }
 // a door on an upper floor needs terrace in front of it
 function terraceAt(b,k,i,t){
@@ -437,15 +452,80 @@ function terraceAt(b,k,i,t){
   const L=Math.hypot(c.x-a.x,c.z-a.z)||1, sg=area2(fp)>0?1:-1, nx=sg*(c.z-a.z)/L, nz=-sg*(c.x-a.x)/L, d=T_EXT+0.5;
   const x=a.x+(c.x-a.x)*t+nx*d, z=a.z+(c.z-a.z)*t+nz*d; return pip(fpAt(b,k-1),x,z) && !pip(fp,x,z);
 }
+/* Shared (party) walls: an outline edge that runs along a neighbour's edge the other way round (within 1 cm)
+   is one wall for both. The building that stands taller along it owns the wall (ties: the lower id) and
+   builds it blank wherever the neighbour reaches; the other building leaves its wall, bands and parapet out. */
+// how high b's outlines run along world segment a-c, counting tiers up from the base
+function coverH(b, ax,az,cx,cz){
+  const mx=(ax+cx)/2-b.pos.x, mz=(az+cz)/2-b.pos.z, dx=cx-ax, dz=cz-az, L=Math.hypot(dx,dz)||1; let H=0;
+  for(const t of tiers(b)){ const fp=fpAt(b,t.k0); let on=false;
+    for(let i=0;i<fp.length && !on;i++){ const p=fp[i], q=fp[(i+1)%fp.length], ex=q.x-p.x, ez=q.z-p.z; if(Math.abs(ex*dz-ez*dx)>0.01*L*Math.hypot(ex,ez)) continue; if(segDist(mx,mz,p.x,p.z,q.x,q.z).d<0.01) on=true; }
+    if(!on) break; H=floorBase(b,t.k1); }
+  return H;
+}
+const partyMemo = new Map();   // building id -> Map("k0:i" -> ranges); cleared when that building regenerates
+// party ranges along tier k0's edge i: [{s, e, own, Hp (neighbour's height there), pIdx, pInner}]
+function partyRanges(b,k0,i){
+  let m=partyMemo.get(b.id); if(!m) partyMemo.set(b.id, m=new Map()); const key=k0+':'+i; if(m.has(key)) return m.get(key);
+  const fp=fpAt(b,k0), a=fp[i], c=fp[(i+1)%fp.length], ax=a.x+b.pos.x, az=a.z+b.pos.z, cx=c.x+b.pos.x, cz=c.z+b.pos.z, L=Math.hypot(cx-ax,cz-az)||1, ux=(cx-ax)/L, uz=(cz-az)/L;
+  const found=new Map();
+  for(const r of nearRecs((ax+cx)/2,(az+cz)/2,L/2+1)){ const p=bById(r.id); if(!p || p===b) continue;
+    for(const t of tiers(p)){ const q=fpAt(p,t.k0);
+      for(let j=0;j<q.length;j++){ const P0=q[j], Q0=q[(j+1)%q.length], px=P0.x+p.pos.x, pz=P0.z+p.pos.z, qx=Q0.x+p.pos.x, qz=Q0.z+p.pos.z, M=Math.hypot(qx-px,qz-pz)||1;
+        if(((qx-px)*ux+(qz-pz)*uz)/M > -0.9999) continue;                                   // must face the other way
+        if(Math.abs((px-ax)*uz-(pz-az)*ux)>0.01 || Math.abs((qx-ax)*uz-(qz-az)*ux)>0.01) continue;   // and lie on the same line
+        const t0=(px-ax)*ux+(pz-az)*uz, t1=(qx-ax)*ux+(qz-az)*uz, s0=Math.max(0,Math.min(t0,t1)), e0=Math.min(L,Math.max(t0,t1)); if(e0-s0<0.1) continue;
+        const f=found.get(p.id); if(f){ f.s=Math.min(f.s,s0); f.e=Math.max(f.e,e0); f.sRaw=Math.min(f.sRaw,t0,t1); f.eRaw=Math.max(f.eRaw,t0,t1); } else found.set(p.id,{p,s:s0,e:e0,sRaw:Math.min(t0,t1),eRaw:Math.max(t0,t1)}); } } }
+  const out=[...found.values()].map(({p,s:s0,e:e0,sRaw,eRaw})=>{ const sx=ax+ux*s0, sz=az+uz*s0, ex=ax+ux*e0, ez=az+uz*e0, Hm=coverH(b,sx,sz,ex,ez), Hp=coverH(p,sx,sz,ex,ez);
+    return {s:s0, e:e0, sRaw, eRaw, own: Hm>Hp+1e-3 || (Math.abs(Hm-Hp)<=1e-3 && b.id<p.id), Hp, pIdx:recOf(p).idx, pInner:col(p.style.interior)}; }).sort((x,y)=>x.s-y.s);
+  m.set(key,out); return out;
+}
+// At a corner next to a party wall, a wall stops against the face of the wall that holds the corner (flat, on the
+// plane T in from the shared line) instead of mitering past the line: always for the building that doesn't own the
+// party wall, and for the owner where the neighbour's wall runs on past the corner (below the neighbour's height).
+// Returns the end {s,k} (u = s + k·w) for edge i at its start (end=false) or end corner, or null for the usual miter.
+function cornerCut(b,k0,i,end,y,strip){
+  const fp=fpAt(b,k0), n=fp.length, j = end ? (i+1)%n : (i-1+n)%n, Lj=edgeLen(fp,j);
+  const r=partyRanges(b,k0,j).find(r=> end ? r.s<0.02 : r.e>Lj-0.02); if(!r) return null;
+  const past = end ? r.sRaw < -0.02 : r.eRaw > Lj+0.02;
+  let off=T_EXT+(strip && past ? 0.06 : 0);   // stop T in from the shared line (on the neighbour's wall face; strips also clear that wall's own bands)
+  if(r.own && !(past && y < r.Hp+0.01)){ if(!strip || y >= r.Hp) return null; off=-T_EXT; }   // the owner's bands and plinth stop on its own party wall's outer face
+  const sg=area2(fp)>0?1:-1, a=fp[i], c=fp[(i+1)%n], L=edgeLen(fp,i), U=[(c.x-a.x)/L,(c.z-a.z)/L], Wn=[sg*U[1],-sg*U[0]];
+  const p=fp[j], q=fp[(j+1)%n], M=edgeLen(fp,j), nq=[-sg*(q.z-p.z)/M, sg*(q.x-p.x)/M];   // inward normal of the party edge
+  const un=U[0]*nq[0]+U[1]*nq[1], wn=Wn[0]*nq[0]+Wn[1]*nq[1]; if(Math.abs(un)<0.2) return null;
+  return {s:(end?L:0)+off/un, k:-wn/un};
+}
+// the pieces of storey k's wall along edge i: 'wall' (facade), 'party' (blank, owned) or 'skip' (the neighbour's)
+function wallPieces(b,k,i,L,m){
+  const y=floorBase(b,k), k0=tierStart(b,k), cuts=partyRanges(b,k0,i).filter(r=>!r.own || y<r.Hp-0.2);
+  const c0=cornerCut(b,k0,i,false,y), c1=cornerCut(b,k0,i,true,y);
+  const piece=(kind,s0,e0,r)=>({kind, i, s:s0, e:e0, S: s0<0.02 ? (c0||m.S) : {s:s0,k:0}, E: e0>L-0.02 ? (c1||m.E) : {s:e0,k:0}, r,
+    lo: s0<0.02 ? (c0 ? Math.max(c0.s,c0.s+c0.k*T_EXT)+0.14 : -1e9) : s0+0.14, hi: e0>L-0.02 ? (c1 ? Math.min(c1.s,c1.s+c1.k*T_EXT)-0.14 : 1e9) : e0-0.14});
+  if(!cuts.length) return [piece('wall',0,L)];
+  const out=[]; let pos=0;
+  for(const r of cuts){ const s0=Math.max(pos,r.s); if(s0>=r.e) continue; if(s0>pos+0.02) out.push(piece('wall',pos,s0)); out.push(piece(r.own?'party':'skip',s0,r.e,r)); pos=r.e; }
+  if(pos<L-0.02) out.push(piece('wall',pos,L));
+  return out;
+}
+// ranges along tier k0's edge i that belong to a neighbour's wall (no parapet or strip of ours there)
+const partySkips = (b,k0,i) => partyRanges(b,k0,i).filter(r=>!r.own).map(r=>[r.s,r.e]);
+function minusRanges(rs, cuts){ let out=rs.map(r=>[r[0],r[1]]); for(const [c0,c1] of cuts) out=out.flatMap(([a,e])=> c1<=a || c0>=e ? [[a,e]] : [[a,Math.min(e,c0)],[Math.max(a,c1),e]].filter(([x,y])=>y-x>0.02)); return out; }
+// exterior style of storey k: a setback may carry its own (floor.style), otherwise it looks like the tier below;
+// interior colours stay the building's
+const styleMix = new WeakMap();
+function styleAt(b,k){ let j=tierStart(b,k); while(j && !b.floors[j].style) j=tierStart(b,j-1); const own=j && b.floors[j].style; if(!own) return b.style;
+  let m=styleMix.get(own); const key=b.style.interior+b.style.floor+b.style.core+b.style.ground;
+  if(!m || m.key!==key){ m={st:{...own, interior:b.style.interior, floor:b.style.floor, core:b.style.core, ground:b.style.ground}, key}; styleMix.set(own,m); }
+  return m.st; }
 const doorOpen = (b,e) => !e.k || terraceAt(b,e.k,e.edge,e.t);
 // a core must fit inside the outline of every level it serves
-function fitsLevels(b,x,z,hx,hz,k0,k1){ for(let k=k0;k<=k1;k++) if(!rectInside(fpAt(b,k),x,z,hx,hz)) return false; return true; }
-const shaftFits = (b,s,x=s.x,z=s.z,rot=s.rot) => { const h=itemHalf({...s,rot},0.16); return fitsLevels(b,x,z,h.hx,h.hz,s.bottom,shaftTop(b,s)); };
+function fitsLevels(b,it,k0,k1,x=it.x,z=it.z,rot=it.rot){ for(let k=k0;k<=k1;k++) if(!coreFits(fpAt(b,k),it,0.16,x,z,rot)) return false; return true; }
+const shaftFits = (b,s,x=s.x,z=s.z,rot=s.rot) => fitsLevels(b,s,s.bottom,shaftTop(b,s),x,z,rot);
 
 /* =========================================================================
    State, undo, persistence
    ========================================================================= */
-const LS_KEY = 'storey-builder-v5';
+const LS_KEY = 'storey-builder-v7';
 let state;
 const undoStack=[], redoStack=[];
 /* Undo entries hold only what an action touched: the JSON of the affected buildings (null = did not
@@ -524,6 +604,26 @@ function demoState(){
   for(let i=1;i<7;i++) C.floors.push(clone(office));
   state.buildings.push(C);
 
+  // Overlook: tall lobby, a glass section that cantilevers out from floor 3, and a smaller top with a terrace
+  const O = makeBuilding('rect', P(-22,-8), 'concrete', 'Overlook');
+  O.footprint = [[0,0],[12,0],[12,10],[0,10]].map(([x,z])=>P(x,z)); O.entrances = [{edge:0,t:0.5}];
+  const plan = { walls:[ W(0,2.4,12,2.4,[0.3,0.75]) ] };
+  O.floors[0] = { walls:[], h:5.0 };
+  for(let i=1;i<8;i++) O.floors.push(clone(plan));
+  O.floors[3].shape = [[-3,-1],[12,-1],[12,10],[-3,10]].map(([x,z])=>P(x,z)); O.floors[3].blank = []; O.floors[3].style = {...clone(STYLES.glass), preset:'glass'};
+  O.floors[6].shape = [[-3,-1],[7,-1],[7,10],[-3,10]].map(([x,z])=>P(x,z)); O.floors[6].blank = [];
+  O.entrances.push({edge:1, t:0.4, k:6});
+  O.shafts = [ {id:nid('s'), type:'stairs', x:4.5, z:5.6, rot:0, bottom:0, top:-1, roof:true}, {id:nid('s'), type:'lift', x:1.8, z:5.6, rot:0, bottom:0, top:-1, roof:false} ];
+  state.buildings.push(O);
+
+  // Row House: built wall to wall between the Corner Shop and the Dockside Store (two party walls it owns)
+  const H = makeBuilding('rect', P(22,-6), 'stucco', 'Row House');
+  H.footprint = [[0,0],[6,0],[6,8],[0,8]].map(([x,z])=>P(x,z)); H.entrances = [{edge:0,t:0.5}];
+  H.style = {...H.style, wall:'#EAD9B8', preset:null};
+  H.floors[0] = { walls:[] }; for(let i=1;i<4;i++) H.floors.push({ walls:[ W(0,2.2,6,2.2,[0.25]) ] });
+  H.shafts = [{id:nid('s'), type:'stairs', x:3.0, z:4.9, rot:0, bottom:0, top:-1, roof:true}];
+  state.buildings.push(H);
+
   // Background blocks: many floors, no interior
   const D = makeBuilding('rect', P(-40,2), 'concrete', 'Westgate Tower');
   D.footprint = [[0,0],[14,0],[14,11],[0,11]].map(([x,z])=>P(x,z)); D.interior=false;
@@ -582,8 +682,9 @@ const TEX_W = 256, MAX_B = 8192, PARAM_TEXELS = 8, LOD_TAG = 65536;
 const stateArr = new Float32Array(MAX_B*4);                    // per building: displayed LOD, previous LOD, fade 0..1
 for(let i=0;i<MAX_B;i++){ stateArr[i*4]=3; stateArr[i*4+1]=3; stateArr[i*4+2]=1; }
 const stateTex = new THREE.DataTexture(stateArr, TEX_W, MAX_B/TEX_W, THREE.RGBAFormat, THREE.FloatType); stateTex.needsUpdate=true;
-const paramArr = new Float32Array(MAX_B*PARAM_TEXELS*4);       // per building: storey heights, window specs, colours
-const paramTex = new THREE.DataTexture(paramArr, TEX_W, MAX_B*PARAM_TEXELS/TEX_W, THREE.RGBAFormat, THREE.FloatType); paramTex.needsUpdate=true;
+const PARAM_ROWS = 512;                                         // LOD2 run slots: 8 texels each (colours, window spec, storey height / bands / top / parapet)
+const paramArr = new Float32Array(TEX_W*PARAM_ROWS*4);
+const paramTex = new THREE.DataTexture(paramArr, TEX_W, PARAM_ROWS, THREE.RGBAFormat, THREE.FloatType); paramTex.needsUpdate=true;
 
 const G = { uCam:{value:new THREE.Vector3()}, uFocus:{value:new THREE.Vector3()}, uFeetY:{value:-1e9}, uConeOn:{value:0}, uConeR:{value:2.6}, uCutH:{value:1.0}, uCamDir:{value:new THREE.Vector2(0,1)},
   uActive:{value:-1}, uClipY:{value:1e9}, uCutOn:{value:0}, uCutBase:{value:0}, uCutTop:{value:0}, uCap:{value:new THREE.Vector3(0.23,0.25,0.24)},
@@ -601,8 +702,8 @@ const OCC_VERT = `vOccW = (modelMatrix * vec4(transformed, 1.0)).xyz; vWall = aW
     if (!isDisp && !isFrom) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);   // LOD not shown: clip the whole triangle
     vFade = st.z >= 1.0 ? 3.0 : (isDisp ? st.z : -1.0 - st.z);
   }`;
-const MASS_VERT_DECL = `attribute vec4 aFac; attribute vec2 aFac2; varying vec4 vFac; varying vec2 vFac2;`;
-const MASS_VERT = `vFac = aFac; vFac2 = aFac2;`;
+const MASS_VERT_DECL = `attribute vec4 aFac; attribute vec2 aFac2; attribute float aSlot; varying vec4 vFac; varying vec2 vFac2; varying float vSlot;`;
+const MASS_VERT = `vFac = aFac; vFac2 = aFac2; vSlot = aSlot;`;
 const OCC_FRAG_DECL = `
 uniform vec3 uCam; uniform vec3 uFocus; uniform float uFeetY; uniform float uConeOn; uniform float uConeR; uniform float uCutH; uniform vec2 uCamDir;
 uniform float uActive; uniform float uClipY; uniform float uCutOn; uniform float uCutBase; uniform float uCutTop; uniform vec3 uCap; uniform float uLodTint; uniform float uIso; uniform float uIsoBid;
@@ -621,11 +722,13 @@ void occlude(){
     if (occBayer(gl_FragCoord.xy + vec2(1.0, 2.0)) < uIso) discard;   // dissolves out; fully hidden at 1
   }
   bool act = abs(vBid - uActive) < 0.5;          // only the building the player is in (or the one being edited) is sliced
+  float kind = mod(vKind, 8.0), mate = floor(vKind / 8.0) - 1.0;   // a party wall also belongs to its neighbour for the cutaway
+  bool actCut = act || (mate >= 0.0 && abs(mate - uActive) < 0.5);
   // 1. everything above the ceiling of the active floor
   if (act && vOccW.y > uClipY) discard;
   // 2. cutaway: walls between camera and focus drop to stub height; tall parts on the camera side too
-  if (act && uCutOn > 0.5 && vKind > 0.5 && vOccW.y > uCutBase + uCutH && vOccW.y < uCutTop && vOccW.y > uCutBase - 0.05) {
-    if (vKind < 1.5) {
+  if (actCut && uCutOn > 0.5 && kind > 0.5 && vOccW.y > uCutBase + uCutH && vOccW.y < uCutTop && vOccW.y > uCutBase - 0.05) {
+    if (kind < 1.5) {
       float sc = dot(uCam.xz - vWall.xy, vWall.zw);
       float sp = dot(uFocus.xz - vWall.xy, vWall.zw);
       if (sc * sp < 0.0) discard;
@@ -643,27 +746,22 @@ void occlude(){
 }`;
 // LOD2 massing: windows are drawn procedurally from the same parameters the geometry uses,
 // so the LOD1 -> LOD2 switch keeps every window in place.
+// Each facade quad covers a run of storeys with one height and window type: aFac = (u, height above the run's
+// base, window span start/end), aFac2 = (bay, kind), aSlot = the run's row in the parameter table: colours,
+// window spec, and (storey height, storeys with a band, run height, parapet 0 none / 1 wall / 2 curb).
 const MASS_FRAG_DECL = `
 uniform highp sampler2D uParams;
-varying vec4 vFac; varying vec2 vFac2;
-vec4 bParam(int i){ int t = int(vBid + 0.5) * 8 + i; return texelFetch(uParams, ivec2(t % 256, t / 256), 0); }
+varying vec4 vFac; varying vec2 vFac2; varying float vSlot;
+vec4 sParam(int i){ int t = int(vSlot + 0.5) * 8 + i; return texelFetch(uParams, ivec2(t % 256, t / 256), 0); }
 vec3 facadeColor(){
   float fu = fwidth(vFac.x), fv = fwidth(vFac.y);
-  vec4 p0 = bParam(0);
-  vec3 wall = bParam(3).rgb, trim = bParam(4).rgb, glass = bParam(5).rgb, roof = bParam(6).rgb;
+  vec3 wall = sParam(0).rgb, trim = sParam(1).rgb, glass = sParam(2).rgb, roof = sParam(3).rgb;
   float kind = vFac2.y;                            // 1 facade, 2 roof, 3 trim, 4 plain wall
   if (kind > 1.5) return kind < 2.5 ? roof : (kind < 3.5 ? trim : wall);
-  float u = vFac.x, v = vFac.y, uS = vFac.z, uE = vFac.w, bay = vFac2.x;
-  float gH = p0.x, fH = p0.y, N = p0.z, flags = p0.w;
-  float roofH = gH + (N - 1.0) * fH;
-  bool bands = mod(flags, 2.0) > 0.5;
-  bool parapet = mod(floor(flags / 2.0), 2.0) > 0.5;
-  if (v >= roofH) return (!parapet || v > roofH + 1.0) ? trim : wall;
-  float fl = v < gH ? 0.0 : min(N - 1.0, 1.0 + floor((v - gH) / fH));
-  float base = fl < 0.5 ? 0.0 : gH + (fl - 1.0) * fH;
-  float h = fl < 0.5 ? gH : fH;
-  float lv = v - base;
-  vec4 sp = fl < 0.5 ? bParam(2) : bParam(1);      // x: gap for full-width styles (<0: fixed width), y: width, z: sill, w: head
+  vec4 sp = sParam(4), run = sParam(5);           // sp.x: gap for full-width styles (<0: fixed width), y: width, z: sill, w: head
+  float u = vFac.x, v = vFac.y, uS = vFac.z, uE = vFac.w, bay = vFac2.x, h = run.x;
+  if (v >= run.z) return (run.w > 1.5 || v > run.z + 1.0) ? trim : wall;   // parapet (or curb) above the top run
+  float fl = floor(v / h), lv = v - fl * h;
   vec3 c = wall;
   if (bay > 0.0 && sp.w > sp.z + 0.4) {
     float ww = sp.x >= 0.0 ? bay - sp.x : min(sp.y, bay - 0.5);
@@ -677,7 +775,7 @@ vec3 facadeColor(){
       c = mix(wall, glass, mix(cover, mu * mv, smoothstep(3.0, 8.0, px)) * inU);   // sub-pixel windows fade to their average
     }
   }
-  if (bands && fl < N - 1.5 && lv > h - 0.22) c = trim;
+  if (fl < run.y - 0.5 && lv > h - 0.22) c = trim;
   return c;
 }`;
 function patch(mat, o={}){
@@ -798,7 +896,7 @@ const groundKind = st => st.ground==='match' ? st.windows : st.ground==='solid' 
 // Window layout shared by every LOD (LOD2 reproduces it in the facade shader from the same numbers)
 function bayLayout(st, uS, uE){ const spn=uE-uS; if(spn<=1.2) return {n:0, bay:0}; const n=Math.max(1,Math.round(spn/st.bay)); return {n, bay:spn/n}; }
 function facadeOps(b,k,i,L,uS,uE){
-  const st=b.style, h=floorH(b,k), ops=[], spn=uE-uS;
+  const st=styleAt(b,k), h=floorH(b,k), ops=[], spn=uE-uS;
   for(const e of b.entrances) if((e.k||0)===k && e.edge===i && spn>DOOR_EXT+0.6 && doorOpen(b,e)){ const c=clamp(e.t*L, uS+DOOR_EXT/2+0.3, uE-DOOR_EXT/2-0.3); ops.push({u0:c-DOOR_EXT/2, u1:c+DOOR_EXT/2, y0:0, y1:Math.min(2.6,h-0.4), door:true}); }
   if(!blankAt(b,k).includes(i)){
     const ws = winSpec(k===0 ? groundKind(st) : st.windows, h, st);
@@ -878,10 +976,11 @@ function buildSlab(op,b,k,C,shell,topOnly){
   const surf=(contour,hs,yy,nr,c)=>{ let tris; try{ tris=THREE.ShapeUtils.triangulateShape(contour.slice(), hs.map(h=>h.slice())); }catch(e){ tris=[]; } op.polyTris([...contour,...hs.flat()].map(p=>[p.x,yy,p.y]), tris, nr, c); };
   const side=shade(b.style.core,0.85), yb = k===0 ? y-0.05 : y-SLAB, outer=V2(below||above);
   op.ctx(Z4,0);
-  if(op.solids) op.solids.push({prism:outer.map(p=>({x:p.x,z:p.y})), y0:yb, y1:y});
+  if(op.solids){ op.solids.push({prism:outer.map(p=>({x:p.x,z:p.y})), y0:yb, y1:y}); if(step) op.solids.push({prism:above.map(p=>({x:p.x+ox,z:p.z+oz})), y0:yb, y1:y}); }
   if(!step) surf(outer, holes, y, [0,1,0], k===N ? C.roof : C.floor);
   else { if(!shell) surf(V2(above), holes, y, [0,1,0], C.floor); for(const poly of terracePolys(below, above)) surf(R2(poly[0]), poly.slice(1).map(R2), y, [0,1,0], C.roof); }
   if(k>0 && !topOnly) surf(outer, holes, yb, [0,-1,0], C.ceil);
+  if(step) for(const poly of terracePolys(above, below)) surf(R2(poly[0]), poly.slice(1).map(R2), yb, [0,-1,0], C.ceil);   // soffit under an overhang
   const ring=(pts,inward)=>{ const cx=pts.reduce((s,p)=>s+p.x,0)/pts.length, cz=pts.reduce((s,p)=>s+p.y,0)/pts.length;
     for(let i=0;i<pts.length;i++){ const a=pts[i], c=pts[(i+1)%pts.length]; const dx=c.x-a.x, dz=c.y-a.y, L=Math.hypot(dx,dz)||1; let nx=dz/L, nz=-dx/L; const mx=(a.x+c.x)/2-cx, mz=(a.y+c.y)/2-cz; if((nx*mx+nz*mz>0)===inward){nx=-nx;nz=-nz;}
       op.poly([[a.x,yb,a.y],[c.x,yb,c.y],[c.x,y,c.y],[a.x,y,a.y]],[nx,0,nz],side); } };
@@ -898,9 +997,10 @@ function parapetEnd(up, uccw, V, U, Wn, uV, dir){
     if(nu*dir<0.2) continue; return {s:uV+T_EXT/nu, k:-nw/nu}; }
   return null;
 }
-function terraceRuns(b,k){
-  const lo=fpAt(b,k-1), up=fpAt(b,k), lccw=area2(lo)>0, uccw=area2(up)>0, n=lo.length;
-  const Wp=lo.map(p=>[p.x+b.pos.x,p.z+b.pos.z]), cor=corners(lo,lccw), ex=lo.map((_,i)=>exposedRanges(lo,up,i)), out=[];
+// strips along the parts of A's edges outside B; they end on A's miter at an open corner, or against the outer face of B's wall
+function stripRuns(b,A,B,kA){
+  const lo=A, up=B, lccw=area2(lo)>0, uccw=area2(up)>0, n=lo.length;
+  const Wp=lo.map(p=>[p.x+b.pos.x,p.z+b.pos.z]), cor=corners(lo,lccw), ex=lo.map((_,i)=>kA==null ? exposedRanges(lo,up,i) : minusRanges(exposedRanges(lo,up,i), partySkips(b,kA,i))), out=[];
   for(let i=0;i<n;i++){ const g=edgeInfo(Wp,i,lccw), m=miter(cor,i,g.L), ip=(i-1+n)%n;
     for(const [s0,e0] of ex[i]){
       const open0 = s0<0.02 && ex[ip].some(r=>r[1]>edgeLen(lo,ip)-0.02), open1 = e0>g.L-0.02 && ex[(i+1)%n].some(r=>r[0]<0.02);
@@ -909,6 +1009,12 @@ function terraceRuns(b,k){
       const E = open1 ? m.E : (parapetEnd(up,uccw,V(e0),g.u,g.w,e0,-1) || {s:e0,k:0});
       out.push({...g, S, E}); } }
   return out;
+}
+const terraceRuns = (b,k) => stripRuns(b, fpAt(b,k-1), fpAt(b,k), tierStart(b,k-1));    // parapets on the storey below
+const overhangRuns = (b,k) => stripRuns(b, fpAt(b,k), fpAt(b,k-1));   // fascias under an overhanging wall
+function buildOverhang(op,b,k,C){
+  const y=floorBase(b,k), T=T_EXT;
+  for(const {a,u,w,S,E} of overhangRuns(b,k)){ op.ctx([a[0],a[1],w[0],w[1]],1); op.mbox(a,u,w,S.s,S.k,E.s,E.k,y-SLAB,y,0,T,C.wall,C.wall,SK.TOP|SK.IN|SK.USTART|SK.UEND); }
 }
 function buildTerrace(op,sg,b,k,C){
   const y=floorBase(b,k), T=T_EXT;
@@ -926,30 +1032,43 @@ function buildFacade(op,gl,sg,b,k,Wp,ccw,cor,C,shell){
   for(let i=0;i<n;i++){
     const {a,L,u,w}=edgeInfo(Wp,i,ccw);
     const m=miter(cor,i,L), [uS,uE]=facadeSpan(m,L);
-    const ops=facadeOps(b,k,i,L,uS,uE);
-    op.ctx([a[0],a[1],w[0],w[1]],1); gl.ctx([a[0],a[1],w[0],w[1]],1);
-    wallPanel(op,a,u,w,m,0,T,y,h,ops,C.wall,C.inner,{inner:!shell, threshold:k===0, revealFrom: shell ? T*0.45 : 0});
-    for(const o of ops){
-      if(o.door){
-        op.obox(a,u,w,o.u0-0.08,o.u0,y,y+o.y1+0.08,T,T+0.06,C.trim,C.trim,SK.IN|SK.BOT);
-        op.obox(a,u,w,o.u1,o.u1+0.08,y,y+o.y1+0.08,T,T+0.06,C.trim,C.trim,SK.IN|SK.BOT);
-        op.obox(a,u,w,o.u0-0.35,o.u1+0.35,y+o.y1+0.1,y+o.y1+0.24,T,T+1.1,C.trim,C.trim,SK.IN);
-        if(shell) pane(op,a,u,w,o.u0,o.u1,y,y+o.y1,T*0.45,C.door,false);
-      } else {
-        if(shell) pane(op,a,u,w,o.u0,o.u1,y+o.y0,y+o.y1,T*0.45,C.glassDark,false);
-        else pane(gl,a,u,w,o.u0,o.u1,y+o.y0,y+o.y1,T*0.45,C.glass,true);
-        const ex=o.full?0:0.06, eh=o.full?0:0.04;
-        op.obox(a,u,w,o.u0-ex,o.u1+ex,y+o.y0-0.07,y+o.y0,T,T+0.07,C.trim,C.trim,SK.IN);
-        op.obox(a,u,w,o.u0-eh,o.u1+eh,y+o.y1,y+o.y1+0.06,T,T+0.04,C.trim,C.trim,SK.IN);
-        if((o.u1-o.u0)>1.7){ const mm=(o.u0+o.u1)/2; op.obox(a,u,w,mm-0.03,mm+0.03,y+o.y0,y+o.y1,T*0.3,T*0.6,C.trim,C.trim,SK.TOP|SK.BOT); }
+    const all=facadeOps(b,k,i,L,uS,uE);
+    for(const pc of wallPieces(b,k,i,L,m)){
+      if(pc.kind==='skip') continue;
+      const pm={S:pc.S,E:pc.E}, party=pc.kind==='party';
+      const ops = party ? [] : all.filter(o=>o.u0>=pc.lo && o.u1<=pc.hi);
+      op.ctx([a[0],a[1],w[0],w[1]], party ? 1+8*(pc.r.pIdx+1) : 1); gl.ctx([a[0],a[1],w[0],w[1]],1);   // a party wall is also cut away for the neighbour
+      wallPanel(op,a,u,w,pm,0,T,y,h,ops,party?pc.r.pInner:C.wall,C.inner,{inner:!shell, threshold:k===0, revealFrom: shell ? T*0.45 : 0});
+      for(const o of ops){
+        if(o.door){
+          op.obox(a,u,w,o.u0-0.08,o.u0,y,y+o.y1+0.08,T,T+0.06,C.trim,C.trim,SK.IN|SK.BOT);
+          op.obox(a,u,w,o.u1,o.u1+0.08,y,y+o.y1+0.08,T,T+0.06,C.trim,C.trim,SK.IN|SK.BOT);
+          op.obox(a,u,w,o.u0-0.35,o.u1+0.35,y+o.y1+0.1,y+o.y1+0.24,T,T+1.1,C.trim,C.trim,SK.IN);
+          if(shell) pane(op,a,u,w,o.u0,o.u1,y,y+o.y1,T*0.45,C.door,false);
+        } else {
+          if(shell) pane(op,a,u,w,o.u0,o.u1,y+o.y0,y+o.y1,T*0.45,C.glassDark,false);
+          else pane(gl,a,u,w,o.u0,o.u1,y+o.y0,y+o.y1,T*0.45,C.glass,true);
+          const ex=o.full?0:0.06, eh=o.full?0:0.04;
+          op.obox(a,u,w,o.u0-ex,o.u1+ex,y+o.y0-0.07,y+o.y0,T,T+0.07,C.trim,C.trim,SK.IN);
+          op.obox(a,u,w,o.u0-eh,o.u1+eh,y+o.y1,y+o.y1+0.06,T,T+0.04,C.trim,C.trim,SK.IN);
+          if((o.u1-o.u0)>1.7){ const mm=(o.u0+o.u1)/2; op.obox(a,u,w,mm-0.03,mm+0.03,y+o.y0,y+o.y1,T*0.3,T*0.6,C.trim,C.trim,SK.TOP|SK.BOT); }
+        }
       }
+      if(!party){ op.ctx([a[0],a[1],w[0],w[1]],1); pieceStrips(op,b,k,a,u,w,m,pc,ops,y,h,N,C); }
+      const [cs,ce]=span(pm,T/2,T/2);
+      for(const [s1,e1] of (shell||party ? [[cs,ce]] : solidRanges(cs,ce,ops))) pushSeg(sg,a,u,w,s1,e1,T/2,T/2);
     }
-    if(b.style.bands && k<N-1) stripPieces(op,a,u,w,m,[span(m,T,T+0.06)],y+h-0.22,y+h,T,T+0.06,C.trim,C.trim,SK.IN);
-    if(k===0){ const [s0,e0]=span(m,T,T+0.04); stripPieces(op,a,u,w,m,solidRanges(s0,e0,ops.map(o=>o.door?{...o,u0:o.u0-0.08,u1:o.u1+0.08}:o)),0,0.45,T,T+0.04,C.plinth,C.plinth,SK.IN|SK.BOT|SK.UEND|SK.USTART); }
-    const [cs,ce]=span(m,T/2,T/2);
-    for(const [s1,e1] of (shell ? [[cs,ce]] : solidRanges(cs,ce,ops))) pushSeg(sg,a,u,w,s1,e1,T/2,T/2);
   }
 }
+// floor bands and the ground-floor plinth along one facade piece (ends against a party wall are left open)
+function pieceStrips(op,b,k,a,u,w,m,pc,ops,y,h,N,C){ const T=T_EXT, cut=(E,w0)=>E.s+E.k*w0, L=edgeLenW(m), k0=tierStart(b,k), i=pc.i;
+  const c0=pc.s<0.02 && cornerCut(b,k0,i,false,y,true), c1=pc.e>L-0.02 && cornerCut(b,k0,i,true,y,true);
+  const clip=([s0,e0])=>[pc.s>0.02 ? Math.max(s0,pc.s) : c0 ? cut(c0,T)+1e-4 : s0, pc.e<L-0.02 ? Math.min(e0,pc.e) : c1 ? cut(c1,T)-1e-4 : e0];   // a cut end is flat and keeps its end face
+  if(styleAt(b,k).bands && k<N-1){ const under = isSetback(b,k+1) ? exposedRanges(fpAt(b,k),fpAt(b,k+1),i,true).map(([s0,e0])=>[s0<0.06?-1e9:s0, e0>L-0.06?1e9:e0]) : [];   // no band under an overhang (the slab is there), miter included
+    const rs=minusRanges([clip(span(m,T,T+0.06))], under).filter(r=>r[1]-r[0]>0.02); if(rs.length) stripPieces(op,a,u,w,m,rs,y+h-0.22,y+h,T,T+0.06,C.trim,C.trim,SK.IN); }
+  if(k===0){ const r=clip(span(m,T,T+0.04)); stripPieces(op,a,u,w,m,solidRanges(r[0],r[1],ops.map(o=>o.door?{...o,u0:o.u0-0.08,u1:o.u1+0.08}:o)),0,0.45,T,T+0.04,C.plinth,C.plinth,SK.IN|SK.BOT|SK.UEND|SK.USTART); }
+}
+const edgeLenW = m => m.E.s;   // an edge's length, from its miter
 
 // interior walls are trimmed to the storey's outline (a setback can cut through a copied layout)
 function clipWall(fp, wl){
@@ -982,13 +1101,14 @@ function buildInterior(op,sg,b,k,C){
 function segFrom(f,p,q,r){ const X=(l)=>[f.O[0]+f.u[0]*l[0]+f.w[0]*l[1], f.O[1]+f.u[1]*l[0]+f.w[1]*l[1]]; const a=X(p), c=X(q); return {ax:a[0],az:a[1],bx:c[0],bz:c[1],r}; }
 
 function buildRoof(op,sg,b,Wp,ccw,cor,C){
-  const y=roofY(b), n=Wp.length, T=T_EXT;
+  const y=roofY(b), n=Wp.length, T=T_EXT, k0=tierStart(b,b.floors.length);
   for(let i=0;i<n;i++){
-    const {a,L,u,w}=edgeInfo(Wp,i,ccw); const m=miter(cor,i,L);
+    const {a,L,u,w}=edgeInfo(Wp,i,ccw); const m=miter(cor,i,L), cut=partySkips(b,k0,i), c0=cornerCut(b,k0,i,false,y), c1=cornerCut(b,k0,i,true,y);
+    const R=r=>minusRanges([[c0?Math.max(r[0],c0.s+c0.k*T):r[0], c1?Math.min(r[1],c1.s+c1.k*T):r[1]]],cut);
     op.ctx([a[0],a[1],w[0],w[1]],1);
-    if(b.style.parapet){ stripPieces(op,a,u,w,m,[span(m,0,T)],y,y+1.0,0,T,C.wall,C.inner,SK.TOP|SK.BOT); stripPieces(op,a,u,w,m,[span(m,-0.04,T+0.05)],y+1.0,y+1.1,-0.04,T+0.05,C.trim); }
-    else stripPieces(op,a,u,w,m,[span(m,0,T)],y,y+0.3,0,T,C.trim,C.trim,SK.BOT);
-    const [cs,ce]=span(m,T/2,T/2); if(sg) pushSeg(sg,a,u,w,cs,ce,T/2,T/2);
+    if(styleAt(b,b.floors.length).parapet){ stripPieces(op,a,u,w,m,R(span(m,0,T)),y,y+1.0,0,T,C.wall,C.inner,SK.TOP|SK.BOT); stripPieces(op,a,u,w,m,R(span(m,-0.04,T+0.05)),y+1.0,y+1.1,-0.04,T+0.05,C.trim); }
+    else stripPieces(op,a,u,w,m,R(span(m,0,T)),y,y+0.3,0,T,C.trim,C.trim,SK.BOT);
+    if(sg) for(const [cs,ce] of R(span(m,T/2,T/2))) pushSeg(sg,a,u,w,cs,ce,T/2,T/2);
   }
 }
 
@@ -1047,9 +1167,9 @@ function buildShafts(op,sg,b,k,C){
 
 let DEBUG_SOLIDS=false;
 function tierGeo(b,fp){ const ccw=area2(fp)>0; return {fp, ccw, Wp:fp.map(p=>[p.x+b.pos.x, p.z+b.pos.z]), cor:corners(fp,ccw)}; }
-// at(k): outline geometry of storey k (one entry per setback tier)
-function buildCtx(b){ const cache=new Map(); const at=k=>{ const fp=fpAt(b,k); let g=cache.get(fp); if(!g) cache.set(fp, g=tierGeo(b,fp)); return g; };
-  return {N:b.floors.length, shell:b.interior===false, at, C:colorsOf(b.style)}; }
+// at(k): outline geometry and colours of storey k (one entry per setback tier)
+function buildCtx(b){ const cache=new Map(); const at=k=>{ const j=tierStart(b,k); let g=cache.get(j); if(!g) cache.set(j, g={...tierGeo(b,fpAt(b,k)), C:colorsOf(styleAt(b,k))}); return g; };
+  return {N:b.floors.length, shell:b.interior===false, at}; }
 
 /* LOD0 - everything: interior, frames, see-through glass. One mesh (+ one glass mesh) per building;
    floors above the active one are removed by the clip plane, so no per-floor objects are needed. */
@@ -1057,15 +1177,16 @@ function buildCtx(b){ const cache=new Map(); const at=k=>{ const fp=fpAt(b,k); l
 // big building over several frames (the Unity version runs the same steps in Burst jobs).
 function runJob(it){ let r; do{ r=it.next(); }while(!r.done); return r.value; }
 function* lod0Steps(b, idx){
-  const {N, shell, at, C}=buildCtx(b);
+  partyMemo.delete(b.id);
+  const {N, shell, at}=buildCtx(b);
   const op=new GB(idx), gl=new GB(idx), segs=[];
   if(DEBUG_SOLIDS) op.solids=[];
   for(let k=0;k<=N;k++){
-    const sg=[], {Wp, ccw, cor}=at(k), sb=isSetback(b,k);
-    if(!shell || k===N || sb) buildSlab(op,b,k,C,shell);
-    if(sb) buildTerrace(op,sg,b,k,C);
+    const sg=[], {Wp, ccw, cor, C}=at(k), sb=isSetback(b,k), Cb=at(Math.max(0,k-1)).C;   // decks and parapets take the colours of the storey below
+    if(!shell || k===N || sb) buildSlab(op,b,k,Cb,shell);
+    if(sb){ buildTerrace(op,sg,b,k,Cb); buildOverhang(op,b,k,C); }
     if(k<N){ buildFacade(op,gl,sg,b,k,Wp,ccw,cor,C,shell); if(!shell) buildInterior(op,sg,b,k,C); }
-    else buildRoof(op,sg,b,Wp,ccw,cor,C);
+    else buildRoof(op,sg,b,Wp,ccw,cor,Cb);
     if(!shell) buildShafts(op,sg,b,k,C);
     segs.push(sg);
     yield;
@@ -1077,27 +1198,31 @@ const buildLOD0 = (b, idx) => runJob(lod0Steps(b, idx));
 /* LOD1 - exterior shell only: outer faces with recessed opaque windows, doors, floor bands, plinth,
    canopies, parapet and stair/lift bulkheads. No interior, frames or transparency. */
 function* lod1Steps(b, idx){
-  const {N, at, C}=buildCtx(b), T=T_EXT;
+  partyMemo.delete(b.id);
+  const {N, at}=buildCtx(b), T=T_EXT;
   const op=new GB(idx+LOD_TAG, true);
   if(DEBUG_SOLIDS) op.solids=[];
-  buildSlab(op,b,N,C,true,true);
+  buildSlab(op,b,N,at(N).C,true,true);
   for(let k=0;k<N;k++){
     if(k) yield;
-    const h=floorH(b,k), y=floorBase(b,k), {Wp, ccw, cor}=at(k);
-    if(isSetback(b,k)){ buildSlab(op,b,k,C,true,true); buildTerrace(op,null,b,k,C); }
+    const h=floorH(b,k), y=floorBase(b,k), {Wp, ccw, cor, C}=at(k);
+    if(isSetback(b,k)){ const Cb=at(k-1).C; buildSlab(op,b,k,Cb,true,true); buildTerrace(op,null,b,k,Cb); buildOverhang(op,b,k,C); }
     for(let i=0;i<Wp.length;i++){
-      const {a,L,u,w}=edgeInfo(Wp,i,ccw), m=miter(cor,i,L), [uS,uE]=facadeSpan(m,L), ops=facadeOps(b,k,i,L,uS,uE);
-      wallPanel(op,a,u,w,m,0,T,y,h,ops,C.wall,C.wall,{inner:false, revealFrom:T*0.45, threshold:k===0});
-      for(const o of ops){
-        pane(op,a,u,w,o.u0,o.u1,y+o.y0,y+o.y1,T*0.45,o.door?C.door:C.glassDark,false);
-        if(o.door) op.obox(a,u,w,o.u0-0.35,o.u1+0.35,y+o.y1+0.1,y+o.y1+0.24,T,T+1.1,C.trim,C.trim,SK.IN);
+      const {a,L,u,w}=edgeInfo(Wp,i,ccw), m=miter(cor,i,L), [uS,uE]=facadeSpan(m,L), all=facadeOps(b,k,i,L,uS,uE);
+      for(const pc of wallPieces(b,k,i,L,m)){
+        if(pc.kind==='skip') continue;
+        const party=pc.kind==='party', ops = party ? [] : all.filter(o=>o.u0>=pc.lo && o.u1<=pc.hi);
+        wallPanel(op,a,u,w,{S:pc.S,E:pc.E},0,T,y,h,ops,party?pc.r.pInner:C.wall,C.wall,{inner:false, revealFrom:T*0.45, threshold:k===0});
+        for(const o of ops){
+          pane(op,a,u,w,o.u0,o.u1,y+o.y0,y+o.y1,T*0.45,o.door?C.door:C.glassDark,false);
+          if(o.door) op.obox(a,u,w,o.u0-0.35,o.u1+0.35,y+o.y1+0.1,y+o.y1+0.24,T,T+1.1,C.trim,C.trim,SK.IN);
+        }
+        if(!party) pieceStrips(op,b,k,a,u,w,m,pc,ops,y,h,N,C);
       }
-      if(b.style.bands && k<N-1) stripPieces(op,a,u,w,m,[span(m,T,T+0.06)],y+h-0.22,y+h,T,T+0.06,C.trim,C.trim,SK.IN);
-      if(k===0){ const [s0,e0]=span(m,T,T+0.04); stripPieces(op,a,u,w,m,solidRanges(s0,e0,ops.map(o=>o.door?{...o,u0:o.u0-0.08,u1:o.u1+0.08}:o)),0,0.45,T,T+0.04,C.plinth,C.plinth,SK.IN|SK.BOT|SK.UEND|SK.USTART); }
     }
   }
-  { const g=at(N); buildRoof(op,null,b,g.Wp,g.ccw,g.cor,C); }
-  if(b.interior!==false){ const y=roofY(b);
+  { const g=at(N); buildRoof(op,null,b,g.Wp,g.ccw,g.cor,g.C); }
+  if(b.interior!==false){ const C=at(N).C; const y=roofY(b);
     for(const s of b.shafts){ if(!shaftRoof(b,s)) continue; const f=frame(b,s), st=s.type==='stairs';
       const hx=st?1.45:1.35, hz=st?2.75:1.35, hh=st?2.7:2.9, cx=st?1.55:1.45, cz=st?2.85:1.45;
       op.obox(f.O,f.u,f.w,-hx,hx,y,y+hh,-hz,hz,C.core,C.core,SK.TOP|SK.BOT); op.obox(f.O,f.u,f.w,-cx,cx,y+hh,y+hh+0.2,-cz,cz,C.roof); } }
@@ -1108,34 +1233,46 @@ const buildLOD1 = (b, idx) => runJob(lod1Steps(b, idx));
 /* LOD2 - massing: one quad per footprint edge for the height of each setback tier, the parapets, the roof and terraces.
    Windows come from the facade shader. ~7 triangles per footprint edge. Returned as typed arrays
    so they can be merged into per-cell meshes (HLOD). */
-function buildLOD2(b, idx){
-  const st=b.style, T=T_EXT, N=b.floors.length, ox=b.pos.x, oz=b.pos.z;
-  const top=roofY(b), yTop=top+(st.parapet?1.1:0.3);
-  const P=[], NR=[], F=[], F2=[], I=[];
+function buildLOD2(b, idx, rec=null){
+  const T=T_EXT, N=b.floors.length, ox=b.pos.x, oz=b.pos.z, top=roofY(b), stTop=styleAt(b,N), yTop=top+(stTop.parapet?1.1:0.3);
+  const P=[], NR=[], F=[], F2=[], SL=[], I=[], Z=[0,0,0,0], ZZ=[Z,Z,Z,Z];
+  let slot=0;   // parameter row of the quads being written
+  const vtx=(p,nr,fac,f2)=>{ P.push(p[0],p[1],p[2]); NR.push(Math.round(nr[0]*127),Math.round(nr[1]*127),Math.round(nr[2]*127)); F.push(...fac); F2.push(f2[0],f2[1]); SL.push(slot); };
   const quad=(q,nr,fac,f2)=>{ const [A,B,D]=q; const ux=B[0]-A[0],uy=B[1]-A[1],uz=B[2]-A[2], vx=D[0]-A[0],vy=D[1]-A[1],vz=D[2]-A[2];
     const flip=(uy*vz-uz*vy)*nr[0]+(uz*vx-ux*vz)*nr[1]+(ux*vy-uy*vx)*nr[2] < 0; const base=P.length/3;
-    for(let j=0;j<4;j++){ P.push(q[j][0],q[j][1],q[j][2]); NR.push(Math.round(nr[0]*127),Math.round(nr[1]*127),Math.round(nr[2]*127)); F.push(...fac[j]); F2.push(f2[0],f2[1]); }
+    for(let j=0;j<4;j++) vtx(q[j],nr,fac[j],f2);
     if(flip) I.push(base,base+2,base+1, base,base+3,base+2); else I.push(base,base+1,base+2, base,base+2,base+3); };
-  const flat=(rings, y, kind)=>{   // horizontal polygon (outer ring + holes, [x,z] local), facing up
+  const flat=(rings, y, kind, down)=>{   // horizontal polygon (outer ring + holes, [x,z] local), facing up (or down)
     const v2=rings.map(r=>r.map(q=>new THREE.Vector2(q[0]+ox,q[1]+oz))); let tris=[]; try{ tris=THREE.ShapeUtils.triangulateShape(v2[0].slice(), v2.slice(1).map(h=>h.slice())); }catch(e){}
-    const all=v2.flat(), base=P.length/3; for(const p of all){ P.push(p.x,y,p.y); NR.push(0,127,0); F.push(0,0,0,0); F2.push(0,kind); }
-    for(const t of tris){ let [x,yy,z]=t; const A=all[x], B=all[yy], D=all[z]; if(((B.y-A.y)*(D.x-A.x)-(B.x-A.x)*(D.y-A.y)) < 0){ const q=yy; yy=z; z=q; } I.push(base+x,base+yy,base+z); } };
-  const Z=[0,0,0,0], ZZ=[Z,Z,Z,Z];
-  for(const t of tiers(b)){   // one extrusion per setback tier
-    const fp=fpAt(b,t.k0), blank=blankAt(b,t.k0), {ccw, Wp, cor}=tierGeo(b,fp), n=fp.length, last=t.k1===N;
-    const y0=floorBase(b,t.k0), y1=floorBase(b,t.k1), yT=last?yTop:y1;
+    const all=v2.flat(), base=P.length/3; for(const p of all) vtx([p.x,y,p.y],[0,down?-1:1,0],Z,[0,kind]);
+    for(const t of tris){ let [x,yy,z]=t; const A=all[x], B=all[yy], D=all[z]; if((((B.y-A.y)*(D.x-A.x)-(B.x-A.x)*(D.y-A.y)) < 0) !== !!down){ const q=yy; yy=z; z=q; } I.push(base+x,base+yy,base+z); } };
+  tiers(b).forEach((t,ti)=>{   // one extrusion per setback tier, split into runs of storeys with the same height
+    const fp=fpAt(b,t.k0), st=styleAt(b,t.k0), blank=blankAt(b,t.k0), {ccw, Wp, cor}=tierGeo(b,fp), n=fp.length, last=t.k1===N, C=colorsOf(st);
+    const tierSlot = rec ? slotWrite(rec, C) : 0; slot=tierSlot;
+    if(t.k0){ const y0=floorBase(b,t.k0), yb=y0-SLAB;   // overhang: soffit and fascia
+      for(const poly of terracePolys(fp, fpAt(b,t.k0-1))) flat(poly, yb, 4, true);
+      for(const {a,u,w,S,E} of overhangRuns(b,t.k0)){ const X=(uu,y,wv)=>[a[0]+u[0]*uu+w[0]*wv, y, a[1]+u[1]*uu+w[1]*wv], s0=S.s, e0=E.s, s1=S.s+S.k*T, e1=E.s+E.k*T;
+        quad([X(s1,yb,T),X(e1,yb,T),X(e1,y0,T),X(s1,y0,T)], [w[0],0,w[1]], ZZ, [0,4]);
+        quad([X(s0,yb,0),X(e0,yb,0),X(e1,yb,T),X(s1,yb,T)], [0,-1,0], ZZ, [0,4]); } }
+    const runs=[]; for(let k=t.k0;k<t.k1;k++){ const h=floorH(b,k), g=k===0, r=runs.at(-1); if(r && !r.g && !g && Math.abs(r.h-h)<1e-6) r.k1=k+1; else runs.push({k0:k,k1:k+1,h,g}); }
+    for(const r of runs){ const H=floorBase(b,r.k1)-floorBase(b,r.k0), top=last && r===runs.at(-1);
+      r.slot = rec ? slotWrite(rec, C, specOf(r.g ? groundKind(st) : st.windows, r.h, st), [r.h, st.bands ? Math.max(0, Math.min(r.k1,N-1)-r.k0) : 0, top ? H : 1e9, top ? (st.parapet?1:2) : 0]) : 0; r.top=top; }
     for(let i=0;i<n;i++){
       const {a,L,u,w}=edgeInfo(Wp,i,ccw), m=miter(cor,i,L), [uS,uE]=facadeSpan(m,L);
       const bay = blank.includes(i) ? 0 : bayLayout(st,uS,uE).bay;
       const X=(uu,y,wv)=>[a[0]+u[0]*uu+w[0]*wv, y, a[1]+u[1]*uu+w[1]*wv];
-      const s1=mAt(m.S,T), e1=mAt(m.E,T), s0=mAt(m.S,0), e0=mAt(m.E,0);
-      quad([X(s1,y0,T),X(e1,y0,T),X(e1,yT,T),X(s1,yT,T)], [w[0],0,w[1]], [[s1,y0,uS,uE],[e1,y0,uS,uE],[e1,yT,uS,uE],[s1,yT,uS,uE]], [bay,1]);
+      const yc=floorBase(b,t.k0), c0=cornerCut(b,t.k0,i,false,yc), c1=cornerCut(b,t.k0,i,true,yc); if(c0) m.S=c0; if(c1) m.E=c1;
+      const s1=mAt(m.S,T), e1=mAt(m.E,T), s0=mAt(m.S,0), e0=mAt(m.E,0), out=[w[0],0,w[1]];
+      for(const r of runs){ const y0=floorBase(b,r.k0), y1=r.top ? yTop : floorBase(b,r.k1), H=y1-y0; slot=r.slot;   // the top run's quad carries the parapet too
+        quad([X(s1,y0,T),X(e1,y0,T),X(e1,y1,T),X(s1,y1,T)], out, [[s1,0,uS,uE],[e1,0,uS,uE],[e1,H,uS,uE],[s1,H,uS,uE]], [bay,1]); }
+      slot=tierSlot;
       if(last){
-        quad([X(s0,top,0),X(e0,top,0),X(e0,yTop,0),X(s0,yTop,0)], [-w[0],0,-w[1]], ZZ, [0, st.parapet?4:3]);   // inner face of parapet / curb
+        quad([X(s0,top,0),X(e0,top,0),X(e0,yTop,0),X(s0,yTop,0)], [-w[0],0,-w[1]], ZZ, [0, st.parapet?4:3]);   // inner face
         quad([X(s0,yTop,0),X(e0,yTop,0),X(e1,yTop,T),X(s1,yTop,T)], [0,1,0], ZZ, [0,3]); }                     // cap
     }
     if(last) flat([fp.map(p=>[p.x,p.z])], top, 2);
     else {   // terrace under the next setback: deck, and a parapet on the exposed edges
+      const y1=floorBase(b,t.k1);
       for(const poly of terracePolys(fp, fpAt(b,t.k1))) flat(poly, y1, 2);
       for(const {a,u,w,S,E} of terraceRuns(b,t.k1)){
         const X=(uu,y,wv)=>[a[0]+u[0]*uu+w[0]*wv, y, a[1]+u[1]*uu+w[1]*wv], s0=S.s, e0=E.s, s1=S.s+S.k*T, e1=E.s+E.k*T, yp=y1+1.1;
@@ -1143,19 +1280,19 @@ function buildLOD2(b, idx){
         quad([X(s0,y1,0),X(e0,y1,0),X(e0,yp,0),X(s0,yp,0)], [-w[0],0,-w[1]], ZZ, [0,4]);
         quad([X(s0,yp,0),X(e0,yp,0),X(e1,yp,T),X(s1,yp,T)], [0,1,0], ZZ, [0,3]); }
     }
-  }
-  return {pos:new Float32Array(P), nrm:new Int8Array(NR), fac:new Float32Array(F), fac2:new Float32Array(F2), idx:new Uint32Array(I), tag:idx+2*LOD_TAG, count:P.length/3, tris:I.length/3};
+  });
+  return {pos:new Float32Array(P), nrm:new Int8Array(NR), fac:new Float32Array(F), fac2:new Float32Array(F2), slot:new Float32Array(SL), idx:new Uint32Array(I), tag:idx+2*LOD_TAG, count:P.length/3, tris:I.length/3};
 }
 // facade parameters for the LOD2 shader (same numbers the geometry LODs use)
 function specOf(kind,h,st){ const ws=winSpec(kind,h,st); return ws ? [ws.full!=null?ws.full:-1, ws.w||0, ws.y0, ws.y1] : [-1,0,1,0]; }
-function writeParams(b, idx){
-  const st=b.style, C=colorsOf(st), o=idx*PARAM_TEXELS*4;
-  paramArr.set([b.groundHeight, b.floorHeight, b.floors.length, (st.bands?1:0)+(st.parapet?2:0)], o);
-  paramArr.set(specOf(st.windows,b.floorHeight,st), o+4);
-  paramArr.set(specOf(groundKind(st),b.groundHeight,st), o+8);
-  paramArr.set([...C.wall,1], o+12); paramArr.set([...C.trim,1], o+16); paramArr.set([...C.glassDark,1], o+20); paramArr.set([...C.roof,1], o+24);
-  paramTex.needsUpdate=true;
+const SLOT_TEXELS = 8, SLOT_MAX = TEX_W*PARAM_ROWS/SLOT_TEXELS, slotFree=[]; let slotNext=0;
+// a parameter row for one LOD2 run (or a tier's colours); r.slots remembers them so a rebuild frees them
+function slotWrite(r, C, spec=[-1,0,1,0], run=[3,0,1e9,0]){
+  const x=slotFree.length ? slotFree.pop() : Math.min(slotNext++, SLOT_MAX-1), o=x*SLOT_TEXELS*4;
+  paramArr.set([...C.wall,1],o); paramArr.set([...C.trim,1],o+4); paramArr.set([...C.glassDark,1],o+8); paramArr.set([...C.roof,1],o+12); paramArr.set(spec,o+16); paramArr.set(run,o+20);
+  if(r){ (r.slots||(r.slots=[])).push(x); paramTex.needsUpdate=true; } return x;
 }
+function freeSlots(r){ for(const x of r.slots||[]) slotFree.push(x); r.slots=[]; }
 
 /* =========================================================================
    LOD system
@@ -1178,7 +1315,9 @@ function recOf(b){
     recs.set(b.id,r); recByIdx[idx]=r; }
   return r;
 }
-function boundsOf(b){ const bb=bbox(b.footprint), H=roofY(b)+1.1, dx=bb.x1-bb.x0+2*T_EXT, dz=bb.z1-bb.z0+2*T_EXT;
+function bboxAll(b){ const bb=bbox(b.footprint); for(const t of tiers(b)) if(t.k0){ const q=bbox(fpAt(b,t.k0)); bb.x0=Math.min(bb.x0,q.x0); bb.z0=Math.min(bb.z0,q.z0); bb.x1=Math.max(bb.x1,q.x1); bb.z1=Math.max(bb.z1,q.z1); } return bb; }
+const inBuilding = (b,lx,lz) => tiers(b).some(t=>pip(fpAt(b,t.k0),lx,lz));
+function boundsOf(b){ const bb=bboxAll(b), H=roofY(b)+1.1, dx=bb.x1-bb.x0+2*T_EXT, dz=bb.z1-bb.z0+2*T_EXT;
   return {x:(bb.x0+bb.x1)/2+b.pos.x, y:H/2, z:(bb.z0+bb.z1)/2+b.pos.z, r:Math.hypot(dx,dz,H)/2, size:Math.max(dx,dz,H),
     x0:bb.x0+b.pos.x-T_EXT, x1:bb.x1+b.pos.x+T_EXT, z0:bb.z0+b.pos.z-T_EXT, z1:bb.z1+b.pos.z+T_EXT, y1:H}; }
 const ready = (r,k) => !!r[k] && r[k].ver===r.ver;
@@ -1196,9 +1335,10 @@ const jobs = new Map();   // "id:lod" -> {r, l, ver, it}: detail LODs being buil
 /* a building's data changed (or it is new): refresh its table rows, massing, cell and grid entry */
 function refreshBuilding(b){
   const r=recOf(b); r.ver++;
-  writeParams(b, r.idx);
+  freeSlots(r);
   r.sph=boundsOf(b);
-  r.l2=buildLOD2(b, r.idx);
+  { const bb=bboxAll(b); r.bbw={x0:bb.x0+b.pos.x, z0:bb.z0+b.pos.z, x1:bb.x1+b.pos.x, z1:bb.z1+b.pos.z}; }
+  r.l2=buildLOD2(b, r.idx, r);
   const key=cellKey(r.sph.x, r.sph.z);
   if(r.cell && r.cell!==key){ const oc=cells.get(r.cell); if(oc){ oc.members.delete(r); oc.dirty=true; } }
   r.cell=key; const c=cellOf(key); c.members.add(r); c.dirty=true;
@@ -1211,11 +1351,17 @@ function removeRec(r){
   disposeLod(r,'l0'); disposeLod(r,'l1');
   if(r.cell){ const c=cells.get(r.cell); if(c){ c.members.delete(r); c.dirty=true; } }
   jobs.delete(r.id+':0'); jobs.delete(r.id+':1');
-  gridSet(r,null); recs.delete(r.id); recByIdx[r.idx]=null; freeIdx.push(r.idx);
+  gridSet(r,null); recs.delete(r.id); recByIdx[r.idx]=null; freeIdx.push(r.idx); freeSlots(r);
   stateArr.set([3,3,1,0], r.idx*4); stateTex.needsUpdate=true;
 }
 function syncRecs(){ for(const r of [...recs.values()]) if(!bById(r.id)) removeRec(r); }
-function touch(b){ if(b) dirty.add(b.id); else state.buildings.forEach(x=>dirty.add(x.id)); saveSoon(); }
+function touch(b){ if(b){ dirty.add(b.id); for(const id of touchingIds(b)) dirty.add(id); } else state.buildings.forEach(x=>dirty.add(x.id)); saveSoon(); }
+// buildings whose bounds touch b's (where it was, or where it is now): their party walls may change
+function touchingIds(b){ const r=recs.get(b.id), bb=bboxAll(b), now={x0:bb.x0+b.pos.x, z0:bb.z0+b.pos.z, x1:bb.x1+b.pos.x, z1:bb.z1+b.pos.z}, was=r?.bbw, out=new Set();
+  const hit=(A,B)=>A && B && A.x0<=B.x1+0.05 && B.x0<=A.x1+0.05 && A.z0<=B.z1+0.05 && B.z0<=A.z1+0.05;
+  const cand=new Set(nearRecs((now.x0+now.x1)/2,(now.z0+now.z1)/2,Math.max(now.x1-now.x0,now.z1-now.z0)/2+1)); for(const k of r?.gkeys||[]) for(const x of bgrid.get(k)||[]) cand.add(x);
+  for(const x of cand) if(x.id!==b.id && (hit(x.bbw,now) || hit(x.bbw,was))){ out.add(x.id); partyMemo.delete(x.id); }
+  partyMemo.delete(b.id); return out; }
 
 /* HLOD cells: all LOD2 massings in a 128 m cell are one mesh (one draw call). Buildings shown at a
    finer LOD are switched off inside it by the vertex shader, so the cell never needs rebuilding for LOD changes. */
@@ -1226,12 +1372,12 @@ function rebuildCell(c){
   if(c.mesh){ scene.remove(c.mesh); c.mesh.geometry.dispose(); c.mesh=null; }
   if(!c.members.size){ cells.delete(c.key); return; }
   let nv=0, ni=0; for(const r of c.members){ nv+=r.l2.count; ni+=r.l2.idx.length; }
-  const pos=new Float32Array(nv*3), nrm=new Int8Array(nv*3), fac=new Float32Array(nv*4), fac2=new Float32Array(nv*2), tag=new Float32Array(nv), idx=nv>65535?new Uint32Array(ni):new Uint16Array(ni);
+  const pos=new Float32Array(nv*3), nrm=new Int8Array(nv*3), fac=new Float32Array(nv*4), fac2=new Float32Array(nv*2), slot=new Float32Array(nv), tag=new Float32Array(nv), idx=nv>65535?new Uint32Array(ni):new Uint16Array(ni);
   let v=0, i=0;
-  for(const r of c.members){ const L=r.l2; pos.set(L.pos,v*3); nrm.set(L.nrm,v*3); fac.set(L.fac,v*4); fac2.set(L.fac2,v*2); tag.fill(L.tag,v,v+L.count); for(let j=0;j<L.idx.length;j++) idx[i+j]=L.idx[j]+v; v+=L.count; i+=L.idx.length; }
+  for(const r of c.members){ const L=r.l2; pos.set(L.pos,v*3); nrm.set(L.nrm,v*3); fac.set(L.fac,v*4); fac2.set(L.fac2,v*2); slot.set(L.slot,v); tag.fill(L.tag,v,v+L.count); for(let j=0;j<L.idx.length;j++) idx[i+j]=L.idx[j]+v; v+=L.count; i+=L.idx.length; }
   const g=new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos,3)); g.setAttribute('normal', new THREE.BufferAttribute(nrm,3,true));
-  g.setAttribute('aFac', new THREE.BufferAttribute(fac,4)); g.setAttribute('aFac2', new THREE.BufferAttribute(fac2,2)); g.setAttribute('aTag', new THREE.BufferAttribute(tag,1));
+  g.setAttribute('aFac', new THREE.BufferAttribute(fac,4)); g.setAttribute('aFac2', new THREE.BufferAttribute(fac2,2)); g.setAttribute('aSlot', new THREE.BufferAttribute(slot,1)); g.setAttribute('aTag', new THREE.BufferAttribute(tag,1));
   g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere();
   const m=new THREE.Mesh(g, MAT.mass); m.castShadow=true; m.receiveShadow=true; m.customDepthMaterial=MAT.massDepth; m.matrixAutoUpdate=false; scene.add(m);
   c.mesh=m; c.tris=ni/3;
@@ -1298,7 +1444,7 @@ const BGRID=32, bgrid=new Map();
 function gridSet(r,b){
   if(r.gkeys) for(const k of r.gkeys){ const s=bgrid.get(k); if(s){ s.delete(r); if(!s.size) bgrid.delete(k); } }
   r.gkeys=null; if(!b) return;
-  const bb=bbox(b.footprint); r.gkeys=[];
+  const bb=bboxAll(b); r.gkeys=[];
   for(let gx=Math.floor((bb.x0+b.pos.x-1)/BGRID); gx<=Math.floor((bb.x1+b.pos.x+1)/BGRID); gx++)
     for(let gz=Math.floor((bb.z0+b.pos.z-1)/BGRID); gz<=Math.floor((bb.z1+b.pos.z+1)/BGRID); gz++){ const k=gx+','+gz; let s=bgrid.get(k); if(!s) bgrid.set(k,s=new Set()); s.add(r); r.gkeys.push(k); }
 }
@@ -1451,14 +1597,15 @@ function simplifyTier(b,k0){
 }
 // can tier k0 take this outline? It must stay a simple polygon, fit inside the tier below, hold the tier
 // above, leave a usable terrace wherever it steps in, and keep every core it serves inside it.
-const OUTLINE_WHY = { shape:'Edges can’t cross or get shorter than 0.3 m', out:'A setback has to stay inside the floors below it', up:'The setback above has to fit inside this outline',
+const OUTLINE_WHY = { shape:'Edges can’t cross or get shorter than 0.3 m', out:'At least a quarter of a setback has to rest on the floor below', up:'The setback above would lose its footing',
   thin:'Line the edge up with the floor below, or leave at least 0.8 m of terrace', core:'Stairs or a lift are in the way' };
 function outlineIssue(b,k0,fp){
   if(!simplePoly(fp)) return 'shape';
-  if(k0){ const lo=fpAt(b,k0-1); if(!polyInside(fp,lo)) return 'out'; if(!terraceClear(fp,lo)) return 'thin'; }
+  const stands=(up,lo)=>sharedArea(up,lo) >= Math.max(4, 0.25*Math.abs(area2(up))/2);   // at least a quarter of it (and 4 m²) rests on the storey below
+  if(k0){ const lo=fpAt(b,k0-1); if(!stands(fp,lo)) return 'out'; if(!terraceClear(fp,lo)) return 'thin'; }
   const k1=tierEnd(b,k0), N=b.floors.length;
-  if(k1<N){ const up=b.floors[k1].shape; if(!polyInside(up,fp)) return 'up'; if(!terraceClear(up,fp)) return 'thin'; }
-  for(const s of b.shafts){ const lv=shaftLevels(b,s); if(!lv.some(k=>k>=k0 && (k<k1 || (k===N && k1===N)))) continue; const h=itemHalf(s,0.16); if(!rectInside(fp,s.x,s.z,h.hx,h.hz)) return 'core'; }
+  if(k1<N){ const up=b.floors[k1].shape; if(!stands(up,fp)) return 'up'; if(!terraceClear(up,fp)) return 'thin'; }
+  for(const s of b.shafts){ const lv=shaftLevels(b,s); if(!lv.some(k=>k>=k0 && (k<k1 || (k===N && k1===N)))) continue; if(!coreFits(fp,s)) return 'core'; }
   return null;
 }
 function setOutline(b,k0,fp,ev){
@@ -1466,8 +1613,27 @@ function setOutline(b,k0,fp,ev){
   if(why){ if(ev) showTip(ev, OUTLINE_WHY[why]); return false; }
   tip.hidden=true; const cur=tierFp(b,k0); cur.length=0; cur.push(...fp); touch(b); return true;
 }
+// neighbours' base outlines near a world point, in world coords
+function neighbourOutlines(b, x, z, rad){ const out=[]; for(const r of nearRecs(x,z,rad)){ const p=bById(r.id); if(p && p!==b) out.push(p.footprint.map(q=>P(q.x+p.pos.x,q.z+p.pos.z))); } return out; }
+// moving a building: an edge that comes within 0.5 m of a neighbour's edge running the other way snaps onto it (a party wall)
+function snapMove(b, x, z){
+  const fp=b.footprint, bb=bbox(fp), W=fp.map(q=>P(q.x+x,q.z+z)); let best=null, bd=0.5;
+  for(const q of neighbourOutlines(b, x+(bb.x0+bb.x1)/2, z+(bb.z0+bb.z1)/2, Math.max(bb.x1-bb.x0,bb.z1-bb.z0)/2+3))
+    for(let i=0;i<W.length;i++){ const a=W[i], c=W[(i+1)%W.length], L=Math.hypot(c.x-a.x,c.z-a.z)||1, ux=(c.x-a.x)/L, uz=(c.z-a.z)/L;
+      for(let j=0;j<q.length;j++){ const p0=q[j], p1=q[(j+1)%q.length], M=Math.hypot(p1.x-p0.x,p1.z-p0.z)||1;
+        if(((p1.x-p0.x)*ux+(p1.z-p0.z)*uz)/M > -0.999) continue;
+        const d=(p0.x-a.x)*(-uz)+(p0.z-a.z)*ux, t0=(p0.x-a.x)*ux+(p0.z-a.z)*uz, t1=(p1.x-a.x)*ux+(p1.z-a.z)*uz;
+        if(Math.min(L,Math.max(t0,t1))-Math.max(0,Math.min(t0,t1))<0.5 || Math.abs(d)>=bd) continue;
+        bd=Math.abs(d); best=[-uz*d, ux*d]; } }
+  return best ? [cm(x+best[0]), cm(z+best[1])] : [x,z];
+}
 // corner snapping: onto the outline below (corners, then edges), then in line with the neighbouring corners
 function outlineSnap(b,k0,fp,i,x,z){
+  if(!k0){ let best=null, bd=0.45; const wx=x+b.pos.x, wz=z+b.pos.z, ns=neighbourOutlines(b,wx,wz,3);   // the base outline also snaps to neighbouring buildings
+    for(const q of ns) for(const v of q){ const d=Math.hypot(v.x-wx,v.z-wz); if(d<bd){ bd=d; best=P(cm(v.x-b.pos.x),cm(v.z-b.pos.z)); } }
+    if(best) return best;
+    let ed=0.35; for(const q of ns) q.forEach((v,j)=>{ const c=q[(j+1)%q.length], r=segDist(wx,wz,v.x,v.z,c.x,c.z); if(r.d<ed){ ed=r.d; best=P(cm(r.cx-b.pos.x),cm(r.cz-b.pos.z)); } });
+    if(best) return best; }
   if(k0){ const lo=fpAt(b,k0-1); let best=null, bd=0.45;
     for(const v of lo){ const d=Math.hypot(v.x-x,v.z-z); if(d<bd){ bd=d; best=P(v.x,v.z); } }
     if(best) return best;
@@ -1501,7 +1667,7 @@ function moveSetback(b,k0,k){
 }
 function applyShape(b,key){
   b.footprint=FOOTPRINTS[key]().map(([x,z])=>P(x,z)); b.entrances=[{edge:0,t:0.5}, ...b.entrances.filter(e=>e.k)]; b.blank=[];
-  for(const t of tiers(b)) if(t.k0 && !polyInside(fpAt(b,t.k0),fpAt(b,t.k0-1))) removeSetback(b,t.k0);   // setbacks that no longer fit go
+  for(const t of tiers(b)) if(t.k0 && outlineIssue(b,t.k0,fpAt(b,t.k0))) removeSetback(b,t.k0);   // setbacks that no longer fit go
   b.shafts=b.shafts.filter(s=>shaftFits(b,s));
 }
 
@@ -1509,7 +1675,7 @@ function applyShape(b,key){
    View / occlusion state per frame
    ========================================================================= */
 function playerLoc(){
-  for(const r of nearRecs(player.x,player.z,0)){ const b=bById(r.id); if(b && pip(b.footprint, player.x-b.pos.x, player.z-b.pos.z) && player.y<=roofY(b)+1.5) return {b, floor:floorAtY(b,player.y)}; }
+  for(const r of nearRecs(player.x,player.z,0)){ const b=bById(r.id); if(b && inBuilding(b, player.x-b.pos.x, player.z-b.pos.z) && player.y<=roofY(b)+1.5) return {b, floor:floorAtY(b,player.y)}; }
   return {b:null, floor:null};
 }
 const tmpV=new THREE.Vector3();
@@ -1546,10 +1712,10 @@ function surfaceAt(x,z,y){
   let best = y+0.6 >= 0 ? 0 : -1e9;
   for(const r of nearRecs(x,z,0)){
     const b=bById(r.id); if(!b) continue;
-    const lx=x-b.pos.x, lz=z-b.pos.z; if(!pip(b.footprint,lx,lz)) continue;
+    const lx=x-b.pos.x, lz=z-b.pos.z; if(!inBuilding(b,lx,lz)) continue;
     const N=b.floors.length;
     for(let k=0;k<=N;k++){ const yk=floorBase(b,k); if(yk>y+0.6 || yk<=best) continue;
-      if(k>1 && tierStart(b,k-1) && !pip(fpAt(b,k-1),lx,lz)) continue;
+      if(!(k>0 && pip(fpAt(b,k-1),lx,lz)) && !(k<N && pip(fpAt(b,k),lx,lz))) continue;   // level k: the storey below's roof or terrace, or this storey's floor
       if(b.shafts.some(s=>stairHoleAt(b,s,k) && (()=>{ const q=toItem(s,lx,lz); return Math.abs(q.x)<1.3 && q.z>-1.6 && q.z<2.6; })())) continue; best=yk; }
     for(const s of b.shafts){ if(s.type!=='stairs') continue; const q=toItem(s,lx,lz); if(Math.abs(q.x)>=1.3 || q.z<=-1.6 || q.z>=2.6) continue;
       for(let k=s.bottom;k<=N;k++){ if(!hasFlight(b,s,k)) continue; const yb=floorBase(b,k), half=floorH(b,k)/2; let hy;
@@ -1560,7 +1726,7 @@ function surfaceAt(x,z,y){
 }
 function collide(px,pz,y){
   const segs=[];
-  for(const r of nearRecs(px,pz,3)){ const b=bById(r.id); if(!b) continue; const bb=bbox(b.footprint); if(px<bb.x0+b.pos.x-3||px>bb.x1+b.pos.x+3||pz<bb.z0+b.pos.z-3||pz>bb.z1+b.pos.z+3) continue; if(y>roofY(b)+2) continue;
+  for(const r of nearRecs(px,pz,3)){ const b=bById(r.id); if(!b) continue; const bb=bboxAll(b); if(px<bb.x0+b.pos.x-3||px>bb.x1+b.pos.x+3||pz<bb.z0+b.pos.z-3||pz>bb.z1+b.pos.z+3) continue; if(y>roofY(b)+2) continue;
     if(!ready(r,'l0')) genL0(b,r);   // collision comes from the full-detail generator
     const k=floorAtY(b,y); if(r.l0.segs[k]) segs.push(...r.l0.segs[k]); }
   for(let it=0;it<4;it++) for(const s of segs){ const q=segDist(px,pz,s.ax,s.az,s.bx,s.bz); const rr=PR+s.r; if(q.d<rr){ if(q.d<1e-5){ px+=rr; continue; } px=q.cx+(px-q.cx)/q.d*rr; pz=q.cz+(pz-q.cz)/q.d*rr; } }
@@ -1589,7 +1755,7 @@ function updatePlayer(dt){
     player.y = Math.abs(d)<=sp ? r.to : player.y+Math.sign(d)*sp;
     if(player.y===r.to){ player.ride=null; liftKey=''; }
     if(!carMesh){ carMesh=new THREE.Mesh(carGB.geo(), new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.7})); scene.add(carMesh); }
-    const f=frame(r.b,r.s); carMesh.position.set(f.O[0],player.y,f.O[1]); carMesh.rotation.y=-r.s.rot*Math.PI/2; carMesh.visible=true;
+    const f=frame(r.b,r.s); carMesh.position.set(f.O[0],player.y,f.O[1]); carMesh.rotation.y=-rad(r.s); carMesh.visible=true;
   } else if(carMesh){ carMesh.visible=false; }
   let ix=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0), iy=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0);
   if(joy.id!==null){ ix=joy.x; iy=joy.y; }
@@ -1730,11 +1896,9 @@ function wallPreview(b,k,a,c,e){
 }
 function placingType(){ return ui.tool==='stairs'?'stairs' : ui.tool==='lift'?'lift' : null; }
 function placementAt(b,k,p){
-  const type=placingType(); const it={type,x:0,z:0,rot:ui.placeRot}; const h=itemHalf(it);
-  it.x = cm(p.x); it.z = cm(p.z);
-  const hm=itemHalf(it, type==='stairs'||type==='lift' ? 0.16 : 0);
-  let ok = k<b.floors.length && fitsLevels(b,it.x,it.z,hm.hx,hm.hz,k,b.floors.length-1);
-  if(ok && (type==='stairs'||type==='lift')) ok = !b.shafts.some(s=>{ const o=itemHalf(s,0.15); return Math.abs(s.x-it.x)<o.hx+hm.hx && Math.abs(s.z-it.z)<o.hz+hm.hz; });
+  const type=placingType(), x=cm(p.x), z=cm(p.z), it={type, x, z, rot:(wallAngle(fpAt(b,k),x,z)+ui.placeRot)%360};   // lines up with the nearest wall
+  let ok = k<b.floors.length && fitsLevels(b,it,k,b.floors.length-1);
+  if(ok) ok = !b.shafts.some(s=>itemsOverlap(s,it));
   return {it, ok};
 }
 function ghostItem(b,k,it,ok){
@@ -1838,9 +2002,9 @@ function toolMove(e, pressed){
     case 'select': {
       if(dragItem && pressed){
         if(!dragItem.pushed){ pushUndo(b); dragItem.pushed=true; }
-        const it=dragItem.it, h=itemHalf(it, it.type==='stairs'||it.type==='lift'?0.16:0);
+        const it=dragItem.it;
         const nx=cm(p.x+dragItem.off.x), nz=cm(p.z+dragItem.off.z);
-        if(fitsLevels(b,nx,nz,h.hx,h.hz,it.bottom,shaftTop(b,it)) && (it.type!=='stairs'&&it.type!=='lift' || !b.shafts.some(s=>{ if(s===it) return false; const o=itemHalf(s,0.15); return Math.abs(s.x-nx)<o.hx+h.hx && Math.abs(s.z-nz)<o.hz+h.hz; }))){ if(nx!==it.x||nz!==it.z){ it.x=nx; it.z=nz; dragItem.moved=true; touch(b); } }
+        if(fitsLevels(b,it,it.bottom,shaftTop(b,it),nx,nz) && !b.shafts.some(s=>s!==it && itemsOverlap(s,it,0.3,nx,nz))){ if(nx!==it.x||nz!==it.z){ it.x=nx; it.z=nz; dragItem.moved=true; touch(b); } }
         ghostItem(b,k,it,true); hlMat.color.set('#2F7D4F');
       } else if(!pressed){ const t=hoverTarget(b,k,p); if(t && t.kind==='shaft'){ showTarget(b,k,t,'#2F7D4F'); canvas.style.cursor='move'; } else { canvas.style.cursor=''; if(!ui.sub) hideHL(); } }
       break;
@@ -1882,13 +2046,14 @@ function deleteSub(){
   commit(()=>{ if(s.kind==='wall') b.floors[s.floor].walls.splice(s.i,1); else if(s.kind==='shaft') b.shafts=b.shafts.filter(x=>x.id!==s.id); }, 'Removed', b);
   ui.sub=null; hideHL(); renderPanel(); return true;
 }
+function setCoreAngle(b, sh, deg){ const r=Math.round((((deg%360)+360)%360)*10)/10; if(!shaftFits(b,sh,sh.x,sh.z,r) || b.shafts.some(x=>x!==sh && itemsOverlap(x,{...sh,rot:r}))){ toast('No room to turn it to '+r+'°'); renderPanel(); return; } commit(()=>{ sh.rot=r; }, null, b); renderPanel(); }
 function rotateSub(){
   const b=selB(); if(!b) return;
-  if(ui.tab==='interior' && placingType()){ ui.placeRot=(ui.placeRot+1)%4; return; }
+  if(ui.tab==='interior' && placingType()){ ui.placeRot=(ui.placeRot+90)%360; return; }
   if(!ui.sub) return; const s=ui.sub;
   const it = s.kind==='shaft' ? b.shafts.find(x=>x.id===s.id) : null; if(!it) return;
-  const nr=(it.rot+1)%4, h=itemHalf({...it,rot:nr}, s.kind==='shaft'?0.16:0);
-  if(!shaftFits(b,it,it.x,it.z,nr)){ toast('No room to rotate here'); return; }
+  const nr=((it.rot||0)+90)%360;
+  if(!shaftFits(b,it,it.x,it.z,nr) || b.shafts.some(x=>x!==it && itemsOverlap(x,{...it,rot:nr}))){ toast('No room to rotate here'); return; }
   commit(()=>{ it.rot=nr; }, null, b);
 }
 
@@ -2027,7 +2192,7 @@ function cityBuildings(count){
       const b={ id:nid('b'), gen:true, name:`Block ${bx},${bz} · ${ix*nz+iz+1}`, pos:P(snapG(x0+ix*lw+inset), snapG(z0+iz*ld+inset)), footprint:fp.map(([a,c])=>P(a,c)),
         floors:Array.from({length:floors},()=>({walls:[]})), groundHeight:[3.6,4.0,4.5][Math.floor(R()*3)], floorHeight: tall?3.3:3.0+Math.floor(R()*4)/10,
         shafts:[], entrances:[{edge:0,t:0.25+R()*0.5}], blank: R()<0.3 ? [1+Math.floor(R()*(fp.length-1))] : [], style:{...clone(STYLES[sk]), preset:sk}, interior:false };
-      if(floors<=12 && R()<0.06){ b.interior=true; const sc={id:nid('s'), type:'stairs', x:snapG(w/2), z:snapG(d/2), rot:0, bottom:0, top:-1, roof:true}; const hh=itemHalf(sc,0.16); if(rectInside(b.footprint,sc.x,sc.z,hh.hx,hh.hz)) b.shafts.push(sc); }
+      if(floors<=12 && R()<0.06){ b.interior=true; const sc={id:nid('s'), type:'stairs', x:snapG(w/2), z:snapG(d/2), rot:0, bottom:0, top:-1, roof:true}; if(coreFits(b.footprint,sc)) b.shafts.push(sc); }
       out.push(b);
     }
   }
@@ -2063,11 +2228,14 @@ const TOOL_ICONS = {
 };
 function shapeIcon(key){ const fp=FOOTPRINTS[key](); const xs=fp.map(p=>p[0]), zs=fp.map(p=>p[1]); const s=22/Math.max(Math.max(...xs),Math.max(...zs)); return `<svg viewBox="-3 -3 28 28" aria-hidden="true"><polygon points="${fp.map(([x,z])=>`${(x*s).toFixed(1)},${(z*s).toFixed(1)}`).join(' ')}" fill="currentColor" fill-opacity=".18" stroke="currentColor" stroke-width="1.6"/></svg>`; }
 const seg = (path, val, opts) => `<div class="seg">${opts.map(([v,l])=>`<button data-set="${path}" data-val="${v}" class="${String(v)===String(val)?'on':''}">${l}</button>`).join('')}</div>`;
-const slider = (path, label, val, min, max, step, unit, dec=1) => `<label class="sl"><span>${label}</span><input type="range" id="in-${path.replace('.','-')}" data-num="${path}" data-unit="${unit}" data-dec="${dec}" min="${min}" max="${max}" step="${step}" value="${val}"><output>${(+val).toFixed(dec)}${unit}</output></label>`;
-const swatches = (path, val) => `<div class="sws">${PALETTE[path.split('.')[1]].map(c=>`<button class="swb ${c.toLowerCase()===String(val).toLowerCase()?'on':''}" style="background:${c}" data-set="${path}" data-val="${c}" aria-label="${c}"></button>`).join('')}<input type="color" id="in-${path.replace('.','-')}" data-color="${path}" value="${val}" aria-label="Custom colour"></div>`;
+const slider = (path, label, val, min, max, step, unit, dec=1) => `<label class="sl"><span>${label}</span><input type="range" id="in-${path.replace(/\./g,'-')}" data-num="${path}" data-unit="${unit}" data-dec="${dec}" min="${min}" max="${max}" step="${step}" value="${val}"><output>${(+val).toFixed(dec)}${unit}</output></label>`;
+const swatches = (path, val) => `<div class="sws">${PALETTE[path.split('.').at(-1)].map(c=>`<button class="swb ${c.toLowerCase()===String(val).toLowerCase()?'on':''}" style="background:${c}" data-set="${path}" data-val="${c}" aria-label="${c}"></button>`).join('')}<input type="color" id="in-${path.replace(/\./g,'-')}" data-color="${path}" value="${val}" aria-label="Custom colour"></div>`;
 
 const isShell = b => b.interior===false;
-const TOOLS=[['select','Select','V','Drag wall points to reshape rooms · drag + to split a wall · double-click a point to join or remove · Alt: no snap'],['wall','Wall','W','Click to chain walls · snaps to points (ring) and walls (diamond) · Esc to finish'],['door','Door','D','Click a wall to add or remove a doorway'],['erase','Erase','X','Click anything on this floor to remove it'],['stairs','Stairs','S','Click to place · runs to the top floor · R rotates'],['lift','Lift','L','Click to place · serves every floor above · R rotates']];
+// the style the Facade tab edits: the base building's, or the selected setback's own
+function facadeStylePath(b){ const k0=tiers(b).length>1 ? shapeTier(b) : 0; return k0 && b.floors[k0].style ? `floors.${k0}.style` : 'style'; }
+const styleOf = (b,path) => getPath(b, path.split('.').slice(0,-1).join('.'));
+const TOOLS=[['select','Select','V','Drag wall points to reshape rooms · drag + to split a wall · double-click a point to join or remove · Alt: no snap'],['wall','Wall','W','Click to chain walls · snaps to points (ring) and walls (diamond) · Esc to finish'],['door','Door','D','Click a wall to add or remove a doorway'],['erase','Erase','X','Click anything on this floor to remove it'],['stairs','Stairs','S','Click to place · lines up with the nearest wall · runs to the top floor · R turns 90°'],['lift','Lift','L','Click to place · lines up with the nearest wall · serves every floor above · R turns 90°']];
 function renderPanel(){
   if(ui.mode!=='edit') return;
   const b=selB();
@@ -2108,20 +2276,28 @@ function renderPanel(){
       <p class="note mono">${(Math.abs(area2(fp))/2).toFixed(0)} m² per floor · ${roofY(b).toFixed(1)} m tall</p></div>`;
   }
   if(ui.tab==='facade'){
-    const st=b.style;
-    h+=`<div class="sec"><div class="presets">${Object.entries(STYLES).map(([k,x])=>`<button class="preset ${st.preset===k?'on':''}" data-act="style" data-style="${k}"><i><b style="background:${x.roof}"></b><b style="background:${x.wall};flex:3"></b><b style="background:${x.trim}"></b></i><span>${x.label}</span></button>`).join('')}</div>
-      <div class="sub-h">Windows</div>${seg('style.windows',st.windows,[['none','None'],['punched','Punched'],['tall','Tall'],['ribbon','Ribbon'],['curtain','Glass']])}
+    const ts=tiers(b), k0=ts.length>1 ? shapeTier(b) : 0, own=k0 && b.floors[k0].style, sp=facadeStylePath(b), st=own || b.style;
+    const range = t => t.k1-1===t.k0 ? floorShort(b,t.k0) : `${floorShort(b,t.k0)}–${floorShort(b,t.k1-1)}`, isTop = tierEnd(b,k0)===b.floors.length;
+    h+=`<div class="sec">`;
+    if(ts.length>1) h+=`<div class="sub-h" style="margin-top:0">Style for</div><div class="seg" role="group" aria-label="Style for">${ts.map(t=>`<button data-act="tierSel" data-k="${t.k0}" class="${t.k0===k0?'on':''}">${t.k0?'Setback':'Base'} <span class="mono" style="opacity:.7">${range(t)}</span></button>`).join('')}</div>`;
+    if(k0 && !own) h+=`<p class="lead" style="margin-top:10px">This setback looks like the floors below it.</p><div class="row"><button class="btn" data-act="tierStyle">Give it its own style</button></div>`;
+    else {
+      if(k0) h+=`<div class="row" style="margin:8px 0 2px"><button class="btn ghost" data-act="tierStyleOff" title="Drop this setback's style and follow the floors below again">Match the floors below</button></div>`;
+      h+=`<div class="presets" ${ts.length>1?'style="margin-top:10px"':''}>${Object.entries(STYLES).map(([k,x])=>`<button class="preset ${st.preset===k?'on':''}" data-act="style" data-style="${k}"><i><b style="background:${x.roof}"></b><b style="background:${x.wall};flex:3"></b><b style="background:${x.trim}"></b></i><span>${x.label}</span></button>`).join('')}</div>
+      <div class="sub-h">Windows</div>${seg(sp+'.windows',st.windows,[['none','None'],['punched','Punched'],['tall','Tall'],['ribbon','Ribbon'],['curtain','Glass']])}
       <div class="sub-h">Colours</div>
-      <div class="field"><span>Walls</span>${swatches('style.wall',st.wall)}</div>
-      <div class="field"><span>Trim</span>${swatches('style.trim',st.trim)}</div>
-      <div class="field"><span>Roof</span>${swatches('style.roof',st.roof)}</div>
-      <div class="sub-h">Click walls to add</div><div class="seg">${[['entrance','Entrance'],['blank','Blank wall']].map(([t,l])=>`<button data-act="ftool" data-t="${t}" class="${ui.facadeTool===t?'on':''}">${l}</button>`).join('')}</div>
-      <details class="more" ${ui.moreOpen?'open':''} id="moreFacade"><summary>More options</summary>
-        ${slider('style.winW','Window width',st.winW,0.6,2.4,0.1,' m')}${slider('style.bay','Bay spacing',st.bay,1.4,5,0.1,' m')}
-        <div class="field"><span>Ground floor</span>${seg('style.ground',st.ground,[['storefront','Shopfront'],['match','Match'],['solid','Solid']])}</div>
-        <label class="chk"><input type="checkbox" data-bool="style.bands" id="bandsChk" ${st.bands?'checked':''}> Floor bands</label>
-        <label class="chk"><input type="checkbox" data-bool="style.parapet" id="parChk" ${st.parapet?'checked':''}> Roof parapet</label>
-      </details></div>`;
+      <div class="field"><span>Walls</span>${swatches(sp+'.wall',st.wall)}</div>
+      <div class="field"><span>Trim</span>${swatches(sp+'.trim',st.trim)}</div>
+      <div class="field"><span>Roof</span>${swatches(sp+'.roof',st.roof)}</div>`;
+    }
+    h+=`<div class="sub-h">Click walls to add</div><div class="seg">${[['entrance','Entrance'],['blank','Blank wall']].map(([t,l])=>`<button data-act="ftool" data-t="${t}" class="${ui.facadeTool===t?'on':''}">${l}</button>`).join('')}</div>`;
+    if(!k0 || own) h+=`<details class="more" ${ui.moreOpen?'open':''} id="moreFacade"><summary>More options</summary>
+        ${slider(sp+'.winW','Window width',st.winW,0.6,2.4,0.1,' m')}${slider(sp+'.bay','Bay spacing',st.bay,1.4,5,0.1,' m')}
+        ${k0?'':`<div class="field"><span>Ground floor</span>${seg('style.ground',st.ground,[['storefront','Shopfront'],['match','Match'],['solid','Solid']])}</div>`}
+        <label class="chk"><input type="checkbox" data-bool="${sp}.bands" id="bandsChk" ${st.bands?'checked':''}> Floor bands</label>
+        ${isTop?`<label class="chk"><input type="checkbox" data-bool="${sp}.parapet" id="parChk" ${st.parapet?'checked':''}> Roof parapet</label>`:''}
+      </details>`;
+    h+=`</div>`;
   }
   if(ui.tab==='interior'){
     const k=activeFloor(b), N=b.floors.length, shell=isShell(b);
@@ -2138,6 +2314,7 @@ function renderPanel(){
       h+=`<div class="tstrip" role="toolbar" aria-label="Interior tools">${TOOLS.map(([t,l,kb])=>`<button class="${ui.tool===t?'on':''}" data-act="tool" data-t="${t}" title="${l} (${kb})" aria-label="${l}" aria-pressed="${ui.tool===t}">${TOOL_ICONS[t]}</button>`).join('')}</div>
         <div class="toolname"><b>${cur[1]}</b><kbd>${cur[2]}</kbd></div><p class="note" style="margin-top:2px">${cur[3]}</p>`;
       if(ui.sub) h+=inspector(b);
+      h+=`<div class="sub-h">Storey height · ${floorLabel(b,k)}</div>${slider('floors.'+k+'.h','Height',floorH(b,k),2.4,8,0.1,' m')}${b.floors[k].h!=null?`<div class="row"><button class="btn ghost" data-act="hReset">Use default (${(k===0?b.groundHeight:b.floorHeight).toFixed(1)} m)</button></div>`:''}`;
       h+=`<details class="more" ${ui.moreOpen?'open':''} id="moreInt"><summary>Interior colours</summary>
         <div class="field"><span>Walls</span>${swatches('style.interior',b.style.interior)}</div>
         <div class="field"><span>Floors</span>${swatches('style.floor',b.style.floor)}</div></details></div>`;
@@ -2157,7 +2334,8 @@ function inspector(b){
       <div class="field"><span>From</span><select id="shBottom" data-sh="bottom">${opts(sh.bottom)}</select></div>
       <div class="field"><span>To</span><select id="shTop" data-sh="top"><option value="-1" ${sh.top<0?'selected':''}>Top floor</option>${opts(sh.top<0?-9:sh.top)}</select></div>
       <label class="chk"><input type="checkbox" data-act="shRoof" ${sh.roof?'checked':''}> Continue to the roof</label>
-      <div class="row"><button class="btn" data-act="subRot">Rotate</button><button class="btn danger ghost" data-act="subDel">${I.del} Remove</button></div></div>`; }
+      <div class="field"><span>Angle</span><input type="number" id="shRot" min="-360" max="360" step="1" value="${+(sh.rot||0).toFixed(1)}" style="width:72px"> °<button class="btn ghost" data-act="shAlign" title="Line it up with the nearest wall" style="margin-left:auto">Align to wall</button></div>
+      <div class="row"><button class="btn" data-act="subRot">Rotate 90°</button><button class="btn danger ghost" data-act="subDel">${I.del} Remove</button></div></div>`; }
   if(s.kind==='wall'){ const w=b.floors[s.floor]?.walls[s.i]; if(!w) return ''; const L=Math.hypot(w.b.x-w.a.x,w.b.z-w.a.z); return `<div class="insp"><div class="t">Wall <span class="mono note" style="margin:0">${L.toFixed(2)} m</span></div><div class="row"><button class="btn danger ghost" data-act="subDel">${I.del} Remove</button></div></div>`; }
   return '';
 }
@@ -2171,7 +2349,7 @@ function renderStack(){
   if(list){
     const roofAcc=b.shafts.some(x=>shaftRoof(b,x));
     h+=`<div class="floors"><div class="frow ${k===N?'on':''}" data-act="fSel" data-k="${N}"><span class="num">R</span><span class="lb">Roof${roofAcc?' <em>· access</em>':''}</span></div>`;
-    for(let i=N-1;i>=0;i--) h+=`<div class="frow ${k===i?'on':''}" data-act="fSel" data-k="${i}"><span class="num">${floorShort(b,i)}</span><span class="lb">${i===0?'Ground':'Floor '+i}${b.floors[i].shape?' <em>· setback</em>':''}</span><span class="acts"><button data-act="fCopyUp" data-k="${i}" title="Copy this layout to every floor above" aria-label="Copy layout up" ${i>=N-1?'disabled':''}>${I.up}</button><button data-act="fDup" data-k="${i}" title="Duplicate this floor" aria-label="Duplicate floor">${I.dup}</button><button data-act="fDel" data-k="${i}" title="Delete this floor" aria-label="Delete floor" ${N<=1?'disabled':''}>${I.del}</button></span></div>`;
+    for(let i=N-1;i>=0;i--) h+=`<div class="frow ${k===i?'on':''}" data-act="fSel" data-k="${i}"><span class="num">${floorShort(b,i)}</span><span class="lb">${i===0?'Ground':'Floor '+i}${b.floors[i].shape?' <em>· setback</em>':''}${b.floors[i].h!=null?` <em>· ${b.floors[i].h.toFixed(1)} m</em>`:''}</span><span class="acts"><button data-act="fCopyUp" data-k="${i}" title="Copy this layout to every floor above" aria-label="Copy layout up" ${i>=N-1?'disabled':''}>${I.up}</button><button data-act="fDup" data-k="${i}" title="Duplicate this floor" aria-label="Duplicate floor">${I.dup}</button><button data-act="fDel" data-k="${i}" title="Delete this floor" aria-label="Delete floor" ${N<=1?'disabled':''}>${I.del}</button></span></div>`;
     h+=`</div>`;
   }
   const sc=stackEl.querySelector('.floors')?.scrollTop||0;
@@ -2194,7 +2372,7 @@ let sliding=false;
 panel.addEventListener('click', e=>{
   const b=selB();
   const setEl=e.target.closest('[data-set]');
-  if(setEl && b){ const path=setEl.dataset.set; let v=setEl.dataset.val; if(!isNaN(+v) && v!=='') v=+v; commit(()=>{ setPath(b,path,v); if(path.startsWith('style.') && ['windows','ground','wall','trim','roof'].includes(path.split('.')[1])) b.style.preset=null; }, null, b); renderPanel(); return; }
+  if(setEl && b){ const path=setEl.dataset.set; let v=setEl.dataset.val; if(!isNaN(+v) && v!=='') v=+v; commit(()=>{ setPath(b,path,v); if(path.split('.').includes('style') && ['windows','ground','wall','trim','roof'].includes(path.split('.').at(-1))) styleOf(b,path).preset=null; }, null, b); renderPanel(); return; }
   const a=e.target.closest('[data-act]'); if(!a) return; const act=a.dataset.act;
   switch(act){
     case 'ptoggle': panel.classList.toggle('collapsed'); renderPanel(); break;
@@ -2213,7 +2391,10 @@ panel.addEventListener('click', e=>{
     case 'tierDel': { e.stopPropagation(); const k=+a.dataset.k; commit(()=>removeSetback(b,k), 'Setback removed — '+floorLabel(b,k)+' and up follow the outline below', b); ui.tierSel[b.id]=0; overlayRebuild(); renderPanel(); renderStack(); break; }
     case 'tierAdd': { let k; commit(()=>{ k=addSetback(b,shapeTier(b)); }, null, b); ui.tierSel[b.id]=k; ui.vsel=-1; toast(`${floorLabel(b,k)} and up now have their own outline — push an edge in to make a terrace`); overlayRebuild(); renderPanel(); renderStack(); break; }
     case 'tierInset': { const k0=shapeTier(b), nf=insetPoly(tierFp(b,k0),1.5), why=outlineIssue(b,k0,nf); if(why){ toast(OUTLINE_WHY[why]); break; } commit(()=>{ const f=tierFp(b,k0); f.length=0; f.push(...nf); }, 'Inset 1.5 m', b); overlayRebuild(); renderPanel(); break; }
-    case 'style': { const k=a.dataset.style; commit(()=>{ b.style={...clone(STYLES[k]), preset:k}; }, STYLES[k].label+' applied', b); renderPanel(); break; }
+    case 'style': { const k=a.dataset.style, sp=facadeStylePath(b); commit(()=>{ if(sp==='style') b.style={...clone(STYLES[k]), preset:k}; else setPath(b, sp, {...clone(STYLES[k]), preset:k}); }, STYLES[k].label+' applied'+(sp==='style'?'':' to the setback'), b); renderPanel(); break; }
+    case 'tierStyle': { const k0=shapeTier(b); commit(()=>{ b.floors[k0].style=clone(styleAt(b,k0-1)); /* starts as what it looks like now */ }, 'The setback has its own style now — pick a preset or colours', b); renderPanel(); break; }
+    case 'tierStyleOff': { const k0=shapeTier(b); commit(()=>{ delete b.floors[k0].style; }, 'The setback matches the floors below again', b); renderPanel(); break; }
+    case 'hReset': { const k=activeFloor(b); commit(()=>{ delete b.floors[k].h; }, floorLabel(b,k)+' uses the default height', b); renderPanel(); break; }
     case 'ftool': ui.facadeTool = ui.facadeTool===a.dataset.t ? null : a.dataset.t; hideHL(); canvas.style.cursor=ui.facadeTool?'crosshair':''; renderPanel(); if(ui.facadeTool) toast(ui.facadeTool==='entrance'?'Click a ground-floor wall (or a wall facing a terrace) to add or remove a door':'Click a wall to switch its windows off or on'); break;
     case 'tool': setTool(a.dataset.t); break;
     case 'playHere': playHere(); break;
@@ -2221,6 +2402,7 @@ panel.addEventListener('click', e=>{
     case 'clearFloor': { const k=activeFloor(b); commit(()=>{ b.floors[k].walls=[]; }, floorLabel(b,k)+' cleared', b); renderPanel(); break; }
     case 'subDel': deleteSub(); break;
     case 'subRot': rotateSub(); break;
+    case 'shAlign': { const sh=b.shafts.find(x=>x.id===ui.sub?.id); if(sh) setCoreAngle(b, sh, wallAngle(fpAt(b,sh.bottom),sh.x,sh.z)+Math.round(((sh.rot||0)-wallAngle(fpAt(b,sh.bottom),sh.x,sh.z))/90)*90); break; }
     case 'shRoof': { const sh=b.shafts.find(x=>x.id===ui.sub?.id); if(sh) commit(()=>{ sh.roof=a.checked; }, a.checked?'Now reaches the roof':'Stops at the top floor', b); break; }
     case 'shRoofI': { const sh=b.shafts.find(x=>x.id===a.dataset.id); if(sh) commit(()=>{ sh.roof=a.checked; }, null, b); renderStack(); break; }
   }
@@ -2229,16 +2411,17 @@ panel.addEventListener('toggle', e=>{ if(e.target.matches('details.more')) ui.mo
 panel.addEventListener('input', e=>{
   if(e.target.id==='bfind'){ ui.find=e.target.value; const l=$('#blist'); if(l) l.innerHTML=buildingRows(state.buildings.filter(x=>x.id!==ui.sel)); return; }
   const b=selB(); if(!b) return; const t=e.target;
-  if(t.dataset.num){ if(!sliding){ pushUndo(b); sliding=true; } const v=+t.value; setPath(b,t.dataset.num,v); if(t.dataset.num==='style.winW'||t.dataset.num==='style.bay') b.style.preset=null; t.nextElementSibling.textContent=v.toFixed(+t.dataset.dec)+t.dataset.unit; touch(b); }
-  if(t.dataset.color){ if(!sliding){ pushUndo(b); sliding=true; } setPath(b,t.dataset.color,t.value); b.style.preset=null; touch(b); }
+  if(t.dataset.num){ if(!sliding){ pushUndo(b); sliding=true; } const v=+t.value; setPath(b,t.dataset.num,v); if(/\.(winW|bay)$/.test(t.dataset.num)) styleOf(b,t.dataset.num).preset=null; t.nextElementSibling.textContent=v.toFixed(+t.dataset.dec)+t.dataset.unit; touch(b); }
+  if(t.dataset.color){ if(!sliding){ pushUndo(b); sliding=true; } setPath(b,t.dataset.color,t.value); styleOf(b,t.dataset.color).preset=null; touch(b); }
 });
 panel.addEventListener('change', e=>{
   const b=selB(); const t=e.target;
-  if(t.dataset.num||t.dataset.color){ sliding=false; if(t.dataset.color) renderPanel(); if(t.dataset.num==='groundHeight'||t.dataset.num==='floorHeight') renderPanel(); return; }
+  if(t.dataset.num||t.dataset.color){ sliding=false; if(t.dataset.color) renderPanel(); if(t.dataset.num==='groundHeight'||t.dataset.num==='floorHeight'||t.dataset.num.startsWith('floors.')) renderPanel(); return; }
   if(!b) { return; }
   if(t.id==='tierFrom'){ const k0=shapeTier(b), k=+t.value; if(k===k0) return; const e=beginUndo(b); if(moveSetback(b,k0,k)){ endUndo(e); touch(b); ui.tierSel[b.id]=k; toast('Setback now starts at '+floorLabel(b,k)); } else { applyEntry(e); reindex(); toast('Stairs or a lift don’t fit the setback there'); } overlayRebuild(); renderPanel(); renderStack(); return; }
   if(t.id==='bname'){ const v=t.value.trim()||b.name; commit(()=>{ b.name=v; }, null, b); renderPanel(); return; }
   if(t.dataset.bool){ commit(()=>setPath(b,t.dataset.bool,t.checked), null, b); return; }
+  if(t.id==='shRot'){ const sh=b.shafts.find(x=>x.id===ui.sub?.id); if(sh) setCoreAngle(b, sh, +t.value||0); return; }
   if(t.dataset.sh){ const sh=b.shafts.find(x=>x.id===ui.sub?.id); if(!sh) return; const v=+t.value;
     commit(()=>{ if(t.dataset.sh==='bottom'){ sh.bottom=v; if(sh.top>=0 && sh.top<v) sh.top=v; } else { sh.top=v; if(v>=0 && v<sh.bottom) sh.bottom=v; } }, null, b); renderPanel(); renderStack(); }
 });
@@ -2325,7 +2508,7 @@ function overlayRebuild(){
   ce.innerHTML='<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.5v15M1.5 9h15M9 1.5 6.8 3.7M9 1.5l2.2 2.2M9 16.5l-2.2-2.2M9 16.5l2.2-2.2M1.5 9l2.2-2.2M1.5 9l2.2 2.2M16.5 9l-2.2-2.2M16.5 9l-2.2 2.2" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>';
   ov.appendChild(ce); ovItems.push({el:ce, pos:()=>{ const bb=bById(id); if(!bb) return null; const c=centroid(bb.footprint); return tmp3.set(c.x+bb.pos.x,0,c.z+bb.pos.z); }});
   let off=null;
-  handleDrag(ce, ()=>{ pushUndo(bById(id)); off=null; }, (p)=>{ const bb=bById(id); if(!off) off=P(bb.pos.x-p.x,bb.pos.z-p.z); const nx=cm(p.x+off.x), nz=cm(p.z+off.z); if(nx!==bb.pos.x||nz!==bb.pos.z){ bb.pos=P(nx,nz); touch(bb); } });
+  handleDrag(ce, ()=>{ pushUndo(bById(id)); off=null; }, (p,ev)=>{ const bb=bById(id); if(!off) off=P(bb.pos.x-p.x,bb.pos.z-p.z); let nx=cm(p.x+off.x), nz=cm(p.z+off.z); if(!ev.altKey) [nx,nz]=snapMove(bb,nx,nz); if(nx!==bb.pos.x||nz!==bb.pos.z){ bb.pos=P(nx,nz); touch(bb); } });
 }
 function handleDrag(el, onStart, onMove, onEnd, planeY=()=>0){
   let active=false;
@@ -2495,7 +2678,8 @@ function tick(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   resize();
   const tf=performance.now();
-  if(dirty.size){ for(const id of dirty){ const b=bById(id); if(b) refreshBuilding(b); } dirty.clear(); }
+  if(dirty.size){ for(const id of dirty){ const b=bById(id); if(b){ const r=recOf(b), bb=bboxAll(b); r.bbw={x0:bb.x0+b.pos.x, z0:bb.z0+b.pos.z, x1:bb.x1+b.pos.x, z1:bb.z1+b.pos.z}; gridSet(r,b); partyMemo.delete(id); } }
+    for(const id of dirty){ const b=bById(id); if(b) refreshBuilding(b); } dirty.clear(); }
   if(ui.mode==='play'){ updatePlayer(dt); updateHUD(); updateLiftUI(); applyCam(camPlay); G.uIso.value=0; }
   else {
     const b=selB(); const inInt = b && ui.tab==='interior' && !isShell(b); const desY = inInt ? floorBase(b,activeFloor(b)) : b && ui.tab==='shape' ? floorBase(b,shapeTier(b)) : 0;
@@ -2532,5 +2716,5 @@ window.__sb = { geo:(i,lod=0)=>{ const b=state.buildings[i], r=recOf(b); DEBUG_S
   memBytes:()=>{ let by=0, m=0; scene.traverse(o=>{ if(o.isMesh && o.geometry){ m++; for(const a of Object.values(o.geometry.attributes)) by+=a.array.byteLength; if(o.geometry.index) by+=o.geometry.index.array.byteLength; } }); return {meshes:m, MB:+(by/1048576).toFixed(1)}; },
   timeCells:()=>{ const t=performance.now(); let n=0; for(const c of cells.values()){ c.dirty=true; rebuildCell(c); n++; } return {cells:n, msPerCell:+((performance.now()-t)/Math.max(1,n)).toFixed(3)}; },
   snapFx:()=>snapFx, screenOf:(bi,k,x,z)=>{ const b=state.buildings[bi], v=new THREE.Vector3(x+b.pos.x, floorBase(b,k), z+b.pos.z).project(camera), r=canvas.getBoundingClientRect(); return [r.left+(v.x+1)/2*r.width, r.top+(1-v.y)/2*r.height]; },
-  camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); }, facadeAt:(x,y)=>{ const b=selB(), h=pickBuilding({clientX:x,clientY:y}, b.id); return {hit:h&&{bid:h.bid,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2))}, ed:facadeEdgeAt({clientX:x,clientY:y},b)}; }, outline:{insetPoly, pushEdge, outlineIssue, simplifyTier, addSetback, tiers, fpAt, touch, refresh:()=>{ touch(); refreshChrome(); overlayRebuild(); }} };
+  camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); }, party:(b,k0,i)=>partyRanges(b,k0,i), facadeAt:(x,y)=>{ const b=selB(), h=pickBuilding({clientX:x,clientY:y}, b.id); return {hit:h&&{bid:h.bid,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2))}, ed:facadeEdgeAt({clientX:x,clientY:y},b)}; }, outline:{insetPoly, pushEdge, outlineIssue, simplifyTier, addSetback, tiers, fpAt, touch, refresh:()=>{ touch(); refreshChrome(); overlayRebuild(); }} };
 </script>

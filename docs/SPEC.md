@@ -11,15 +11,17 @@ Goal: designers can build a good-looking building with 10 floors and rooftop acc
 | Area | Prototype behaviour |
 |---|---|
 | **Modes** | *Edit*: set up one or more buildings. *Play* (stands in for Unity Play mode): third-person character, follow camera, virtual joystick + WASD. `P` / `Esc` switch. From the Interior tab, Play starts on the floor you're editing. |
-| **Footprint** | Drag corner handles; click `+` on an edge to insert a corner; double-click a corner to delete it. No grid: corners move freely (stored to the centimetre) and align to neighbouring corners on each axis (Alt for fully free). Edge lengths are shown live. Presets: Rect, L, U, T, Octagon. Move the building with the centre handle. An orange bar outside each edge pushes that whole wall in or out, keeping the neighbouring walls' angles. |
-| **Setbacks** | Any floor can start a new outline that every floor above inherits (until the next setback). The Shape tab lists the outlines (*Base G–5*, *Setback 6–9*); **Add setback** splits the selected one halfway up, **Starts at** moves it, **Inset 1.5 m** pulls every edge in, and the handles then edit that outline at its own height with the outline below drawn dashed. A setback must fit inside the floors below. The roof it leaves uncovered becomes a walkable **terrace** with a parapet, and a door onto it is placed with the Entrance or Door tool. Example in the demo: Linden Court's L loses its wing from floor 6. |
+| **Footprint** | Drag corner handles; click `+` on an edge to insert a corner; double-click a corner to delete it. No grid: corners move freely (stored to the centimetre) and align to neighbouring corners on each axis (Alt for fully free). Edge lengths are shown live. Presets: Rect, L, U, T, Octagon. Move the building with the centre handle; an edge that comes within 0.5 m of a neighbour's edge snaps onto it (making a shared wall), and base corners snap to neighbours' corners and edges. An orange bar outside each edge pushes that whole wall in or out, keeping the neighbouring walls' angles. |
+| **Setbacks** | Any floor can start a new outline that every floor above inherits (until the next setback). The Shape tab lists the outlines (*Base G–5*, *Setback 6–9*); **Add setback** splits the selected one halfway up, **Starts at** moves it, **Inset 1.5 m** pulls every edge in, and the handles then edit that outline at its own height with the outline below drawn dashed. A setback can step in or out: at least a quarter of it must rest on the floor below. The roof it leaves uncovered becomes a walkable **terrace** with a parapet (a door onto it is placed with the Entrance or Door tool); where it sticks out (an **overhang**), it gets a soffit underneath and a fascia under its wall. Each setback can have its **own facade style** (Facade tab › *Style for*); one without its own looks like the floors below. Demo: Linden Court's L loses its wing from floor 6; Overlook cantilevers a glass section out from floor 3 and steps back with a terrace at floor 6. |
+| **Storey heights** | Ground and upper defaults in the Shape tab; any floor can override its height (Interior tab › *Storey height*, shown in the floor list). Overlook has a 5 m ground floor. |
+| **Shared walls** | Buildings built wall to wall share one party wall: the taller one builds it (blank, its outside face in the neighbour's interior colour) wherever the neighbour reaches, and the neighbour leaves its wall, bands and parapet out along it. Above the neighbour's roof the wall is a normal facade again. Demo: Row House between the Corner Shop and the Dockside Store. |
 | **Facade** | Five one-click style presets. Window type (none / punched / tall / ribbon / curtain wall), width, bay spacing. Ground-floor treatment (shopfront / match / solid). Floor bands, parapet, colour swatches with custom pickers. Facade tools: *Entrance* (click a ground-floor wall, or a setback wall facing a terrace) and *Blank wall* (switch one wall's windows off, per outline). |
 | **Floors** | Floor card on the right: count field (type `10` to get 10 floors) and `+` / `−`. **New floors copy the top floor's layout.** In the Interior tab the card expands into the floor list, with per-floor *copy layout to all floors above*, *duplicate* and *delete*. `[` `]` step floors, `+` `−` add or remove the top floor. |
-| **Interior** | *Walk-in interior* or *Shell only* per building (see §3). Walls are edited like the footprint: drag joints, split with **+**, double-click to join or remove. Tools: Select, Wall (click-chain or drag, snaps to points and walls with visible markers, T-junctions split the host wall), Door (toggle a doorway on any wall, on exterior walls at ground level, and on walls facing a terrace), Erase, Stairs, Lift. No furniture or roof equipment is placed by the tool. Floors above the active one are hidden and drawn as outline "ghosts". |
+| **Interior** | *Walk-in interior* or *Shell only* per building (see §3). Walls are edited like the footprint: drag joints, split with **+**, double-click to join or remove. Tools: Select, Wall (click-chain or drag, snaps to points and walls with visible markers, T-junctions split the host wall), Door (toggle a doorway on any wall, on exterior walls at ground level, and on walls facing a terrace), Erase, Stairs, Lift. Stairs and lifts turn to any angle: a new one lines up with the nearest wall, R turns it 90°, and the inspector has an angle field and *Align to wall*. No furniture or roof equipment is placed by the tool. Floors above the active one are hidden and drawn as outline "ghosts". |
 | **Vertical circulation** | Stairs and lifts are **building-level cores** with a floor range (`bottom` → `top`, where `top = -1` means "follow the top floor") and a **roof access** flag. Adding floors extends them automatically. Deleting floors re-indexes them. Slabs are cut automatically where stairs pass through. Roof access generates a bulkhead with a door. |
 | **Occlusion** | Floors above the player are hidden. The rest is handled per fragment in the shader: height clip, **cutaway** (walls between camera and player drop to a stub), **see-through cone** (dithered hole from camera to player), and a character silhouette. All of it runs live during play, with the modes and parameters exposed for tuning. |
 | **Data** | The whole layout is one JSON document (**?** → Layout JSON). Undo/redo covers every edit. Autosaves to local storage. |
-| **Rendering** | No z-fighting: generated geometry has zero visible coplanar faces at every LOD (automated check, §4.2). Optimised topology: walls are polygons with holes, and hidden faces are never generated (§4.3). |
+| **Rendering** | No z-fighting: generated geometry has zero visible coplanar faces at every LOD (automated check, §4.3). Optimised topology: walls are polygons with holes, and hidden faces are never generated (§4.4). |
 | **City scale** | Three semantic LODs per building plus merged far-distance cells, picked per frame from on-screen feature size with a dithered cross-fade. Detail LODs build on demand, one storey per step, within a frame budget. The **stats card** (bar-chart button) shows the LOD split, draw calls and triangles, has a LOD-tint toggle, and can generate a 1,000- or 3,000-building test city (§6). |
 
 ## 2. Workflow principles that proved out
@@ -50,12 +52,14 @@ BuildingData
 
 FloorData
   walls: {a:Vector2, b:Vector2, doors:{t:float}[]}[]
+  height?: float                  // overrides groundHeight / floorHeight for this storey
   shape?: Vector2[]               // setback: this floor and the ones above use this outline
   blankEdges?: int[]              // blank walls of that outline
+  style?: FacadeStyle             // setback's own exterior style (interior colours stay the building's)
 
 CoreData
   id, type: Stairs | Lift
-  x, z, rot (prototype: quarter turns; decided: free angle in degrees, §10 #6)
+  x, z, rot (degrees, any angle)
   bottom: int, top: int (-1 = follow top floor), roofAccess: bool
 
 FacadeStyle
@@ -69,12 +73,17 @@ FacadeStyle
 Runtime only (never stored): each building gets a small integer **index** into the GPU building table (§6.4). Merged meshes carry it per vertex; single-building renderers carry it via the renderer user value.
 
 **Setbacks.** A floor with a `shape` starts a *tier*: it and every floor above use that outline until the next floor with a `shape`. The outline of floor `k` is `outline(k)` = the nearest `shape` at or below `k`, or the base footprint. Rules the editor enforces on every edit (the handle simply stops where a move would break one):
-- A setback lies inside the tier below it (edges may run along its edges), and every tier above still fits inside it. *(Prototype rule. Overhangs are decided, §10 #3: this becomes "simple polygon", and the part that sticks out gets a soffit.)*
-- Where a setback steps in, it leaves at least 0.8 m of terrace, or lines up exactly with the edge below. Anything thinner would put the setback's 0.3 m wall on top of the parapet.
+- A setback is a simple polygon, and at least a quarter of it (and 4 m²) rests on the tier below; the same holds for the tier above it. It may step in (terrace) and out (overhang) at once.
+- Where a setback steps in, it leaves at least 0.8 m of terrace, or lines up exactly with the edge below. Anything thinner would put the setback's 0.3 m wall on top of the parapet. (Stepping out has no minimum.)
+- A setback without its own `style` looks like the tier below it; the base uses the building's style.
 - Every core fits inside the outline of every level it serves (stairs to the roof must fit the top tier).
 - Floor operations carry setbacks along: duplicating or adding floors copies rooms but never the outline (the copy inherits it); deleting the first floor of a setback moves the outline and its terrace doors up one floor; a setback that becomes the ground floor becomes the new base footprint.
 
-Derived values, never stored: `floorBase(k)`, `floorH(k)`, `roofY`, `outline(k)`, terraces, `shaftTop`, `shaftReachesRoof`, slab holes, window placement, and collision.
+**Storey heights.** `floorH(k)` = the floor's `height`, or the ground / upper default; `floorBase(k)` is the running sum (cache it per building in Unity).
+
+**Shared walls** are derived, never stored: see §4.2.
+
+Derived values, never stored: `floorBase(k)`, `floorH(k)`, `roofY`, `outline(k)`, `styleAt(k)`, terraces, overhangs, party walls, `shaftTop`, `shaftReachesRoof`, slab holes, window placement, and collision.
 
 Edge-indexed data (entrances, blank edges) is re-mapped when corners are inserted or removed (see `insertVertex` / `removeVertex` in the prototype), per outline. After a drag, corners that coincide or sit on a straight line are merged (`simplifyTier`), with doors keeping their position along the merged edge.
 
@@ -83,7 +92,7 @@ Edge-indexed data (entrances, blank edges) is re-mapped when corners are inserte
 - **One mesh per LOD per building** (LOD0 has an opaque and a glass submesh). There are no per-floor objects: floors above the active one are removed by the clip plane in the shader (§5), which also removes their shadows. This keeps a 10-floor building at 1–2 draws instead of 22.
 - Exterior walls sit **outside** the footprint line (inner face on the line). Slabs fill the footprint exactly, so walls and slabs never z-fight and the facade is continuous.
 - Interior walls and core walls stop at the **underside of the slab above** (`floorH - slab`). They never reach the next floor's surface.
-- Walls are generated from **openings lists** (`u0,u1,y0,y1`) as **wall panels** (§4.2): each face is one polygon with the openings as holes (doors as notches in the outline), plus the four reveal faces per opening. The same routine handles windows, doors, interior doorways and bulkhead doors.
+- Walls are generated from **openings lists** (`u0,u1,y0,y1`) as **wall panels** (§4.4): each face is one polygon with the openings as holes (doors as notches in the outline), plus the four reveal faces per opening. The same routine handles windows, doors, interior doorways and bulkhead doors.
 - LOD0 vertices carry **occlusion data** (only the building the player is in is ever cut away, and it is always at LOD0):
   - `uv2.xy` = wall line point (world xz), `uv2.zw` = wall normal (xz)
   - `uv3.x` = kind (0 = floor/stairs, 1 = wall, 2 = free-standing object, reserved for game-placed objects)
@@ -97,14 +106,27 @@ Edge-indexed data (entrances, blank edges) is re-mapped when corners are inserte
 
 Each storey is generated from `outline(k)`. At a floor `k` that starts a setback (lower = `outline(k−1)`, upper = `outline(k)`):
 
-- **Slab:** the floor surface covers the upper outline (with stair holes); the **terrace deck** is `lower − upper`, a polygon difference that can have holes or several parts (the prototype uses the `polygon-clipping` library; in Unity use **Clipper2**); the underside covers the whole lower outline. Deck and floor share edges exactly, so they never overlap.
-- **Parapet:** runs along the parts of the lower outline's edges that no upper edge covers (collinear overlap within 1 cm). A run ends on the neighbouring run's miter at an open corner, or against the **outer face of the setback's wall** where the setback meets the edge, so the two touch face-to-face. The same runs feed LOD0/1 boxes, LOD2 quads and the collision segments.
+- **Slab:** the floor surface covers the upper outline (with stair holes); the **terrace deck** is `lower − upper`, a polygon difference that can have holes or several parts (the prototype uses the `polygon-clipping` library; in Unity use **Clipper2**); the underside covers the lower outline, and the **soffit** `upper − lower` covers the overhang. Deck, floor and soffit share edges exactly, so they never overlap.
+- **Edge classification:** each edge of one outline is split where the other outline's edges cross or touch it, and each piece is *on* the other outline, *inside* it or *outside* it (midpoint test). Lower-edge pieces outside the upper outline carry the terrace parapet; upper-edge pieces outside the lower outline carry the overhang **fascia** (a strip under the upper wall, from the slab underside to the floor, closing the slab edge). Pieces inside the other outline need nothing: under an overhang the lower wall simply meets the slab.
+- **Parapet:** A run (parapet or fascia) ends on the neighbouring run's miter at an open corner, or against the **outer face of the other outline's wall** where the two outlines meet, so they touch face-to-face. The same runs feed LOD0/1 boxes, LOD2 quads and the collision segments.
 - **Terrace doors** are ordinary exterior doors on the setback's first floor, placed only where there's deck in front. Their threshold face is skipped because the deck is already there.
 - **Interior walls** are trimmed to the storey's outline at generation time, so a copied layout that crosses a setback edge just stops at the facade. The stored walls are untouched.
-- **LOD2** is one extrusion per tier (quads from the tier's base to its top), plus the deck and a parapet (outer, inner, cap quads) under each setback. The facade shader needs no change, because the quads carry absolute heights.
-- **Play:** level `k` is walkable over `outline(k−1)`, which includes the terrace; the parapet is in floor `k`'s collision.
+- **Style per setback:** storey `k` is built with `styleAt(k)` (the tier's own style, else the tier below's, else the building's), with the building's interior colours. Decks, parapets and the roof take the style of the storey below them.
+- **LOD2** is one extrusion per tier, split into **runs** of storeys with the same height and window type (the ground floor is its own run). Each run has a row (**slot**) in the parameter table: colours, window spec, storey height, number of banded storeys, run height and parapet mode. Every vertex carries only its slot index, and the top run's quad also covers the parapet, which the shader colours above the run height. Decks, parapets, soffits and fascias are extra quads. Cost measured on the 3,000-building test city: 61k overview triangles (50k before per-floor heights), 13 MB of LOD2 memory (10 MB before), and the same load time.
+- **Play:** level `k` is walkable over `outline(k−1)` (floor and terrace) and over `outline(k)` (an overhanging floor); the parapet is in floor `k`'s collision.
 
-### 4.2 No z-fighting: generation rules
+### 4.2 Shared walls
+
+- **Detection:** for each outline edge, look up neighbours in the city grid and find their outline edges that are anti-parallel and collinear (within 1 cm) and overlap by at least 10 cm. That overlap is a **party range**.
+- **Ownership:** each side's height along the range is how far its tiers run along it, counting up from the base. The taller side owns the range; on a tie, the lower id owns it. Both sides compute the same answer independently.
+- **Owner:** its storeys along the range are built **blank** (no openings, bands or plinth) while they're below the neighbour's height. The outside face gets the neighbour's interior colour, because it is the neighbour's room wall. Above the neighbour's roof the facade is normal again, with windows looking out over that roof.
+- **Neighbour:** leaves its wall, bands, plinth, roof parapet and terrace parapet out along the range. Its slabs run on to the shared line and meet the owner's wall. Walls are built outside their own outline, so each building's wall sits inside the other's footprint and nothing doubles up.
+- **Occlusion:** the owner's party-wall vertices carry the neighbour's building index too (`kind + 8 × (neighbour + 1)` in the kind channel), so the cutaway also applies when the player is in the neighbour. The ceiling clip does not apply, so the wall still reads as the owner's building above.
+- **Collision:** the owner's wall segments serve both buildings. Collision already merges the segments of every building nearby.
+- **Updates:** editing or moving a building re-generates every building whose bounds touch its old or new position. LOD2 needs nothing special, because each side's massing hides the other's.
+- **Editor:** moving a building snaps an edge onto a neighbour's anti-parallel edge within 0.5 m; base corners snap to neighbours' corners and edges.
+
+### 4.3 No z-fighting: generation rules
 
 Z-fighting comes from two faces that share a plane, face the same way, and overlap. The generator avoids ever producing that:
 
@@ -116,7 +138,7 @@ Z-fighting comes from two faces that share a plane, face the same way, and overl
 
 **Automated check (make this a Unity edit-mode test).** For every generated mesh, bucket triangles by plane (normal + offset). Clip each same-plane pair and flag any overlap area > 2 cm², unless a point just in front of the overlap lies inside another solid (buried faces can't be seen). The prototype passes with **0 visible overlaps** at LOD0, LOD1 and LOD2 across the demo plus 42 generated variants (every footprint preset × every window style, entrances on every edge, parapet on/off, walk-in and shell, and one- and two-step setbacks with terrace doors on every preset).
 
-### 4.3 Optimised mesh topology
+### 4.4 Optimised mesh topology
 
 | Rule | What it removes |
 |---|---|
@@ -145,7 +167,7 @@ Each layer runs every frame from a handful of global shader properties (`Shader.
 | Layer | Rule | Why |
 |---|---|---|
 | **Floors above** | In the active building only, discard fragments above `floorBase + floorH − slab` of the active floor (just under the slab above). | Removes every storey above, the roof, and stair flights poking up. Because the same discard runs in the shadow pass, the active floor is lit. |
-| **Cutaway** | For kind = wall on the active floor, above `stubHeight`: discard if the wall's line separates camera and player: `sign(dot(cam - p, n)) != sign(dot(player - p, n))`. For free-standing objects (kind 2), discard above the stub if the object is on the camera side of the player. | "Sims-style" walls-down: works for any wall orientation and any camera yaw with no raycasts. |
+| **Cutaway** | For kind = wall on the active floor (including a party wall whose neighbour is the active building, §4.2), above `stubHeight`: discard if the wall's line separates camera and player: `sign(dot(cam - p, n)) != sign(dot(player - p, n))`. For free-standing objects (kind 2), discard above the stub if the object is on the camera side of the player. | "Sims-style" walls-down: works for any wall orientation and any camera yaw with no raycasts. |
 | **Section cap** | Back faces render as a flat dark colour. | Cut walls read as solid sections, not hollow shells. |
 | **See-through cone** | Discard (4×4 Bayer dither) fragments inside a cone from camera to the player's chest, above the player's feet. Applies to all buildings and world objects. | Handles other buildings, scenery, and edge cases the cutaway misses (for example the player hugging a wall). |
 | **Silhouette** | Player drawn a second time with `ZTest Greater`. | The player is never lost. |
@@ -190,7 +212,7 @@ Why semantic LODs rather than decimation: automatic simplification of boxy archi
 - **Five shared materials for the whole city:** opaque, glass, massing (facade shader), and their shadow-caster variants.
 - **Building table:** a `GraphicsBuffer` (StructuredBuffer) bound with `Shader.SetGlobalBuffer`. Per building it holds:
   - displayed LOD, previous LOD and fade (updated per frame, only when something changes);
-  - storey heights, window specs and colours (updated on edit).
+  - one row per LOD2 run (colours, window spec, storey height / bands / run height / parapet), referenced by a slot index on the LOD2 vertices and rewritten on edit. A building uses one row per run plus one per tier, typically 2–4.
 
   The prototype uses two float textures with the same layout.
 - **Finding a building's row:** merged meshes carry the building index per vertex. A single-building renderer can use the vertex attribute too, or, on Unity 6.3+, `MeshRenderer.SetShaderUserValue(uint)` / `unity_RendererUserValue`, which is compatible with the SRP Batcher and the GPU Resident Drawer.
@@ -238,7 +260,7 @@ The coplanar check passes with 0 visible overlaps at LOD0, LOD1 and LOD2 across 
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
-| **1. Data + generation** | `BuildingData` model, footprint → slabs/walls/windows generator with the §4.2 rules, floor grouping, JSON import of prototype layouts, coplanar-face test | Prototype JSON loads in Unity and looks the same; coplanar test passes |
+| **1. Data + generation** | `BuildingData` model, footprint → slabs/walls/windows generator with the §4.3 rules, floor grouping, JSON import of prototype layouts, coplanar-face test | Prototype JSON loads in Unity and looks the same; coplanar test passes |
 | **2. Occlusion** | `BuildingOcclusion` shader include, floor toggling, cutaway, cone, section caps, shadow pass, silhouette. Tuning panel in play. | Walk every floor of a 10-floor building from any camera yaw without losing the character |
 | **3. Play-mode test rig** | Third-person controller, follow camera (orbit / zoom / pitch clamp), virtual joystick, stairs ramps, lift interaction. Only for testing authored buildings; game code may replace it. | Outside → lobby → stairs → roof → lift down, on device |
 | **4. Editor: shape & facade** | Scene-view handles (footprint corners, insert, delete, move, edge push), setbacks (tier list, containment rules, terrace generation with Clipper2), facade inspector with presets, entrance and blank-wall tools, undo via `Undo.RecordObject`, shell-only toggle | Designer makes a styled 3-floor building in < 2 min |
@@ -258,6 +280,10 @@ The prototype's UI was cut down so only the current task is on screen:
 | Walls as a graph: in the Interior tab every wall is a line with a point at each end. Walls that meet share a joint that moves as one. A **+** at a wall's middle splits it; double-clicking a joint joins two straight walls or removes the walls ending there. | `Handles.FreeMoveHandle` per joint and `Handles.DrawAAPolyLine` per wall, on the active floor's plane. The data stays a list of wall segments; joints are derived by matching endpoints (1 cm tolerance). |
 | One snapping rule for drawing and dragging: points first (ring marker), then axis alignment with the previous point and nearby points (dashed guides), then onto a wall or footprint edge (diamond marker). There is no grid. A point landing on the middle of a wall splits that wall into a T-junction, so the walls stay connected. Alt disables snapping. | Same rule in a shared `WallSnap` utility, previewed in the Scene view with `Handles.DrawWireDisc` and a dotted guide line. |
 | Facade: style presets, window type, three colour rows, *Entrance / Blank wall* picking; everything else under **More options** | Presets are `FacadeStyle` ScriptableObject assets (so they're shared and versioned). A foldout holds the less-used fields. |
+| Facade: *Style for* (base or a setback) when the building has setbacks; a setback can take its own style or match the floors below | A tier dropdown at the top of the Facade tab; the style fields bind to the selected tier's `FacadeStyle` (or show *Give it its own style*). |
+| Storey height per floor (Interior tab, active floor), shown in the floor list | A float field with a reset button in the floor overlay row. |
+| Stairs and lifts at any angle: placed aligned to the nearest wall, R = +90°, angle field and *Align to wall* in the inspector | `Handles.Disc` rotation handle snapping to the nearest outline edge angle (and 15° steps with Ctrl). |
+| Moving a building snaps an edge onto a neighbour's facing edge (0.5 m); base corners snap to neighbours | Same snap in the move handle, using the city grid for neighbour lookup. A shared-wall highlight shows which building owns it. |
 | Interior: walk-in / shell, one-row tool strip, selection inspector; interior colours under a foldout | A **Scene view overlay toolbar** (Overlays API) for tools. Selected cores use the standard inspector. |
 | Floor card: count ± always; floor list only in Interior | A Scene view overlay panel. It stays collapsed to the count field except while the Interior tool is active. |
 | **Isolate** (button next to the building name, or `I`): every other building dissolves out completely (no ghost, no shadows); the camera frames the selected building. Done in the shared shader from the building index, so nothing is rebuilt. | `SceneVisibilityManager.Isolate` gives the same result for scene objects, but merged HLOD cells contain many buildings, so drive the same shader global (`_IsolateBuilding`, `_IsolateAmount`) from the editor tool. |
@@ -266,21 +292,21 @@ The prototype's UI was cut down so only the current task is on screen:
 
 ## 10. Decisions (formerly open questions)
 
-All questions from the prototype review have been answered. Items marked **(prototype: not yet)** change the data model or generator and aren't in the prototype yet.
+All questions from the prototype review have been answered, and every decision that changes the data model or generator is in the prototype.
 
 | # | Question | Decision | What it means |
 |---|---|---|---|
 | 1 | Editor-only or in-game? | **Editor-only.** | Players don't build. The play-mode rig is a test harness. |
 | 2 | Setback floors with a smaller footprint? | **Yes**, as outlines per floor range (§3, §4.1). | Done in the prototype. |
-| 3 | Overhangs (an upper floor bigger than the one below)? | **Allow overhangs.** (prototype: not yet) | Relax the containment rule to "simple polygon". Generate the exposed underside (`upper − lower`) as a soffit at the slab underside, slab edge faces and a wall-bottom strip where the upper wall is over void, and a parapet or terrace where `lower − upper` is exposed, which already exists. Cores still have to fit every level they serve; doors need floor below them on the outside. Optional columns under large cantilevers can wait. |
-| 4 | Facade style per setback? | **Yes, per setback.** (prototype: not yet) | `FloorData.style?: FacadeStyle` on the floor that starts a tier; floors without one use the building style. The LOD2 parameter table needs one row per tier, not per building. |
-| 5 | Storey heights? | **Per floor.** (prototype: not yet) | `FloorData.height?: float` overrides the ground/upper default. `floorBase(k)` becomes a prefix sum (cache it per building). The LOD2 facade shader can't derive floors from two numbers any more: pass per-tier storey offsets, or bake the storey index into a vertex attribute of the tier quads. |
-| 6 | Core rotation? | **Free rotation.** (prototype: not yet) | `CoreData.rot` becomes an angle in degrees, and the editor snaps it to the nearest outline edge's angle. Fit tests use an oriented rectangle, not an axis-aligned one; slab holes and collision already use the core's frame. |
+| 3 | Overhangs (an upper floor bigger than the one below)? | **Allow overhangs.** Done in the prototype (§4.1). | Containment became "a quarter rests on the floor below". The overhang gets a soffit and a fascia at every LOD, the floor is walkable, and doors still need deck in front of them. Columns under large cantilevers can come later. |
+| 4 | Facade style per setback? | **Yes, per setback.** Done in the prototype. | `FloorData.style` on the floor that starts a tier. A tier without one looks like the tier below. LOD2 gets one colour slot per tier (§6.4). |
+| 5 | Storey heights? | **Per floor.** Done in the prototype. | `FloorData.height` overrides the defaults, and `floorBase(k)` is a running sum. LOD2 quads are split into runs of equal storey height, each carrying its height and window spec (§4.1). |
+| 6 | Core rotation? | **Free rotation.** Done in the prototype. | `rot` is in degrees. New cores line up with the nearest wall, and the inspector has an angle field and *Align to wall*. Fit uses the oriented rectangle (corners, edge midpoints, and no outline corner inside it); core-to-core spacing uses a separating-axis test. |
 | 7 | Doors as objects? | **Open doorways only.** | The game may place door objects in the openings later. The generator exposes each opening's frame (position, width, height, facing). |
 | 8 | Player occlusion settings? | **Fixed by design.** | Designers tune cutaway height, fade and cone radius per project in a settings asset. No player-facing option. |
 | 9 | Dim floors below the player? | **Leave as is.** | Floors below draw normally. |
 | 10 | Art pipeline? | **Procedural first.** | Keep the generator and add materials and textures (trim sheets, tiling wall materials). Modular kits can come later from the same data, because only the generator changes. |
-| 11 | Buildings sharing walls? | **Yes.** (prototype: not yet) | Detect edges of neighbouring buildings that coincide (within 1 cm, opposite direction) and mark them as **party walls**: one wall is generated, with no windows, no parapet overlap and no double collision; roofs and parapets meet it face-to-face. Occlusion treats the party wall as belonging to whichever building the player is in. Neighbour lookup uses the city spatial grid (§6), and editing one building re-generates its neighbours' shared edges. |
+| 11 | Buildings sharing walls? | **Yes.** Done in the prototype (§4.2). | Party walls are derived from outlines that run along each other, never stored. The taller building owns the wall and builds it blank; the other leaves its wall out. Moving a building snaps it onto a neighbour's edge. The demo's Row House shares walls with two neighbours. |
 | 12 | Platforms? | **PC / Mac, high-end mobile, low-end mobile.** | Low-end mobile sets the floor: OpenGL ES fallback, so the GPU Resident Drawer is optional (on for desktop and Vulkan/Metal only). 16-bit indices everywhere (cells split under 65,535 vertices). A texture fallback for the building table. Per-platform `LODCFG` (px/m thresholds, cell size, cache sizes). Budgets are still needed per tier; proposed starting points are ≤ 150 draws and ≤ 300k triangles on low-end mobile, ≤ 250 draws and ≤ 800k triangles on high-end mobile, and ≤ 1,000 draws and ≤ 3M triangles on desktop. |
 | 13 | World size and streaming? | **Streaming districts.** | Districts are separate scenes or Addressables groups. HLOD cells are baked per district at edit time. Building data is loaded per district, and LOD0/1 are generated at runtime or baked per platform. A district border must not split a cell. |
 | 14 | LOD1 for tall glass towers? | **Merge openings.** | At LOD1, flush glass openings (curtain wall, ribbon, shopfront) on one storey of one wall become a single recess. That cuts the 38-floor glass tower from about 26.8k to about 3k triangles at LOD1. |
