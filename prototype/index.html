@@ -376,7 +376,7 @@ const floorH = (b,k) => b.floors[k]?.h ?? (k===0 ? b.groundHeight : b.floorHeigh
 function floorBase(b,k){ if(k<=0) return 0; const n=Math.floor(k); let y=0; for(let j=0;j<n;j++) y+=floorH(b,j); return y+(k-n)*floorH(b,n); }
 const roofY = b => floorBase(b, b.floors.length);
 const shaftTop = (b,s) => s.top < 0 ? b.floors.length-1 : Math.min(s.top, b.floors.length-1);
-const shaftRoof = (b,s) => !!s.roof && shaftTop(b,s) === b.floors.length-1;
+const shaftRoof = (b,s) => !!s.roof && shaftTop(b,s) === b.floors.length-1 && !isPitched(b);
 function shaftLevels(b,s){ const out=[]; for(let k=s.bottom;k<=shaftTop(b,s);k++) out.push(k); if(shaftRoof(b,s)) out.push(b.floors.length); return out; }
 function stairHoleAt(b,s,k){ return s.type==='stairs' && k>s.bottom && (k<=shaftTop(b,s) || (k===b.floors.length && shaftRoof(b,s))); }
 function hasFlight(b,s,k){ const T=shaftTop(b,s); return s.type==='stairs' && k>=s.bottom && (k<T || (k===T && shaftRoof(b,s))); }
@@ -514,7 +514,7 @@ function minusRanges(rs, cuts){ let out=rs.map(r=>[r[0],r[1]]); for(const [c0,c1
 // interior colours stay the building's
 const styleMix = new WeakMap();
 function styleAt(b,k){ let j=tierStart(b,k); while(j && !b.floors[j].style) j=tierStart(b,j-1); const own=j && b.floors[j].style; if(!own) return b.style;
-  let m=styleMix.get(own); const key=b.style.interior+b.style.floor+b.style.core+b.style.ground;
+  let m=styleMix.get(own); const key=JSON.stringify(own)+b.style.interior+b.style.floor+b.style.core+b.style.ground;   // edits to either style show up at once
   if(!m || m.key!==key){ m={st:{...own, interior:b.style.interior, floor:b.style.floor, core:b.style.core, ground:b.style.ground}, key}; styleMix.set(own,m); }
   return m.st; }
 const doorOpen = (b,e) => !e.k || terraceAt(b,e.k,e.edge,e.t);
@@ -525,7 +525,7 @@ const shaftFits = (b,s,x=s.x,z=s.z,rot=s.rot) => fitsLevels(b,s,s.bottom,shaftTo
 /* =========================================================================
    State, undo, persistence
    ========================================================================= */
-const LS_KEY = 'storey-builder-v7';
+const LS_KEY = 'storey-builder-v8';
 let state;
 const undoStack=[], redoStack=[];
 /* Undo entries hold only what an action touched: the JSON of the affected buildings (null = did not
@@ -621,16 +621,17 @@ function demoState(){
   H.footprint = [[0,0],[6,0],[6,8],[0,8]].map(([x,z])=>P(x,z)); H.entrances = [{edge:0,t:0.5}];
   H.style = {...H.style, wall:'#EAD9B8', preset:null};
   H.floors[0] = { walls:[] }; for(let i=1;i<4;i++) H.floors.push({ walls:[ W(0,2.2,6,2.2,[0.25]) ] });
-  H.shafts = [{id:nid('s'), type:'stairs', x:3.0, z:4.9, rot:0, bottom:0, top:-1, roof:true}];
+  H.shafts = [{id:nid('s'), type:'stairs', x:3.0, z:4.9, rot:0, bottom:0, top:-1, roof:false}];
+  H.style.roofType = 'gable'; H.style.pitch = 38; H.style.roof = '#A7725D';
   state.buildings.push(H);
 
   // Background blocks: many floors, no interior
   const D = makeBuilding('rect', P(-40,2), 'concrete', 'Westgate Tower');
-  D.footprint = [[0,0],[14,0],[14,11],[0,11]].map(([x,z])=>P(x,z)); D.interior=false;
+  D.footprint = [[0,0],[14,0],[14,11],[0,11]].map(([x,z])=>P(x,z)); D.interior=false; D.style.roofType='hip'; D.style.pitch=24;
   for(let i=1;i<9;i++) D.floors.push(blankFloor());
   state.buildings.push(D);
   const E = makeBuilding('rect', P(28,-6), 'warehouse', 'Dockside Store');
-  E.footprint = [[0,0],[13,0],[13,10],[0,10]].map(([x,z])=>P(x,z)); E.interior=false; E.floors.push(blankFloor());
+  E.footprint = [[0,0],[13,0],[13,10],[0,10]].map(([x,z])=>P(x,z)); E.interior=false; E.floors.push(blankFloor()); E.style.roofType='shed'; E.style.pitch=12;
   state.buildings.push(E);
   return state;
 }
@@ -1101,6 +1102,7 @@ function buildInterior(op,sg,b,k,C){
 function segFrom(f,p,q,r){ const X=(l)=>[f.O[0]+f.u[0]*l[0]+f.w[0]*l[1], f.O[1]+f.u[1]*l[0]+f.w[1]*l[1]]; const a=X(p), c=X(q); return {ax:a[0],az:a[1],bx:c[0],bz:c[1],r}; }
 
 function buildRoof(op,sg,b,Wp,ccw,cor,C){
+  if(buildPitchedRoof(op,b,C)) return;   // hip, gable or shed (no roof access, no parapet)
   const y=roofY(b), n=Wp.length, T=T_EXT, k0=tierStart(b,b.floors.length);
   for(let i=0;i<n;i++){
     const {a,L,u,w}=edgeInfo(Wp,i,ccw); const m=miter(cor,i,L), cut=partySkips(b,k0,i), c0=cornerCut(b,k0,i,false,y), c1=cornerCut(b,k0,i,true,y);
@@ -1164,6 +1166,153 @@ function buildShafts(op,sg,b,k,C){
     }
   }
 }
+
+/* Straight skeleton of a simple polygon (the hip roof): every edge moves inward at unit speed and sweeps one roof
+   face; a face's height is the time its edge took to get there. Brute force event simulation (fine for the few
+   dozen corners a building has): find the next edge event (an edge shrinks to nothing) or split event (a reflex
+   corner runs into another edge), apply it, repeat. poly: [{x,z}] counter-clockwise (area2 > 0).
+   Returns {faces:[{edge, pts:[[x,z,t],...]}], tMax}. */
+function straightSkeleton(poly){
+  const n=poly.length, EPS=1e-9;
+  const E=poly.map((p,i)=>{ const q=poly[(i+1)%n], L=Math.hypot(q.x-p.x,q.z-p.z)||1, d=[(q.x-p.x)/L,(q.z-p.z)/L]; return {a:[p.x,p.z], d, n:[-d[1],d[0]]}; });
+  const nodes=[], arcs=[];
+  const node=(x,z,t)=>{ for(let i=0;i<nodes.length;i++){ const q=nodes[i]; if(Math.abs(q[0]-x)<1e-6 && Math.abs(q[1]-z)<1e-6) return i; } nodes.push([x,z,t]); return nodes.length-1; };
+  const vel=(e1,e2)=>{ const a=E[e1].n, b=E[e2].n, det=a[0]*b[1]-a[1]*b[0];
+    if(Math.abs(det)<1e-9) return a[0]*b[0]+a[1]*b[1] > 0 ? [a[0],a[1]] : null;   // straight on, or the two sides met (a ridge end)
+    return [(b[1]-a[1])/det, (a[0]-b[0])/det]; };
+  const mk=(x,z,t,e1,e2,nd)=>({p:[x,z], t0:t, e1, e2, node:nd, v:vel(e1,e2)});
+  const pos=(v,t)=> v.v ? [v.p[0]+v.v[0]*(t-v.t0), v.p[1]+v.v[1]*(t-v.t0)] : v.p;
+  let lavs=[poly.map((p,i)=>mk(p.x,p.z,0,(i-1+n)%n,i,node(p.x,p.z,0)))], now=0, guard=0;
+  // a wavefront with nothing left to do (it has collapsed onto a ridge): join its corners where they stand
+  const close=(l)=>{ const m=l.length, P=l.map(v=>{ const p=pos(v,now); return node(p[0],p[1],now); });
+    l.forEach((v,k)=>arcs.push([v.node,P[k],v.e1,v.e2]));
+    for(let k=0;k<m;k++){ const s=l[k].e2; arcs.push([P[k],P[(k+1)%m],s,s]); } };   // each face on the ridge gets the piece its own edge swept
+  while(lavs.length && guard++<4*n+20){
+    const flat=l=>{ let A=0; const P=l.map(v=>pos(v,now)); for(let k=0;k<P.length;k++){ const a=P[k], c=P[(k+1)%P.length]; A+=a[0]*c[1]-c[0]*a[1]; } return Math.abs(A)<1e-7; };
+    lavs=lavs.filter(l=>{ if(l.length>2 && !flat(l)) return true; if(l.length>=2) close(l); return false; }); if(!lavs.length) break;   // done, or collapsed onto a ridge
+    let best=null;
+    for(const l of lavs){ const m=l.length;
+      for(let i=0;i<m;i++){ const a=l[i], b=l[(i+1)%m], d=E[a.e2].d, pa=pos(a,now), pb=pos(b,now);
+        const L0=(pb[0]-pa[0])*d[0]+(pb[1]-pa[1])*d[1], va=a.v||[0,0], vb=b.v||[0,0], rate=(vb[0]-va[0])*d[0]+(vb[1]-va[1])*d[1];
+        let t = L0<=1e-7 ? now : rate < -EPS ? now + L0/(-rate) : Infinity;
+        if(t<Infinity && (!best || t<best.t-1e-9)) best={t, l, i, type:'edge'}; }
+      for(let r=0;r<m;r++){ const R=l[r]; if(!R.v) continue; const din=E[R.e1].d, dout=E[R.e2].d; if(din[0]*dout[1]-din[1]*dout[0] > -1e-9) continue;   // reflex corners only
+        const pr=pos(R,now);
+        for(let j=0;j<m;j++){ const X=l[j], Y=l[(j+1)%m], f=X.e2; if(f===R.e1 || f===R.e2 || X===R || Y===R) continue;
+          const F=E[f], s0=(pr[0]-F.a[0])*F.n[0]+(pr[1]-F.a[1])*F.n[1]-now, rate=R.v[0]*F.n[0]+R.v[1]*F.n[1]-1;
+          if(rate > -EPS || s0 < -1e-7) continue;
+          const t=now+Math.max(0,s0)/(-rate); if(best && t>=best.t-1e-9) continue;
+          const h=pos(R,t), px=pos(X,t), py=pos(Y,t), ux=(px[0]-h[0])*F.d[0]+(px[1]-h[1])*F.d[1], uy=(py[0]-h[0])*F.d[0]+(py[1]-h[1])*F.d[1];
+          if(ux>1e-6 || uy<-1e-6) continue;
+          best={t, l, i:r, j, type:'split'}; } } }
+    if(!best){ for(const l of lavs) close(l); break; }
+    now=best.t; const l=best.l, m=l.length;
+    if(best.type==='edge'){ const a=l[best.i], b=l[(best.i+1)%m], pa=pos(a,now), pb=pos(b,now), x=(pa[0]+pb[0])/2, z=(pa[1]+pb[1])/2, nd=node(x,z,now);
+      arcs.push([a.node,nd,a.e1,a.e2],[b.node,nd,b.e1,b.e2]);
+      const c=mk(x,z,now,a.e1,b.e2,nd); if(a.e1===b.e2){ lavs=lavs.filter(q=>q!==l); continue; }
+      l.splice(best.i,1,c); l.splice(l.indexOf(b),1); }
+    else { const R=l[best.i], h=pos(R,now), nd=node(h[0],h[1],now), X=l[best.j], f=X.e2;
+      arcs.push([R.node,nd,R.e1,R.e2]);
+      const V1=mk(h[0],h[1],now,R.e1,f,nd), V2=mk(h[0],h[1],now,f,R.e2,nd), A=[V1], B=[V2];
+      for(let k=(best.j+1)%m; k!==best.i; k=(k+1)%m) A.push(l[k]);
+      for(let k=(best.i+1)%m; k!==(best.j+1)%m; k=(k+1)%m) B.push(l[k]);
+      lavs=lavs.filter(q=>q!==l); lavs.push(A,B); } }
+  // faces: each edge plus the arcs of the corners that bordered it
+  const faces=[];
+  for(let i=0;i<n;i++){ const adj=new Map(), add=(u,v)=>{ if(u===v) return; (adj.get(u)||adj.set(u,[]).get(u)).push(v); (adj.get(v)||adj.set(v,[]).get(v)).push(u); };
+    // this face's arcs, split where another of its corners lies on them (ridge pieces can overlap), without repeats
+    const fa=arcs.filter(a=>a[2]===i || a[3]===i).map(a=>[a[0],a[1]]), fn=[...new Set(fa.flat())], keys=new Set();
+    const split=(u,v)=>{ const A=nodes[u], B=nodes[v], dx=B[0]-A[0], dz=B[1]-A[1], L2=dx*dx+dz*dz; if(L2<1e-12) return [];
+      for(const w of fn){ if(w===u || w===v) continue; const C=nodes[w], t=((C[0]-A[0])*dx+(C[1]-A[1])*dz)/L2; if(t<=1e-6 || t>=1-1e-6) continue;
+        if(Math.abs((C[0]-A[0])*dz-(C[1]-A[1])*dx)/Math.sqrt(L2) < 1e-6) return [...split(u,w), ...split(w,v)]; }
+      return [[u,v]]; };
+    for(const [u,v] of fa) for(const [x,y] of split(u,v)){ const k=Math.min(x,y)+':'+Math.max(x,y); if(!keys.has(k)){ keys.add(k); add(x,y); } }
+    const s=node(poly[i].x,poly[i].z,0), e=node(poly[(i+1)%n].x,poly[(i+1)%n].z,0), path=[s,e], seen=new Set([s,e]); let cur=e, ok=true;
+    while(cur!==s){ const nx=(adj.get(cur)||[]).find(v=>!seen.has(v)) ?? ((adj.get(cur)||[]).includes(s) && path.length>2 ? s : undefined); if(nx===undefined){ ok=false; break; } if(nx===s) break; path.push(nx); seen.add(nx); cur=nx; }
+    if(ok) faces.push({edge:i, pts:path.map(k=>nodes[k])}); }
+  return {faces, tMax:Math.max(0,...nodes.map(q=>q[2]))};
+}
+
+/* Pitched roofs. The top tier's style picks the roof: flat (parapet or curb), hip, gable or shed, with a pitch
+   and an eave. Roof faces come from the straight skeleton of the outline pushed out to the eave line (every
+   face at the same pitch), then clipped to the real roof outline: at the eave line on eave edges, at the wall
+   face on rake / gable edges, and behind the owner's wall on a shared wall the neighbour owns. A gable turns a
+   triangular end face into a wall by running the ridge out to the wall along the ridge line (so every face
+   stays planar); walls on rake and gable edges follow the roof profile up from the wall top. Eave edges get a
+   fascia and a soffit, closed by end caps where they meet a rake. Returns planar polygons {pts, n, kind}. */
+const ROOF_TYPES = [['flat','Flat'],['hip','Hip'],['gable','Gable'],['shed','Shed']];
+const roofType = b => styleAt(b,b.floors.length).roofType || 'flat';
+const isPitched = b => roofType(b)!=='flat';
+const roofMemo = new WeakMap();
+function roofParts(b){
+  const st=styleAt(b,b.floors.length), type=st.roofType||'flat'; if(type==='flat') return null;
+  const N=b.floors.length, k0=tierStart(b,N), raw=fpAt(b,N), n=raw.length, T=T_EXT;
+  const party=raw.map((_,i)=>{ const pr=partyRanges(b,k0,i), L=edgeLen(raw,i), cov=pr.reduce((s,r)=>s+r.e-r.s,0); return cov>0.5*L ? (pr.some(r=>!r.own) ? 'skip' : 'own') : ''; });
+  const key=JSON.stringify([raw,b.pos,roofY(b),type,st.pitch,st.eave,party]); const hit=roofMemo.get(b); if(hit && hit.key===key) return hit.val;
+  const val=makeRoof(b, st, type, raw, party); roofMemo.set(b,{key,val}); return val;
+}
+function makeRoof(b, st, type, raw, party){
+  const n=raw.length, T=T_EXT, top=roofY(b), slope=Math.tan(clamp(st.pitch??(type==='shed'?15:30),5,60)*Math.PI/180), e=clamp(st.eave??0.35,0,1.2), hb=top-e*slope, ox=b.pos.x, oz=b.pos.z;
+  const PC=globalThis.polygonClipping;
+  // counter-clockwise working copy; em[j] = the original edge of working edge j
+  const ccw=area2(raw)>0, fp = ccw ? raw.map(p=>P(p.x+ox,p.z+oz)) : raw.slice().reverse().map(p=>P(p.x+ox,p.z+oz)), em=fp.map((_,j)=> ccw ? j : (2*n-2-j)%n);
+  const E=fp.map((p,j)=>{ const q=fp[(j+1)%n], L=Math.hypot(q.x-p.x,q.z-p.z)||1, d=[(q.x-p.x)/L,(q.z-p.z)/L]; return {p, d, nin:[-d[1],d[0]], L}; });
+  const offsetPoly = off => fp.map((_,j)=>{ const i=(j-1+n)%n, A=E[i], B=E[j], pa=[A.p.x-A.nin[0]*off[i], A.p.z-A.nin[1]*off[i]], pb=[B.p.x-B.nin[0]*off[j], B.p.z-B.nin[1]*off[j]];
+    const den=A.d[0]*B.d[1]-A.d[1]*B.d[0]; if(Math.abs(den)<1e-9) return P(pb[0],pb[1]); const t=((pb[0]-pa[0])*B.d[1]-(pb[1]-pa[1])*B.d[0])/den; return P(pa[0]+A.d[0]*t, pa[1]+A.d[1]*t); });
+  const kinds=E.map((_,j)=>party[em[j]] ? party[em[j]] : 'eave');   // eave | rake | own | skip
+  let low=-1; if(type==='shed'){ let bl=-1; E.forEach((x,j)=>{ if(kinds[j]==='eave' && x.L>bl){ bl=x.L; low=j; } }); if(low<0) low=0;
+    E.forEach((x,j)=>{ if(kinds[j]==='eave' && Math.abs(x.d[0]*E[low].d[0]+x.d[1]*E[low].d[1])<0.9) kinds[j]='rake'; }); }
+  const full=offsetPoly(E.map(()=>T+e));                           // every edge out to the eave line: the planes start here at hb
+  const Ef=full.map((p,j)=>({p, nin:E[j].nin}));
+  const hOf=(j,x,z)=>hb+slope*((x-Ef[j].p.x)*Ef[j].nin[0]+(z-Ef[j].p.z)*Ef[j].nin[1]);
+  let faces;   // [{j, pts:[[x,z]...]}] in the plane of working edge j
+  if(type==='shed') faces=[{j:low, pts:full.map(p=>[p.x,p.z])}];
+  else { const sk=straightSkeleton(full); faces=sk.faces.map(f=>({j:f.edge, pts:f.pts.map(q=>[q[0],q[1]])}));
+    if(type==='gable'){   // triangular end faces whose tip closes a ridge become gable walls
+      const cnt=new Map(), K=q=>q[0].toFixed(5)+','+q[1].toFixed(5); for(const f of faces) for(const q of f.pts) cnt.set(K(q),(cnt.get(K(q))||0)+1);
+      for(const f of faces){ if(f.pts.length!==3 || kinds[f.j]!=='eave') continue; const tip=f.pts[2]; if(cnt.get(K(tip))!==3) continue;
+        const a=Ef[(f.j-1+n)%n].nin, c=Ef[(f.j+1)%n].nin, g=[a[0]-c[0], a[1]-c[1]], dir=[-g[1],g[0]], G=E[f.j].nin, off=T;
+        const gp=[E[f.j].p.x-G[0]*off, E[f.j].p.z-G[1]*off], den=dir[0]*G[0]+dir[1]*G[1]; if(Math.abs(den)<1e-6) continue;
+        const t=((gp[0]-tip[0])*G[0]+(gp[1]-tip[1])*G[1])/den, nt=[tip[0]+dir[0]*t, tip[1]+dir[1]*t];
+        for(const h of faces) if(h!==f) h.pts=h.pts.map(q=>K(q)===K(tip)?nt:q);
+        kinds[f.j]='gable'; f.gone=true; }
+      faces=faces.filter(f=>!f.gone); } }
+  // the real roof outline: eave edges at the eave line, rakes and gables at the wall face, a neighbour's party wall's face
+  const off=kinds.map(k=> k==='eave' ? T+e : k==='skip' ? -T : T), Q=offsetPoly(off), W=offsetPoly(E.map(()=>T));
+  const parts=[], ring=pts=>pts.map(p=>[p.x,p.z]);
+  let rise=0;
+  const clipped=[];
+  for(const f of faces){ let polys=[[f.pts]]; if(PC){ try{ polys=PC.intersection([f.pts],[ring(Q)]).map(pl=>pl.map(r=>r.slice(0,-1))); }catch(err){} }
+    const g=Ef[f.j].nin, nrm=(()=>{ const v=[-slope*g[0],1,-slope*g[1]], l=Math.hypot(...v); return v.map(x=>x/l); })();
+    for(const pl of polys){ if(pl[0].length<3) continue; const pts=pl[0].map(([x,z])=>[x,hOf(f.j,x,z),z]); pts.forEach(p=>rise=Math.max(rise,p[1]-top)); parts.push({pts, holes:pl.slice(1).map(r=>r.map(([x,z])=>[x,hOf(f.j,x,z),z])), n:nrm, kind:'roof'}); clipped.push({j:f.j, pts}); } }
+  for(let j=0;j<n;j++){ const A=Q[j], B=Q[(j+1)%n], L=Math.hypot(B.x-A.x,B.z-A.z); if(L<1e-4) continue; const d=[(B.x-A.x)/L,(B.z-A.z)/L], out=[E[j].nin[0]*-1,0,E[j].nin[1]*-1];
+    if(kinds[j]==='eave'){   // fascia and soffit (none without an overhang: the roof edge then sits on the wall)
+      if(e<0.05) continue; const yb=hb-0.15; parts.push({pts:[[A.x,yb,A.z],[B.x,yb,B.z],[B.x,hb,B.z],[A.x,hb,A.z]], n:out, kind:'trim'});
+      const Wa=W[j], Wb=W[(j+1)%n]; parts.push({pts:[[A.x,yb,A.z],[B.x,yb,B.z],[Wb.x,yb,Wb.z],[Wa.x,yb,Wa.z]], n:[0,-1,0], kind:'soffit'}); continue; }
+    if(kinds[j]==='skip') continue;
+    // wall under the roof along a rake / gable / own edge: the roof profile along the line, from the wall top up
+    const prof=[]; for(const c of clipped) for(const q of c.pts){ const t=(q[0]-A.x)*d[0]+(q[2]-A.z)*d[1], dd=Math.abs((q[0]-A.x)*d[1]-(q[2]-A.z)*d[0]); if(dd<1e-4 && t>-1e-4 && t<L+1e-4) prof.push([t,q[1]]); }
+    prof.sort((u,v)=>u[0]-v[0]); const pr=prof.filter((q,i)=>!i || q[0]-prof[i-1][0]>1e-4 || Math.abs(q[1]-prof[i-1][1])>1e-4);
+    if(pr.length<2) continue;
+    let poly=[[pr[0][0],top],...pr,[pr.at(-1)[0],top]];
+    const cl=[]; for(let i=0;i<poly.length;i++){ const u=poly[i], v=poly[(i+1)%poly.length], iu=u[1]>=top-1e-6, iv=v[1]>=top-1e-6; if(iu) cl.push(u); if(iu!==iv){ const s=(top-u[1])/(v[1]-u[1]); cl.push([u[0]+(v[0]-u[0])*s, top]); } }
+    const wp=cl.filter((q,i)=>i===0 || Math.hypot(q[0]-cl[i-1][0],q[1]-cl[i-1][1])>1e-5).map(([t,y])=>[A.x+d[0]*t, y, A.z+d[1]*t]);
+    if(wp.length>=3 && Math.abs(polyArea3(wp))>1e-4) parts.push({pts:wp, n:out, kind:'wall'});
+    // end caps where a neighbouring eave box stops at this wall
+    for(const [end, nb] of [[0,(j-1+n)%n],[1,(j+1)%n]]){ if(kinds[nb]!=='eave' || e<0.05) continue;
+      const d0=E[end?j:nb].d, d1=E[end?nb:j].d; if(d0[0]*d1[1]-d0[1]*d1[0] <= 1e-9) continue;   // outer corners only: at an inner one the eave box ends on the wall
+      const C=end ? B : A, Wc=end ? W[(j+1)%n] : W[j], yb=hb-0.15, yr=hOf(nb,Wc.x,Wc.z);
+      parts.push({pts:[[C.x,yb,C.z],[Wc.x,yb,Wc.z],[Wc.x,Math.max(yr,top),Wc.z],[C.x,hb,C.z]], n:out, kind:'wall'}); } }
+  return {parts, rise:Math.max(rise,0)};
+}
+const polyArea3 = pts => { let a=0; for(let i=0;i<pts.length;i++){ const p=pts[i], q=pts[(i+1)%pts.length]; a+=(p[0]-q[0])*(p[1]+q[1]) + (p[2]-q[2])*(p[1]+q[1]); } return a/2; };
+// triangulate a planar 3D polygon (with holes) by projecting it onto its dominant plane
+function planarTris(pts, holes, n){ const ax=Math.abs(n[0])>=Math.abs(n[1]) && Math.abs(n[0])>=Math.abs(n[2]) ? 0 : Math.abs(n[1])>=Math.abs(n[2]) ? 1 : 2, [i,j]=[[1,2],[0,2],[0,1]][ax];
+  const V=r=>r.map(p=>new THREE.Vector2(p[i],p[j])); try{ return THREE.ShapeUtils.triangulateShape(V(pts), (holes||[]).map(V)); }catch(e){ return []; } }
+function buildPitchedRoof(op, b, C){ const R=roofParts(b); if(!R) return false; op.ctx(Z4,0);
+  const col={roof:C.roof, trim:C.trim, soffit:C.trim.map(v=>v*0.8), wall:C.wall};
+  for(const p of R.parts) op.polyTris([...p.pts, ...(p.holes||[]).flat()], planarTris(p.pts,p.holes,p.n), p.n, col[p.kind]);
+  return true; }
 
 let DEBUG_SOLIDS=false;
 function tierGeo(b,fp){ const ccw=area2(fp)>0; return {fp, ccw, Wp:fp.map(p=>[p.x+b.pos.x, p.z+b.pos.z]), cor:corners(fp,ccw)}; }
@@ -1234,7 +1383,7 @@ const buildLOD1 = (b, idx) => runJob(lod1Steps(b, idx));
    Windows come from the facade shader. ~7 triangles per footprint edge. Returned as typed arrays
    so they can be merged into per-cell meshes (HLOD). */
 function buildLOD2(b, idx, rec=null){
-  const T=T_EXT, N=b.floors.length, ox=b.pos.x, oz=b.pos.z, top=roofY(b), stTop=styleAt(b,N), yTop=top+(stTop.parapet?1.1:0.3);
+  const T=T_EXT, N=b.floors.length, ox=b.pos.x, oz=b.pos.z, top=roofY(b), stTop=styleAt(b,N), pitched=isPitched(b), yTop=pitched ? top : top+(stTop.parapet?1.1:0.3);
   const P=[], NR=[], F=[], F2=[], SL=[], I=[], Z=[0,0,0,0], ZZ=[Z,Z,Z,Z];
   let slot=0;   // parameter row of the quads being written
   const vtx=(p,nr,fac,f2)=>{ P.push(p[0],p[1],p[2]); NR.push(Math.round(nr[0]*127),Math.round(nr[1]*127),Math.round(nr[2]*127)); F.push(...fac); F2.push(f2[0],f2[1]); SL.push(slot); };
@@ -1256,7 +1405,7 @@ function buildLOD2(b, idx, rec=null){
         quad([X(s0,yb,0),X(e0,yb,0),X(e1,yb,T),X(s1,yb,T)], [0,-1,0], ZZ, [0,4]); } }
     const runs=[]; for(let k=t.k0;k<t.k1;k++){ const h=floorH(b,k), g=k===0, r=runs.at(-1); if(r && !r.g && !g && Math.abs(r.h-h)<1e-6) r.k1=k+1; else runs.push({k0:k,k1:k+1,h,g}); }
     for(const r of runs){ const H=floorBase(b,r.k1)-floorBase(b,r.k0), top=last && r===runs.at(-1);
-      r.slot = rec ? slotWrite(rec, C, specOf(r.g ? groundKind(st) : st.windows, r.h, st), [r.h, st.bands ? Math.max(0, Math.min(r.k1,N-1)-r.k0) : 0, top ? H : 1e9, top ? (st.parapet?1:2) : 0]) : 0; r.top=top; }
+      r.slot = rec ? slotWrite(rec, C, specOf(r.g ? groundKind(st) : st.windows, r.h, st), [r.h, st.bands ? Math.max(0, Math.min(r.k1,N-1)-r.k0) : 0, top && !pitched ? H : 1e9, top ? (st.parapet?1:2) : 0]) : 0; r.top=top && !pitched; }
     for(let i=0;i<n;i++){
       const {a,L,u,w}=edgeInfo(Wp,i,ccw), m=miter(cor,i,L), [uS,uE]=facadeSpan(m,L);
       const bay = blank.includes(i) ? 0 : bayLayout(st,uS,uE).bay;
@@ -1266,11 +1415,15 @@ function buildLOD2(b, idx, rec=null){
       for(const r of runs){ const y0=floorBase(b,r.k0), y1=r.top ? yTop : floorBase(b,r.k1), H=y1-y0; slot=r.slot;   // the top run's quad carries the parapet too
         quad([X(s1,y0,T),X(e1,y0,T),X(e1,y1,T),X(s1,y1,T)], out, [[s1,0,uS,uE],[e1,0,uS,uE],[e1,H,uS,uE],[s1,H,uS,uE]], [bay,1]); }
       slot=tierSlot;
-      if(last){
+      if(last && !pitched){
         quad([X(s0,top,0),X(e0,top,0),X(e0,yTop,0),X(s0,yTop,0)], [-w[0],0,-w[1]], ZZ, [0, st.parapet?4:3]);   // inner face
         quad([X(s0,yTop,0),X(e0,yTop,0),X(e1,yTop,T),X(s1,yTop,T)], [0,1,0], ZZ, [0,3]); }                     // cap
     }
-    if(last) flat([fp.map(p=>[p.x,p.z])], top, 2);
+    if(last && !pitched) flat([fp.map(p=>[p.x,p.z])], top, 2);
+    else if(last){ const K={roof:2, trim:3, soffit:3, wall:4};   // pitched roof: the same planar pieces as the detail LODs
+      for(const p of roofParts(b).parts){ const all=[...p.pts, ...(p.holes||[]).flat()], base=P.length/3; for(const q of all) vtx(q,p.n,Z,[0,K[p.kind]]);
+        for(const t of planarTris(p.pts,p.holes,p.n)){ let [a,c,d]=t; const A=all[a], B=all[c], D=all[d], ux=B[0]-A[0],uy=B[1]-A[1],uz=B[2]-A[2], vx=D[0]-A[0],vy=D[1]-A[1],vz=D[2]-A[2];
+          if((uy*vz-uz*vy)*p.n[0]+(uz*vx-ux*vz)*p.n[1]+(ux*vy-uy*vx)*p.n[2] < 0){ const x=c; c=d; d=x; } I.push(base+a,base+c,base+d); } } }
     else {   // terrace under the next setback: deck, and a parapet on the exposed edges
       const y1=floorBase(b,t.k1);
       for(const poly of terracePolys(fp, fpAt(b,t.k1))) flat(poly, y1, 2);
@@ -1317,7 +1470,7 @@ function recOf(b){
 }
 function bboxAll(b){ const bb=bbox(b.footprint); for(const t of tiers(b)) if(t.k0){ const q=bbox(fpAt(b,t.k0)); bb.x0=Math.min(bb.x0,q.x0); bb.z0=Math.min(bb.z0,q.z0); bb.x1=Math.max(bb.x1,q.x1); bb.z1=Math.max(bb.z1,q.z1); } return bb; }
 const inBuilding = (b,lx,lz) => tiers(b).some(t=>pip(fpAt(b,t.k0),lx,lz));
-function boundsOf(b){ const bb=bboxAll(b), H=roofY(b)+1.1, dx=bb.x1-bb.x0+2*T_EXT, dz=bb.z1-bb.z0+2*T_EXT;
+function boundsOf(b){ const bb=bboxAll(b), H=roofY(b)+Math.max(1.1,(roofParts(b)?.rise||0)+0.1), dx=bb.x1-bb.x0+2*T_EXT, dz=bb.z1-bb.z0+2*T_EXT;
   return {x:(bb.x0+bb.x1)/2+b.pos.x, y:H/2, z:(bb.z0+bb.z1)/2+b.pos.z, r:Math.hypot(dx,dz,H)/2, size:Math.max(dx,dz,H),
     x0:bb.x0+b.pos.x-T_EXT, x1:bb.x1+b.pos.x+T_EXT, z0:bb.z0+b.pos.z-T_EXT, z1:bb.z1+b.pos.z+T_EXT, y1:H}; }
 const ready = (r,k) => !!r[k] && r[k].ver===r.ver;
@@ -2192,6 +2345,7 @@ function cityBuildings(count){
       const b={ id:nid('b'), gen:true, name:`Block ${bx},${bz} · ${ix*nz+iz+1}`, pos:P(snapG(x0+ix*lw+inset), snapG(z0+iz*ld+inset)), footprint:fp.map(([a,c])=>P(a,c)),
         floors:Array.from({length:floors},()=>({walls:[]})), groundHeight:[3.6,4.0,4.5][Math.floor(R()*3)], floorHeight: tall?3.3:3.0+Math.floor(R()*4)/10,
         shafts:[], entrances:[{edge:0,t:0.25+R()*0.5}], blank: R()<0.3 ? [1+Math.floor(R()*(fp.length-1))] : [], style:{...clone(STYLES[sk]), preset:sk}, interior:false };
+      if(floors<=5 && R()<0.5){ b.style.roofType = R()<0.5 ? 'gable' : 'hip'; b.style.pitch = 25+Math.round(R()*12); }   // low blocks: pitched roofs
       if(floors<=12 && R()<0.06){ b.interior=true; const sc={id:nid('s'), type:'stairs', x:snapG(w/2), z:snapG(d/2), rot:0, bottom:0, top:-1, roof:true}; if(coreFits(b.footprint,sc)) b.shafts.push(sc); }
       out.push(b);
     }
@@ -2277,7 +2431,9 @@ function renderPanel(){
   }
   if(ui.tab==='facade'){
     const ts=tiers(b), k0=ts.length>1 ? shapeTier(b) : 0, own=k0 && b.floors[k0].style, sp=facadeStylePath(b), st=own || b.style;
-    const range = t => t.k1-1===t.k0 ? floorShort(b,t.k0) : `${floorShort(b,t.k0)}–${floorShort(b,t.k1-1)}`, isTop = tierEnd(b,k0)===b.floors.length;
+    const range = t => t.k1-1===t.k0 ? floorShort(b,t.k0) : `${floorShort(b,t.k0)}–${floorShort(b,t.k1-1)}`;
+    let j0=tierStart(b,b.floors.length); while(j0 && !b.floors[j0].style) j0=tierStart(b,j0-1);
+    const drivesRoof = k0===j0 || (!own && k0 && j0===0);   // this style is the one the roof is built with
     h+=`<div class="sec">`;
     if(ts.length>1) h+=`<div class="sub-h" style="margin-top:0">Style for</div><div class="seg" role="group" aria-label="Style for">${ts.map(t=>`<button data-act="tierSel" data-k="${t.k0}" class="${t.k0===k0?'on':''}">${t.k0?'Setback':'Base'} <span class="mono" style="opacity:.7">${range(t)}</span></button>`).join('')}</div>`;
     if(k0 && !own) h+=`<p class="lead" style="margin-top:10px">This setback looks like the floors below it.</p><div class="row"><button class="btn" data-act="tierStyle">Give it its own style</button></div>`;
@@ -2289,13 +2445,14 @@ function renderPanel(){
       <div class="field"><span>Walls</span>${swatches(sp+'.wall',st.wall)}</div>
       <div class="field"><span>Trim</span>${swatches(sp+'.trim',st.trim)}</div>
       <div class="field"><span>Roof</span>${swatches(sp+'.roof',st.roof)}</div>`;
+      if(drivesRoof) h+=`<div class="sub-h">Roof</div>${seg(sp+'.roofType',st.roofType||'flat',ROOF_TYPES)}${(st.roofType||'flat')==='flat' ? '' : slider(sp+'.pitch','Pitch',st.pitch??((st.roofType==='shed')?15:30),5,60,1,'°',0)+slider(sp+'.eave','Eaves',st.eave??0.35,0,1.2,0.05,' m',2)}`;
     }
     h+=`<div class="sub-h">Click walls to add</div><div class="seg">${[['entrance','Entrance'],['blank','Blank wall']].map(([t,l])=>`<button data-act="ftool" data-t="${t}" class="${ui.facadeTool===t?'on':''}">${l}</button>`).join('')}</div>`;
     if(!k0 || own) h+=`<details class="more" ${ui.moreOpen?'open':''} id="moreFacade"><summary>More options</summary>
         ${slider(sp+'.winW','Window width',st.winW,0.6,2.4,0.1,' m')}${slider(sp+'.bay','Bay spacing',st.bay,1.4,5,0.1,' m')}
         ${k0?'':`<div class="field"><span>Ground floor</span>${seg('style.ground',st.ground,[['storefront','Shopfront'],['match','Match'],['solid','Solid']])}</div>`}
         <label class="chk"><input type="checkbox" data-bool="${sp}.bands" id="bandsChk" ${st.bands?'checked':''}> Floor bands</label>
-        ${isTop?`<label class="chk"><input type="checkbox" data-bool="${sp}.parapet" id="parChk" ${st.parapet?'checked':''}> Roof parapet</label>`:''}
+        ${drivesRoof && (st.roofType||'flat')==='flat' ?`<label class="chk"><input type="checkbox" data-bool="${sp}.parapet" id="parChk" ${st.parapet?'checked':''}> Roof parapet</label>`:''}
       </details>`;
     h+=`</div>`;
   }
@@ -2304,6 +2461,8 @@ function renderPanel(){
     h+=`<div class="sec"><div class="seg" role="group" aria-label="Interior">${[['walk','Walk-in interior'],['shell','Shell only']].map(([v,l])=>`<button data-act="interior" data-v="${v}" class="${(v==='shell')===shell?'on':''}">${l}</button>`).join('')}</div>`;
     if(shell){
       h+=`<p class="lead" style="margin-top:12px">Facade only: windows are opaque, no floors or rooms inside, and the player can't enter. Use it for background blocks. Your floor layouts are kept if you switch back.</p></div>`;
+    } else if(k===N && isPitched(b)){
+      h+=`<p class="lead" style="margin-top:12px">${ROOF_TYPES.find(r=>r[0]===roofType(b))[1]} roof: there's no roof access. Switch the roof to Flat in the Facade tab to put stairs up here.</p></div>`;
     } else if(k===N){
       h+=`<div class="sub-h">Roof access</div>`;
       if(!b.shafts.length) h+=`<p class="note">No stairs or lifts yet. Pick a floor on the right, then place stairs.</p>`;
@@ -2391,7 +2550,8 @@ panel.addEventListener('click', e=>{
     case 'tierDel': { e.stopPropagation(); const k=+a.dataset.k; commit(()=>removeSetback(b,k), 'Setback removed — '+floorLabel(b,k)+' and up follow the outline below', b); ui.tierSel[b.id]=0; overlayRebuild(); renderPanel(); renderStack(); break; }
     case 'tierAdd': { let k; commit(()=>{ k=addSetback(b,shapeTier(b)); }, null, b); ui.tierSel[b.id]=k; ui.vsel=-1; toast(`${floorLabel(b,k)} and up now have their own outline — push an edge in to make a terrace`); overlayRebuild(); renderPanel(); renderStack(); break; }
     case 'tierInset': { const k0=shapeTier(b), nf=insetPoly(tierFp(b,k0),1.5), why=outlineIssue(b,k0,nf); if(why){ toast(OUTLINE_WHY[why]); break; } commit(()=>{ const f=tierFp(b,k0); f.length=0; f.push(...nf); }, 'Inset 1.5 m', b); overlayRebuild(); renderPanel(); break; }
-    case 'style': { const k=a.dataset.style, sp=facadeStylePath(b); commit(()=>{ if(sp==='style') b.style={...clone(STYLES[k]), preset:k}; else setPath(b, sp, {...clone(STYLES[k]), preset:k}); }, STYLES[k].label+' applied'+(sp==='style'?'':' to the setback'), b); renderPanel(); break; }
+    case 'style': { const k=a.dataset.style, sp=facadeStylePath(b), cur=getPath(b,sp), keep={roofType:cur.roofType, pitch:cur.pitch, eave:cur.eave};   // presets keep the roof
+      commit(()=>{ const ns={...clone(STYLES[k]), preset:k, ...keep}; if(sp==='style') b.style=ns; else setPath(b, sp, ns); }, STYLES[k].label+' applied'+(sp==='style'?'':' to the setback'), b); renderPanel(); break; }
     case 'tierStyle': { const k0=shapeTier(b); commit(()=>{ b.floors[k0].style=clone(styleAt(b,k0-1)); /* starts as what it looks like now */ }, 'The setback has its own style now — pick a preset or colours', b); renderPanel(); break; }
     case 'tierStyleOff': { const k0=shapeTier(b); commit(()=>{ delete b.floors[k0].style; }, 'The setback matches the floors below again', b); renderPanel(); break; }
     case 'hReset': { const k=activeFloor(b); commit(()=>{ delete b.floors[k].h; }, floorLabel(b,k)+' uses the default height', b); renderPanel(); break; }
