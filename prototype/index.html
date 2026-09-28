@@ -643,7 +643,7 @@ function loadState(){ try{ const s=localStorage.getItem(LS_KEY); if(s){ const o=
 const ui = {
   mode:'edit', sel:null, tab:'shape', facadeTool:null, tool:'select', placeRot:0,
   floors:{}, sub:null, occOpen:false, bmenu:false, moreOpen:false, copyOnAdd:true, tierSel:{}, vsel:-1,
-  occ:{cut:true, cutH:1.0, outside:'slice', holeR:2.4, silhouette:true, assist:false},
+  occ:{cut:true, cutH:1.0, outside:'sink', baseH:1.0, holeR:2.4, silhouette:true, assist:false},
 };
 const selB = () => ui.sel ? bById(ui.sel) : null;
 function shapeTier(b){ const k0=ui.tierSel[b.id]||0; return isSetback(b,k0) ? k0 : 0; }
@@ -683,6 +683,13 @@ const TEX_W = 256, MAX_B = 8192, PARAM_TEXELS = 8, LOD_TAG = 65536;
 const stateArr = new Float32Array(MAX_B*4);                    // per building: displayed LOD, previous LOD, fade 0..1
 for(let i=0;i<MAX_B;i++){ stateArr[i*4]=3; stateArr[i*4+1]=3; stateArr[i*4+2]=1; }
 const stateTex = new THREE.DataTexture(stateArr, TEX_W, MAX_B/TEX_W, THREE.RGBAFormat, THREE.FloatType); stateTex.needsUpdate=true;
+// buildings in the way: one row per occluder slot. Texel 0 = (segments, dark 0..1, clip height, solid base height);
+// texel 1+i = segment i of a sinking building (floor line, vertical scale, gone, slab on top gone). Segment 0 is the
+// storey at the player's height, the last one is the roof. Each storey is scaled linearly between its own floor lines,
+// so every storey's geometry squashes without gaps; the building's state row points at its slot (w = slot + 1).
+const OCC_SLOTS = 16, OCC_W = 64;
+const occArr = new Float32Array(OCC_W*OCC_SLOTS*4);
+const occTex = new THREE.DataTexture(occArr, OCC_W, OCC_SLOTS, THREE.RGBAFormat, THREE.FloatType); occTex.needsUpdate=true;
 const PARAM_ROWS = 512;                                         // LOD2 run slots: 8 texels each (colours, window spec, storey height / bands / top / parapet)
 const paramArr = new Float32Array(TEX_W*PARAM_ROWS*4);
 const paramTex = new THREE.DataTexture(paramArr, TEX_W, PARAM_ROWS, THREE.RGBAFormat, THREE.FloatType); paramTex.needsUpdate=true;
@@ -690,10 +697,30 @@ const paramTex = new THREE.DataTexture(paramArr, TEX_W, PARAM_ROWS, THREE.RGBAFo
 const G = { uCam:{value:new THREE.Vector3()}, uFocus:{value:new THREE.Vector3()}, uCutH:{value:1.0}, uCamDir:{value:new THREE.Vector2(0,1)},
   uActive:{value:-1}, uClipY:{value:1e9}, uCutOn:{value:0}, uCutBase:{value:0}, uCutTop:{value:0}, uCap:{value:new THREE.Vector3(0.23,0.25,0.24)},
   uState:{value:stateTex}, uParams:{value:paramTex}, uLodTint:{value:0}, uIso:{value:0}, uIsoBid:{value:-1},
-  uOccMode:{value:0}, uPZ:{value:1}, uPScr:{value:new THREE.Vector2()}, uHoleR:{value:100} };
+  uOccT:{value:occTex}, uOccMode:{value:0}, uPZ:{value:1}, uPScr:{value:new THREE.Vector2()}, uHoleR:{value:100} };
 const OCC_VERT_DECL = `attribute vec4 aWall; attribute float aKind; attribute float aTag;
-uniform highp sampler2D uState;
-varying vec3 vOccW; varying vec4 vWall; varying float vKind; varying float vBid; varying float vLod; varying float vFade; varying float vOcc;`;
+uniform highp sampler2D uState; uniform highp sampler2D uOccT; uniform float uActive;
+varying vec3 vOccW; varying vec4 vWall; varying float vKind; varying float vBid; varying float vLod; varying float vFade; varying float vOcc; varying float vOrigY;`;
+// Sink: squash each storey of a building in the way between its floor lines (runs before projection, so shadows follow)
+const OCC_SINK = `{
+    vOrigY = (modelMatrix * vec4(transformed, 1.0)).y;
+    int ib = int(mod(aTag, 65536.0) + 0.5);
+    int slot = int(texelFetch(uState, ivec2(ib % 256, ib / 256), 0).w + 0.5) - 1;
+    if (slot >= 0 && abs(float(ib) - uActive) > 0.5 && aKind < 8.0) {   // a party wall also belongs to the neighbour: it stays
+      int n = int(texelFetch(uOccT, ivec2(0, slot), 0).x + 0.5);
+      if (n > 0) {
+        float y = vOrigY, f0 = texelFetch(uOccT, ivec2(1, slot), 0).x;
+        if (y > f0) {
+          float f = f0;
+          for (int i = 0; i < ${OCC_W - 1}; i++) { if (i >= n) break;
+            vec4 a = texelFetch(uOccT, ivec2(1 + i, slot), 0);
+            float top = i + 1 < n ? texelFetch(uOccT, ivec2(2 + i, slot), 0).x : 1e6;
+            f += clamp(y - a.x, 0.0, top - a.x) * a.y; }
+          transformed.y += f - y;
+        }
+      }
+    }
+  }`;
 const OCC_VERT = `vOccW = (modelMatrix * vec4(transformed, 1.0)).xyz; vWall = aWall; vKind = aKind;
   vBid = mod(aTag, 65536.0); vLod = floor(aTag / 65536.0);
   {
@@ -703,14 +730,16 @@ const OCC_VERT = `vOccW = (modelMatrix * vec4(transformed, 1.0)).xyz; vWall = aW
     bool isFrom = st.z < 1.0 && abs(vLod - st.y) < 0.5;
     if (!isDisp && !isFrom) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);   // LOD not shown: clip the whole triangle
     vFade = st.z >= 1.0 ? 3.0 : (isDisp ? st.z : -1.0 - st.z);
-    vOcc = st.w;   // building in the way: slice height (Slice) or amount 0..1 (Cutout, Fade)
+    vOcc = st.w - 1.0;   // building in the way: its occluder slot, or -1
   }`;
 const MASS_VERT_DECL = `attribute vec4 aFac; attribute vec2 aFac2; attribute float aSlot; varying vec4 vFac; varying vec2 vFac2; varying float vSlot;`;
 const MASS_VERT = `vFac = aFac; vFac2 = aFac2; vSlot = aSlot;`;
 const OCC_FRAG_DECL = `
 uniform vec3 uCam; uniform vec3 uFocus; uniform float uCutH; uniform vec2 uCamDir; uniform float uOccMode; uniform float uPZ; uniform vec2 uPScr; uniform float uHoleR;
 uniform float uActive; uniform float uClipY; uniform float uCutOn; uniform float uCutBase; uniform float uCutTop; uniform vec3 uCap; uniform float uLodTint; uniform float uIso; uniform float uIsoBid;
-varying vec3 vOccW; varying vec4 vWall; varying float vKind; varying float vBid; varying float vLod; varying float vFade; varying float vOcc;
+uniform highp sampler2D uOccT;
+varying vec3 vOccW; varying vec4 vWall; varying float vKind; varying float vBid; varying float vLod; varying float vFade; varying float vOcc; varying float vOrigY;
+float gOccDark = 0.0, gOccRim = 0.0;   // building in the way: tint toward black, light rim along the cut
 float occBayer(vec2 p){ int x = int(mod(p.x,4.0)); int y = int(mod(p.y,4.0));
   float m[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.); return (m[x+y*4]+0.5)/16.0; }
 vec3 lodTint(float l){ return l < 0.5 ? vec3(0.16,0.62,0.30) : l < 1.5 ? vec3(0.95,0.72,0.12) : vec3(0.90,0.30,0.10); }
@@ -738,12 +767,28 @@ void occlude(){
     } else if (dot(vWall.xy - uFocus.xz, uCamDir) > 0.4) discard;
   }
   // 3. buildings between the camera and the player (never the player's own building, which is sliced above)
-  if (uOccMode > 0.5 && !act) {
-    if (uOccMode < 1.5) { if (vOcc > 0.001 && vOccW.y > vOcc) discard; }                      // Slice: the cut plane lowered to the player's storey
+  if (uOccMode > 0.5 && !act && vOcc > -0.5 && mate < 0.0) {
+    int slot = int(vOcc + 0.5);
+    vec4 hd = texelFetch(uOccT, ivec2(0, slot), 0);   // segments, dark, clip height, solid base height
+    if (vOrigY > hd.z) discard;                        // Slice: the cut plane lowered to the player's storey
+    int n = int(hd.x + 0.5);
+    if (n > 0) {                                       // Sink: storeys collapse from the roof down, the player's storey squashes to a low base
+      gOccDark = hd.y;
+      for (int i = 0; i < ${OCC_W - 1}; i++) { if (i >= n) break;
+        vec4 a = texelFetch(uOccT, ivec2(1 + i, slot), 0);
+        float top = i + 1 < n ? texelFetch(uOccT, ivec2(2 + i, slot), 0).x : 1e6;
+        if (vOrigY < a.x || vOrigY > top) continue;
+        if (a.z > 0.5) discard;                                      // collapsed storey
+        float ceil = top - ${SLAB + 0.01};
+        if (a.w > 0.5 && vOrigY > ceil) discard;                     // the slab above, once the storey on it has gone
+        if (i == 0 && a.w > 0.5 && vOrigY > ceil - 0.07 / max(a.y, 0.05) && fwidth(vOrigY) > 1e-3) gOccRim = hd.y;   // wall tops only, not landings
+        break;
+      }
+    } else if (vOrigY < hd.w) gOccDark = hd.y;          // Cutout / Fade keep a solid dark base
 #ifndef OCC_DEPTH
-    else if (vOcc > 0.001 && gl_FragCoord.z < uPZ) {                           // Cutout / Fade: only what lies in front of the player
-      if (uOccMode < 2.5) { float f = (1.0 - smoothstep(uHoleR * 0.6, uHoleR, length(gl_FragCoord.xy - uPScr))) * vOcc; if (f > occBayer(gl_FragCoord.xy)) discard; }
-      else if (occBayer(gl_FragCoord.xy + vec2(2.0, 1.0)) < vOcc * 0.8) discard;   // fades to a light ghost
+    else if (hd.y > 0.001 && gl_FragCoord.z < uPZ) {   // Cutout / Fade: only what lies in front of the player
+      if (uOccMode < 2.5) { float f = (1.0 - smoothstep(uHoleR * 0.6, uHoleR, length(gl_FragCoord.xy - uPScr))) * hd.y; if (f > occBayer(gl_FragCoord.xy)) discard; }
+      else if (occBayer(gl_FragCoord.xy + vec2(2.0, 1.0)) < hd.y * 0.8) discard;   // fades to a light ghost
     }
 #endif
   }
@@ -786,10 +831,11 @@ function patch(mat, o={}){
   mat.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, G);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n'+OCC_VERT_DECL+(o.massing?MASS_VERT_DECL:''))
-      .replace('#include <project_vertex>', '#include <project_vertex>\n'+OCC_VERT+(o.massing?MASS_VERT:''));
+      .replace('#include <project_vertex>', OCC_SINK+'\n#include <project_vertex>\n'+OCC_VERT+(o.massing?MASS_VERT:''));
     let fs = sh.fragmentShader.replace('#include <common>', '#include <common>\n'+(o.depth?'#define OCC_DEPTH\n':'')+OCC_FRAG_DECL+(o.massing?MASS_FRAG_DECL:'')).replace('void main() {', 'void main() {\n  occlude();');
     fs = fs.replace('#include <color_fragment>', '#include <color_fragment>\n'+(o.massing?'  diffuseColor.rgb = facadeColor();\n':'')+'  if (uLodTint > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, lodTint(vLod), 0.65);\n  if (uIso > 0.001 && abs(vBid - uIsoBid) > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.82, 0.83), uIso * 0.7);');
-    if (o.cap) fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  if (!gl_FrontFacing) gl_FragColor = vec4(uCap, 1.0);');
+    // a building in the way goes near-black after lighting (a trace of shading keeps its form), with a light rim along the cut
+    fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n'+(o.cap?'  if (!gl_FrontFacing) gl_FragColor.rgb = uCap;\n':'')+'  gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * 0.1 + vec3(0.01, 0.011, 0.013), gOccDark);\n  gl_FragColor.a = mix(gl_FragColor.a, 1.0, gOccDark);\n  gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.80, 0.76, 0.70), gOccRim);');
     sh.fragmentShader = fs;
   };
   mat.customProgramCacheKey = () => 'occ'+(o.cap?1:0)+(o.massing?'m':'')+(o.depth?'d':'');
@@ -1561,7 +1607,7 @@ function updateLOD(dt, activeId){
     let want=3;
     for(let l=0;l<3;l++) if(rel >= PX[l]*(l<r.want ? 1+H : 1-H)){ want=l; break; }
     if(d > far) want=3;
-    const forced = r.id===activeId || (ui.mode==='edit' && r.id===ui.sel) || (r.occA>0.01 && ui.mode==='play' && ui.occ.outside==='slice');   // a sliced building shows its rooms
+    const forced = r.id===activeId || (ui.mode==='edit' && r.id===ui.sel) || (r.slot!=null && ui.mode==='play' && (ui.occ.outside==='slice' || ui.occ.outside==='sink'));   // a sliced building shows its rooms
     if(forced) want=0;
     r.want=want;
     let show=want;
@@ -1853,7 +1899,7 @@ function applyView(){
     const loc=playerLoc(); b=loc.b; floor=loc.floor; cut=ui.occ.cut;
     G.uFocus.value.set(player.x, player.y+1.2, player.z);
     // buildings in the way: the player's depth and screen position (for Cutout / Fade), and the hole size in pixels
-    G.uOccMode.value = ({off:0, slice:1, cutout:2, fade:3})[ui.occ.outside];
+    G.uOccMode.value = ({off:0, slice:1, cutout:2, fade:3, sink:4})[ui.occ.outside];
     const pc=tmpV.set(player.x, player.y+1.1, player.z).project(camera), W=canvas.width, H=canvas.height;
     G.uPZ.value=pc.z*0.5+0.5; G.uPScr.value.set((pc.x*0.5+0.5)*W, (pc.y*0.5+0.5)*H);
     const dist=camera.position.distanceTo(tmpV.set(player.x, player.y+1.1, player.z)); G.uHoleR.value = ui.occ.holeR/(2*dist*Math.tan(THREE.MathUtils.degToRad(camera.fov)/2))*H;
@@ -1890,23 +1936,57 @@ function segHitsBuilding(b, p, q){
 }
 // Slice: just under the ceiling of the occluder's storey at the player's height (at least head height)
 function sliceHeight(b){ const N=b.floors.length; let k=0; for(let j=1;j<N;j++) if(player.y+0.5>=floorBase(b,j)) k=j; return Math.max(floorBase(b,k)+floorH(b,k)-SLAB-0.01, player.y+2.0); }
+// the occluder's storey at the player's height (the base that stays), N when the player is above its roof
+function occStorey(b){ const N=b.floors.length; let k=0; for(let j=1;j<=N;j++) if(player.y+0.5>=floorBase(b,j)) k=j; return k; }
+const occSlots=new Array(OCC_SLOTS).fill(null); let occDbgT=null;   // test hook: pin the Sink animation time
+// Sink timing: the roof goes first, then each storey from the top down (overlapping), then the player's storey
+// squashes to the base height with a little bounce. Reversed, it plays backwards.
+const SINK_DUR=0.3, SINK_BASE=0.42;
+const easeInBack = p => { const c=1.3; return (c+1)*p*p*p - c*p*p; };
+const easeOutBack = p => { const c=1.6, q=p-1; return 1 + (c+1)*q*q*q + c*q*q; };
+function sinkPlan(b, k){
+  const N=b.floors.length, segs=[];
+  for(let j=k;j<=N;j++) segs.push({y:floorBase(b,j), h: j<N ? floorH(b,j) : 0});
+  const nc=segs.length-(k<N?1:0), stag=Math.min(0.08, 0.45/Math.max(nc,1));
+  return {segs, stag, total:(nc-1)*stag+SINK_DUR+(k<N?SINK_BASE:0), squash:k<N};
+}
+function writeOcc(r, b){
+  const m=ui.occ.outside, o=r.slot*OCC_W*4;
+  occArr.fill(0, o, o+OCC_W*4); occArr[o+2]=1e9; occArr[o+3]=-1e9;
+  if(m==='slice'){ const e=r.occA*r.occA*(3-2*r.occA); occArr[o+2]=r.occTop+(r.occY-r.occTop)*e; return; }
+  const k=r.occK, base=(k<b.floors.length ? floorBase(b,k) : roofY(b)) + ui.occ.baseH;
+  if(m==='cutout' || m==='fade'){ occArr[o+1]=r.occA; occArr[o+3]=base; return; }
+  const P=r.plan, S=P.segs, n=S.length, T=r.occT;
+  occArr[o]=n; occArr[o+1]=Math.min(1, T/0.25);
+  const gone=new Array(n).fill(false);
+  for(let i=n-1;i>=0;i--){ const q=o+(1+i)*4; let sc;
+    if(i===0 && P.squash){ const p=clamp((T-(n-2)*P.stag-SINK_DUR)/SINK_BASE,0,1), end=Math.min(1, ui.occ.baseH/S[0].h); sc=1+(end-1)*easeOutBack(p); }
+    else { const p=clamp((T-(n-1-i)*P.stag)/SINK_DUR,0,1); sc=p>=1 ? 0 : 1-easeInBack(p); gone[i]=p>=1; }
+    occArr[q]=S[i].y; occArr[q+1]=sc; occArr[q+2]=gone[i]?1:0; occArr[q+3]=(i+1<n && gone[i+1])?1:0; }
+}
 function updateOccluders(dt){
-  const hits=new Set();
-  if(ui.mode==='play' && ui.occ.outside!=='off'){
-    const loc=playerLoc(), c=camera.position, tg=[0.25,1.1,1.75].map(h=>({x:player.x, y:player.y+h, z:player.z}));
+  const hits=new Set(), m=ui.occ.outside, loc=playerLoc();
+  if(ui.mode==='play' && m!=='off'){
+    const c=camera.position, tg=[0.25,1.1,1.75].map(h=>({x:player.x, y:player.y+h, z:player.z}));
     const L=Math.hypot(c.x-player.x, c.z-player.z), steps=Math.ceil(L/16), cand=new Set();
     for(let i=0;i<=steps;i++){ const f=i/Math.max(steps,1); for(const r of nearRecs(c.x+(player.x-c.x)*f, c.z+(player.z-c.z)*f, 17)) cand.add(r); }
     for(const r of cand){ const b=bById(r.id); if(!b || b===loc.b) continue;
-      if(tg.some(t=>segHitsBuilding(b,c,t))){ hits.add(r); r.occY=sliceHeight(b); r.occTop=roofY(b)+(isPitched(b)?(roofParts(b)?.rise||0):1.1)+0.5; } } }
-  for(const r of hits){ r.occHold=OCC_HOLD; occActive.add(r); }
-  for(const r of occActive){ const want = hits.has(r) || (r.occHold-=dt)>0;
-    r.occA=clamp((r.occA||0)+(want?dt:-dt)/OCC_FADE,0,1); if(!want && r.occA<=0){ r.occA=0; occActive.delete(r); } }
+      if(tg.some(t=>segHitsBuilding(b,c,t))){ hits.add(r); r.occY=sliceHeight(b); r.occTop=roofY(b)+(isPitched(b)?(roofParts(b)?.rise||0):1.1)+0.5;
+        const k=occStorey(b); if(k!==r.occK && !(r.occT>0)) r.occK=k; } } }
+  for(const r of hits){ r.occHold=OCC_HOLD; if(!occActive.has(r)){ const i=occSlots.indexOf(null); if(i<0) continue; occSlots[i]=r; r.slot=i; r.occT=0; r.occK=occStorey(bById(r.id)); occActive.add(r); } }
+  for(const r of occActive){ const b=bById(r.id), want = !!b && (hits.has(r) || (r.occHold-=dt)>0);
+    r.occA=clamp((r.occA||0)+(want?dt:-dt)/OCC_FADE,0,1);
+    if(b){ r.plan=sinkPlan(b, Math.min(r.occK, b.floors.length)); r.occT = m==='sink' ? clamp(r.occT+(want?dt:-dt*1.25),0,r.plan.total) : 0; }
+    const done = !want && r.occA<=0 && !(r.occT>0);
+    if(done || !b || (loc.b && b===loc.b) || ui.mode!=='play'){ r.occA=0; r.occT=0; occActive.delete(r); if(r.slot!=null){ occSlots[r.slot]=null; r.slot=null; } continue; }
+    if(occDbgT!=null) r.occT=Math.min(occDbgT, r.plan.total);
+    writeOcc(r, b); }
+  occTex.needsUpdate=true;
   // camera assist: after half a second hidden, tilt the camera a little steeper (never overriding the player's orbit)
   hiddenFor = hits.size ? hiddenFor+dt : 0;
   const want = ui.mode==='play' && ui.occ.assist && hiddenFor>0.5 ? 0.3 : 0; camPlay.assist=(camPlay.assist||0)+(want-(camPlay.assist||0))*Math.min(1,dt*2.5);
 }
-const occState = r => { const m=ui.occ.outside; if(!(r.occA>0) || ui.mode!=='play') return 0;   // 0 = not in the way, in every mode
-  if(m==='slice'){ const e=r.occA*r.occA*(3-2*r.occA); return r.occTop+(r.occY-r.occTop)*e; } return r.occA; };
+const occState = r => r.slot!=null && ui.mode==='play' ? r.slot+1 : 0;   // the state row points at the occluder slot (0 = not in the way)
 
 /* =========================================================================
    Play mode
@@ -1996,8 +2076,8 @@ function updateHUD(){
   if(!loc.b){ $('#locD').textContent='—'; $('#locN').textContent='Outside'; $('#locS').textContent='No building'; return; }
   $('#locD').textContent=floorShort(loc.b,loc.floor).padStart(2,' '); $('#locN').textContent=loc.b.name; $('#locS').textContent=floorLabel(loc.b,loc.floor)+' of '+loc.b.floors.length;
 }
-const OCC_OUT = [['slice','Slice'],['cutout','Cutout'],['fade','Fade'],['off','Off']];
-const OCC_TIP = { slice:'A building in the way is cut down to the storey you are on, showing its rooms', cutout:'A soft hole opens around you, only in buildings in the way', fade:'Buildings in the way fade to a light ghost', off:'Buildings in the way stay solid' };
+const OCC_OUT = [['sink','Sink'],['slice','Slice'],['cutout','Cutout'],['fade','Fade'],['off','Off']];
+const OCC_TIP = { sink:'A building in the way collapses storey by storey into a low dark base, so you can see it and what is inside', slice:'A building in the way is cut down to the storey you are on, showing its rooms', cutout:'A soft hole opens around you in buildings in the way, above a dark base', fade:'Buildings in the way fade to a light ghost above a dark base', off:'Buildings in the way stay solid' };
 function renderOcc(){
   const o=ui.occ;
   $('#occ').classList.toggle('closed', !ui.occOpen);
@@ -2005,6 +2085,7 @@ function renderOcc(){
   <div class="sub-h" style="margin-top:0">Buildings in the way</div>
   <div class="seg" style="margin-bottom:4px">${OCC_OUT.map(([v,l])=>`<button data-occout="${v}" class="${o.outside===v?'on':''}" title="${OCC_TIP[v]}">${l}</button>`).join('')}</div>
   <p class="note" style="margin:0 0 6px">${OCC_TIP[o.outside]}.</p>
+  ${['sink','cutout','fade'].includes(o.outside)?`<label class="sl"><span>Base height</span><input type="range" id="occBase" min="0.3" max="2.5" step="0.1" value="${o.baseH}"><output>${o.baseH.toFixed(1)} m</output></label>`:''}
   ${o.outside==='cutout'?`<label class="sl"><span>Hole size</span><input type="range" id="occHole" min="1" max="5" step="0.1" value="${o.holeR}"><output>${o.holeR.toFixed(1)} m</output></label>`:''}
   <div class="sub-h">The building you're in</div>
   <label class="chk"><input type="checkbox" id="occCutOn" ${o.cut?'checked':''}> Cut away walls in front of you</label>
@@ -2016,6 +2097,7 @@ function renderOcc(){
 $('#occ').addEventListener('click', e=>{ if(e.target.closest('[data-occtog]')){ ui.occOpen=!ui.occOpen; renderOcc(); return; } const t=e.target.closest('[data-occout]'); if(t){ ui.occ.outside=t.dataset.occout; renderOcc(); } });
 $('#occ').addEventListener('input', e=>{ const t=e.target;
   if(t.id==='occCut'){ ui.occ.cutH=+t.value; t.nextElementSibling.textContent=ui.occ.cutH.toFixed(1)+' m'; }
+  if(t.id==='occBase'){ ui.occ.baseH=+t.value; t.nextElementSibling.textContent=ui.occ.baseH.toFixed(1)+' m'; }
   if(t.id==='occHole'){ ui.occ.holeR=+t.value; t.nextElementSibling.textContent=ui.occ.holeR.toFixed(1)+' m'; }
   if(t.id==='occCutOn'){ ui.occ.cut=t.checked; renderOcc(); }
   if(t.id==='occSil') ui.occ.silhouette=t.checked;
@@ -2942,5 +3024,5 @@ window.__sb = { geo:(i,lod=0)=>{ const b=state.buildings[i], r=recOf(b); DEBUG_S
   memBytes:()=>{ let by=0, m=0; scene.traverse(o=>{ if(o.isMesh && o.geometry){ m++; for(const a of Object.values(o.geometry.attributes)) by+=a.array.byteLength; if(o.geometry.index) by+=o.geometry.index.array.byteLength; } }); return {meshes:m, MB:+(by/1048576).toFixed(1)}; },
   timeCells:()=>{ const t=performance.now(); let n=0; for(const c of cells.values()){ c.dirty=true; rebuildCell(c); n++; } return {cells:n, msPerCell:+((performance.now()-t)/Math.max(1,n)).toFixed(3)}; },
   snapFx:()=>snapFx, screenOf:(bi,k,x,z)=>{ const b=state.buildings[bi], v=new THREE.Vector3(x+b.pos.x, floorBase(b,k), z+b.pos.z).project(camera), r=canvas.getBoundingClientRect(); return [r.left+(v.x+1)/2*r.width, r.top+(1-v.y)/2*r.height]; },
-  camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); }, party:(b,k0,i)=>partyRanges(b,k0,i), occluders:()=>[...occActive].map(r=>bById(r.id)?.name+':'+(r.occA||0).toFixed(2)), facadeAt:(x,y)=>{ const b=selB(), h=pickBuilding({clientX:x,clientY:y}, b.id); return {hit:h&&{bid:h.bid,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2))}, ed:facadeEdgeAt({clientX:x,clientY:y},b)}; }, outline:{insetPoly, pushEdge, outlineIssue, simplifyTier, addSetback, tiers, fpAt, touch, refresh:()=>{ touch(); refreshChrome(); overlayRebuild(); }} };
+  camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); }, party:(b,k0,i)=>partyRanges(b,k0,i), occluders:()=>[...occActive].map(r=>bById(r.id)?.name+':'+(r.occA||0).toFixed(2)), occAt:t=>{ occDbgT=t; }, facadeAt:(x,y)=>{ const b=selB(), h=pickBuilding({clientX:x,clientY:y}, b.id); return {hit:h&&{bid:h.bid,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2))}, ed:facadeEdgeAt({clientX:x,clientY:y},b)}; }, outline:{insetPoly, pushEdge, outlineIssue, simplifyTier, addSetback, tiers, fpAt, touch, refresh:()=>{ touch(); refreshChrome(); overlayRebuild(); }} };
 </script>
