@@ -55,7 +55,7 @@ FloorData
 
 CoreData
   id, type: Stairs | Lift
-  x, z, rot (quarter turns)
+  x, z, rot (prototype: quarter turns; decided: free angle in degrees, §10 #6)
   bottom: int, top: int (-1 = follow top floor), roofAccess: bool
 
 FacadeStyle
@@ -69,7 +69,7 @@ FacadeStyle
 Runtime only (never stored): each building gets a small integer **index** into the GPU building table (§6.4). Merged meshes carry it per vertex; single-building renderers carry it via the renderer user value.
 
 **Setbacks.** A floor with a `shape` starts a *tier*: it and every floor above use that outline until the next floor with a `shape`. The outline of floor `k` is `outline(k)` = the nearest `shape` at or below `k`, or the base footprint. Rules the editor enforces on every edit (the handle simply stops where a move would break one):
-- A setback lies inside the tier below it (edges may run along its edges), and every tier above still fits inside it.
+- A setback lies inside the tier below it (edges may run along its edges), and every tier above still fits inside it. *(Prototype rule. Overhangs are decided, §10 #3: this becomes "simple polygon", and the part that sticks out gets a soffit.)*
 - Where a setback steps in, it leaves at least 0.8 m of terrace, or lines up exactly with the edge below. Anything thinner would put the setback's 0.3 m wall on top of the parapet.
 - Every core fits inside the outline of every level it serves (stairs to the roof must fit the top tier).
 - Floor operations carry setbacks along: duplicating or adding floors copies rooms but never the outline (the copy inherits it); deleting the first floor of a setback moves the outline and its terrace doors up one floor; a setback that becomes the ground floor becomes the new base footprint.
@@ -264,19 +264,26 @@ The prototype's UI was cut down so only the current task is on screen:
 | Overlay handles are projected with the *current* frame's camera: the prototype updates the camera matrices right after moving the camera. Before that fix they trailed by a frame, 200–280 px while orbiting. | Draw handles inside the Scene view's `OnSceneGUI` / `Handles` pass, which already uses the current camera. |
 | Hints only when nothing is selected; tool tips inline under the tool strip | Scene view notification (`SceneView.ShowNotification`) for one-off tips. Shortcuts are registered with the `ShortcutManager`, so they're rebindable. |
 
-## 10. Open questions for the team
+## 10. Decisions (formerly open questions)
 
-1. ~~Editor-only or in-game?~~ **Decided: editor-only.** Players don't build. The play-mode rig is a test harness.
-2. ~~Setback floors with a smaller footprint?~~ **Decided: yes**, as outlines per floor range (§3, §4.1). Setbacks only step in. Still open: **overhangs** (an upper floor bigger than the one below needs soffits and supports), a **per-tier facade style**, and **per-floor heights**. Is one ground height plus one upper height enough?
-3. **Curved walls / non-orthogonal interiors:** footprints can be any polygon, but cores rotate in 90° steps. Is that acceptable?
-4. **Doors as objects:** the prototype has open doorways only. Do we need doors that open or close, or lock?
-5. **Occlusion default:** cutaway + cone together reads best in the prototype. Should the cutaway height or fade be a player setting?
-6. **Floors below the player:** they are visible now (you see them through the cone from outside). Should they be dimmed for readability?
-7. **Art pipeline:** will facades stay procedural (like here) or be assembled from modular prefab kits (wall / window / corner pieces)? The data model supports both. Only the generator changes.
-8. **Multiple buildings sharing walls (terraces):** needed? It affects collision and occlusion between adjacent buildings.
-9. **Target platforms and budgets:** which devices, and what draw-call, triangle and memory budgets? Mobile rules out the GPU Resident Drawer on OpenGL ES and makes the 16-bit index limit and texture fallback for the building table mandatory.
-10. **World size and streaming:** how many buildings in one scene, and do districts stream in and out? That decides whether cells are baked per district and loaded with Addressables.
-11. **LOD1 for tall glass towers:** the 38-floor curtain-wall tower is 26.8k triangles at LOD1 (a recess per window). Options: merge flush openings per storey at LOD1, or move to the facade shader earlier with a parallax ("interior mapping") effect.
+All questions from the prototype review have been answered. Items marked **(prototype: not yet)** change the data model or generator and aren't in the prototype yet.
+
+| # | Question | Decision | What it means |
+|---|---|---|---|
+| 1 | Editor-only or in-game? | **Editor-only.** | Players don't build. The play-mode rig is a test harness. |
+| 2 | Setback floors with a smaller footprint? | **Yes**, as outlines per floor range (§3, §4.1). | Done in the prototype. |
+| 3 | Overhangs (an upper floor bigger than the one below)? | **Allow overhangs.** (prototype: not yet) | Relax the containment rule to "simple polygon". Generate the exposed underside (`upper − lower`) as a soffit at the slab underside, slab edge faces and a wall-bottom strip where the upper wall is over void, and a parapet or terrace where `lower − upper` is exposed, which already exists. Cores still have to fit every level they serve; doors need floor below them on the outside. Optional columns under large cantilevers can wait. |
+| 4 | Facade style per setback? | **Yes, per setback.** (prototype: not yet) | `FloorData.style?: FacadeStyle` on the floor that starts a tier; floors without one use the building style. The LOD2 parameter table needs one row per tier, not per building. |
+| 5 | Storey heights? | **Per floor.** (prototype: not yet) | `FloorData.height?: float` overrides the ground/upper default. `floorBase(k)` becomes a prefix sum (cache it per building). The LOD2 facade shader can't derive floors from two numbers any more: pass per-tier storey offsets, or bake the storey index into a vertex attribute of the tier quads. |
+| 6 | Core rotation? | **Free rotation.** (prototype: not yet) | `CoreData.rot` becomes an angle in degrees, and the editor snaps it to the nearest outline edge's angle. Fit tests use an oriented rectangle, not an axis-aligned one; slab holes and collision already use the core's frame. |
+| 7 | Doors as objects? | **Open doorways only.** | The game may place door objects in the openings later. The generator exposes each opening's frame (position, width, height, facing). |
+| 8 | Player occlusion settings? | **Fixed by design.** | Designers tune cutaway height, fade and cone radius per project in a settings asset. No player-facing option. |
+| 9 | Dim floors below the player? | **Leave as is.** | Floors below draw normally. |
+| 10 | Art pipeline? | **Procedural first.** | Keep the generator and add materials and textures (trim sheets, tiling wall materials). Modular kits can come later from the same data, because only the generator changes. |
+| 11 | Buildings sharing walls? | **Yes.** (prototype: not yet) | Detect edges of neighbouring buildings that coincide (within 1 cm, opposite direction) and mark them as **party walls**: one wall is generated, with no windows, no parapet overlap and no double collision; roofs and parapets meet it face-to-face. Occlusion treats the party wall as belonging to whichever building the player is in. Neighbour lookup uses the city spatial grid (§6), and editing one building re-generates its neighbours' shared edges. |
+| 12 | Platforms? | **PC / Mac, high-end mobile, low-end mobile.** | Low-end mobile sets the floor: OpenGL ES fallback, so the GPU Resident Drawer is optional (on for desktop and Vulkan/Metal only). 16-bit indices everywhere (cells split under 65,535 vertices). A texture fallback for the building table. Per-platform `LODCFG` (px/m thresholds, cell size, cache sizes). Budgets are still needed per tier; proposed starting points are ≤ 150 draws and ≤ 300k triangles on low-end mobile, ≤ 250 draws and ≤ 800k triangles on high-end mobile, and ≤ 1,000 draws and ≤ 3M triangles on desktop. |
+| 13 | World size and streaming? | **Streaming districts.** | Districts are separate scenes or Addressables groups. HLOD cells are baked per district at edit time. Building data is loaded per district, and LOD0/1 are generated at runtime or baked per platform. A district border must not split a cell. |
+| 14 | LOD1 for tall glass towers? | **Merge openings.** | At LOD1, flush glass openings (curtain wall, ribbon, shopfront) on one storey of one wall become a single recess. That cuts the 38-floor glass tower from about 26.8k to about 3k triangles at LOD1. |
 
 ## 11. Unity package layout
 
