@@ -204,6 +204,18 @@ details.more[open] summary{margin-bottom:6px}
 .swb{width:21px;height:21px}
 .len{display:none}
 #ov.dragging .len{display:block}
+#perf{position:absolute;right:12px;bottom:12px;width:280px;padding:12px 14px;z-index:15}
+#perf .h{margin-bottom:6px}
+.pstats{display:grid;grid-template-columns:1fr auto;gap:3px 12px;font-size:12px;margin:2px 0 10px}
+.pstats span{color:var(--muted)}
+.pstats b{font:600 12px var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.lodbar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--well);margin:4px 0 6px}
+.lodbar i{display:block;height:100%}
+.lodleg{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-bottom:10px}
+.lodleg em{font-style:normal;font-family:var(--mono);color:var(--ink)}
+.lodleg b{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
+.ib.on{background:var(--well)}
+.bfind{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:7px;padding:6px 8px;background:var(--well);color:var(--ink);font:inherit;margin-bottom:6px}
 #panelToggle{display:none;width:100%;border:0;border-bottom:1px solid var(--line);background:var(--well);padding:8px 14px;font-weight:600;cursor:pointer;text-align:left;align-items:center;gap:8px;position:sticky;top:0;z-index:2;color:var(--ink)}
 .brand span{white-space:nowrap}
 #occ .h{cursor:pointer;user-select:none}
@@ -224,6 +236,7 @@ details.more[open] summary{margin-bottom:6px}
   #lift{max-width:calc(100% - 24px);bottom:calc(176px + env(safe-area-inset-bottom,0px))}
   #phint{display:none}
   #loc{left:8px}
+  #perf{left:8px;right:8px;width:auto;bottom:8px}
 }
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
 </style>
@@ -248,6 +261,7 @@ details.more[open] summary{margin-bottom:6px}
     </div>
     <div class="spacer"></div>
     <div class="card tb">
+      <button class="ib" id="bPerf" title="City &amp; LOD stats" aria-label="City and LOD stats"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 13.5V9M6.2 13.5V5M9.8 13.5V7.5M13.5 13.5V2.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
       <button class="ib" id="bHelp" title="Shortcuts and layout data" aria-label="Shortcuts and layout data">?</button>
     </div>
   </div>
@@ -263,6 +277,7 @@ details.more[open] summary{margin-bottom:6px}
     <div id="joy" aria-label="Virtual joystick"><div class="k"></div></div>
     <div id="lift" class="card" hidden></div>
   </div>
+  <div id="perf" class="card" hidden aria-label="City and LOD stats"></div>
   <div id="toast" role="status"></div>
   <div id="modal" hidden></div>
 </div>
@@ -353,10 +368,37 @@ function rectInside(fp, x, z, hx, hz){ const pts=[[-1,-1],[1,-1],[1,1],[-1,1],[0
 const LS_KEY = 'storey-builder-v3';
 let state;
 const undoStack=[], redoStack=[];
-function pushUndo(){ undoStack.push(JSON.stringify(state)); if(undoStack.length>150) undoStack.shift(); redoStack.length=0; updateUndoBtns(); }
+/* Undo entries hold only what an action touched: the JSON of the affected buildings (null = did not
+   exist), plus the spawn point. Bulk operations (load, reset, generate city) snapshot everything. */
+function snapItem(id){ const i=state.buildings.findIndex(x=>x.id===id); return {id, i, json: i>=0 ? JSON.stringify(state.buildings[i]) : null}; }
+function beginUndo(scope){
+  if(scope==='all') return {all: JSON.stringify(state)};
+  const list=(scope==null ? [] : Array.isArray(scope) ? scope : [scope]).filter(Boolean);
+  return {items:list.map(b=>snapItem(b.id||b)), spawn:{...state.spawn}, seq:state.seq, before:new Set(state.buildings.map(x=>x.id))};
+}
+function endUndo(e){
+  if(e.before){ for(const b of state.buildings) if(!e.before.has(b.id) && !e.items.some(it=>it.id===b.id)) e.items.push({id:b.id, i:-1, json:null}); delete e.before; }
+  undoStack.push(e); if(undoStack.length>150) undoStack.shift(); redoStack.length=0; updateUndoBtns(); return e;
+}
+const pushUndo = scope => endUndo(beginUndo(scope));
+function applyEntry(e){
+  if(e.all!==undefined){ const inv={all:JSON.stringify(state)}; state=JSON.parse(e.all); reindex(); return {inv, ids:null}; }
+  const inv={items:e.items.map(it=>snapItem(it.id)), spawn:{...state.spawn}, seq:state.seq};
+  const ids=new Set(e.items.map(it=>it.id));
+  state.buildings=state.buildings.filter(b=>!ids.has(b.id));
+  for(const it of e.items.filter(x=>x.json).sort((a,b)=>a.i-b.i)) state.buildings.splice(clamp(it.i,0,state.buildings.length),0,JSON.parse(it.json));
+  state.spawn={...e.spawn}; state.seq=Math.max(state.seq,e.seq);
+  reindex();
+  return {inv, ids:[...ids]};
+}
 let saveT=0;
-function saveSoon(){ clearTimeout(saveT); saveT=setTimeout(()=>{ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }, 400); }
-const bById = id => state.buildings.find(b=>b.id===id);
+let saveWarned=false;
+function saveSoon(){ clearTimeout(saveT); saveT=setTimeout(()=>{
+  if(state.buildings.length>400){ if(!saveWarned){ saveWarned=true; toast('Autosave is off for large test cities. Use ? → Layout JSON to export.'); } return; }
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }, 400); }
+let bIndex=new Map(), bIndexArr=null, bIndexN=-1;
+function reindex(){ bIndex=new Map(state.buildings.map(b=>[b.id,b])); bIndexArr=state.buildings; bIndexN=state.buildings.length; }
+function bById(id){ if(bIndexArr!==state.buildings || bIndexN!==state.buildings.length) reindex(); const b=bIndex.get(id); return b || (reindex(), bIndex.get(id)); }
 const nid = p => p + (state.seq++);
 
 function makeBuilding(shape, pos, styleKey, name){
@@ -437,8 +479,8 @@ renderer.toneMapping = THREE.NeutralToneMapping;
 const scene = new THREE.Scene();
 const SKY = new THREE.Color('#CBD8DC');
 scene.background = SKY;
-scene.fog = new THREE.Fog(SKY, 120, 320);
-const camera = new THREE.PerspectiveCamera(45, 1, 0.3, 600);   // near 0.3 keeps depth precision ~2 mm at 100 m
+scene.fog = new THREE.Fog(SKY, 220, 1300);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.3, 1600);   // near 0.3 keeps depth precision ~2 mm at 100 m
 scene.add(new THREE.HemisphereLight('#E4EDF2', '#6E6656', 1.35));
 const sun = new THREE.DirectionalLight('#FFF1DC', 2.3);
 sun.castShadow = true;
@@ -447,28 +489,60 @@ Object.assign(sun.shadow.camera, {left:-45,right:45,top:45,bottom:-45,near:1,far
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(sun, sun.target);
 
-/* ---- occlusion shader (shared by every building material) ---- */
-const G = { uCam:{value:new THREE.Vector3()}, uFocus:{value:new THREE.Vector3()}, uFeetY:{value:-1e9}, uConeOn:{value:0}, uConeR:{value:2.6}, uCutH:{value:1.0}, uCamDir:{value:new THREE.Vector2(0,1)} };
-const OCC_VERT_DECL = `attribute vec4 aWall; attribute float aKind; varying vec3 vOccW; varying vec4 vWall; varying float vKind;`;
-const OCC_VERT = `vOccW = (modelMatrix * vec4(transformed, 1.0)).xyz; vWall = aWall; vKind = aKind;`;
+/* =========================================================================
+   Shared building materials + per-building data tables
+   Every building mesh (any LOD, any city cell) uses the same five materials. Per-building values
+   (displayed LOD, cross-fade, facade parameters, colours) live in two float textures indexed by a
+   per-vertex building index, so thousands of buildings need no per-object material state and
+   merged meshes can still switch individual buildings on and off.
+   ========================================================================= */
+const TEX_W = 256, MAX_B = 8192, PARAM_TEXELS = 8, LOD_TAG = 65536;
+const stateArr = new Float32Array(MAX_B*4);                    // per building: displayed LOD, previous LOD, fade 0..1
+for(let i=0;i<MAX_B;i++){ stateArr[i*4]=3; stateArr[i*4+1]=3; stateArr[i*4+2]=1; }
+const stateTex = new THREE.DataTexture(stateArr, TEX_W, MAX_B/TEX_W, THREE.RGBAFormat, THREE.FloatType); stateTex.needsUpdate=true;
+const paramArr = new Float32Array(MAX_B*PARAM_TEXELS*4);       // per building: storey heights, window specs, colours
+const paramTex = new THREE.DataTexture(paramArr, TEX_W, MAX_B*PARAM_TEXELS/TEX_W, THREE.RGBAFormat, THREE.FloatType); paramTex.needsUpdate=true;
+
+const G = { uCam:{value:new THREE.Vector3()}, uFocus:{value:new THREE.Vector3()}, uFeetY:{value:-1e9}, uConeOn:{value:0}, uConeR:{value:2.6}, uCutH:{value:1.0}, uCamDir:{value:new THREE.Vector2(0,1)},
+  uActive:{value:-1}, uClipY:{value:1e9}, uCutOn:{value:0}, uCutBase:{value:0}, uCutTop:{value:0}, uCap:{value:new THREE.Vector3(0.23,0.25,0.24)},
+  uState:{value:stateTex}, uParams:{value:paramTex}, uLodTint:{value:0} };
+const OCC_VERT_DECL = `attribute vec4 aWall; attribute float aKind; attribute float aTag;
+uniform highp sampler2D uState;
+varying vec3 vOccW; varying vec4 vWall; varying float vKind; varying float vBid; varying float vLod; varying float vFade;`;
+const OCC_VERT = `vOccW = (modelMatrix * vec4(transformed, 1.0)).xyz; vWall = aWall; vKind = aKind;
+  vBid = mod(aTag, 65536.0); vLod = floor(aTag / 65536.0);
+  {
+    int ib = int(vBid + 0.5);
+    vec4 st = texelFetch(uState, ivec2(ib % 256, ib / 256), 0);   // x: displayed LOD, y: previous LOD, z: cross-fade 0..1
+    bool isDisp = abs(vLod - st.x) < 0.5;
+    bool isFrom = st.z < 1.0 && abs(vLod - st.y) < 0.5;
+    if (!isDisp && !isFrom) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);   // LOD not shown: clip the whole triangle
+    vFade = st.z >= 1.0 ? 3.0 : (isDisp ? st.z : -1.0 - st.z);
+  }`;
+const MASS_VERT_DECL = `attribute vec4 aFac; attribute vec2 aFac2; varying vec4 vFac; varying vec2 vFac2;`;
+const MASS_VERT = `vFac = aFac; vFac2 = aFac2;`;
 const OCC_FRAG_DECL = `
 uniform vec3 uCam; uniform vec3 uFocus; uniform float uFeetY; uniform float uConeOn; uniform float uConeR; uniform float uCutH; uniform vec2 uCamDir;
-uniform float uClipY; uniform float uCutOn; uniform float uCutBase; uniform float uCutTop; uniform vec3 uCap;
-varying vec3 vOccW; varying vec4 vWall; varying float vKind;
+uniform float uActive; uniform float uClipY; uniform float uCutOn; uniform float uCutBase; uniform float uCutTop; uniform vec3 uCap; uniform float uLodTint;
+varying vec3 vOccW; varying vec4 vWall; varying float vKind; varying float vBid; varying float vLod; varying float vFade;
 float occBayer(vec2 p){ int x = int(mod(p.x,4.0)); int y = int(mod(p.y,4.0));
   float m[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.); return (m[x+y*4]+0.5)/16.0; }
+vec3 lodTint(float l){ return l < 0.5 ? vec3(0.16,0.62,0.30) : l < 1.5 ? vec3(0.95,0.72,0.12) : vec3(0.90,0.30,0.10); }
 void occlude(){
+  // 0. LOD cross-fade: the old and new LOD draw complementary dither patterns
+  if (vFade < 2.0) { float d = occBayer(gl_FragCoord.xy); if (vFade >= 0.0) { if (d >= vFade) discard; } else if (d < -vFade - 1.0) discard; }
+  bool act = abs(vBid - uActive) < 0.5;          // only the building the player is in (or the one being edited) is sliced
   // 1. everything above the ceiling of the active floor
-  if (vOccW.y > uClipY) discard;
+  if (act && vOccW.y > uClipY) discard;
   // 2. cutaway: walls between camera and focus drop to stub height; tall props on the camera side too
-  if (uCutOn > 0.5 && vKind > 0.5 && vOccW.y > uCutBase + uCutH && vOccW.y < uCutTop && vOccW.y > uCutBase - 0.05) {
+  if (act && uCutOn > 0.5 && vKind > 0.5 && vOccW.y > uCutBase + uCutH && vOccW.y < uCutTop && vOccW.y > uCutBase - 0.05) {
     if (vKind < 1.5) {
       float sc = dot(uCam.xz - vWall.xy, vWall.zw);
       float sp = dot(uFocus.xz - vWall.xy, vWall.zw);
       if (sc * sp < 0.0) discard;
     } else if (dot(vWall.xy - uFocus.xz, uCamDir) > 0.4) discard;
   }
-  // 3. see-through cone from camera to focus (dithered edge)
+  // 3. see-through cone from camera to focus (dithered edge), any building
   if (uConeOn > 0.5 && vOccW.y > uFeetY + 0.12) {
     vec3 tf = uFocus - uCam; float L = length(tf); vec3 d = tf / L; vec3 r = vOccW - uCam; float t = dot(r, d);
     if (t > 0.0 && t < L - 0.45) {
@@ -478,86 +552,145 @@ void occlude(){
     }
   }
 }`;
-function patch(mat, U, cap){
+// LOD2 massing: windows are drawn procedurally from the same parameters the geometry uses,
+// so the LOD1 -> LOD2 switch keeps every window in place.
+const MASS_FRAG_DECL = `
+uniform highp sampler2D uParams;
+varying vec4 vFac; varying vec2 vFac2;
+vec4 bParam(int i){ int t = int(vBid + 0.5) * 8 + i; return texelFetch(uParams, ivec2(t % 256, t / 256), 0); }
+vec3 facadeColor(){
+  float fu = fwidth(vFac.x), fv = fwidth(vFac.y);
+  vec4 p0 = bParam(0);
+  vec3 wall = bParam(3).rgb, trim = bParam(4).rgb, glass = bParam(5).rgb, roof = bParam(6).rgb;
+  float kind = vFac2.y;                            // 1 facade, 2 roof, 3 trim, 4 plain wall
+  if (kind > 1.5) return kind < 2.5 ? roof : (kind < 3.5 ? trim : wall);
+  float u = vFac.x, v = vFac.y, uS = vFac.z, uE = vFac.w, bay = vFac2.x;
+  float gH = p0.x, fH = p0.y, N = p0.z, flags = p0.w;
+  float roofH = gH + (N - 1.0) * fH;
+  bool bands = mod(flags, 2.0) > 0.5;
+  bool parapet = mod(floor(flags / 2.0), 2.0) > 0.5;
+  if (v >= roofH) return (!parapet || v > roofH + 1.0) ? trim : wall;
+  float fl = v < gH ? 0.0 : min(N - 1.0, 1.0 + floor((v - gH) / fH));
+  float base = fl < 0.5 ? 0.0 : gH + (fl - 1.0) * fH;
+  float h = fl < 0.5 ? gH : fH;
+  float lv = v - base;
+  vec4 sp = fl < 0.5 ? bParam(2) : bParam(1);      // x: gap for full-width styles (<0: fixed width), y: width, z: sill, w: head
+  vec3 c = wall;
+  if (bay > 0.0 && sp.w > sp.z + 0.4) {
+    float ww = sp.x >= 0.0 ? bay - sp.x : min(sp.y, bay - 0.5);
+    if (ww >= 0.45) {
+      float cx = uS + (floor((u - uS) / bay) + 0.5) * bay;
+      float inU = step(uS, u) * step(u, uE);
+      float mu = 1.0 - smoothstep(ww * 0.5 - fu, ww * 0.5 + fu, abs(u - cx));
+      float mv = smoothstep(sp.z - fv, sp.z + fv, lv) * (1.0 - smoothstep(sp.w - fv, sp.w + fv, lv));
+      float cover = (ww / bay) * (sp.w - sp.z) / h;                 // average glass coverage
+      float px = min(bay / max(fu, 1e-4), h / max(fv, 1e-4));      // pixels per bay / per storey
+      c = mix(wall, glass, mix(cover, mu * mv, smoothstep(3.0, 8.0, px)) * inU);   // sub-pixel windows fade to their average
+    }
+  }
+  if (bands && fl < N - 1.5 && lv > h - 0.22) c = trim;
+  return c;
+}`;
+function patch(mat, o={}){
   mat.onBeforeCompile = sh => {
-    Object.assign(sh.uniforms, G, U);
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n'+OCC_VERT_DECL).replace('#include <project_vertex>', '#include <project_vertex>\n'+OCC_VERT);
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n'+OCC_FRAG_DECL).replace('void main() {', 'void main() {\n  occlude();');
-    if (cap) sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  if (!gl_FrontFacing) gl_FragColor = vec4(uCap, 1.0);');
+    Object.assign(sh.uniforms, G);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n'+OCC_VERT_DECL+(o.massing?MASS_VERT_DECL:''))
+      .replace('#include <project_vertex>', '#include <project_vertex>\n'+OCC_VERT+(o.massing?MASS_VERT:''));
+    let fs = sh.fragmentShader.replace('#include <common>', '#include <common>\n'+OCC_FRAG_DECL+(o.massing?MASS_FRAG_DECL:'')).replace('void main() {', 'void main() {\n  occlude();');
+    fs = fs.replace('#include <color_fragment>', '#include <color_fragment>\n'+(o.massing?'  diffuseColor.rgb = facadeColor();\n':'')+'  if (uLodTint > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, lodTint(vLod), 0.65);');
+    if (o.cap) fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  if (!gl_FrontFacing) gl_FragColor = vec4(uCap, 1.0);');
+    sh.fragmentShader = fs;
   };
-  mat.customProgramCacheKey = () => 'occ'+(cap?1:0);
+  mat.customProgramCacheKey = () => 'occ'+(o.cap?1:0)+(o.massing?'m':'');
   return mat;
 }
-function makeMats(){
-  const U = { uClipY:{value:1e9}, uCutOn:{value:0}, uCutBase:{value:0}, uCutTop:{value:0}, uCap:{value:new THREE.Vector3(0.23,0.25,0.24)} };
-  return { U,
-    opaque: patch(new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.86, metalness:0, side:THREE.DoubleSide}), U, true),
-    glass: patch(new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.08, metalness:0.15, transparent:true, opacity:0.5, depthWrite:false}), U, false),
-    depth: patch(new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide}), U, false) };
-}
+const MAT = {
+  opaque: patch(new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.86, metalness:0, side:THREE.DoubleSide}), {cap:true}),
+  glass: patch(new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.08, metalness:0.15, transparent:true, opacity:0.5, depthWrite:false}), {}),
+  depth: patch(new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide}), {}),
+  mass: patch(new THREE.MeshStandardMaterial({roughness:0.9, metalness:0, side:THREE.DoubleSide}), {cap:true, massing:true}),
+  massDepth: patch(new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide}), {massing:true}),
+};
 
-/* ---- geometry builder: boxes & polygons with per-vertex colour + occlusion data ---- */
+/* ---- geometry builder: boxes & polygons with per-vertex colour, building tag and occlusion data ---- */
+const SK = {OUT:1, IN:2, UEND:4, USTART:8, TOP:16, BOT:32};   // faces a box can leave out because something covers them
 class GB {
-  constructor(){ this.p=[]; this.n=[]; this.c=[]; this.w=[]; this.k=[]; this.i=[]; this.W=Z4; this.K=0; this.solids=null; }
+  constructor(tag=0, lean=false){ this.p=[]; this.n=[]; this.c=[]; this.w=[]; this.k=[]; this.i=[]; this.W=Z4; this.K=0; this.solids=null; this.tag=tag; this.lean=lean; }
   ctx(W,K){ this.W=W||Z4; this.K=K||0; return this; }
+  _v(q,nr,c){ this.p.push(q[0],q[1],q[2]); this.n.push(nr[0],nr[1],nr[2]); this.c.push(c[0],c[1],c[2]); if(!this.lean){ this.w.push(this.W[0],this.W[1],this.W[2],this.W[3]); this.k.push(this.K); } }
   poly(pts, nr, c){
     const [a,b,d]=pts; const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2], vx=d[0]-a[0],vy=d[1]-a[1],vz=d[2]-a[2];
     if ((uy*vz-uz*vy)*nr[0] + (uz*vx-ux*vz)*nr[1] + (ux*vy-uy*vx)*nr[2] < 0) pts = pts.slice().reverse();
     const base=this.p.length/3;
-    for(const q of pts){ this.p.push(q[0],q[1],q[2]); this.n.push(nr[0],nr[1],nr[2]); this.c.push(c[0],c[1],c[2]); this.w.push(this.W[0],this.W[1],this.W[2],this.W[3]); this.k.push(this.K); }
+    for(const q of pts) this._v(q,nr,c);
     for(let j=1;j<pts.length-1;j++) this.i.push(base, base+j, base+j+1);
   }
-  obox(O,u,w,u0,u1,y0,y1,w0,w1,c,cIn){
+  // triangulated planar polygon (earcut output): one vertex per corner, shared by its triangles
+  polyTris(pts, tris, nr, c){
+    if(!tris.length) return; const base=this.p.length/3;
+    for(const q of pts) this._v(q,nr,c);
+    for(const t of tris){ let a=t[0], b=t[1], d=t[2]; const A=pts[a], B=pts[b], D=pts[d];
+      const ux=B[0]-A[0],uy=B[1]-A[1],uz=B[2]-A[2], vx=D[0]-A[0],vy=D[1]-A[1],vz=D[2]-A[2];
+      if ((uy*vz-uz*vy)*nr[0] + (uz*vx-ux*vz)*nr[1] + (ux*vy-uy*vx)*nr[2] < 0){ const x=b; b=d; d=x; }
+      this.i.push(base+a, base+b, base+d); }
+  }
+  obox(O,u,w,u0,u1,y0,y1,w0,w1,c,cIn,skip=0){
     if(u1-u0<1e-4||y1-y0<1e-4||w1-w0<1e-4) return; cIn=cIn||c; if(this.solids) this.solids.push({O,u,w,u0,u1,y0,y1,w0,w1});
     const Pt=(a,y,b)=>[O[0]+u[0]*a+w[0]*b, y, O[1]+u[1]*a+w[1]*b];
     const nu=[u[0],0,u[1]], nw=[w[0],0,w[1]];
-    this.poly([Pt(u0,y0,w1),Pt(u1,y0,w1),Pt(u1,y1,w1),Pt(u0,y1,w1)], nw, c);
-    this.poly([Pt(u0,y0,w0),Pt(u1,y0,w0),Pt(u1,y1,w0),Pt(u0,y1,w0)], [-nw[0],0,-nw[2]], cIn);
-    this.poly([Pt(u1,y0,w0),Pt(u1,y0,w1),Pt(u1,y1,w1),Pt(u1,y1,w0)], nu, c);
-    this.poly([Pt(u0,y0,w0),Pt(u0,y0,w1),Pt(u0,y1,w1),Pt(u0,y1,w0)], [-nu[0],0,-nu[2]], c);
-    this.poly([Pt(u0,y1,w0),Pt(u1,y1,w0),Pt(u1,y1,w1),Pt(u0,y1,w1)], [0,1,0], c);
-    this.poly([Pt(u0,y0,w0),Pt(u1,y0,w0),Pt(u1,y0,w1),Pt(u0,y0,w1)], [0,-1,0], c);
+    if(!(skip&SK.OUT))    this.poly([Pt(u0,y0,w1),Pt(u1,y0,w1),Pt(u1,y1,w1),Pt(u0,y1,w1)], nw, c);
+    if(!(skip&SK.IN))     this.poly([Pt(u0,y0,w0),Pt(u1,y0,w0),Pt(u1,y1,w0),Pt(u0,y1,w0)], [-nw[0],0,-nw[2]], cIn);
+    if(!(skip&SK.UEND))   this.poly([Pt(u1,y0,w0),Pt(u1,y0,w1),Pt(u1,y1,w1),Pt(u1,y1,w0)], nu, c);
+    if(!(skip&SK.USTART)) this.poly([Pt(u0,y0,w0),Pt(u0,y0,w1),Pt(u0,y1,w1),Pt(u0,y1,w0)], [-nu[0],0,-nu[2]], c);
+    if(!(skip&SK.TOP))    this.poly([Pt(u0,y1,w0),Pt(u1,y1,w0),Pt(u1,y1,w1),Pt(u0,y1,w1)], [0,1,0], c);
+    if(!(skip&SK.BOT))    this.poly([Pt(u0,y0,w0),Pt(u1,y0,w0),Pt(u1,y0,w1),Pt(u0,y0,w1)], [0,-1,0], c);
   }
   // box whose start/end faces are slanted: u_start(w)=sA+kA*w, u_end(w)=eB+kB*w (w measured from the footprint line)
-  mbox(O,u,w,sA,kA,eB,kB,y0,y1,w0,w1,c,cIn){
+  mbox(O,u,w,sA,kA,eB,kB,y0,y1,w0,w1,c,cIn,skip=0){
     const s0=sA+kA*w0, s1=sA+kA*w1, e0=eB+kB*w0, e1=eB+kB*w1;
     if(e0-s0<1e-4 || e1-s1<1e-4 || y1-y0<1e-4 || w1-w0<1e-4) return; cIn=cIn||c;
     if(this.solids) this.solids.push({O,u,w,sA,kA,eB,kB,y0,y1,w0,w1});
     const Pt=(a,y,b)=>[O[0]+u[0]*a+w[0]*b, y, O[1]+u[1]*a+w[1]*b];
     const nw=[w[0],0,w[1]];
-    const endN=(a0,a1,sign)=>{ const dx=u[0]*(a1-a0)+w[0]*(w1-w0), dz=u[1]*(a1-a0)+w[1]*(w1-w0); let nx=dz, nz=-dx; const l=Math.hypot(nx,nz)||1; nx/=l; nz/=l; if((nx*u[0]+nz*u[1])*sign<0){nx=-nx;nz=-nz;} return [nx,0,nz]; };
-    this.poly([Pt(s1,y0,w1),Pt(e1,y0,w1),Pt(e1,y1,w1),Pt(s1,y1,w1)], nw, c);
-    this.poly([Pt(s0,y0,w0),Pt(e0,y0,w0),Pt(e0,y1,w0),Pt(s0,y1,w0)], [-nw[0],0,-nw[2]], cIn);
-    this.poly([Pt(e0,y0,w0),Pt(e1,y0,w1),Pt(e1,y1,w1),Pt(e0,y1,w0)], endN(e0,e1,1), c);
-    this.poly([Pt(s0,y0,w0),Pt(s1,y0,w1),Pt(s1,y1,w1),Pt(s0,y1,w0)], endN(s0,s1,-1), c);
-    this.poly([Pt(s0,y1,w0),Pt(e0,y1,w0),Pt(e1,y1,w1),Pt(s1,y1,w1)], [0,1,0], c);
-    this.poly([Pt(s0,y0,w0),Pt(e0,y0,w0),Pt(e1,y0,w1),Pt(s1,y0,w1)], [0,-1,0], c);
+    if(!(skip&SK.OUT))    this.poly([Pt(s1,y0,w1),Pt(e1,y0,w1),Pt(e1,y1,w1),Pt(s1,y1,w1)], nw, c);
+    if(!(skip&SK.IN))     this.poly([Pt(s0,y0,w0),Pt(e0,y0,w0),Pt(e0,y1,w0),Pt(s0,y1,w0)], [-nw[0],0,-nw[2]], cIn);
+    if(!(skip&SK.UEND))   this.poly([Pt(e0,y0,w0),Pt(e1,y0,w1),Pt(e1,y1,w1),Pt(e0,y1,w0)], endNormal(u,w,e0,e1,w0,w1,1), c);
+    if(!(skip&SK.USTART)) this.poly([Pt(s0,y0,w0),Pt(s1,y0,w1),Pt(s1,y1,w1),Pt(s0,y1,w0)], endNormal(u,w,s0,s1,w0,w1,-1), c);
+    if(!(skip&SK.TOP))    this.poly([Pt(s0,y1,w0),Pt(e0,y1,w0),Pt(e1,y1,w1),Pt(s1,y1,w1)], [0,1,0], c);
+    if(!(skip&SK.BOT))    this.poly([Pt(s0,y0,w0),Pt(e0,y0,w0),Pt(e1,y0,w1),Pt(s1,y0,w1)], [0,-1,0], c);
   }
+  get tris(){ return this.i.length/3; }
+  get verts(){ return this.p.length/3; }
+  // compact vertex format: float position, SNorm8 normal, UNorm8 colour, float building tag (+ occlusion data for LOD0)
   geo(){
-    const g=new THREE.BufferGeometry();
+    const g=new THREE.BufferGeometry(), nv=this.p.length/3;
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.p,3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.n,3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(this.c,3));
-    g.setAttribute('aWall', new THREE.Float32BufferAttribute(this.w,4));
-    g.setAttribute('aKind', new THREE.Float32BufferAttribute(this.k,1));
-    g.setIndex(this.i); g.computeBoundingSphere(); return g;
+    const nn=new Int8Array(this.n.length); for(let i=0;i<nn.length;i++) nn[i]=Math.round(this.n[i]*127);
+    g.setAttribute('normal', new THREE.BufferAttribute(nn,3,true));
+    const cc=new Uint8Array(this.c.length); for(let i=0;i<cc.length;i++) cc[i]=Math.round(clamp(this.c[i],0,1)*255);
+    g.setAttribute('color', new THREE.BufferAttribute(cc,3,true));
+    g.setAttribute('aTag', new THREE.BufferAttribute(new Float32Array(nv).fill(this.tag),1));
+    if(!this.lean){ g.setAttribute('aWall', new THREE.Float32BufferAttribute(this.w,4)); g.setAttribute('aKind', new THREE.Float32BufferAttribute(this.k,1)); }
+    g.setIndex(new THREE.BufferAttribute(nv>65535 ? new Uint32Array(this.i) : new Uint16Array(this.i), 1));
+    g.computeBoundingSphere(); return g;
   }
 }
+function endNormal(u,w,a0,a1,w0,w1,sign){ const dx=u[0]*(a1-a0)+w[0]*(w1-w0), dz=u[1]*(a1-a0)+w[1]*(w1-w0); let nx=dz, nz=-dx; const l=Math.hypot(nx,nz)||1; nx/=l; nz/=l; if((nx*u[0]+nz*u[1])*sign<0){nx=-nx;nz=-nz;} return [nx,0,nz]; }
 const AX = {O:null, u:[1,0], w:[0,1]};
 
 /* =========================================================================
    Building generation
    ========================================================================= */
 function edgeInfo(Wp, i, ccw){ const a=Wp[i], c=Wp[(i+1)%Wp.length]; const dx=c[0]-a[0], dz=c[1]-a[1]; const L=Math.hypot(dx,dz)||1e-6; const u=[dx/L,dz/L]; const w = ccw ? [u[1],-u[0]] : [-u[1],u[0]]; return {a,L,u,w}; }
-function wallOps(gb,O,u,w,uA,uB,y0,h,w0,w1,ops,c,cIn){
+function wallOps(gb,O,u,w,uA,uB,y0,h,w0,w1,ops,c,cIn,skip=0){
   let cur=uA;
   for(const o of ops){
-    if(o.u0>cur) gb.obox(O,u,w,cur,o.u0,y0,y0+h,w0,w1,c,cIn);
+    if(o.u0>cur) gb.obox(O,u,w,cur,o.u0,y0,y0+h,w0,w1,c,cIn,skip);
     const a=Math.max(o.u0,cur), e=o.u1;
-    if(e>a){ if(o.y0>0.001) gb.obox(O,u,w,a,e,y0,y0+o.y0,w0,w1,c,cIn); if(o.y1<h-0.001) gb.obox(O,u,w,a,e,y0+o.y1,y0+h,w0,w1,c,cIn); }
+    if(e>a){ if(o.y0>0.001) gb.obox(O,u,w,a,e,y0,y0+o.y0,w0,w1,c,cIn,skip|SK.TOP); if(o.y1<h-0.001) gb.obox(O,u,w,a,e,y0+o.y1,y0+h,w0,w1,c,cIn,skip|SK.BOT); }
     cur=Math.max(cur,o.u1);
   }
-  if(uB>cur) gb.obox(O,u,w,cur,uB,y0,y0+h,w0,w1,c,cIn);
+  if(uB>cur) gb.obox(O,u,w,cur,uB,y0,y0+h,w0,w1,c,cIn,skip);
 }
 function solidRanges(uA,uB,ops){ const out=[]; let cur=uA; for(const o of ops){ if(!o.door) continue; if(o.u0>cur) out.push([cur,o.u0]); cur=Math.max(cur,o.u1); } if(uB>cur) out.push([cur,uB]); return out; }
 function pushSeg(sg,O,u,w,s,e,wo,r){ sg.push({ax:O[0]+u[0]*s+w[0]*wo, az:O[1]+u[1]*s+w[1]*wo, bx:O[0]+u[0]*e+w[0]*wo, bz:O[1]+u[1]*e+w[1]*wo, r}); }
@@ -572,20 +705,23 @@ function winSpec(kind,h,st){
     default: return null;
   }
 }
+const groundKind = st => st.ground==='match' ? st.windows : st.ground==='solid' ? 'none' : 'storefront';
+// Window layout shared by every LOD (LOD2 reproduces it in the facade shader from the same numbers)
+function bayLayout(st, uS, uE){ const spn=uE-uS; if(spn<=1.2) return {n:0, bay:0}; const n=Math.max(1,Math.round(spn/st.bay)); return {n, bay:spn/n}; }
 function facadeOps(b,k,i,L,uS,uE){
-  const st=b.style, h=floorH(b,k), ops=[], span=uE-uS;
-  if(k===0) for(const e of b.entrances) if(e.edge===i && span>DOOR_EXT+0.6){ const c=clamp(e.t*L, uS+DOOR_EXT/2+0.3, uE-DOOR_EXT/2-0.3); ops.push({u0:c-DOOR_EXT/2, u1:c+DOOR_EXT/2, y0:0, y1:Math.min(2.6,h-0.4), door:true}); }
+  const st=b.style, h=floorH(b,k), ops=[], spn=uE-uS;
+  if(k===0) for(const e of b.entrances) if(e.edge===i && spn>DOOR_EXT+0.6){ const c=clamp(e.t*L, uS+DOOR_EXT/2+0.3, uE-DOOR_EXT/2-0.3); ops.push({u0:c-DOOR_EXT/2, u1:c+DOOR_EXT/2, y0:0, y1:Math.min(2.6,h-0.4), door:true}); }
   if(!b.blank.includes(i)){
-    const kind = k===0 ? (st.ground==='match' ? st.windows : st.ground==='solid' ? 'none' : 'storefront') : st.windows;
-    const ws = winSpec(kind,h,st);
-    if(ws && ws.y1-ws.y0>0.4 && span>1.2){
-      const n=Math.max(1,Math.round(span/ws.sp)), bay=span/n;
+    const ws = winSpec(k===0 ? groundKind(st) : st.windows, h, st);
+    const {n, bay} = bayLayout(st, uS, uE);
+    if(ws && ws.y1-ws.y0>0.4 && n){
       for(let j=0;j<n;j++){ const c=uS+(j+0.5)*bay; const ww = ws.full!=null ? bay-ws.full : Math.min(ws.w, bay-0.5); if(ww<0.45) continue;
         const u0=c-ww/2, u1=c+ww/2; if(ops.some(o=>o.door && u1>o.u0-0.3 && u0<o.u1+0.3)) continue; ops.push({u0,u1,y0:ws.y0,y1:ws.y1,full:ws.full!=null}); }
     }
   }
   return ops.sort((a,c)=>a.u0-c.u0);
 }
+const facadeSpan = (m,L) => { const [ws,we]=span(m,0,T_EXT); return [Math.max(0,ws)+0.14, Math.min(L,we)-0.14]; };   // windows keep clear of the neighbouring wall
 
 /* Corner rule: every strip along an edge (wall, band, plinth, parapet, cap) ends on the corner's
    bisector plane, so neighbouring edges meet face-to-face and never overlap or share a plane. */
@@ -593,67 +729,100 @@ function corners(fp, ccw){ const n=fp.length; return fp.map((p,i)=>{ const a=fp[
 function miter(cor,i,L){ const c0=cor[i], c1=cor[(i+1)%cor.length]; return {S:{s:0,k:-c0.sg*c0.t}, E:{s:L,k:c1.sg*c1.t}}; }
 const mAt = (m,w) => m.s+m.k*w;
 function span(m,wa,wb){ return [Math.max(mAt(m.S,wa),mAt(m.S,wb)), Math.min(mAt(m.E,wa),mAt(m.E,wb))]; }
-// a strip split into pieces at [a,b] ranges; the first/last piece take the mitered ends
-function stripPieces(gb,O,u,w,m,ranges,y0,y1,wa,wb,c,cIn){
+// a strip split into pieces at [a,b] ranges; the first/last piece take the mitered ends (whose faces are covered by the neighbour)
+function stripPieces(gb,O,u,w,m,ranges,y0,y1,wa,wb,c,cIn,skip=0){
   const [s0,e0]=span(m,wa,wb);
   for(const [a,b] of ranges){ const ms = a<=s0+1e-6, me = b>=e0-1e-6;
-    gb.mbox(O,u,w, ms?m.S.s:a, ms?m.S.k:0, me?m.E.s:b, me?m.E.k:0, y0,y1,wa,wb,c,cIn); }
+    gb.mbox(O,u,w, ms?m.S.s:a, ms?m.S.k:0, me?m.E.s:b, me?m.E.k:0, y0,y1,wa,wb,c,cIn, skip|(ms?SK.USTART:0)|(me?SK.UEND:0)); }
 }
-function wallOpsM(gb,O,u,w,m,y0,h,w0,w1,ops,c,cIn){
-  let cur=null;
-  const pier=(a,b)=>gb.mbox(O,u,w, a===null?m.S.s:a, a===null?m.S.k:0, b===null?m.E.s:b, b===null?m.E.k:0, y0,y0+h,w0,w1,c,cIn);
-  for(const o of ops){
-    if(cur===null || o.u0>cur) pier(cur,o.u0);
-    const a=cur===null?o.u0:Math.max(o.u0,cur), e=o.u1;
-    if(e>a){ if(o.y0>0.001) gb.obox(O,u,w,a,e,y0,y0+o.y0,w0,w1,c,cIn); if(o.y1<h-0.001) gb.obox(O,u,w,a,e,y0+o.y1,y0+h,w0,w1,c,cIn); }
-    cur=cur===null?o.u1:Math.max(cur,o.u1);
-  }
-  pier(cur,null);
-}
+function mergeOps(ops){ const out=[]; for(const o of ops.slice().sort((p,q)=>p.u0-q.u0)){ const l=out[out.length-1]; if(l && o.u0<l.u1+1e-3){ l.u1=Math.max(l.u1,o.u1); l.y0=Math.min(l.y0,o.y0); l.y1=Math.max(l.y1,o.y1); l.door=l.door||o.door; } else out.push({...o}); } return out; }
 
-function buildSlab(op,b,k,Wp,C,shell){
+/* Wall panel: the optimised wall topology. Instead of stacking pier/sill/head boxes (whose touching
+   faces are never visible and whose edges create T-junctions), each face of the wall is one polygon
+   with the openings cut out as holes, triangulated once with shared vertices. Only visible surfaces
+   are emitted: outer face, inner face (optional), the four reveal faces of each opening, and end faces
+   for free-standing walls. Tops and bottoms are always covered by the slab, the next storey or the
+   parapet; cut views show the section cap drawn from back faces. */
+function wallPanel(gb,O,u,w,m,w0,w1,y0,h,ops,cOut,cIn,opt={}){
+  const os=mergeOps(ops);
+  const X=(uu,yy,wv)=>[O[0]+u[0]*uu+w[0]*wv, y0+yy, O[1]+u[1]*uu+w[1]*wv];
+  const face=(wv,sign,c)=>{
+    const s=mAt(m.S,wv), e=mAt(m.E,wv), cont=[[s,0]];
+    for(const o of os) if(o.y0<=1e-3) cont.push([o.u0,0],[o.u0,o.y1],[o.u1,o.y1],[o.u1,0]);         // doors: notches in the outline
+    cont.push([e,0],[e,h]);
+    for(let j=os.length-1;j>=0;j--){ const o=os[j]; if(o.y1>=h-1e-3 && o.y0>1e-3) cont.push([o.u1,h],[o.u1,o.y0],[o.u0,o.y0],[o.u0,h]); }
+    cont.push([s,h]);
+    const holes=os.filter(o=>o.y0>1e-3 && o.y1<h-1e-3).map(o=>[[o.u0,o.y0],[o.u1,o.y0],[o.u1,o.y1],[o.u0,o.y1]]);
+    let tris; try{ tris=THREE.ShapeUtils.triangulateShape(cont.map(q=>new THREE.Vector2(q[0],q[1])), holes.map(hh=>hh.map(q=>new THREE.Vector2(q[0],q[1])))); }catch(err){ tris=[]; }
+    gb.polyTris([...cont,...holes.flat()].map(q=>X(q[0],q[1],wv)), tris, [w[0]*sign,0,w[1]*sign], c);
+  };
+  if(opt.outer!==false) face(w1,1,cOut);
+  if(opt.inner!==false) face(w0,-1,cIn);
+  const rw=opt.revealFrom ?? w0, rc=opt.revealC || cOut;
+  for(const o of os){
+    gb.poly([X(o.u0,o.y0,rw),X(o.u0,o.y0,w1),X(o.u0,o.y1,w1),X(o.u0,o.y1,rw)],[u[0],0,u[1]],rc);
+    gb.poly([X(o.u1,o.y0,rw),X(o.u1,o.y0,w1),X(o.u1,o.y1,w1),X(o.u1,o.y1,rw)],[-u[0],0,-u[1]],rc);
+    if(o.y0>1e-3 || opt.threshold) gb.poly([X(o.u0,o.y0,rw),X(o.u1,o.y0,rw),X(o.u1,o.y0,w1),X(o.u0,o.y0,w1)],[0,1,0],rc);
+    if(o.y1<h-1e-3) gb.poly([X(o.u0,o.y1,rw),X(o.u1,o.y1,rw),X(o.u1,o.y1,w1),X(o.u0,o.y1,w1)],[0,-1,0],rc);
+  }
+  if(opt.ends){ const s0=mAt(m.S,w0), s1=mAt(m.S,w1), e0=mAt(m.E,w0), e1=mAt(m.E,w1);
+    gb.poly([X(s0,0,w0),X(s1,0,w1),X(s1,h,w1),X(s0,h,w0)], endNormal(u,w,s0,s1,w0,w1,-1), cOut);
+    gb.poly([X(e0,0,w0),X(e1,0,w1),X(e1,h,w1),X(e0,h,w0)], endNormal(u,w,e0,e1,w0,w1,1), cOut); }
+  if(gb.solids){ // volume of the wall minus its openings, for the coplanar-face checker
+    let cur=null; const put=(a,b,ya,yb)=>gb.solids.push({O,u,w, sA:a===null?m.S.s:a, kA:a===null?m.S.k:0, eB:b===null?m.E.s:b, kB:b===null?m.E.k:0, y0:y0+ya, y1:y0+yb, w0, w1});
+    for(const o of os){ put(cur,o.u0,0,h); if(o.y0>1e-3) put(o.u0,o.u1,0,o.y0); if(o.y1<h-1e-3) put(o.u0,o.u1,o.y1,h); cur=o.u1; } put(cur,null,0,h); }
+}
+// a glass or door pane filling an opening: a single quad (two for glass seen from inside and out)
+function pane(gb,O,u,w,u0,u1,y0,y1,wv,c,two){ const X=(uu,yy)=>[O[0]+u[0]*uu+w[0]*wv, yy, O[1]+u[1]*uu+w[1]*wv]; const q=[X(u0,y0),X(u1,y0),X(u1,y1),X(u0,y1)]; gb.poly(q,[w[0],0,w[1]],c); if(two) gb.poly(q,[-w[0],0,-w[1]],c); }
+
+function colorsOf(st){ return { wall:col(st.wall), trim:col(st.trim), inner:col(st.interior), core:col(st.core), coreIn:shade(st.core,1.08), liftIn:col('#8E9A9E'), roof:col(st.roof),
+  step:shade(st.core,0.82), glass:col(st.glass), glassDark:shade(st.glass,0.42), door:col('#3B3129'), metal:col('#A3ABAE'), rail:col('#3D4448'), doorTrim:shade(st.interior,0.72), plinth:shade(st.wall,0.72), floor:col(st.floor), ceil:col('#F3F2EE') }; }
+
+function buildSlab(op,b,k,Wp,C,shell,topOnly){
   const y=floorBase(b,k), N=b.floors.length;
   const holes=[];
-  if(!shell) for(const s of b.shafts) if(stairHoleAt(b,s,k)){ const f=frame(b,s); const Pt=(lx,lz)=>new THREE.Vector2(f.O[0]+f.u[0]*lx+f.w[0]*lz, f.O[1]+f.u[1]*lx+f.w[1]*lz); holes.push([Pt(-1.3,-1.6),Pt(1.3,-1.6),Pt(1.3,2.6),Pt(-1.3,2.6)]); }
+  if(!shell && !topOnly) for(const s of b.shafts) if(stairHoleAt(b,s,k)){ const f=frame(b,s); const Pt=(lx,lz)=>new THREE.Vector2(f.O[0]+f.u[0]*lx+f.w[0]*lz, f.O[1]+f.u[1]*lx+f.w[1]*lz); holes.push([Pt(-1.3,-1.6),Pt(1.3,-1.6),Pt(1.3,2.6),Pt(-1.3,2.6)]); }
   const contour=Wp.map(p=>new THREE.Vector2(p[0],p[1]));
   let tris; try{ tris = THREE.ShapeUtils.triangulateShape(contour.slice(), holes.map(h=>h.slice())); }catch(e){ tris=[]; }
   const all=[...contour, ...holes.flat()];
-  const top = k===N ? col(b.style.roof) : col(b.style.floor), bot=col('#F3F2EE'), side=shade(b.style.core,0.85);
+  const top = k===N ? C.roof : C.floor, side=shade(b.style.core,0.85);
   op.ctx(Z4,0);
   const yb = k===0 ? y-0.05 : y-SLAB;
   if(op.solids) op.solids.push({prism:Wp.map(p=>({x:p[0],z:p[1]})), y0:yb, y1:y});
-  for(const t of tris){ const [p,q,r]=t.map(i=>all[i]); op.poly([[p.x,y,p.y],[q.x,y,q.y],[r.x,y,r.y]],[0,1,0],top); if(k>0) op.poly([[p.x,yb,p.y],[q.x,yb,q.y],[r.x,yb,r.y]],[0,-1,0],bot); }
+  op.polyTris(all.map(p=>[p.x,y,p.y]), tris, [0,1,0], top);
+  if(k>0 && !topOnly) op.polyTris(all.map(p=>[p.x,yb,p.y]), tris, [0,-1,0], C.ceil);
   const ring=(pts,inward)=>{ const cx=pts.reduce((s,p)=>s+p.x,0)/pts.length, cz=pts.reduce((s,p)=>s+p.y,0)/pts.length;
     for(let i=0;i<pts.length;i++){ const a=pts[i], c=pts[(i+1)%pts.length]; const dx=c.x-a.x, dz=c.y-a.y, L=Math.hypot(dx,dz)||1; let nx=dz/L, nz=-dx/L; const mx=(a.x+c.x)/2-cx, mz=(a.y+c.y)/2-cz; if((nx*mx+nz*mz>0)===inward){nx=-nx;nz=-nz;}
       op.poly([[a.x,yb,a.y],[c.x,yb,c.y],[c.x,y,c.y],[a.x,y,a.y]],[nx,0,nz],side); } };
   for(const h of holes) ring(h,true);
 }
 
+// LOD0 facade of one storey: panels with window/door holes, recessed panes, frames and trims
 function buildFacade(op,gl,sg,b,k,Wp,ccw,cor,C,shell){
   const n=Wp.length, h=floorH(b,k), y=floorBase(b,k), N=b.floors.length, T=T_EXT;
-  const G2 = shell ? op : gl, glassC = shell ? shade(b.style.glass,0.42) : C.glass;
   for(let i=0;i<n;i++){
     const {a,L,u,w}=edgeInfo(Wp,i,ccw);
-    const m=miter(cor,i,L), [ws,we]=span(m,0,T);
-    const ops=facadeOps(b,k,i,L,Math.max(0,ws)+0.14,Math.min(L,we)-0.14);   // keep window trims clear of the neighbouring wall
+    const m=miter(cor,i,L), [uS,uE]=facadeSpan(m,L);
+    const ops=facadeOps(b,k,i,L,uS,uE);
     op.ctx([a[0],a[1],w[0],w[1]],1); gl.ctx([a[0],a[1],w[0],w[1]],1);
-    wallOpsM(op,a,u,w,m,y,h,0,T,ops,C.wall,C.inner);
+    wallPanel(op,a,u,w,m,0,T,y,h,ops,C.wall,C.inner,{inner:!shell, threshold:true, revealFrom: shell ? T*0.45 : 0});
     for(const o of ops){
       if(o.door){
-        op.obox(a,u,w,o.u0-0.08,o.u0,y,y+o.y1+0.08,T,T+0.06,C.trim);
-        op.obox(a,u,w,o.u1,o.u1+0.08,y,y+o.y1+0.08,T,T+0.06,C.trim);
-        op.obox(a,u,w,o.u0-0.35,o.u1+0.35,y+o.y1+0.1,y+o.y1+0.24,T,T+1.1,C.trim);
-        if(shell) op.obox(a,u,w,o.u0,o.u1,y,y+o.y1,T*0.4,T*0.5,col('#3B3129'));
+        op.obox(a,u,w,o.u0-0.08,o.u0,y,y+o.y1+0.08,T,T+0.06,C.trim,C.trim,SK.IN|SK.BOT);
+        op.obox(a,u,w,o.u1,o.u1+0.08,y,y+o.y1+0.08,T,T+0.06,C.trim,C.trim,SK.IN|SK.BOT);
+        op.obox(a,u,w,o.u0-0.35,o.u1+0.35,y+o.y1+0.1,y+o.y1+0.24,T,T+1.1,C.trim,C.trim,SK.IN);
+        if(shell) pane(op,a,u,w,o.u0,o.u1,y,y+o.y1,T*0.45,C.door,false);
       } else {
-        G2.obox(a,u,w,o.u0,o.u1,y+o.y0,y+o.y1,T*0.4,T*0.5,glassC);
+        if(shell) pane(op,a,u,w,o.u0,o.u1,y+o.y0,y+o.y1,T*0.45,C.glassDark,false);
+        else pane(gl,a,u,w,o.u0,o.u1,y+o.y0,y+o.y1,T*0.45,C.glass,true);
         const ex=o.full?0:0.06, eh=o.full?0:0.04;
-        op.obox(a,u,w,o.u0-ex,o.u1+ex,y+o.y0-0.07,y+o.y0,T,T+0.07,C.trim);
-        op.obox(a,u,w,o.u0-eh,o.u1+eh,y+o.y1,y+o.y1+0.06,T,T+0.04,C.trim);
-        if((o.u1-o.u0)>1.7){ const m=(o.u0+o.u1)/2; op.obox(a,u,w,m-0.03,m+0.03,y+o.y0,y+o.y1,T*0.3,T*0.6,C.trim); }
+        op.obox(a,u,w,o.u0-ex,o.u1+ex,y+o.y0-0.07,y+o.y0,T,T+0.07,C.trim,C.trim,SK.IN);
+        op.obox(a,u,w,o.u0-eh,o.u1+eh,y+o.y1,y+o.y1+0.06,T,T+0.04,C.trim,C.trim,SK.IN);
+        if((o.u1-o.u0)>1.7){ const mm=(o.u0+o.u1)/2; op.obox(a,u,w,mm-0.03,mm+0.03,y+o.y0,y+o.y1,T*0.3,T*0.6,C.trim,C.trim,SK.TOP|SK.BOT); }
       }
     }
-    if(b.style.bands && k<N-1) stripPieces(op,a,u,w,m,[span(m,T,T+0.06)],y+h-0.22,y+h,T,T+0.06,C.trim);
-    if(k===0){ const [s0,e0]=span(m,T,T+0.04); stripPieces(op,a,u,w,m,solidRanges(s0,e0,ops.map(o=>o.door?{...o,u0:o.u0-0.08,u1:o.u1+0.08}:o)),0,0.45,T,T+0.04,C.plinth); }
+    if(b.style.bands && k<N-1) stripPieces(op,a,u,w,m,[span(m,T,T+0.06)],y+h-0.22,y+h,T,T+0.06,C.trim,C.trim,SK.IN);
+    if(k===0){ const [s0,e0]=span(m,T,T+0.04); stripPieces(op,a,u,w,m,solidRanges(s0,e0,ops.map(o=>o.door?{...o,u0:o.u0-0.08,u1:o.u1+0.08}:o)),0,0.45,T,T+0.04,C.plinth,C.plinth,SK.IN|SK.BOT|SK.UEND|SK.USTART); }
     const [cs,ce]=span(m,T/2,T/2);
     for(const [s1,e1] of (shell ? [[cs,ce]] : solidRanges(cs,ce,ops))) pushSeg(sg,a,u,w,s1,e1,T/2,T/2);
   }
@@ -664,11 +833,11 @@ function buildInterior(op,sg,b,k,C){
   for(const wl of b.floors[k].walls){
     const a=[wl.a.x+ox, wl.a.z+oz], c=[wl.b.x+ox, wl.b.z+oz]; const dx=c[0]-a[0], dz=c[1]-a[1], L=Math.hypot(dx,dz); if(L<0.05) continue;
     const u=[dx/L,dz/L], w=[-u[1],u[0]];
-    const ops=wl.doors.map(d=>{ const m=clamp(d.t*L, DOOR_INT/2+0.1, L-DOOR_INT/2-0.1); return {u0:m-DOOR_INT/2,u1:m+DOOR_INT/2,y0:0,y1:2.2,door:true}; }).sort((p,q)=>p.u0-q.u0);
+    const ops=wl.doors.map(d=>{ const mm=clamp(d.t*L, DOOR_INT/2+0.1, L-DOOR_INT/2-0.1); return {u0:mm-DOOR_INT/2,u1:mm+DOOR_INT/2,y0:0,y1:2.2,door:true}; }).sort((p,q)=>p.u0-q.u0);
     op.ctx([a[0],a[1],w[0],w[1]],1);
-    wallOps(op,a,u,w,-E,L+E,y,hh,-T_INT/2,T_INT/2,ops,C.inner,C.inner);
-    for(const o of ops){
-      op.obox(a,u,w,o.u0-0.07,o.u0+0.01,y,y+2.19,-t,t,C.doorTrim); op.obox(a,u,w,o.u1-0.01,o.u1+0.07,y,y+2.19,-t,t,C.doorTrim);
+    wallPanel(op,a,u,w,{S:{s:-E,k:0},E:{s:L+E,k:0}},-T_INT/2,T_INT/2,y,hh,ops,C.inner,C.inner,{ends:true});
+    for(const o of mergeOps(ops)){
+      op.obox(a,u,w,o.u0-0.07,o.u0+0.01,y,y+2.19,-t,t,C.doorTrim,C.doorTrim,SK.BOT); op.obox(a,u,w,o.u1-0.01,o.u1+0.07,y,y+2.19,-t,t,C.doorTrim,C.doorTrim,SK.BOT);
       op.obox(a,u,w,o.u0-0.07,o.u1+0.07,y+2.19,y+2.27,-t,t,C.doorTrim); }
     for(const [s0,e0] of solidRanges(-E,L+E,ops)) pushSeg(sg,a,u,w,s0,e0,0,T_INT/2);
   }
@@ -676,21 +845,22 @@ function buildInterior(op,sg,b,k,C){
 
 /* Props: boxes only touch face-to-face, never share a plane in the same direction */
 const PROP_BUILD = {
-  sofa(bx){ bx(-0.8,0.8,0.08,0.42,-0.43,0.22,'#4F6D7A'); bx(-0.8,0.8,0.08,0.88,0.22,0.45,'#46616D'); bx(-1,-0.8,0.08,0.62,-0.45,0.45,'#46616D'); bx(0.8,1,0.08,0.62,-0.45,0.45,'#46616D'); bx(-0.78,0.78,0.42,0.52,-0.41,0.2,'#6C8C99'); bx(-0.95,-0.85,0,0.08,-0.4,-0.3,'#2A2A2A'); bx(0.85,0.95,0,0.08,-0.4,-0.3,'#2A2A2A'); bx(-0.95,-0.85,0,0.08,0.32,0.42,'#2A2A2A'); bx(0.85,0.95,0,0.08,0.32,0.42,'#2A2A2A'); },
-  table(bx){ bx(-0.8,0.8,0.71,0.77,-0.45,0.45,'#8A6446'); for(const [x,z] of [[-0.72,-0.37],[0.66,-0.37],[-0.72,0.31],[0.66,0.31]]) bx(x,x+0.06,0,0.71,z,z+0.06,'#5E4330'); bx(-0.3,0.1,0,0.45,-0.85,-0.5,'#D9D2C3'); bx(-0.3,0.1,0.45,0.95,-0.9,-0.84,'#D9D2C3'); },
-  bed(bx){ bx(-0.8,0.8,0,0.42,-1.05,0.95,'#6B5A4A'); bx(-0.76,0.76,0.42,0.6,-1.0,0.95,'#F1EFE9'); bx(-0.78,0.78,0.48,0.64,-1.02,0.3,'#C0685A'); bx(-0.8,0.8,0,1.05,0.95,1.05,'#5A4A3C'); bx(-0.6,-0.05,0.6,0.72,0.55,0.9,'#FFFFFF'); bx(0.05,0.6,0.6,0.72,0.55,0.9,'#FFFFFF'); },
-  shelf(bx){ bx(-0.6,-0.56,0,2.1,-0.22,0.22,'#7A5C44'); bx(0.56,0.6,0,2.1,-0.22,0.22,'#7A5C44'); bx(-0.56,0.56,0,2.1,0.18,0.22,'#6A4F3A'); for(const y of [0.02,0.52,1.02,1.52,2.06]) bx(-0.56,0.56,y,y+0.04,-0.2,0.18,'#7A5C44');
-    const bk=['#3D5A80','#C1666B','#E0B34D','#5B8C5A','#3A3A3A','#98C1D9']; let s=1; for(const y of [0.06,0.56,1.06,1.56]){ let x=-0.52; while(x<0.42){ s=(s*9301+49297)%233280; const wd=0.05+0.06*(s/233280); const ht=0.26+0.14*((s%97)/97); bx(x,Math.min(x+wd,0.54),y,y+ht,-0.16,0.14,bk[s%bk.length]); x+=wd+0.01; } } },
-  plant(bx){ bx(-0.22,0.22,0,0.4,-0.22,0.22,'#B5673F'); bx(-0.3,0.3,0.4,0.95,-0.3,0.3,'#4E7A45'); bx(-0.2,0.2,0.95,1.3,-0.2,0.2,'#5F8F52'); bx(-0.12,0.12,1.3,1.5,-0.12,0.12,'#6FA062'); },
-  desk(bx){ bx(-0.7,0.7,0.72,0.76,-0.35,0.35,'#E9E5DC'); bx(-0.69,-0.65,0,0.72,-0.33,0.33,'#5B5F61'); bx(0.65,0.69,0,0.72,-0.33,0.33,'#5B5F61'); bx(-0.25,0.25,0.76,1.08,0.1,0.14,'#23282B'); bx(-0.25,0.25,0,0.48,-0.75,-0.3,'#3E6B89'); bx(-0.24,0.24,0.48,1.0,-0.8,-0.74,'#3E6B89'); },
-  counter(bx){ bx(-1.2,1.2,0,0.9,-0.35,0.35,'#D8D3C8'); bx(-1.22,1.22,0.9,0.95,-0.37,0.37,'#3D3F41'); bx(0.6,0.95,0.95,1.2,-0.1,0.2,'#2B2E30'); },
+  // last argument: faces pressed against another part (SK flags), left out of the mesh
+  sofa(bx){ bx(-0.8,0.8,0.08,0.42,-0.43,0.22,'#4F6D7A',SK.USTART|SK.UEND|SK.OUT|SK.BOT); bx(-0.8,0.8,0.08,0.88,0.22,0.45,'#46616D',SK.USTART|SK.UEND|SK.BOT); bx(-1,-0.8,0.08,0.62,-0.45,0.45,'#46616D'); bx(0.8,1,0.08,0.62,-0.45,0.45,'#46616D'); bx(-0.78,0.78,0.42,0.52,-0.41,0.2,'#6C8C99',SK.BOT); for(const [x,z] of [[-0.95,-0.4],[0.85,-0.4],[-0.95,0.32],[0.85,0.32]]) bx(x,x+0.1,0,0.08,z,z+0.1,'#2A2A2A',SK.TOP); },
+  table(bx){ bx(-0.8,0.8,0.71,0.77,-0.45,0.45,'#8A6446'); for(const [x,z] of [[-0.72,-0.37],[0.66,-0.37],[-0.72,0.31],[0.66,0.31]]) bx(x,x+0.06,0,0.71,z,z+0.06,'#5E4330',SK.TOP); bx(-0.3,0.1,0,0.45,-0.85,-0.5,'#D9D2C3'); bx(-0.3,0.1,0.45,0.95,-0.9,-0.84,'#D9D2C3',SK.BOT); },
+  bed(bx){ bx(-0.8,0.8,0,0.42,-1.05,0.95,'#6B5A4A',SK.OUT); bx(-0.76,0.76,0.42,0.6,-1.0,0.95,'#F1EFE9',SK.OUT|SK.BOT); bx(-0.78,0.78,0.48,0.64,-1.02,0.3,'#C0685A',SK.BOT); bx(-0.8,0.8,0,1.05,0.95,1.05,'#5A4A3C'); bx(-0.6,-0.05,0.6,0.72,0.55,0.9,'#FFFFFF',SK.BOT); bx(0.05,0.6,0.6,0.72,0.55,0.9,'#FFFFFF',SK.BOT); },
+  shelf(bx){ bx(-0.6,-0.56,0,2.1,-0.22,0.22,'#7A5C44'); bx(0.56,0.6,0,2.1,-0.22,0.22,'#7A5C44'); bx(-0.56,0.56,0,2.1,0.18,0.22,'#6A4F3A',SK.USTART|SK.UEND); for(const y of [0.02,0.52,1.02,1.52,2.06]) bx(-0.56,0.56,y,y+0.04,-0.2,0.18,'#7A5C44',SK.USTART|SK.UEND|SK.OUT);
+    const bk=['#3D5A80','#C1666B','#E0B34D','#5B8C5A','#3A3A3A','#98C1D9']; let s=1; for(const y of [0.06,0.56,1.06,1.56]){ let x=-0.52; while(x<0.42){ s=(s*9301+49297)%233280; const wd=0.05+0.06*(s/233280); const ht=0.26+0.14*((s%97)/97); bx(x,Math.min(x+wd,0.54),y,y+ht,-0.16,0.14,bk[s%bk.length],SK.BOT); x+=wd+0.01; } } },
+  plant(bx){ bx(-0.22,0.22,0,0.4,-0.22,0.22,'#B5673F'); bx(-0.3,0.3,0.4,0.95,-0.3,0.3,'#4E7A45'); bx(-0.2,0.2,0.95,1.3,-0.2,0.2,'#5F8F52',SK.BOT); bx(-0.12,0.12,1.3,1.5,-0.12,0.12,'#6FA062',SK.BOT); },
+  desk(bx){ bx(-0.7,0.7,0.72,0.76,-0.35,0.35,'#E9E5DC'); bx(-0.69,-0.65,0,0.72,-0.33,0.33,'#5B5F61',SK.TOP); bx(0.65,0.69,0,0.72,-0.33,0.33,'#5B5F61',SK.TOP); bx(-0.25,0.25,0.76,1.08,0.1,0.14,'#23282B',SK.BOT); bx(-0.25,0.25,0,0.48,-0.75,-0.3,'#3E6B89'); bx(-0.24,0.24,0.48,1.0,-0.8,-0.74,'#3E6B89',SK.BOT); },
+  counter(bx){ bx(-1.2,1.2,0,0.9,-0.35,0.35,'#D8D3C8',SK.TOP); bx(-1.22,1.22,0.9,0.95,-0.37,0.37,'#3D3F41'); bx(0.6,0.95,0.95,1.2,-0.1,0.2,'#2B2E30',SK.BOT); },
   crate(bx){ bx(-0.5,0.5,0,1,-0.5,0.5,'#B08D5A'); bx(-0.52,0.52,0.1,0.2,-0.52,0.52,'#8C6B40'); bx(-0.52,0.52,0.8,0.9,-0.52,0.52,'#8C6B40'); },
 };
 function buildProps(op,sg,b,k){
   const y=floorBase(b,k);
   for(const p of b.floors[k].props){
     const f=frame(b,p); op.ctx([f.O[0],f.O[1],0,0],2);
-    PROP_BUILD[p.type]((x0,x1,y0,y1,z0,z1,c)=>op.obox(f.O,f.u,f.w,x0,x1,y+y0,y+y1,z0,z1,col(c)));
+    PROP_BUILD[p.type]((x0,x1,y0,y1,z0,z1,c,sk=0)=>op.obox(f.O,f.u,f.w,x0,x1,y+y0,y+y1,z0,z1,col(c),null,sk|(y0<=1e-3?SK.BOT:0)));   // resting faces are never seen
     if(p.type!=='plant'){ const d=PROPS[p.type]; const hw=d.w/2, hd=d.d/2; const c=[[-hw,-hd],[hw,-hd],[hw,hd],[-hw,hd]]; for(let i=0;i<4;i++) sg.push(segFrom(f,c[i],c[(i+1)%4],0.02)); }
     else sg.push(segFrom(f,[0,0],[0,0],0.25));
   }
@@ -702,9 +872,9 @@ function buildRoof(op,sg,b,Wp,ccw,cor,C){
   for(let i=0;i<n;i++){
     const {a,L,u,w}=edgeInfo(Wp,i,ccw); const m=miter(cor,i,L);
     op.ctx([a[0],a[1],w[0],w[1]],1);
-    if(b.style.parapet){ stripPieces(op,a,u,w,m,[span(m,0,T)],y,y+1.0,0,T,C.wall,C.inner); stripPieces(op,a,u,w,m,[span(m,-0.04,T+0.05)],y+1.0,y+1.1,-0.04,T+0.05,C.trim); }
-    else stripPieces(op,a,u,w,m,[span(m,0,T)],y,y+0.3,0,T,C.trim);
-    const [cs,ce]=span(m,T/2,T/2); pushSeg(sg,a,u,w,cs,ce,T/2,T/2);
+    if(b.style.parapet){ stripPieces(op,a,u,w,m,[span(m,0,T)],y,y+1.0,0,T,C.wall,C.inner,SK.TOP|SK.BOT); stripPieces(op,a,u,w,m,[span(m,-0.04,T+0.05)],y+1.0,y+1.1,-0.04,T+0.05,C.trim); }
+    else stripPieces(op,a,u,w,m,[span(m,0,T)],y,y+0.3,0,T,C.trim,C.trim,SK.BOT);
+    const [cs,ce]=span(m,T/2,T/2); if(sg) pushSeg(sg,a,u,w,cs,ce,T/2,T/2);
   }
   const units=b.style.units|0; if(!units) return;
   const bb=bbox(b.footprint), cand=[];
@@ -716,9 +886,9 @@ function buildRoof(op,sg,b,Wp,ccw,cor,C){
   for(let j=0;j<Math.min(units,cand.length);j++){
     const [x,z]=cand[Math.floor((j+0.5)*cand.length/Math.min(units,cand.length))];
     const f={O:[b.pos.x+x,b.pos.z+z],u:[1,0],w:[0,1]}; op.ctx([f.O[0],f.O[1],0,0],2);
-    const bx=(x0,x1,y0,y1,z0,z1,c)=>op.obox(f.O,f.u,f.w,x0,x1,y+y0,y+y1,z0,z1,c);
+    const bx=(x0,x1,y0,y1,z0,z1,c)=>op.obox(f.O,f.u,f.w,x0,x1,y+y0,y+y1,z0,z1,c,null,SK.BOT);
     bx(-0.7,0.7,0,0.12,-0.5,0.5,col('#6F7478')); bx(-0.65,0.65,0.12,1.05,-0.45,0.45,col('#B9BEC0')); bx(-0.45,0.45,1.05,1.1,-0.3,0.3,col('#3B3F42'));
-    for(const [p,q] of [[[-0.7,-0.5],[0.7,-0.5]],[[0.7,-0.5],[0.7,0.5]],[[0.7,0.5],[-0.7,0.5]],[[-0.7,0.5],[-0.7,-0.5]]]) sg.push(segFrom(f,p,q,0.02));
+    if(sg) for(const [p,q] of [[[-0.7,-0.5],[0.7,-0.5]],[[0.7,-0.5],[0.7,0.5]],[[0.7,0.5],[-0.7,0.5]],[[-0.7,0.5],[-0.7,-0.5]]]) sg.push(segFrom(f,p,q,0.02));
   }
 }
 
@@ -728,100 +898,309 @@ function buildShafts(op,sg,b,k,C){
     if(!shaftLevels(b,s).includes(k)) continue;
     const f=frame(b,s), {O,u,w}=f, y=floorBase(b,k), atRoof=k===N;
     const Wl=(lx,lz,nx,nz)=>[O[0]+u[0]*lx+w[0]*lz, O[1]+u[1]*lx+w[1]*lz, u[0]*nx+w[0]*nz, u[1]*nx+w[1]*nz];
-    const bx=(x0,x1,y0,y1,z0,z1,c,ci)=>op.obox(O,u,w,x0,x1,y0,y1,z0,z1,c,ci);
+    const bx=(x0,x1,y0,y1,z0,z1,c,ci,sk)=>op.obox(O,u,w,x0,x1,y0,y1,z0,z1,c,ci,sk||0);
     const S=(p,q,r)=>sg.push(segFrom(f,p,q,r));
+    const TB=SK.TOP|SK.BOT;   // core walls stand on the slab and stop under the slab (or bulkhead cap) above
     if(s.type==='stairs'){
-      const h = atRoof ? 2.7 : floorH(b,k)-SLAB;   // walls stop under the slab above
-      op.ctx(Wl(-1.3,0,-1,0),1); bx(-1.45,-1.3,y,y+h,-2.6,2.6,C.core,C.coreIn);
-      op.ctx(Wl(1.3,0,1,0),1);  bx(1.3,1.45,y,y+h,-2.6,2.6,C.core,C.coreIn);
-      op.ctx(Wl(0,2.6,0,1),1);  bx(-1.45,1.45,y,y+h,2.6,2.75,C.core,C.coreIn);
+      const h = atRoof ? 2.7 : floorH(b,k)-SLAB;
+      const ends = TB|SK.OUT|(atRoof?SK.IN:0);   // wall ends meet the back wall (and the bulkhead front)
+      op.ctx(Wl(-1.3,0,-1,0),1); bx(-1.45,-1.3,y,y+h,-2.6,2.6,C.core,C.coreIn,ends);
+      op.ctx(Wl(1.3,0,1,0),1);  bx(1.3,1.45,y,y+h,-2.6,2.6,C.core,C.coreIn,ends);
+      op.ctx(Wl(0,2.6,0,1),1);  bx(-1.45,1.45,y,y+h,2.6,2.75,C.core,C.coreIn,TB);
       op.ctx(Wl(0,0,1,0),1);    bx(-0.05,0.05,y,y+(atRoof?1.1:h),-1.6,1.6,C.coreIn);
       S([-1.375,-2.6],[-1.375,2.6],0.075); S([1.375,-2.6],[1.375,2.6],0.075); S([-1.45,2.675],[1.45,2.675],0.075); S([0,-1.6],[0,1.6],0.05);
       if(atRoof){
         op.ctx(Wl(0,-2.6,0,-1),1);
         const ops=[{u0:-1.15,u1:1.15,y0:0,y1:2.2,door:true}];
-        wallOps(op,O,u,w,-1.45,1.45,y,h,-2.75,-2.6,ops,C.core,C.coreIn);
+        wallOps(op,O,u,w,-1.45,1.45,y,h,-2.75,-2.6,ops,C.core,C.coreIn,TB);
         for(const [a,e] of solidRanges(-1.45,1.45,ops)) S([a,-2.675],[e,-2.675],0.075);
-        op.ctx(Z4,0); bx(-1.55,1.55,y+h,y+h+0.2,-2.85,2.85,col(b.style.roof));
+        op.ctx(Z4,0); bx(-1.55,1.55,y+h,y+h+0.2,-2.85,2.85,C.roof);
       }
       op.ctx(Z4,0);
       if(hasFlight(b,s,k)){
         const fh=floorH(b,k), half=fh/2, n=10, run=3.2/n;
-        for(let i=0;i<n;i++){ const z0=-1.6+i*run, t=y+(i+1)*half/n; bx(-1.25,-0.05,t-0.2,t,z0,z0+run,C.step); }
-        bx(-1.3,1.3,y+half-0.22,y+half,1.6,2.6,C.step);
-        for(let i=0;i<n;i++){ const z1=1.6-i*run, t=y+half+(i+1)*half/n; bx(0.05,1.25,t-0.2,t,z1-run,z1,C.step); }
+        for(let i=0;i<n;i++){ const z0=-1.6+i*run, t=y+(i+1)*half/n; bx(-1.25,-0.05,t-0.2,t,z0,z0+run,C.step,null,SK.UEND); }
+        bx(-1.3,1.3,y+half-0.22,y+half,1.6,2.6,C.step,null,SK.USTART|SK.UEND|SK.OUT);
+        for(let i=0;i<n;i++){ const z1=1.6-i*run, t=y+half+(i+1)*half/n; bx(0.05,1.25,t-0.2,t,z1-run,z1,C.step,null,SK.USTART); }
       }
-      const rail=(x0,x1)=>{ bx(x0+0.04,x1-0.04,y+0.95,y+1.02,-1.64,-1.56,C.rail); bx(x0,x0+0.04,y,y+1.02,-1.62,-1.58,C.rail); bx(x1-0.04,x1,y,y+1.02,-1.62,-1.58,C.rail); S([x0,-1.6],[x1,-1.6],0.04); };
+      const rail=(x0,x1)=>{ bx(x0+0.04,x1-0.04,y+0.95,y+1.02,-1.64,-1.56,C.rail); bx(x0,x0+0.04,y,y+1.02,-1.62,-1.58,C.rail,null,SK.BOT); bx(x1-0.04,x1,y,y+1.02,-1.62,-1.58,C.rail,null,SK.BOT); S([x0,-1.6],[x1,-1.6],0.04); };
       const T=shaftTop(b,s);
       if(atRoof || (k===T && !shaftRoof(b,s))) rail(-1.3,-0.05);
       if(k===s.bottom) rail(0.05,1.3);
     } else {
       const h = atRoof ? 2.9 : floorH(b,k)-SLAB;
-      op.ctx(Wl(-1.2,0,-1,0),1); bx(-1.35,-1.2,y,y+h,-1.2,1.2,C.core,C.coreIn);
-      op.ctx(Wl(1.2,0,1,0),1);  bx(1.2,1.35,y,y+h,-1.2,1.2,C.core,C.coreIn);
-      op.ctx(Wl(0,1.2,0,1),1);  bx(-1.35,1.35,y,y+h,1.2,1.35,C.core,C.liftIn);
+      op.ctx(Wl(-1.2,0,-1,0),1); bx(-1.35,-1.2,y,y+h,-1.2,1.2,C.core,C.coreIn,TB|SK.IN|SK.OUT);
+      op.ctx(Wl(1.2,0,1,0),1);  bx(1.2,1.35,y,y+h,-1.2,1.2,C.core,C.coreIn,TB|SK.IN|SK.OUT);
+      op.ctx(Wl(0,1.2,0,1),1);  bx(-1.35,1.35,y,y+h,1.2,1.35,C.core,C.liftIn,TB);
       op.ctx(Wl(0,-1.2,0,-1),1);
       const ops=[{u0:-0.6,u1:0.6,y0:0,y1:2.3,door:true}];
-      wallOps(op,O,u,w,-1.35,1.35,y,h,-1.35,-1.2,ops,C.core,C.coreIn);
-      bx(-0.68,-0.59,y,y+2.29,-1.4,-1.18,C.metal); bx(0.59,0.68,y,y+2.29,-1.4,-1.18,C.metal); bx(-0.68,0.68,y+2.29,y+2.38,-1.4,-1.18,C.metal);
+      wallOps(op,O,u,w,-1.35,1.35,y,h,-1.35,-1.2,ops,C.core,C.coreIn,TB);
+      bx(-0.68,-0.59,y,y+2.29,-1.4,-1.18,C.metal,null,SK.BOT); bx(0.59,0.68,y,y+2.29,-1.4,-1.18,C.metal,null,SK.BOT); bx(-0.68,0.68,y+2.29,y+2.38,-1.4,-1.18,C.metal);
       bx(0.8,0.92,y+1.0,y+1.3,-1.42,-1.35,col('#FFB36B'));
       S([-1.275,-1.35],[-1.275,1.35],0.075); S([1.275,-1.35],[1.275,1.35],0.075); S([-1.35,1.275],[1.35,1.275],0.075);
       for(const [a,e] of solidRanges(-1.35,1.35,ops)) S([a,-1.275],[e,-1.275],0.075);
-      op.ctx(Z4,0); bx(-1.2,1.2,y,y+0.03,-1.2,-1.18,C.metal); bx(-1.2,1.2,y,y+0.03,-1.18,1.2,C.metal);
-      if(atRoof) bx(-1.45,1.45,y+h,y+h+0.2,-1.45,1.45,col(b.style.roof));
+      op.ctx(Z4,0); bx(-1.2,1.2,y,y+0.03,-1.2,-1.18,C.metal,null,SK.BOT); bx(-1.2,1.2,y,y+0.03,-1.18,1.2,C.metal,null,SK.BOT);
+      if(atRoof) bx(-1.45,1.45,y+h,y+h+0.2,-1.45,1.45,C.roof);
     }
   }
 }
 
 let DEBUG_SOLIDS=false;
-function buildGeometry(b){
-  const N=b.floors.length, fp=b.footprint, shell=b.interior===false;
-  const ccw = area2(fp) > 0;
-  const Wp = fp.map(p=>[p.x+b.pos.x, p.z+b.pos.z]);
-  const cor = corners(fp, ccw);
-  const st=b.style;
-  const C = { wall:col(st.wall), trim:col(st.trim), inner:col(st.interior), core:col(st.core), coreIn:shade(st.core,1.08), liftIn:col('#8E9A9E'),
-    step:shade(st.core,0.82), glass:col(st.glass), metal:col('#A3ABAE'), rail:col('#3D4448'), doorTrim:shade(st.interior,0.72), plinth:shade(st.wall,0.72) };
-  const levels=[], segs=[];
+function buildCtx(b){ const fp=b.footprint, ccw=area2(fp)>0; return {N:b.floors.length, shell:b.interior===false, ccw, Wp:fp.map(p=>[p.x+b.pos.x, p.z+b.pos.z]), cor:corners(fp,ccw), C:colorsOf(b.style)}; }
+
+/* LOD0 - everything: interior, frames, see-through glass. One mesh (+ one glass mesh) per building;
+   floors above the active one are removed by the clip plane, so no per-floor objects are needed. */
+// Generation is written as resumable jobs that yield after every storey, so the LOD queue can spread a
+// big building over several frames (the Unity version runs the same steps in Burst jobs).
+function runJob(it){ let r; do{ r=it.next(); }while(!r.done); return r.value; }
+function* lod0Steps(b, idx){
+  const {N, shell, ccw, Wp, cor, C}=buildCtx(b);
+  const op=new GB(idx), gl=new GB(idx), segs=[];
+  if(DEBUG_SOLIDS) op.solids=[];
   for(let k=0;k<=N;k++){
-    const op=new GB(), gl=new GB(), sg=[]; if(DEBUG_SOLIDS) op.solids=[];
-    if(!shell || k===0 || k===N) buildSlab(op,b,k,Wp,C,shell);
+    const sg=[];
+    if(!shell || k===N) buildSlab(op,b,k,Wp,C,shell);
     if(k<N){ buildFacade(op,gl,sg,b,k,Wp,ccw,cor,C,shell); if(!shell){ buildInterior(op,sg,b,k,C); buildProps(op,sg,b,k); } }
     else buildRoof(op,sg,b,Wp,ccw,cor,C);
     if(!shell) buildShafts(op,sg,b,k,C);
-    levels.push({op,gl}); segs.push(sg);
+    segs.push(sg);
+    yield;
   }
-  return {levels, segs};
+  return {op, gl, segs};
+}
+const buildLOD0 = (b, idx) => runJob(lod0Steps(b, idx));
+
+/* LOD1 - exterior shell only: outer faces with recessed opaque windows, doors, floor bands, plinth,
+   canopies, parapet, roof units and stair/lift bulkheads. No interior, frames or transparency. */
+function* lod1Steps(b, idx){
+  const {N, ccw, Wp, cor, C}=buildCtx(b), T=T_EXT;
+  const op=new GB(idx+LOD_TAG, true);
+  if(DEBUG_SOLIDS) op.solids=[];
+  buildSlab(op,b,N,Wp,C,true,true);
+  for(let k=0;k<N;k++){
+    if(k) yield;
+    const h=floorH(b,k), y=floorBase(b,k);
+    for(let i=0;i<Wp.length;i++){
+      const {a,L,u,w}=edgeInfo(Wp,i,ccw), m=miter(cor,i,L), [uS,uE]=facadeSpan(m,L), ops=facadeOps(b,k,i,L,uS,uE);
+      wallPanel(op,a,u,w,m,0,T,y,h,ops,C.wall,C.wall,{inner:false, revealFrom:T*0.45, threshold:true});
+      for(const o of ops){
+        pane(op,a,u,w,o.u0,o.u1,y+o.y0,y+o.y1,T*0.45,o.door?C.door:C.glassDark,false);
+        if(o.door) op.obox(a,u,w,o.u0-0.35,o.u1+0.35,y+o.y1+0.1,y+o.y1+0.24,T,T+1.1,C.trim,C.trim,SK.IN);
+      }
+      if(b.style.bands && k<N-1) stripPieces(op,a,u,w,m,[span(m,T,T+0.06)],y+h-0.22,y+h,T,T+0.06,C.trim,C.trim,SK.IN);
+      if(k===0){ const [s0,e0]=span(m,T,T+0.04); stripPieces(op,a,u,w,m,solidRanges(s0,e0,ops.map(o=>o.door?{...o,u0:o.u0-0.08,u1:o.u1+0.08}:o)),0,0.45,T,T+0.04,C.plinth,C.plinth,SK.IN|SK.BOT|SK.UEND|SK.USTART); }
+    }
+  }
+  buildRoof(op,null,b,Wp,ccw,cor,C);
+  if(b.interior!==false){ const y=roofY(b);
+    for(const s of b.shafts){ if(!shaftRoof(b,s)) continue; const f=frame(b,s), st=s.type==='stairs';
+      const hx=st?1.45:1.35, hz=st?2.75:1.35, hh=st?2.7:2.9, cx=st?1.55:1.45, cz=st?2.85:1.45;
+      op.obox(f.O,f.u,f.w,-hx,hx,y,y+hh,-hz,hz,C.core,C.core,SK.TOP|SK.BOT); op.obox(f.O,f.u,f.w,-cx,cx,y+hh,y+hh+0.2,-cz,cz,C.roof); } }
+  return {op};
+}
+const buildLOD1 = (b, idx) => runJob(lod1Steps(b, idx));
+
+/* LOD2 - massing: one quad per footprint edge for the full height, the parapet and the roof.
+   Windows come from the facade shader. ~7 triangles per footprint edge. Returned as typed arrays
+   so they can be merged into per-cell meshes (HLOD). */
+function buildLOD2(b, idx){
+  const {ccw, Wp, cor}=buildCtx(b), st=b.style, T=T_EXT, n=Wp.length;
+  const top=roofY(b), yTop=top+(st.parapet?1.1:0.3);
+  const P=[], NR=[], F=[], F2=[], I=[];
+  const quad=(q,nr,fac,f2)=>{ const [A,B,D]=q; const ux=B[0]-A[0],uy=B[1]-A[1],uz=B[2]-A[2], vx=D[0]-A[0],vy=D[1]-A[1],vz=D[2]-A[2];
+    const flip=(uy*vz-uz*vy)*nr[0]+(uz*vx-ux*vz)*nr[1]+(ux*vy-uy*vx)*nr[2] < 0; const base=P.length/3;
+    for(let j=0;j<4;j++){ P.push(q[j][0],q[j][1],q[j][2]); NR.push(Math.round(nr[0]*127),Math.round(nr[1]*127),Math.round(nr[2]*127)); F.push(...fac[j]); F2.push(f2[0],f2[1]); }
+    if(flip) I.push(base,base+2,base+1, base,base+3,base+2); else I.push(base,base+1,base+2, base,base+2,base+3); };
+  const Z=[0,0,0,0], ZZ=[Z,Z,Z,Z];
+  for(let i=0;i<n;i++){
+    const {a,L,u,w}=edgeInfo(Wp,i,ccw), m=miter(cor,i,L), [uS,uE]=facadeSpan(m,L);
+    const bay = b.blank.includes(i) ? 0 : bayLayout(st,uS,uE).bay;
+    const X=(uu,y,wv)=>[a[0]+u[0]*uu+w[0]*wv, y, a[1]+u[1]*uu+w[1]*wv];
+    const s1=mAt(m.S,T), e1=mAt(m.E,T), s0=mAt(m.S,0), e0=mAt(m.E,0);
+    quad([X(s1,0,T),X(e1,0,T),X(e1,yTop,T),X(s1,yTop,T)], [w[0],0,w[1]], [[s1,0,uS,uE],[e1,0,uS,uE],[e1,yTop,uS,uE],[s1,yTop,uS,uE]], [bay,1]);
+    quad([X(s0,top,0),X(e0,top,0),X(e0,yTop,0),X(s0,yTop,0)], [-w[0],0,-w[1]], ZZ, [0, st.parapet?4:3]);   // inner face of parapet / curb
+    quad([X(s0,yTop,0),X(e0,yTop,0),X(e1,yTop,T),X(s1,yTop,T)], [0,1,0], ZZ, [0,3]);                        // cap
+  }
+  const contour=Wp.map(p=>new THREE.Vector2(p[0],p[1])); let tris=[]; try{ tris=THREE.ShapeUtils.triangulateShape(contour.slice(),[]); }catch(e){}
+  const base=P.length/3; for(const p of Wp){ P.push(p[0],top,p[1]); NR.push(0,127,0); F.push(0,0,0,0); F2.push(0,2); }
+  for(const t of tris){ let [x,y,z]=t; const A=Wp[x], B=Wp[y], D=Wp[z]; if(((B[1]-A[1])*(D[0]-A[0])-(B[0]-A[0])*(D[1]-A[1])) < 0){ const q=y; y=z; z=q; } I.push(base+x,base+y,base+z); }
+  return {pos:new Float32Array(P), nrm:new Int8Array(NR), fac:new Float32Array(F), fac2:new Float32Array(F2), idx:new Uint32Array(I), tag:idx+2*LOD_TAG, count:P.length/3, tris:I.length/3};
+}
+// facade parameters for the LOD2 shader (same numbers the geometry LODs use)
+function specOf(kind,h,st){ const ws=winSpec(kind,h,st); return ws ? [ws.full!=null?ws.full:-1, ws.w||0, ws.y0, ws.y1] : [-1,0,1,0]; }
+function writeParams(b, idx){
+  const st=b.style, C=colorsOf(st), o=idx*PARAM_TEXELS*4;
+  paramArr.set([b.groundHeight, b.floorHeight, b.floors.length, (st.bands?1:0)+(st.parapet?2:0)], o);
+  paramArr.set(specOf(st.windows,b.floorHeight,st), o+4);
+  paramArr.set(specOf(groundKind(st),b.groundHeight,st), o+8);
+  paramArr.set([...C.wall,1], o+12); paramArr.set([...C.trim,1], o+16); paramArr.set([...C.glassDark,1], o+20); paramArr.set([...C.roof,1], o+24);
+  paramTex.needsUpdate=true;
 }
 
-/* ---- render records (one per building) ---- */
-const recs = new Map();
-const dirty = new Set();
+/* =========================================================================
+   LOD system
+   LOD0 full detail · LOD1 exterior shell · LOD2 massing (merged per city cell, HLOD) · 3 culled.
+   The LOD is picked from the building's size on screen (like Unity's LODGroup), with hysteresis
+   and a dithered cross-fade. LOD0/LOD1 are generated on demand within a per-frame time budget and
+   dropped again (least recently used) when not needed; LOD2 is tiny and always resident.
+   ========================================================================= */
+const LODCFG = { bias:1, PX:[16, 4, 0.3], hyst:0.12, fade:0.35, cell:128, maxL0:16, maxL1:260, budgetMs:6 };   // PX: pixels per metre needed for LOD0 / LOD1 / LOD2
+const recs = new Map(), recByIdx = [], freeIdx = []; let nextIdx = 0;
+const dirty = new Set(), cells = new Map();
+const lodStats = { n:[0,0,0,0], cells:0, cellsShown:0, queue:0, gen:0 };
+let frameNo = 0;
 const ghostMat = new THREE.LineBasicMaterial({color:'#DD5A12', transparent:true, opacity:0.45, depthWrite:false});
-function rebuild(b){
-  let r = recs.get(b.id);
-  if(!r){ r = {group:new THREE.Group(), mats:makeMats(), levels:[], ghosts:[], segs:[]}; r.group.userData.bid=b.id; scene.add(r.group); recs.set(b.id,r); }
-  r.group.traverse(o=>{ if(o.geometry) o.geometry.dispose(); });
-  r.group.clear(); r.levels=[]; r.ghosts=[];
-  const {levels, segs} = buildGeometry(b);
-  r.segs = segs;
-  levels.forEach((L,k)=>{
-    const g=new THREE.Group();
-    const m=new THREE.Mesh(L.op.geo(), r.mats.opaque); m.castShadow=true; m.receiveShadow=true; m.customDepthMaterial=r.mats.depth; m.userData.bid=b.id; g.add(m);
-    if(L.gl.i.length){ const gm=new THREE.Mesh(L.gl.geo(), r.mats.glass); gm.userData.bid=b.id; gm.renderOrder=2; g.add(gm); }
-    r.group.add(g); r.levels.push(g);
-    const y=floorBase(b,k)+0.02, pts=[];
-    b.footprint.forEach((p,i)=>{ const q=b.footprint[(i+1)%b.footprint.length]; pts.push(p.x+b.pos.x,y,p.z+b.pos.z, q.x+b.pos.x,y,q.z+b.pos.z); });
-    const lg=new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(pts,3));
-    const ls=new THREE.LineSegments(lg, ghostMat); ls.visible=false; r.group.add(ls); r.ghosts.push(ls);
-  });
+
+function recOf(b){
+  let r=recs.get(b.id);
+  if(!r){ const idx=freeIdx.length ? freeIdx.pop() : nextIdx++;
+    r={id:b.id, idx, ver:0, l0:null, l1:null, l2:null, cell:null, gkeys:null, disp:3, from:3, t:1, want:3, sph:{x:0,y:0,z:0,r:1,size:1}};
+    recs.set(b.id,r); recByIdx[idx]=r; }
+  return r;
 }
-function syncRecs(){ for(const [id,r] of recs){ if(!bById(id)){ r.group.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); scene.remove(r.group); recs.delete(id); } } }
+function boundsOf(b){ const bb=bbox(b.footprint), H=roofY(b)+1.1, dx=bb.x1-bb.x0+2*T_EXT, dz=bb.z1-bb.z0+2*T_EXT;
+  return {x:(bb.x0+bb.x1)/2+b.pos.x, y:H/2, z:(bb.z0+bb.z1)/2+b.pos.z, r:Math.hypot(dx,dz,H)/2, size:Math.max(dx,dz,H),
+    x0:bb.x0+b.pos.x-T_EXT, x1:bb.x1+b.pos.x+T_EXT, z0:bb.z0+b.pos.z-T_EXT, z1:bb.z1+b.pos.z+T_EXT, y1:H}; }
+const ready = (r,k) => !!r[k] && r[k].ver===r.ver;
+function addMesh(geo, mat, depth, id){ const m=new THREE.Mesh(geo,mat); m.castShadow=!!depth; m.receiveShadow=true; if(depth) m.customDepthMaterial=depth; m.userData.bid=id; m.matrixAutoUpdate=false; m.visible=false; scene.add(m); return m; }
+function disposeLod(r,k){ const L=r[k]; if(!L) return; for(const m of [L.mesh,L.glass]) if(m){ scene.remove(m); m.geometry.dispose(); } r[k]=null; }
+function installL0(b,r,{op,gl,segs}){ disposeLod(r,'l0');
+  r.l0={ver:r.ver, segs, used:frameNo, tris:op.tris+gl.tris, verts:op.verts+gl.verts, mesh:addMesh(op.geo(),MAT.opaque,MAT.depth,b.id), glass:gl.i.length?addMesh(gl.geo(),MAT.glass,null,b.id):null};
+  if(r.l0.glass) r.l0.glass.renderOrder=2; }
+function installL1(b,r,{op}){ disposeLod(r,'l1'); r.l1={ver:r.ver, used:frameNo, tris:op.tris, verts:op.verts, mesh:addMesh(op.geo(),MAT.opaque,MAT.depth,b.id)}; }
+// synchronous versions: for the building being edited or walked in, and for collision
+function genL0(b,r){ jobs.delete(r.id+':0'); installL0(b,r,buildLOD0(b,r.idx)); }
+function genL1(b,r){ jobs.delete(r.id+':1'); installL1(b,r,buildLOD1(b,r.idx)); }
+const jobs = new Map();   // "id:lod" -> {r, l, ver, it}: detail LODs being built a storey at a time
+
+/* a building's data changed (or it is new): refresh its table rows, massing, cell and grid entry */
+function refreshBuilding(b){
+  const r=recOf(b); r.ver++;
+  writeParams(b, r.idx);
+  r.sph=boundsOf(b);
+  r.l2=buildLOD2(b, r.idx);
+  const key=cellKey(r.sph.x, r.sph.z);
+  if(r.cell && r.cell!==key){ const oc=cells.get(r.cell); if(oc){ oc.members.delete(r); oc.dirty=true; } }
+  r.cell=key; const c=cellOf(key); c.members.add(r); c.dirty=true;
+  gridSet(r,b);
+  // a shown detail LOD is rebuilt at once so edits appear immediately; a hidden one is dropped
+  if(r.l0){ if(r.disp===0 || (r.t<1 && r.from===0)) genL0(b,r); else disposeLod(r,'l0'); }
+  if(r.l1){ if(r.disp===1 || (r.t<1 && r.from===1)) genL1(b,r); else disposeLod(r,'l1'); }
+}
+function removeRec(r){
+  disposeLod(r,'l0'); disposeLod(r,'l1');
+  if(r.cell){ const c=cells.get(r.cell); if(c){ c.members.delete(r); c.dirty=true; } }
+  jobs.delete(r.id+':0'); jobs.delete(r.id+':1');
+  gridSet(r,null); recs.delete(r.id); recByIdx[r.idx]=null; freeIdx.push(r.idx);
+  stateArr.set([3,3,1,0], r.idx*4); stateTex.needsUpdate=true;
+}
+function syncRecs(){ for(const r of [...recs.values()]) if(!bById(r.id)) removeRec(r); }
 function touch(b){ if(b) dirty.add(b.id); else state.buildings.forEach(x=>dirty.add(x.id)); saveSoon(); }
+
+/* HLOD cells: all LOD2 massings in a 128 m cell are one mesh (one draw call). Buildings shown at a
+   finer LOD are switched off inside it by the vertex shader, so the cell never needs rebuilding for LOD changes. */
+const cellKey = (x,z) => Math.floor(x/LODCFG.cell)+','+Math.floor(z/LODCFG.cell);
+function cellOf(key){ let c=cells.get(key); if(!c){ c={key, members:new Set(), mesh:null, dirty:true, tris:0}; cells.set(key,c); } return c; }
+function rebuildCell(c){
+  c.dirty=false;
+  if(c.mesh){ scene.remove(c.mesh); c.mesh.geometry.dispose(); c.mesh=null; }
+  if(!c.members.size){ cells.delete(c.key); return; }
+  let nv=0, ni=0; for(const r of c.members){ nv+=r.l2.count; ni+=r.l2.idx.length; }
+  const pos=new Float32Array(nv*3), nrm=new Int8Array(nv*3), fac=new Float32Array(nv*4), fac2=new Float32Array(nv*2), tag=new Float32Array(nv), idx=nv>65535?new Uint32Array(ni):new Uint16Array(ni);
+  let v=0, i=0;
+  for(const r of c.members){ const L=r.l2; pos.set(L.pos,v*3); nrm.set(L.nrm,v*3); fac.set(L.fac,v*4); fac2.set(L.fac2,v*2); tag.fill(L.tag,v,v+L.count); for(let j=0;j<L.idx.length;j++) idx[i+j]=L.idx[j]+v; v+=L.count; i+=L.idx.length; }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos,3)); g.setAttribute('normal', new THREE.BufferAttribute(nrm,3,true));
+  g.setAttribute('aFac', new THREE.BufferAttribute(fac,4)); g.setAttribute('aFac2', new THREE.BufferAttribute(fac2,2)); g.setAttribute('aTag', new THREE.BufferAttribute(tag,1));
+  g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere();
+  const m=new THREE.Mesh(g, MAT.mass); m.castShadow=true; m.receiveShadow=true; m.customDepthMaterial=MAT.massDepth; m.matrixAutoUpdate=false; scene.add(m);
+  c.mesh=m; c.tris=ni/3;
+}
+
+function updateLOD(dt, activeId){
+  frameNo++;
+  // LOD by feature scale: how many pixels one metre covers at the building's nearest point. Detail that
+  // exists at LOD0 (frames, furniture) only matters up close, whatever the size of the building.
+  const cp=camera.position, pxm=canvas.clientHeight/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov)/2))*LODCFG.bias, PX=LODCFG.PX, H=LODCFG.hyst, far=camera.far*0.95;
+  const pend=[]; let changed=false; lodStats.n=[0,0,0,0];
+  for(const r of recs.values()){
+    const s=r.sph, dx=Math.max(s.x0-cp.x,0,cp.x-s.x1), dy=Math.max(-cp.y,0,cp.y-s.y1), dz=Math.max(s.z0-cp.z,0,cp.z-s.z1);
+    const d=Math.max(1, Math.hypot(dx,dy,dz)), rel=pxm/d;
+    let want=3;
+    for(let l=0;l<3;l++) if(rel >= PX[l]*(l<r.want ? 1+H : 1-H)){ want=l; break; }
+    if(d > far) want=3;
+    const forced = r.id===activeId || (ui.mode==='edit' && r.id===ui.sel);
+    if(forced) want=0;
+    r.want=want;
+    let show=want;
+    if(show===0 && !ready(r,'l0')){ if(forced){ const b=bById(r.id); if(b) genL0(b,r); } else { pend.push({r,l:0,p:rel}); show = ready(r,'l1') ? 1 : 2; } }
+    if(show===1 && !ready(r,'l1')){ pend.push({r,l:1,p:rel}); show=2; }
+    if(show!==r.disp){ r.from=r.disp; r.disp=show; r.t=0; changed=true; }
+    if(r.t<1){ r.t=Math.min(1, r.t+dt/LODCFG.fade); changed=true; }
+    const v0 = r.disp===0 || (r.t<1 && r.from===0), v1 = r.disp===1 || (r.t<1 && r.from===1);
+    if(r.l0){ r.l0.mesh.visible=v0; if(r.l0.glass) r.l0.glass.visible=v0; if(v0) r.l0.used=frameNo; }
+    if(r.l1){ r.l1.mesh.visible=v1; if(v1) r.l1.used=frameNo; }
+    const o=r.idx*4; stateArr[o]=r.disp; stateArr[o+1]=r.from; stateArr[o+2]=r.t;
+    lodStats.n[r.disp]++;
+  }
+  if(changed) stateTex.needsUpdate=true;
+  // advance generation jobs, nearest first, a storey at a time, within the frame budget
+  pend.sort((a,b)=>b.p-a.p);
+  const want=new Set(pend.map(q=>q.r.id+':'+q.l));
+  for(const k of [...jobs.keys()]) if(!want.has(k)) jobs.delete(k);      // no longer needed
+  const t0=performance.now();
+  for(const q of pend){
+    if(performance.now()-t0 > LODCFG.budgetMs) break;
+    const key=q.r.id+':'+q.l, b=bById(q.r.id); if(!b) continue;
+    let job=jobs.get(key);
+    if(!job || job.ver!==q.r.ver){ job={ver:q.r.ver, it: q.l===0 ? lod0Steps(b,q.r.idx) : lod1Steps(b,q.r.idx)}; jobs.set(key,job); }
+    let res; do{ res=job.it.next(); }while(!res.done && performance.now()-t0 <= LODCFG.budgetMs);
+    if(res.done){ jobs.delete(key); (q.l===0 ? installL0 : installL1)(b,q.r,res.value); }
+  }
+  lodStats.gen=performance.now()-t0; lodStats.queue=jobs.size+pend.filter(q=>!jobs.has(q.r.id+':'+q.l) && !ready(q.r,q.l===0?'l0':'l1')).length;
+  evict('l0', LODCFG.maxL0); evict('l1', LODCFG.maxL1);
+  let shown=0;
+  for(const c of cells.values()){ if(c.dirty) rebuildCell(c); if(!c.mesh) continue;
+    let any=false; for(const r of c.members) if(r.disp===2 || (r.t<1 && r.from===2)){ any=true; break; }
+    c.mesh.visible=any; if(any) shown++; }
+  lodStats.cells=cells.size; lodStats.cellsShown=shown;
+}
+function evict(k, max){
+  const list=[]; for(const r of recs.values()) if(r[k] && !r[k].mesh.visible) list.push(r);
+  let count=0; for(const r of recs.values()) if(r[k]) count++;
+  if(count<=max) return;
+  list.sort((a,b)=>a[k].used-b[k].used);
+  for(const r of list){ if(count<=max) break; disposeLod(r,k); count--; }
+}
+
+/* spatial grid of buildings for play-mode queries (collision, floors, lifts) */
+const BGRID=32, bgrid=new Map();
+function gridSet(r,b){
+  if(r.gkeys) for(const k of r.gkeys){ const s=bgrid.get(k); if(s){ s.delete(r); if(!s.size) bgrid.delete(k); } }
+  r.gkeys=null; if(!b) return;
+  const bb=bbox(b.footprint); r.gkeys=[];
+  for(let gx=Math.floor((bb.x0+b.pos.x-1)/BGRID); gx<=Math.floor((bb.x1+b.pos.x+1)/BGRID); gx++)
+    for(let gz=Math.floor((bb.z0+b.pos.z-1)/BGRID); gz<=Math.floor((bb.z1+b.pos.z+1)/BGRID); gz++){ const k=gx+','+gz; let s=bgrid.get(k); if(!s) bgrid.set(k,s=new Set()); s.add(r); r.gkeys.push(k); }
+}
+function nearRecs(x,z,rad){ const out=new Set(); for(let gx=Math.floor((x-rad)/BGRID); gx<=Math.floor((x+rad)/BGRID); gx++) for(let gz=Math.floor((z-rad)/BGRID); gz<=Math.floor((z+rad)/BGRID); gz++){ const s=bgrid.get(gx+','+gz); if(s) for(const r of s) out.add(r); } return out; }
+
+/* outlines of the storeys above the one being edited */
+let ghost=null, ghostKey='';
+function updateGhosts(b, floor){
+  const key = b ? b.id+':'+floor+':'+(recs.get(b.id)?.ver||0) : '';
+  if(key===ghostKey) return; ghostKey=key;
+  if(ghost){ scene.remove(ghost); ghost.geometry.dispose(); ghost=null; }
+  if(!b) return;
+  const pts=[];
+  for(let k=floor+1;k<=b.floors.length;k++){ const y=floorBase(b,k)+0.02; b.footprint.forEach((p,i)=>{ const q=b.footprint[(i+1)%b.footprint.length]; pts.push(p.x+b.pos.x,y,p.z+b.pos.z, q.x+b.pos.x,y,q.z+b.pos.z); }); }
+  if(!pts.length) return;
+  const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts,3));
+  ghost=new THREE.LineSegments(g, ghostMat); scene.add(ghost);
+}
 
 /* ---- the world around the buildings ---- */
 function buildWorld(){
-  const ground=new THREE.Mesh(new THREE.PlaneGeometry(600,600), new THREE.MeshStandardMaterial({color:'#A9AE9F', roughness:1}));
+  const ground=new THREE.Mesh(new THREE.PlaneGeometry(6000,6000), new THREE.MeshStandardMaterial({color:'#A9AE9F', roughness:1}));
   ground.rotation.x=-Math.PI/2; ground.position.y=-0.09; ground.receiveShadow=true; scene.add(ground);
 }
 const flGrid = new THREE.GridHelper(1,1,'#DD5A12','#8E968C'); flGrid.material.transparent=true; flGrid.material.opacity=0.35; flGrid.visible=false; scene.add(flGrid);
@@ -869,7 +1248,17 @@ const ray = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
 function setRay(e){ const r=canvas.getBoundingClientRect(); ndc.set(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1); ray.setFromCamera(ndc, camera); }
 function rayY(e,y){ setRay(e); const pl=new THREE.Plane(new THREE.Vector3(0,1,0), -y); const v=new THREE.Vector3(); return ray.ray.intersectPlane(pl,v) ? v : null; }
-function pickBuilding(e){ setRay(e); const ms=[]; for(const r of recs.values()) r.group.traverse(o=>{ if(o.isMesh && o.parent.visible) ms.push(o); }); const h=ray.intersectObjects(ms,false)[0]; return h ? {bid:h.object.userData.bid, point:h.point} : null; }
+function pickBuilding(e, onlyId){
+  setRay(e); const ms=[];
+  for(const r of recs.values()){ if(onlyId && r.id!==onlyId) continue; if(r.l0?.mesh.visible) ms.push(r.l0.mesh); if(r.l1?.mesh.visible) ms.push(r.l1.mesh); }
+  if(!onlyId) for(const c of cells.values()) if(c.mesh?.visible) ms.push(c.mesh);
+  for(const h of ray.intersectObjects(ms,false)){
+    let id=h.object.userData.bid;
+    if(!id){ const r=recByIdx[Math.round(h.object.geometry.getAttribute('aTag').getX(h.face.a))%LOD_TAG]; if(!r || !(r.disp===2 || (r.t<1 && r.from===2))) continue; id=r.id; }
+    return {bid:id, point:h.point};
+  }
+  return null;
+}
 function floorHit(e){ const b=selB(); if(!b) return null; const k=activeFloor(b); const v=rayY(e, floorBase(b,k)); return v ? P(v.x-b.pos.x, v.z-b.pos.z) : null; }
 function nearestWall(b,k,p,maxD){ let best=null; b.floors[k]?.walls.forEach((w,i)=>{ const r=segDist(p.x,p.z,w.a.x,w.a.z,w.b.x,w.b.z); if(r.d<maxD && (!best||r.d<best.d)) best={i,d:r.d,t:r.t,w}; }); return best; }
 function nearestEdge(b,p,maxD){ const fp=b.footprint; let best=null; for(let i=0;i<fp.length;i++){ const a=fp[i], c=fp[(i+1)%fp.length]; const r=segDist(p.x,p.z,a.x,a.z,c.x,c.z); if(r.d<maxD && (!best||r.d<best.d)) best={i,d:r.d,t:r.t,L:Math.hypot(c.x-a.x,c.z-a.z)}; } return best; }
@@ -928,32 +1317,32 @@ function rotate90(b){
    View / occlusion state per frame
    ========================================================================= */
 function playerLoc(){
-  for(const b of state.buildings){ if(pip(b.footprint, player.x-b.pos.x, player.z-b.pos.z) && player.y<=roofY(b)+1.5) return {b, floor:floorAtY(b,player.y)}; }
+  for(const r of nearRecs(player.x,player.z,0)){ const b=bById(r.id); if(b && pip(b.footprint, player.x-b.pos.x, player.z-b.pos.z) && player.y<=roofY(b)+1.5) return {b, floor:floorAtY(b,player.y)}; }
   return {b:null, floor:null};
 }
 const tmpV=new THREE.Vector3();
+// sets the occlusion uniforms; returns the id of the building that is sliced (it is forced to LOD0)
 function applyView(){
-  let bid=null, floor=null, cut=false, cone=false;
+  let b=null, floor=null, cut=false, cone=false;
   if(ui.mode==='play'){
-    const loc=playerLoc(); bid=loc.b?.id||null; floor=loc.floor;
+    const loc=playerLoc(); b=loc.b; floor=loc.floor;
     cut = ui.occ.mode==='both'||ui.occ.mode==='cut'; cone = ui.occ.mode==='both'||ui.occ.mode==='cone';
     G.uFocus.value.set(player.x, player.y+1.2, player.z); G.uFeetY.value=player.y;
   } else {
-    const b=selB(); if(b && ui.tab==='interior' && !isShell(b)){ bid=b.id; floor=activeFloor(b); cut=true; }
+    const sb=selB(); if(sb && ui.tab==='interior' && !isShell(sb)){ b=sb; floor=activeFloor(sb); cut=true; }
     G.uFocus.value.copy(camEdit.target); G.uFeetY.value=-1e9;
   }
   G.uCam.value.copy(camera.position); G.uConeOn.value=cone?1:0; G.uConeR.value=ui.occ.coneR; G.uCutH.value=ui.occ.cutH;
   tmpV.subVectors(camera.position, G.uFocus.value); G.uCamDir.value.set(tmpV.x,tmpV.z).normalize();
-  for(const [id,r] of recs){
-    const b=bById(id); if(!b) continue; const N=b.floors.length, U=r.mats.U;
-    if(id===bid && floor!=null){
-      r.levels.forEach((g,i)=>{ g.visible = i<=floor; }); r.ghosts.forEach((g,i)=>{ g.visible = ui.mode==='edit' && i>floor; });
-      U.uClipY.value = floor<N ? floorBase(b,floor)+floorH(b,floor)-0.02 : 1e9;
-      U.uCutOn.value = cut?1:0; U.uCutBase.value=floorBase(b,floor); U.uCutTop.value=floorBase(b,floor)+(floor<N?floorH(b,floor):3.3)+0.02;
-    } else {
-      r.levels.forEach(g=>g.visible=true); r.ghosts.forEach(g=>g.visible=false); U.uClipY.value=1e9; U.uCutOn.value=0;
-    }
-  }
+  const r = b ? recs.get(b.id) : null;
+  if(r && floor!=null){
+    const N=b.floors.length;
+    G.uActive.value=r.idx;
+    G.uClipY.value = floor<N ? floorBase(b,floor)+floorH(b,floor)-SLAB-0.01 : 1e9;   // just under the slab above
+    G.uCutOn.value=cut?1:0; G.uCutBase.value=floorBase(b,floor); G.uCutTop.value=floorBase(b,floor)+(floor<N?floorH(b,floor):3.3)+0.02;
+  } else { G.uActive.value=-1; G.uClipY.value=1e9; G.uCutOn.value=0; }
+  updateGhosts(ui.mode==='edit' && r && floor!=null ? b : null, floor);
+  return r && floor!=null ? b.id : null;
 }
 
 /* =========================================================================
@@ -963,7 +1352,8 @@ const keys = {};
 const joy = {x:0, y:0, id:null};
 function surfaceAt(x,z,y){
   let best = y+0.6 >= 0 ? 0 : -1e9;
-  for(const b of state.buildings){
+  for(const r of nearRecs(x,z,0)){
+    const b=bById(r.id); if(!b) continue;
     const lx=x-b.pos.x, lz=z-b.pos.z; if(!pip(b.footprint,lx,lz)) continue;
     const N=b.floors.length;
     for(let k=0;k<=N;k++){ const yk=floorBase(b,k); if(yk>y+0.6 || yk<=best) continue;
@@ -977,7 +1367,9 @@ function surfaceAt(x,z,y){
 }
 function collide(px,pz,y){
   const segs=[];
-  for(const b of state.buildings){ const r=recs.get(b.id); if(!r) continue; const bb=bbox(b.footprint); if(px<bb.x0+b.pos.x-3||px>bb.x1+b.pos.x+3||pz<bb.z0+b.pos.z-3||pz>bb.z1+b.pos.z+3) continue; if(y>roofY(b)+2) continue; const k=floorAtY(b,y); if(r.segs[k]) segs.push(...r.segs[k]); }
+  for(const r of nearRecs(px,pz,3)){ const b=bById(r.id); if(!b) continue; const bb=bbox(b.footprint); if(px<bb.x0+b.pos.x-3||px>bb.x1+b.pos.x+3||pz<bb.z0+b.pos.z-3||pz>bb.z1+b.pos.z+3) continue; if(y>roofY(b)+2) continue;
+    if(!ready(r,'l0')) genL0(b,r);   // collision comes from the full-detail generator
+    const k=floorAtY(b,y); if(r.l0.segs[k]) segs.push(...r.l0.segs[k]); }
   for(let it=0;it<4;it++) for(const s of segs){ const q=segDist(px,pz,s.ax,s.az,s.bx,s.bz); const rr=PR+s.r; if(q.d<rr){ if(q.d<1e-5){ px+=rr; continue; } px=q.cx+(px-q.cx)/q.d*rr; pz=q.cz+(pz-q.cz)/q.d*rr; } }
   return [px,pz];
 }
@@ -1003,7 +1395,7 @@ function updatePlayer(dt){
     const r=player.ride, d=r.to-player.y, sp=4.5*dt;
     player.y = Math.abs(d)<=sp ? r.to : player.y+Math.sign(d)*sp;
     if(player.y===r.to){ player.ride=null; liftKey=''; }
-    if(!carMesh){ carMesh=new THREE.Mesh(carGB.geo(), recs.get(r.b.id).mats.opaque); scene.add(carMesh); }
+    if(!carMesh){ carMesh=new THREE.Mesh(carGB.geo(), new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.7})); scene.add(carMesh); }
     const f=frame(r.b,r.s); carMesh.position.set(f.O[0],player.y,f.O[1]); carMesh.rotation.y=-r.s.rot*Math.PI/2; carMesh.visible=true;
   } else if(carMesh){ carMesh.visible=false; }
   let ix=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0), iy=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0);
@@ -1149,7 +1541,7 @@ function showDoorGhost(b,k,d){
   else { const a=b.footprint[d.edge], c=b.footprint[(d.edge+1)%b.footprint.length], dx=c.x-a.x, dz=c.z-a.z; showHL(a.x+dx*d.t+ox,1.27,a.z+dz*d.t+oz,DOOR_EXT-0.05,2.5,T_EXT*2.2,[dx/d.L,dz/d.L], d.ei>=0?'#C0392B':'#DD5A12'); }
 }
 function facadeEdgeAt(e,b){
-  const h=pickBuilding(e); let p=null, y=0;
+  const h=pickBuilding(e, b.id); let p=null, y=0;
   if(h && h.bid===b.id){ p=P(h.point.x-b.pos.x,h.point.z-b.pos.z); y=h.point.y; }
   else { const v=rayY(e,1.2); if(v){ p=P(v.x-b.pos.x,v.z-b.pos.z); y=1.2; } }
   if(!p) return null; const ed=nearestEdge(b,p,1.0); return ed ? {...ed, y} : null;
@@ -1201,7 +1593,7 @@ function toolMove(e, pressed){
     case 'stairs': case 'lift': case 'prop': { const {it,ok}=placementAt(b,k,p); ghostItem(b,k,it,ok); break; }
     case 'select': {
       if(dragItem && pressed){
-        if(!dragItem.pushed){ pushUndo(); dragItem.pushed=true; }
+        if(!dragItem.pushed){ pushUndo(b); dragItem.pushed=true; }
         const it=dragItem.it, h=itemHalf(it, it.type==='stairs'||it.type==='lift'?0.16:0);
         let nx=p.x+dragItem.off.x, nz=p.z+dragItem.off.z; if(ui.snap){ const h0=itemHalf(it); nx=snapG(nx-h0.hx)+h0.hx; nz=snapG(nz-h0.hz)+h0.hz; }
         if(rectInside(b.footprint,nx,nz,h.hx,h.hz) && (it.type!=='stairs'&&it.type!=='lift' || !b.shafts.some(s=>{ if(s===it) return false; const o=itemHalf(s,0.15); return Math.abs(s.x-nx)<o.hx+h.hx && Math.abs(s.z-nz)<o.hz+h.hz; }))){ if(nx!==it.x||nz!==it.z){ it.x=nx; it.z=nz; dragItem.moved=true; touch(b); } }
@@ -1281,7 +1673,7 @@ canvas.addEventListener('pointermove', e=>{
   if(!gest) return;
   if(gest.type==='tool'){ toolMove(e,true); return; }
   if(gest.type==='pinch'){ if(ptrs.size<2) return; const [a,b]=[...ptrs.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y), ang=Math.atan2(b.y-a.y,b.x-a.x), cx=(a.x+b.x)/2, cy=(a.y+b.y)/2;
-    c.dist=clamp(c.dist*gest.d/Math.max(d,1), ui.mode==='play'?4:6, ui.mode==='play'?30:180); c.yaw-=(ang-gest.ang); if(ui.mode==='edit') pan(cx-gest.cx, cy-gest.cy); else c.pitch=clamp(c.pitch+(cy-gest.cy)*0.004,0.2,1.45);
+    c.dist=clamp(c.dist*gest.d/Math.max(d,1), ui.mode==='play'?4:6, ui.mode==='play'?30:1100); c.yaw-=(ang-gest.ang); if(ui.mode==='edit') pan(cx-gest.cx, cy-gest.cy); else c.pitch=clamp(c.pitch+(cy-gest.cy)*0.004,0.2,1.45);
     gest.d=d; gest.ang=ang; gest.cx=cx; gest.cy=cy; return; }
   if(Math.abs(e.clientX-gest.sx)+Math.abs(e.clientY-gest.sy)>4) gest.moved=true;
   if(gest.type==='orbit'){ c.yaw-=dx*0.0055; c.pitch=clamp(c.pitch+dy*0.0045, ui.mode==='play'?0.2:0.12, 1.5); }
@@ -1296,7 +1688,7 @@ const endPtr=e=>{
   gest=null;
 };
 canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
-canvas.addEventListener('wheel', e=>{ e.preventDefault(); const c=cam(); c.dist=clamp(c.dist*Math.exp(e.deltaY*0.0012), ui.mode==='play'?4:6, ui.mode==='play'?30:180); }, {passive:false});
+canvas.addEventListener('wheel', e=>{ e.preventDefault(); const c=cam(); c.dist=clamp(c.dist*Math.exp(e.deltaY*0.0012), ui.mode==='play'?4:6, ui.mode==='play'?30:1100); }, {passive:false});
 canvas.addEventListener('dblclick', e=>{ if(ui.mode!=='edit') return; if(wallChain){ wallChain=null; hideHL(); tip.hidden=true; return; } const h=pickBuilding(e); if(h){ const b=bById(h.bid); selectBuilding(b.id); focusBuilding(b); } });
 canvas.addEventListener('pointerleave', ()=>{ if(!wallChain && !dragItem) { if(!(ui.sub && ui.tab==='interior')) hideHL(); } tip.hidden = !wallChain || tip.hidden; });
 function clickSelect(e){
@@ -1327,7 +1719,7 @@ addEventListener('keydown', e=>{
   else if(k==='-'||k==='_'){ if(b.floors.length>1){ commit(()=>deleteFloor(b,b.floors.length-1), 'Top floor removed', b); refreshChrome(); } }
   else if(k==='c'||k==='C') focusBuilding(b);
   else if(k==='r'||k==='R') rotateSub();
-  else if(k==='Delete'||k==='Backspace'){ if(ui.tab==='shape' && ui.vsel>=0){ pushUndo(); if(removeVertex(b,ui.vsel)){ touch(b); ui.vsel=-1; overlayRebuild(); renderPanel(); } else undoStack.pop(); } else deleteSub(); }
+  else if(k==='Delete'||k==='Backspace'){ if(ui.tab==='shape' && ui.vsel>=0){ pushUndo(b); if(removeVertex(b,ui.vsel)){ touch(b); ui.vsel=-1; overlayRebuild(); renderPanel(); } else undoStack.pop(); } else deleteSub(); }
   else if(ui.tab==='interior'){ const m={v:'select',w:'wall',d:'door',x:'erase',e:'erase',s:'stairs',l:'lift',f:'prop'}[k.toLowerCase()]; if(m) setTool(m); }
 });
 addEventListener('keyup', e=>{ keys[e.code]=false; });
@@ -1337,14 +1729,22 @@ function stepFloor(b,d){ if(isShell(b)) return; setTab('interior', true); setAct
 /* =========================================================================
    Commands: undo/redo/commit, building ops
    ========================================================================= */
-function commit(fn,msg,b){ pushUndo(); fn(); touch(b); if(msg) toast(msg); if(ui.mode==='edit'){ renderStack(); } }
-function undo(){ if(!undoStack.length) return; redoStack.push(JSON.stringify(state)); state=JSON.parse(undoStack.pop()); afterRestore('Undone'); }
-function redo(){ if(!redoStack.length) return; undoStack.push(JSON.stringify(state)); state=JSON.parse(redoStack.pop()); afterRestore('Redone'); }
-function afterRestore(msg){ syncRecs(); touch(); if(ui.sel && !bById(ui.sel)) ui.sel=null; ui.sub=null; ui.vsel=-1; wallChain=null; hideHL(); refreshChrome(); toast(msg); }
+function commit(fn,msg,b,scope){
+  const e=beginUndo(scope!==undefined ? scope : b); fn(); endUndo(e);
+  if(e.all!==undefined){ reindex(); syncRecs(); touch(); } else { for(const it of e.items){ const x=bById(it.id); if(x) touch(x); } syncRecs(); saveSoon(); }
+  if(msg) toast(msg); if(ui.mode==='edit'){ renderStack(); }
+}
+function undo(){ if(!undoStack.length) return; const {inv,ids}=applyEntry(undoStack.pop()); redoStack.push(inv); afterRestore('Undone', ids); }
+function redo(){ if(!redoStack.length) return; const {inv,ids}=applyEntry(redoStack.pop()); undoStack.push(inv); afterRestore('Redone', ids); }
+function afterRestore(msg, ids){
+  syncRecs();
+  if(ids){ for(const id of ids){ const b=bById(id); if(b) touch(b); } saveSoon(); } else touch();
+  if(ui.sel && !bById(ui.sel)) ui.sel=null; ui.sub=null; ui.vsel=-1; wallChain=null; hideHL(); refreshChrome(); toast(msg);
+}
 function updateUndoBtns(){ $('#bUndo').disabled=!undoStack.length; $('#bRedo').disabled=!redoStack.length; }
 function freeSpot(w,d){
-  const t=camEdit.target; const occupied=(x,z)=>state.buildings.some(b=>{ const bb=bbox(b.footprint); return x<bb.x1+b.pos.x+3 && x+w>bb.x0+b.pos.x-3 && z<bb.z1+b.pos.z+3 && z+d>bb.z0+b.pos.z-3; });
-  for(let r=0;r<12;r++) for(let a=0;a<Math.max(1,r*8);a++){ const ang=a/(Math.max(1,r*8))*Math.PI*2; const x=snapG(t.x+Math.cos(ang)*r*8-w/2), z=snapG(t.z+Math.sin(ang)*r*8-d/2); if(z>-7 && !occupied(x,z)) return P(x,z); }
+  const t=camEdit.target; const occupied=(x,z)=>[...nearRecs(x+w/2,z+d/2,Math.max(w,d)/2+4)].some(r=>{ const b=bById(r.id); if(!b) return false; const bb=bbox(b.footprint); return x<bb.x1+b.pos.x+3 && x+w>bb.x0+b.pos.x-3 && z<bb.z1+b.pos.z+3 && z+d>bb.z0+b.pos.z-3; });
+  for(let r=0;r<16;r++) for(let a=0;a<Math.max(1,r*8);a++){ const ang=a/(Math.max(1,r*8))*Math.PI*2; const x=snapG(t.x+Math.cos(ang)*r*8-w/2), z=snapG(t.z+Math.sin(ang)*r*8-d/2); if(!occupied(x,z)) return P(x,z); }
   return P(snapG(t.x), snapG(t.z+30));
 }
 function newBuilding(shape){
@@ -1358,7 +1758,44 @@ function duplicateBuilding(b){
   commit(()=>{ nb=clone(b); nb.id=nid('b'); nb.name=b.name+' copy'; nb.shafts.forEach(s=>s.id=nid('s')); const sp=freeSpot(bb.x1-bb.x0,bb.z1-bb.z0); nb.pos=P(sp.x-bb.x0, sp.z-bb.z0); state.buildings.push(nb); }, 'Duplicated '+b.name, null);
   selectBuilding(nb.id); focusBuilding(nb);
 }
-function deleteBuilding(b){ commit(()=>{ state.buildings=state.buildings.filter(x=>x.id!==b.id); }, b.name+' deleted — Ctrl+Z to undo', null); syncRecs(); ui.sel=null; refreshChrome(); }
+/* Stress test: fill blocks around the hand-made buildings with generated ones (mostly shell-only,
+   a few walk-in with a stair core), taller towards the centre. Deterministic, so runs compare. */
+function rng32(a){ return ()=>{ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function cityBuildings(count){
+  const R=rng32(20260928), out=[], keep=state.buildings.filter(b=>!b.gen);
+  const occ=keep.map(b=>{ const bb=bbox(b.footprint); return [bb.x0+b.pos.x-12, bb.x1+b.pos.x+12, bb.z0+b.pos.z-12, bb.z1+b.pos.z+12]; });
+  const BLOCK=64, PITCH=80, styles=Object.keys(STYLES), rect=(w,d)=>[[0,0],[w,0],[w,d],[0,d]];
+  const blocks=[]; for(let bx=-30;bx<=30;bx++) for(let bz=-30;bz<=30;bz++) blocks.push([bx,bz,Math.hypot(bx,bz*1.1)]);
+  blocks.sort((a,b)=>a[2]-b[2]);
+  for(const [bx,bz] of blocks){
+    if(out.length>=count) break;
+    const x0=bx*PITCH-BLOCK/2, z0=bz*PITCH-BLOCK/2+8;
+    if(occ.some(o=>x0<o[1] && x0+BLOCK>o[0] && z0<o[3] && z0+BLOCK>o[2])) continue;
+    const nx=1+Math.floor(R()*3), nz=1+Math.floor(R()*3), lw=BLOCK/nx, ld=BLOCK/nz, down=Math.exp(-Math.hypot(x0+BLOCK/2, z0+BLOCK/2)/520);
+    for(let ix=0;ix<nx && out.length<count;ix++) for(let iz=0;iz<nz && out.length<count;iz++){
+      const inset=1+R()*2, w=snapG(lw-2*inset), d=snapG(ld-2*inset); if(w<8||d<8) continue;
+      const floors=clamp(Math.round(1+down*(3+R()*32)*(0.5+R())+R()*2),1,40), tall=floors>10;
+      const sk = tall ? (R()<0.6?'glass':'concrete') : styles[Math.floor(R()*styles.length)], sh=R();
+      let fp;
+      if(sh<0.7 || w<14 || d<14) fp=rect(w,d);
+      else if(sh<0.82) fp=[[0,0],[w,0],[w,snapG(d*0.5)],[snapG(w*0.5),snapG(d*0.5)],[snapG(w*0.5),d],[0,d]];
+      else if(sh<0.92) fp=[[0,0],[w,0],[w,snapG(d*0.45)],[snapG(w*0.68),snapG(d*0.45)],[snapG(w*0.68),d],[snapG(w*0.32),d],[snapG(w*0.32),snapG(d*0.45)],[0,snapG(d*0.45)]];
+      else { const c=snapG(Math.min(w,d)*0.28); fp=[[c,0],[w-c,0],[w,c],[w,d-c],[w-c,d],[c,d],[0,d-c],[0,c]]; }
+      const b={ id:nid('b'), gen:true, name:`Block ${bx},${bz} · ${ix*nz+iz+1}`, pos:P(snapG(x0+ix*lw+inset), snapG(z0+iz*ld+inset)), footprint:fp.map(([a,c])=>P(a,c)),
+        floors:Array.from({length:floors},()=>({walls:[],props:[]})), groundHeight:[3.6,4.0,4.5][Math.floor(R()*3)], floorHeight: tall?3.3:3.0+Math.floor(R()*4)/10,
+        shafts:[], entrances:[{edge:0,t:0.25+R()*0.5}], blank: R()<0.3 ? [1+Math.floor(R()*(fp.length-1))] : [], style:{...clone(STYLES[sk]), preset:sk}, interior:false };
+      if(floors<=12 && R()<0.06){ b.interior=true; const sc={id:nid('s'), type:'stairs', x:snapG(w/2), z:snapG(d/2), rot:0, bottom:0, top:-1, roof:true}; const hh=itemHalf(sc,0.16); if(rectInside(b.footprint,sc.x,sc.z,hh.hx,hh.hz)) b.shafts.push(sc); }
+      out.push(b);
+    }
+  }
+  return out;
+}
+function generateCity(count){
+  commit(()=>{ state.buildings=state.buildings.filter(b=>!b.gen); state.buildings.push(...cityBuildings(count)); }, `Test city: ${count.toLocaleString()} generated buildings`, null, 'all');
+  ui.sel=null; ui.bmenu=false; camEdit.target.set(0,0,20); camEdit.dist=Math.min(1000, 320+count*0.15); camEdit.pitch=0.6; refreshChrome();
+}
+function clearCity(){ if(state.buildings.some(b=>b.gen)) commit(()=>{ state.buildings=state.buildings.filter(b=>!b.gen); }, 'Generated buildings removed', null, 'all'); refreshChrome(); }
+function deleteBuilding(b){ commit(()=>{ state.buildings=state.buildings.filter(x=>x.id!==b.id); }, b.name+' deleted — Ctrl+Z to undo', b); syncRecs(); ui.sel=null; refreshChrome(); }
 
 /* =========================================================================
    Panel rendering
@@ -1402,7 +1839,7 @@ function renderPanel(){
     h+=`<div class="menu">`;
     if(b) h+=`<label class="sub-h" for="bname">Name</label><input class="name" id="bname" value="${esc(b.name)}">`;
     const others=state.buildings.filter(x=>x.id!==ui.sel);
-    if(others.length) h+=`${b?'<div class="sub-h">Switch to</div>':''}<div class="blist">${others.map(x=>`<button class="brow" data-act="sel" data-id="${x.id}"><span class="sw" style="background:${x.style.wall}"></span><span class="nm">${esc(x.name)}</span><span class="fl mono">${x.floors.length} fl</span></button>`).join('')}</div>`;
+    if(others.length){ h+=`${b?'<div class="sub-h">Switch to</div>':''}`; if(others.length>12) h+=`<input class="bfind" id="bfind" type="search" placeholder="Find a building (${others.length.toLocaleString()})" value="${esc(ui.find||'')}" aria-label="Find a building">`; h+=`<div class="blist" id="blist">${buildingRows(others)}</div>`; }
     h+=`<div class="sub-h">New building</div><div class="shapes">${Object.keys(FOOTPRINTS).map(k=>`<button class="shape" data-act="new" data-shape="${k}" title="New ${SHAPE_LABEL[k]}-shaped building">${shapeIcon(k)}${SHAPE_LABEL[k]}</button>`).join('')}</div>`;
     if(b) h+=`<div class="row" style="margin-top:12px"><button class="btn" data-act="dup" title="Ctrl+D">${I.dup} Duplicate</button><button class="btn danger ghost" data-act="delB">${I.del} Delete</button></div>`;
     h+=`</div></div>`;
@@ -1456,6 +1893,10 @@ function renderPanel(){
     }
   }
   panel.innerHTML=h; updateHint();
+}
+function buildingRows(list){
+  const q=(ui.find||'').trim().toLowerCase(), hits=q ? list.filter(x=>x.name.toLowerCase().includes(q)) : list, shown=hits.slice(0,30);
+  return shown.map(x=>`<button class="brow" data-act="sel" data-id="${x.id}"><span class="sw" style="background:${x.style.wall}"></span><span class="nm">${esc(x.name)}</span><span class="fl mono">${x.floors.length} fl</span></button>`).join('') + (hits.length>shown.length ? `<p class="note">${(hits.length-shown.length).toLocaleString()} more — type to narrow down</p>` : '') + (!hits.length ? '<p class="note">No building matches.</p>' : '');
 }
 function inspector(b){
   const s=ui.sub;
@@ -1532,9 +1973,10 @@ panel.addEventListener('click', e=>{
 });
 panel.addEventListener('toggle', e=>{ if(e.target.matches('details.more')) ui.moreOpen=e.target.open; }, true);
 panel.addEventListener('input', e=>{
+  if(e.target.id==='bfind'){ ui.find=e.target.value; const l=$('#blist'); if(l) l.innerHTML=buildingRows(state.buildings.filter(x=>x.id!==ui.sel)); return; }
   const b=selB(); if(!b) return; const t=e.target;
-  if(t.dataset.num){ if(!sliding){ pushUndo(); sliding=true; } const v=+t.value; setPath(b,t.dataset.num,v); if(t.dataset.num==='style.winW'||t.dataset.num==='style.bay') b.style.preset=null; t.nextElementSibling.textContent=v.toFixed(+t.dataset.dec)+t.dataset.unit; touch(b); }
-  if(t.dataset.color){ if(!sliding){ pushUndo(); sliding=true; } setPath(b,t.dataset.color,t.value); b.style.preset=null; touch(b); }
+  if(t.dataset.num){ if(!sliding){ pushUndo(b); sliding=true; } const v=+t.value; setPath(b,t.dataset.num,v); if(t.dataset.num==='style.winW'||t.dataset.num==='style.bay') b.style.preset=null; t.nextElementSibling.textContent=v.toFixed(+t.dataset.dec)+t.dataset.unit; touch(b); }
+  if(t.dataset.color){ if(!sliding){ pushUndo(b); sliding=true; } setPath(b,t.dataset.color,t.value); b.style.preset=null; touch(b); }
 });
 panel.addEventListener('change', e=>{
   const b=selB(); const t=e.target;
@@ -1574,26 +2016,26 @@ function overlayRebuild(){
   const sp=document.createElement('div'); sp.className='hd-s'; sp.title='Play spawn point — drag to move';
   sp.innerHTML='<svg width="26" height="30" viewBox="0 0 26 30" aria-hidden="true"><path d="M13 29s10-9.5 10-17A10 10 0 0 0 3 12c0 7.5 10 17 10 17z" fill="#1C2320"/><circle cx="13" cy="9" r="3" fill="#FF8A3D"/><path d="M8 18a5 5 0 0 1 10 0" fill="#FF8A3D"/></svg>';
   ov.appendChild(sp); ovItems.push({el:sp, pos:()=>tmp3.set(state.spawn.x,0,state.spawn.z)});
-  handleDrag(sp, ()=>pushUndo(), p=>{ state.spawn=P(snapG(p.x),snapG(p.z)); saveSoon(); });
+  handleDrag(sp, ()=>pushUndo([]), p=>{ state.spawn=P(snapG(p.x),snapG(p.z)); saveSoon(); });
   }
   const b=selB(); if(!b || ui.tab!=='shape') return;
   const id=b.id;
   b.footprint.forEach((v,i)=>{
     const el=document.createElement('div'); el.className='hd-v'+(ui.vsel===i?' sel':''); el.title='Drag to move · double-click to remove';
     ov.appendChild(el); ovItems.push({el, pos:()=>{ const bb=bById(id), q=bb?.footprint[i]; return q ? tmp3.set(q.x+bb.pos.x,0,q.z+bb.pos.z) : null; }});
-    handleDrag(el, ()=>{ pushUndo(); ui.vsel=i; ov.querySelectorAll('.hd-v').forEach((x,j)=>x.classList.toggle('sel',j===i)); }, (p,ev)=>{
+    handleDrag(el, ()=>{ pushUndo(bById(id)); ui.vsel=i; ov.querySelectorAll('.hd-v').forEach((x,j)=>x.classList.toggle('sel',j===i)); }, (p,ev)=>{
       const bb=bById(id); let x=p.x-bb.pos.x, z=p.z-bb.pos.z;
       if(ui.snap && !ev.altKey){ x=snapG(x); z=snapG(z); const n=bb.footprint.length; for(const j of [(i-1+n)%n,(i+1)%n]){ const q=bb.footprint[j]; if(Math.abs(q.x-x)<0.4) x=q.x; if(Math.abs(q.z-z)<0.4) z=q.z; } }
       const q=bb.footprint[i]; if(q.x!==x||q.z!==z){ q.x=x; q.z=z; touch(bb); }
     }, ()=>renderPanel());
-    el.addEventListener('dblclick', ev=>{ ev.stopPropagation(); const bb=bById(id); pushUndo(); if(removeVertex(bb,i)){ touch(bb); ui.vsel=-1; overlayRebuild(); renderPanel(); } else { undoStack.pop(); toast('A footprint needs at least 3 corners'); } });
+    el.addEventListener('dblclick', ev=>{ ev.stopPropagation(); const bb=bById(id); pushUndo(bb); if(removeVertex(bb,i)){ touch(bb); ui.vsel=-1; overlayRebuild(); renderPanel(); } else { undoStack.pop(); toast('A footprint needs at least 3 corners'); } });
     el.addEventListener('contextmenu', ev=>{ ev.preventDefault(); el.dispatchEvent(new MouseEvent('dblclick')); });
   });
   b.footprint.forEach((v,i)=>{
     const m=document.createElement('div'); m.className='hd-m'; m.textContent='+'; m.title='Drag to add a corner';
     ov.appendChild(m); ovItems.push({el:m, pos:()=>{ const bb=bById(id); if(!bb) return null; const a=bb.footprint[i], c=bb.footprint[(i+1)%bb.footprint.length]; return c ? tmp3.set((a.x+c.x)/2+bb.pos.x,0,(a.z+c.z)/2+bb.pos.z) : null; }});
     let ni=-1;
-    handleDrag(m, ()=>{ const bb=bById(id); pushUndo(); ni=insertVertex(bb,i); touch(bb); }, (p,ev)=>{ const bb=bById(id); const q=bb.footprint[ni]; let x=p.x-bb.pos.x, z=p.z-bb.pos.z; if(ui.snap&&!ev.altKey){x=snapG(x);z=snapG(z);} q.x=x; q.z=z; touch(bb); }, ()=>{ ui.vsel=ni; overlayRebuild(); renderPanel(); });
+    handleDrag(m, ()=>{ const bb=bById(id); pushUndo(bb); ni=insertVertex(bb,i); touch(bb); }, (p,ev)=>{ const bb=bById(id); const q=bb.footprint[ni]; let x=p.x-bb.pos.x, z=p.z-bb.pos.z; if(ui.snap&&!ev.altKey){x=snapG(x);z=snapG(z);} q.x=x; q.z=z; touch(bb); }, ()=>{ ui.vsel=ni; overlayRebuild(); renderPanel(); });
     const len=document.createElement('div'); len.className='len'; ov.appendChild(len);
     ovItems.push({el:len, pos:()=>{ const bb=bById(id); if(!bb) return null; const a=bb.footprint[i], c=bb.footprint[(i+1)%bb.footprint.length]; if(!c) return null; const L=Math.hypot(c.x-a.x,c.z-a.z); const t=L.toFixed(1)+' m'; if(len.textContent!==t) len.textContent=t; const ccw=area2(bb.footprint)>0; const nx=(ccw?1:-1)*(c.z-a.z)/L, nz=(ccw?-1:1)*(c.x-a.x)/L; return tmp3.set((a.x+c.x)/2+bb.pos.x+nx*1.4,0,(a.z+c.z)/2+bb.pos.z+nz*1.4); }});
   });
@@ -1601,7 +2043,7 @@ function overlayRebuild(){
   ce.innerHTML='<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.5v15M1.5 9h15M9 1.5 6.8 3.7M9 1.5l2.2 2.2M9 16.5l-2.2-2.2M9 16.5l2.2-2.2M1.5 9l2.2-2.2M1.5 9l2.2 2.2M16.5 9l-2.2-2.2M16.5 9l-2.2 2.2" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>';
   ov.appendChild(ce); ovItems.push({el:ce, pos:()=>{ const bb=bById(id); if(!bb) return null; const c=centroid(bb.footprint); return tmp3.set(c.x+bb.pos.x,0,c.z+bb.pos.z); }});
   let off=null;
-  handleDrag(ce, ()=>{ pushUndo(); off=null; }, (p)=>{ const bb=bById(id); if(!off) off=P(bb.pos.x-p.x,bb.pos.z-p.z); const nx=snapG(p.x+off.x), nz=snapG(p.z+off.z); if(nx!==bb.pos.x||nz!==bb.pos.z){ bb.pos=P(nx,nz); touch(bb); } });
+  handleDrag(ce, ()=>{ pushUndo(bById(id)); off=null; }, (p)=>{ const bb=bById(id); if(!off) off=P(bb.pos.x-p.x,bb.pos.z-p.z); const nx=snapG(p.x+off.x), nz=snapG(p.z+off.z); if(nx!==bb.pos.x||nz!==bb.pos.z){ bb.pos=P(nx,nz); touch(bb); } });
 }
 function handleDrag(el, onStart, onMove, onEnd){
   let active=false;
@@ -1655,9 +2097,47 @@ $('#bHelp').onclick=()=>{ openModal(`<h2>Shortcuts & data</h2><table>
 function openData(){ openModal(`<h2>Layout data</h2><p class="note" style="margin:0 0 10px">This is the full editor state — the same shape the Unity data model is specced against. Copy it to share a layout, or paste one in and load it.</p><textarea id="jsonTa" spellcheck="false">${esc(JSON.stringify(state,null,1))}</textarea>
   <div class="row" style="margin-top:12px"><button class="btn" id="jCopy">Copy</button><button class="btn" id="jLoad">Load pasted JSON</button><button class="btn danger ghost" id="jReset">Reset to demo</button><span class="spacer" style="flex:1"></span><button class="btn pri" data-close>Close</button></div>`);
   $('#jCopy').onclick=()=>{ const ta=$('#jsonTa'); navigator.clipboard?.writeText(ta.value).then(()=>toast('Copied'),()=>{ ta.select(); toast('Press Ctrl+C to copy'); }) ?? (ta.select(), toast('Press Ctrl+C to copy')); };
-  $('#jLoad').onclick=()=>{ try{ const o=JSON.parse($('#jsonTa').value); if(!o||!Array.isArray(o.buildings)) throw 0; pushUndo(); state=o; state.v=2; state.seq=Math.max(state.seq||1, 1000); afterRestore('Layout loaded'); closeModal(); }catch(e){ toast('That JSON is not a layout — check it starts with {"v":2'); } };
-  $('#jReset').onclick=()=>{ pushUndo(); demoState(); afterRestore('Demo restored'); closeModal(); };
+  $('#jLoad').onclick=()=>{ try{ const o=JSON.parse($('#jsonTa').value); if(!o||!Array.isArray(o.buildings)) throw 0; pushUndo('all'); state=o; state.v=2; state.seq=Math.max(state.seq||1, 1000); afterRestore('Layout loaded'); closeModal(); }catch(e){ toast('That JSON is not a layout — check it starts with {"v":2'); } };
+  $('#jReset').onclick=()=>{ pushUndo('all'); demoState(); afterRestore('Demo restored'); closeModal(); };
 }
+
+/* =========================================================================
+   City & LOD stats card
+   ========================================================================= */
+const perfEl=$('#perf'), LODC=['#299E4D','#F2B71F','#E54D1A','#9AA39D']; let perfOpen=false, perfT=0, cpuAcc=0, cpuN=0; const frameTimes=[];
+const fmtN = v => v>=1e6 ? (v/1e6).toFixed(2)+'M' : v>=1e4 ? (v/1e3).toFixed(1)+'k' : v.toLocaleString();
+function perfTick(now, cpu){ frameTimes.push(now); while(frameTimes.length && now-frameTimes[0]>1000) frameTimes.shift(); cpuAcc+=cpu; cpuN++; if(!perfOpen || now-perfT<250) return; perfT=now; updatePerf(cpuAcc/cpuN); cpuAcc=0; cpuN=0; }
+function openPerf(open){ perfOpen=open; perfEl.hidden=!open; $('#bPerf').classList.toggle('on',open); $('#bPerf').setAttribute('aria-pressed',open); if(open) renderPerf(); }
+function renderPerf(){
+  const gen=state.buildings.filter(b=>b.gen).length;
+  perfEl.innerHTML=`<div class="h"><span class="grow">City &amp; LOD</span><button class="ib" data-pact="close" aria-label="Close stats" style="min-width:24px;height:24px">${I.del}</button></div>
+    <div class="lodbar" id="pBar"></div><div class="lodleg" id="pLeg"></div>
+    <div class="pstats"><span>Buildings</span><b id="pB"></b><span>Draw calls (incl. shadows)</span><b id="pDC"></b><span>Triangles drawn</span><b id="pTri"></b><span>Merged cells shown</span><b id="pCells"></b><span>LODs waiting to build</span><b id="pQ"></b><span>Frame · CPU</span><b id="pFps"></b></div>
+    <div id="pSel"></div>
+    <label class="sl"><span>LOD bias</span><input type="range" id="pBias" min="0.25" max="3" step="0.05" value="${LODCFG.bias}"><output>${LODCFG.bias.toFixed(2)}×</output></label>
+    <label class="chk"><input type="checkbox" id="pTint" ${G.uLodTint.value?'checked':''}> Tint buildings by LOD</label>
+    <div class="sub-h">Stress test</div><div class="row"><button class="btn" data-pact="city" data-n="1000">1,000 buildings</button><button class="btn" data-pact="city" data-n="3000">3,000</button>${gen?`<button class="btn ghost" data-pact="clear">Remove</button>`:''}</div>`;
+  updatePerf(0);
+}
+function selLodTris(){
+  const b=selB(); if(!b || ui.mode!=='edit') return null; const r=recs.get(b.id); if(!r || !r.l2) return null;
+  if(!ready(r,'l1') && !(r.l1c && r.l1c.ver===r.ver)){ r.l1c={ver:r.ver, tris:buildLOD1(b,r.idx).op.tris}; }
+  return [r.l0 ? r.l0.tris : null, ready(r,'l1') ? r.l1.tris : r.l1c.tris, r.l2.tris];
+}
+function updatePerf(cpu){
+  if(!perfOpen) return;
+  const info=renderer.info.render, n=lodStats.n, total=Math.max(1,recs.size), set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
+  set('pB', recs.size.toLocaleString()); set('pDC', info.calls.toLocaleString()); set('pTri', fmtN(info.triangles)); set('pCells', lodStats.cellsShown+' of '+lodStats.cells); set('pQ', lodStats.queue);
+  set('pFps', frameTimes.length+' fps · '+cpu.toFixed(1)+' ms');
+  const bar=$('#pBar'); if(bar) bar.innerHTML=n.map((c,i)=>`<i style="width:${(100*c/total).toFixed(2)}%;background:${LODC[i]}"></i>`).join('');
+  const leg=$('#pLeg'); if(leg) leg.innerHTML=['LOD0 full','LOD1 shell','LOD2 massing','culled'].map((l,i)=>`<span><b style="background:${LODC[i]}"></b>${l} <em>${n[i].toLocaleString()}</em></span>`).join('');
+  const t=selLodTris(), ps=$('#pSel');
+  if(ps) ps.innerHTML = t ? `<div class="sub-h" style="margin-top:0">Triangles in ${esc(selB().name)}</div><div class="pstats"><span>LOD0 full</span><b>${t[0]!=null?t[0].toLocaleString():'—'}</b><span>LOD1 shell</span><b>${t[1].toLocaleString()}</b><span>LOD2 massing</span><b>${t[2].toLocaleString()}</b></div>` : '';
+}
+perfEl.addEventListener('click', e=>{ const a=e.target.closest('[data-pact]'); if(!a) return; const k=a.dataset.pact;
+  if(k==='close') openPerf(false); else if(k==='city'){ generateCity(+a.dataset.n); renderPerf(); } else if(k==='clear'){ clearCity(); renderPerf(); } });
+perfEl.addEventListener('input', e=>{ if(e.target.id==='pBias'){ LODCFG.bias=+e.target.value; e.target.nextElementSibling.textContent=LODCFG.bias.toFixed(2)+'×'; } if(e.target.id==='pTint') G.uLodTint.value=e.target.checked?1:0; });
+$('#bPerf').onclick=()=>openPerf(!perfOpen);
 
 /* =========================================================================
    Main loop
@@ -1667,7 +2147,8 @@ let last=performance.now();
 function tick(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   resize();
-  for(const id of dirty){ const b=bById(id); if(b) rebuild(b); } dirty.clear();
+  const tf=performance.now();
+  if(dirty.size){ for(const id of dirty){ const b=bById(id); if(b) refreshBuilding(b); } dirty.clear(); }
   if(ui.mode==='play'){ updatePlayer(dt); updateHUD(); updateLiftUI(); applyCam(camPlay); }
   else {
     const b=selB(); const inInt = b && ui.tab==='interior' && !isShell(b); const desY = inInt ? floorBase(b,activeFloor(b)) : 0;
@@ -1679,8 +2160,10 @@ function tick(now){
     overlayUpdate();
   }
   const f=G.uFocus.value; sun.position.set(f.x+30, f.y+60, f.z+18); sun.target.position.set(f.x, f.y, f.z);
-  applyView();
+  const activeId=applyView();
+  updateLOD(dt, activeId);
   renderer.render(scene,camera);
+  perfTick(now, performance.now()-tf);
   requestAnimationFrame(tick);
 }
 
@@ -1691,5 +2174,14 @@ touch();
 ui.sel = state.buildings[0]?.id || null;
 refreshChrome();
 requestAnimationFrame(tick);
-window.__sb = { geo:(i)=>{ const b=state.buildings[i]; DEBUG_SOLIDS=true; const g=buildGeometry(b); DEBUG_SOLIDS=false; return g.levels.map(L=>({p:L.op.p,n:L.op.n,c:L.op.c,i:L.op.i,solids:L.op.solids})); }, nb:()=>state.buildings.length, bench:()=>{ const b=state.buildings[0]; const t=performance.now(); for(let i=0;i<10;i++) buildGeometry(b); return (performance.now()-t)/10; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); } };
+window.__sb = { geo:(i,lod=0)=>{ const b=state.buildings[i], r=recOf(b); DEBUG_SOLIDS=true; let out;
+    if(lod<2){ const g = lod===0 ? buildLOD0(b,r.idx) : buildLOD1(b,r.idx); out=[{p:g.op.p,n:g.op.n,c:g.op.c,i:g.op.i,k:g.op.k,solids:g.op.solids}]; }
+    else { const L=buildLOD2(b,r.idx), c=[]; for(let v=0;v<L.count;v++){ const k=L.fac2[v*2+1]; c.push(k,k,k); } out=[{p:[...L.pos], n:[...L.nrm].map(v=>v/127), c, i:[...L.idx], solids:[]}]; }
+    DEBUG_SOLIDS=false; return out; },
+  nb:()=>state.buildings.length, bench:(i=0,lod=0)=>{ const b=state.buildings[i], r=recOf(b), f=[buildLOD0,buildLOD1,buildLOD2][lod]; const t=performance.now(); for(let k=0;k<10;k++) f(b,r.idx); return (performance.now()-t)/10; },
+  lodStats, LODCFG, city:generateCity, clearCity, recs, cells, openPerf, renderer,
+  timeLOD:(n=20)=>{ const b=LODCFG.budgetMs; LODCFG.budgetMs=-1; const t=performance.now(); for(let i=0;i<n;i++) updateLOD(0, null); LODCFG.budgetMs=b; return (performance.now()-t)/n; },
+  memBytes:()=>{ let by=0, m=0; scene.traverse(o=>{ if(o.isMesh && o.geometry){ m++; for(const a of Object.values(o.geometry.attributes)) by+=a.array.byteLength; if(o.geometry.index) by+=o.geometry.index.array.byteLength; } }); return {meshes:m, MB:+(by/1048576).toFixed(1)}; },
+  timeCells:()=>{ const t=performance.now(); let n=0; for(const c of cells.values()){ c.dirty=true; rebuildCell(c); n++; } return {cells:n, msPerCell:+((performance.now()-t)/Math.max(1,n)).toFixed(3)}; },
+  camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); } };
 </script>
