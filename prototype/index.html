@@ -1285,24 +1285,34 @@ function makeRoof(b, st, type, raw, party){
   for(const f of faces){ let polys=[[f.pts]]; if(PC){ try{ polys=PC.intersection([f.pts],[ring(Q)]).map(pl=>pl.map(r=>r.slice(0,-1))); }catch(err){} }
     const g=Ef[f.j].nin, nrm=(()=>{ const v=[-slope*g[0],1,-slope*g[1]], l=Math.hypot(...v); return v.map(x=>x/l); })();
     for(const pl of polys){ if(pl[0].length<3) continue; const pts=pl[0].map(([x,z])=>[x,hOf(f.j,x,z),z]); pts.forEach(p=>rise=Math.max(rise,p[1]-top)); parts.push({pts, holes:pl.slice(1).map(r=>r.map(([x,z])=>[x,hOf(f.j,x,z),z])), n:nrm, kind:'roof'}); clipped.push({j:f.j, pts}); } }
+  // an eave's roof edge height (constant along it: a shed's high side is up at the top, every other eave at hb)
+  const eaveH = j => type==='shed' ? hOf(low, Q[j].x, Q[j].z) : hb;
+  // the eave neighbour at an outer corner of edge j (end 0 = start, 1 = end), where an eave box has to be closed
+  const capAt=(j,end)=>{ const nb=end?(j+1)%n:(j-1+n)%n; if(kinds[nb]!=='eave' || e<0.05) return -1; const d0=E[end?j:nb].d, d1=E[end?nb:j].d; return d0[0]*d1[1]-d0[1]*d1[0] > 1e-9 ? nb : -1; };
+  const clipAbove=(poly,y0)=>{ const cl=[]; for(let i=0;i<poly.length;i++){ const u=poly[i], v=poly[(i+1)%poly.length], iu=u[1]>=y0-1e-6, iv=v[1]>=y0-1e-6; if(iu) cl.push(u); if(iu!==iv){ const s=(y0-u[1])/(v[1]-u[1]); cl.push([u[0]+(v[0]-u[0])*s, y0]); } }
+    return cl.filter((q,i)=>i===0 || Math.hypot(q[0]-cl[i-1][0],q[1]-cl[i-1][1])>1e-5); };
   for(let j=0;j<n;j++){ const A=Q[j], B=Q[(j+1)%n], L=Math.hypot(B.x-A.x,B.z-A.z); if(L<1e-4) continue; const d=[(B.x-A.x)/L,(B.z-A.z)/L], out=[E[j].nin[0]*-1,0,E[j].nin[1]*-1];
+    const lift=(t,y)=>[A.x+d[0]*t, y, A.z+d[1]*t];
     if(kinds[j]==='eave'){   // fascia and soffit (none without an overhang: the roof edge then sits on the wall)
-      if(e<0.05) continue; const yb=hb-0.15; parts.push({pts:[[A.x,yb,A.z],[B.x,yb,B.z],[B.x,hb,B.z],[A.x,hb,A.z]], n:out, kind:'trim'});
-      const Wa=W[j], Wb=W[(j+1)%n]; parts.push({pts:[[A.x,yb,A.z],[B.x,yb,B.z],[Wb.x,yb,Wb.z],[Wa.x,yb,Wa.z]], n:[0,-1,0], kind:'soffit'}); continue; }
+      if(e<0.05) continue; const hE=eaveH(j), yb=hE-0.15, Wa=W[j], Wb=W[(j+1)%n];
+      parts.push({pts:[[A.x,yb,A.z],[B.x,yb,B.z],[B.x,hE,B.z],[A.x,hE,A.z]], n:out, kind:'trim'});
+      parts.push({pts:[[A.x,yb,A.z],[B.x,yb,B.z],[Wb.x,yb,Wb.z],[Wa.x,yb,Wa.z]], n:[0,-1,0], kind:'soffit'});
+      if(yb>top+0.01) parts.push({pts:[[Wa.x,top,Wa.z],[Wb.x,top,Wb.z],[Wb.x,yb,Wb.z],[Wa.x,yb,Wa.z]], n:out, kind:'wall'});   // wall up to a high eave (a shed's tall side)
+      continue; }
     if(kinds[j]==='skip') continue;
-    // wall under the roof along a rake / gable / own edge: the roof profile along the line, from the wall top up
+    // the roof profile along this rake / gable / own edge
     const prof=[]; for(const c of clipped) for(const q of c.pts){ const t=(q[0]-A.x)*d[0]+(q[2]-A.z)*d[1], dd=Math.abs((q[0]-A.x)*d[1]-(q[2]-A.z)*d[0]); if(dd<1e-4 && t>-1e-4 && t<L+1e-4) prof.push([t,q[1]]); }
     prof.sort((u,v)=>u[0]-v[0]); const pr=prof.filter((q,i)=>!i || q[0]-prof[i-1][0]>1e-4 || Math.abs(q[1]-prof[i-1][1])>1e-4);
     if(pr.length<2) continue;
-    let poly=[[pr[0][0],top],...pr,[pr.at(-1)[0],top]];
-    const cl=[]; for(let i=0;i<poly.length;i++){ const u=poly[i], v=poly[(i+1)%poly.length], iu=u[1]>=top-1e-6, iv=v[1]>=top-1e-6; if(iu) cl.push(u); if(iu!==iv){ const s=(top-u[1])/(v[1]-u[1]); cl.push([u[0]+(v[0]-u[0])*s, top]); } }
-    const wp=cl.filter((q,i)=>i===0 || Math.hypot(q[0]-cl[i-1][0],q[1]-cl[i-1][1])>1e-5).map(([t,y])=>[A.x+d[0]*t, y, A.z+d[1]*t]);
-    if(wp.length>=3 && Math.abs(polyArea3(wp))>1e-4) parts.push({pts:wp, n:out, kind:'wall'});
-    // end caps where a neighbouring eave box stops at this wall
-    for(const [end, nb] of [[0,(j-1+n)%n],[1,(j+1)%n]]){ if(kinds[nb]!=='eave' || e<0.05) continue;
-      const d0=E[end?j:nb].d, d1=E[end?nb:j].d; if(d0[0]*d1[1]-d0[1]*d1[0] <= 1e-9) continue;   // outer corners only: at an inner one the eave box ends on the wall
-      const C=end ? B : A, Wc=end ? W[(j+1)%n] : W[j], yb=hb-0.15, yr=hOf(nb,Wc.x,Wc.z);
-      parts.push({pts:[[C.x,yb,C.z],[Wc.x,yb,Wc.z],[Wc.x,Math.max(yr,top),Wc.z],[C.x,hb,C.z]], n:out, kind:'wall'}); } }
+    const at=t=>{ if(t<=pr[0][0]) return pr[0][1]; for(let i=1;i<pr.length;i++) if(t<=pr[i][0]){ const [t0,y0]=pr[i-1], [t1,y1]=pr[i]; return y0+(y1-y0)*(t-t0)/Math.max(t1-t0,1e-9); } return pr.at(-1)[1]; };
+    const span=(t0,t1)=>[[t0,at(t0)], ...pr.filter(q=>q[0]>t0+1e-4 && q[0]<t1-1e-4), [t1,at(t1)]];
+    const c0=capAt(j,0), c1=capAt(j,1), tW=Wc=>(Wc.x-A.x)*d[0]+(Wc.z-A.z)*d[1];
+    // wall from the wall top up to the roof, over the length of the building's wall (an eave box closes the rest)
+    const t0 = c0>=0 ? tW(W[j]) : pr[0][0], t1 = c1>=0 ? tW(W[(j+1)%n]) : pr.at(-1)[0];
+    if(t1>t0+1e-4){ const wp=clipAbove([[t0,top], ...span(t0,t1), [t1,top]], top).map(([t,y])=>lift(t,y)); if(wp.length>=3 && Math.abs(polyArea3(wp))>1e-4) parts.push({pts:wp, n:out, kind:'wall'}); }
+    // end caps: close each eave box from its soffit up to the roof, between the roof corner and the wall corner
+    for(const [nb, tc, tw] of [[c0, 0, t0], [c1, L, t1]]){ if(nb<0) continue; const yb=eaveH(nb)-0.15, a0=Math.min(tc,tw), a1=Math.max(tc,tw); if(a1-a0<1e-4) continue;
+      const cp=[[a0,yb],[a1,yb], ...span(a0,a1).reverse()].map(([t,y])=>lift(t,y)); if(Math.abs(polyArea3(cp))>1e-4) parts.push({pts:cp, n:out, kind:'wall'}); } }
   return {parts, rise:Math.max(rise,0)};
 }
 const polyArea3 = pts => { let a=0; for(let i=0;i<pts.length;i++){ const p=pts[i], q=pts[(i+1)%pts.length]; a+=(p[0]-q[0])*(p[1]+q[1]) + (p[2]-q[2])*(p[1]+q[1]); } return a/2; };
