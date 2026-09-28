@@ -239,6 +239,8 @@ The prototype's UI was cut down so only the current task is on screen:
 | Facade: style presets, window type, three colour rows, *Entrance / Blank wall* picking; everything else under **More options** | Presets are `FacadeStyle` ScriptableObject assets (so they're shared and versioned). A foldout holds the less-used fields. |
 | Interior: walk-in / shell, one-row tool strip, selection inspector; interior colours under a foldout | A **Scene view overlay toolbar** (Overlays API) for tools. Selected cores and props use the standard inspector. |
 | Floor card: count ± always; floor list only in Interior | A Scene view overlay panel. It stays collapsed to the count field except while the Interior tool is active. |
+| **Isolate** (button next to the building name, or `I`): other buildings fade to a light ghost and stop casting shadows; the camera frames the selected building. Done in the shared shader from the building index, so nothing is rebuilt. | A `SceneVisibilityManager.Isolate`-style toggle is not enough (it hides rather than ghosts), so drive the same shader global (`_IsolateBuilding`, `_IsolateAmount`) from the editor tool. |
+| Overlay handles are projected with the *current* frame's camera: the prototype updates the camera matrices right after moving the camera. Before that fix they trailed by a frame, 200–280 px while orbiting. | Draw handles inside the Scene view's `OnSceneGUI` / `Handles` pass, which already uses the current camera. |
 | Hints only when nothing is selected; tool tips inline under the tool strip | Scene view notification (`SceneView.ShowNotification`) for one-off tips. Shortcuts are registered with the `ShortcutManager`, so they're rebindable. |
 
 ## 10. Open questions for the team

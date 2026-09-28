@@ -176,6 +176,12 @@ kbd{font:600 11px var(--mono);background:var(--well);border:1px solid var(--line
 #modal textarea{width:100%;box-sizing:border-box;height:260px;font:12px var(--mono);border:1px solid var(--line);border-radius:8px;background:var(--well);color:var(--ink);padding:8px}
 
 .bsw{padding:10px 10px 12px!important}
+.bswrow{display:flex;gap:6px;margin-bottom:10px}
+.bswrow .bswb{margin-bottom:0}
+.isob{flex:none;width:42px;border:1px solid var(--line);background:var(--panel);border-radius:8px;cursor:pointer;display:grid;place-items:center;color:var(--muted)}
+.isob:hover{border-color:var(--muted)}
+.isob.on{background:var(--ink);border-color:var(--ink);color:var(--panel)}
+.isob:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .bswb{width:100%;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:9px 10px;cursor:pointer;text-align:left;margin-bottom:10px}
 .bswb:hover{border-color:var(--muted)}
 .bswb .sw{width:12px;height:12px;border-radius:3px;flex:none;border:1px solid rgba(0,0,0,.15)}
@@ -517,7 +523,7 @@ const paramTex = new THREE.DataTexture(paramArr, TEX_W, MAX_B*PARAM_TEXELS/TEX_W
 
 const G = { uCam:{value:new THREE.Vector3()}, uFocus:{value:new THREE.Vector3()}, uFeetY:{value:-1e9}, uConeOn:{value:0}, uConeR:{value:2.6}, uCutH:{value:1.0}, uCamDir:{value:new THREE.Vector2(0,1)},
   uActive:{value:-1}, uClipY:{value:1e9}, uCutOn:{value:0}, uCutBase:{value:0}, uCutTop:{value:0}, uCap:{value:new THREE.Vector3(0.23,0.25,0.24)},
-  uState:{value:stateTex}, uParams:{value:paramTex}, uLodTint:{value:0} };
+  uState:{value:stateTex}, uParams:{value:paramTex}, uLodTint:{value:0}, uIso:{value:0}, uIsoBid:{value:-1} };
 const OCC_VERT_DECL = `attribute vec4 aWall; attribute float aKind; attribute float aTag;
 uniform highp sampler2D uState;
 varying vec3 vOccW; varying vec4 vWall; varying float vKind; varying float vBid; varying float vLod; varying float vFade;`;
@@ -535,7 +541,7 @@ const MASS_VERT_DECL = `attribute vec4 aFac; attribute vec2 aFac2; varying vec4 
 const MASS_VERT = `vFac = aFac; vFac2 = aFac2;`;
 const OCC_FRAG_DECL = `
 uniform vec3 uCam; uniform vec3 uFocus; uniform float uFeetY; uniform float uConeOn; uniform float uConeR; uniform float uCutH; uniform vec2 uCamDir;
-uniform float uActive; uniform float uClipY; uniform float uCutOn; uniform float uCutBase; uniform float uCutTop; uniform vec3 uCap; uniform float uLodTint;
+uniform float uActive; uniform float uClipY; uniform float uCutOn; uniform float uCutBase; uniform float uCutTop; uniform vec3 uCap; uniform float uLodTint; uniform float uIso; uniform float uIsoBid;
 varying vec3 vOccW; varying vec4 vWall; varying float vKind; varying float vBid; varying float vLod; varying float vFade;
 float occBayer(vec2 p){ int x = int(mod(p.x,4.0)); int y = int(mod(p.y,4.0));
   float m[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.); return (m[x+y*4]+0.5)/16.0; }
@@ -543,6 +549,13 @@ vec3 lodTint(float l){ return l < 0.5 ? vec3(0.16,0.62,0.30) : l < 1.5 ? vec3(0.
 void occlude(){
   // 0. LOD cross-fade: the old and new LOD draw complementary dither patterns
   if (vFade < 2.0) { float d = occBayer(gl_FragCoord.xy); if (vFade >= 0.0) { if (d >= vFade) discard; } else if (d < -vFade - 1.0) discard; }
+  // isolate: every other building fades to a light screen-door ghost
+  if (uIso > 0.001 && abs(vBid - uIsoBid) > 0.5) {
+#ifdef OCC_DEPTH
+    if (uIso > 0.5) discard;   // faded buildings stop casting shadows
+#endif
+    if (occBayer(gl_FragCoord.xy + vec2(1.0, 2.0)) < uIso * 0.72) discard;
+  }
   bool act = abs(vBid - uActive) < 0.5;          // only the building the player is in (or the one being edited) is sliced
   // 1. everything above the ceiling of the active floor
   if (act && vOccW.y > uClipY) discard;
@@ -608,20 +621,20 @@ function patch(mat, o={}){
     Object.assign(sh.uniforms, G);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n'+OCC_VERT_DECL+(o.massing?MASS_VERT_DECL:''))
       .replace('#include <project_vertex>', '#include <project_vertex>\n'+OCC_VERT+(o.massing?MASS_VERT:''));
-    let fs = sh.fragmentShader.replace('#include <common>', '#include <common>\n'+OCC_FRAG_DECL+(o.massing?MASS_FRAG_DECL:'')).replace('void main() {', 'void main() {\n  occlude();');
-    fs = fs.replace('#include <color_fragment>', '#include <color_fragment>\n'+(o.massing?'  diffuseColor.rgb = facadeColor();\n':'')+'  if (uLodTint > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, lodTint(vLod), 0.65);');
+    let fs = sh.fragmentShader.replace('#include <common>', '#include <common>\n'+(o.depth?'#define OCC_DEPTH\n':'')+OCC_FRAG_DECL+(o.massing?MASS_FRAG_DECL:'')).replace('void main() {', 'void main() {\n  occlude();');
+    fs = fs.replace('#include <color_fragment>', '#include <color_fragment>\n'+(o.massing?'  diffuseColor.rgb = facadeColor();\n':'')+'  if (uLodTint > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, lodTint(vLod), 0.65);\n  if (uIso > 0.001 && abs(vBid - uIsoBid) > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.82, 0.83), uIso * 0.7);');
     if (o.cap) fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  if (!gl_FrontFacing) gl_FragColor = vec4(uCap, 1.0);');
     sh.fragmentShader = fs;
   };
-  mat.customProgramCacheKey = () => 'occ'+(o.cap?1:0)+(o.massing?'m':'');
+  mat.customProgramCacheKey = () => 'occ'+(o.cap?1:0)+(o.massing?'m':'')+(o.depth?'d':'');
   return mat;
 }
 const MAT = {
   opaque: patch(new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.86, metalness:0, side:THREE.DoubleSide}), {cap:true}),
   glass: patch(new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.08, metalness:0.15, transparent:true, opacity:0.5, depthWrite:false}), {}),
-  depth: patch(new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide}), {}),
+  depth: patch(new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide}), {depth:true}),
   mass: patch(new THREE.MeshStandardMaterial({roughness:0.9, metalness:0, side:THREE.DoubleSide}), {cap:true, massing:true}),
-  massDepth: patch(new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide}), {massing:true}),
+  massDepth: patch(new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide}), {massing:true, depth:true}),
 };
 
 /* ---- geometry builder: boxes & polygons with per-vertex colour, building tag and occlusion data ---- */
@@ -1250,7 +1263,7 @@ let carMesh=null;
 const camEdit = {target:new THREE.Vector3(6,0,2), yaw:Math.PI*1.12, pitch:0.72, dist:62, ty:0};
 const camPlay = {target:new THREE.Vector3(), yaw:Math.PI, pitch:0.78, dist:13};
 const cam = () => ui.mode==='play' ? camPlay : camEdit;
-function applyCam(c){ const cp=Math.cos(c.pitch); camera.position.set(c.target.x+Math.sin(c.yaw)*cp*c.dist, c.target.y+Math.sin(c.pitch)*c.dist, c.target.z+Math.cos(c.yaw)*cp*c.dist); camera.lookAt(c.target); }
+function applyCam(c){ const cp=Math.cos(c.pitch); camera.position.set(c.target.x+Math.sin(c.yaw)*cp*c.dist, c.target.y+Math.sin(c.pitch)*c.dist, c.target.z+Math.cos(c.yaw)*cp*c.dist); camera.lookAt(c.target); camera.updateMatrixWorld(); }   // overlay handles project with this frame's camera, not last frame's
 function focusBuilding(b){ const c=centroid(b.footprint), bb=bbox(b.footprint); camEdit.target.set(c.x+b.pos.x, camEdit.target.y, c.z+b.pos.z); camEdit.dist=clamp(Math.max(bb.x1-bb.x0,bb.z1-bb.z0, roofY(b))*2.1, 18, 140); }
 
 /* =========================================================================
@@ -1768,6 +1781,7 @@ addEventListener('keydown', e=>{
   else if(k==='='||k==='+'){ commit(()=>{ addFloorTop(b); }, 'Floor '+b.floors.length+' added', b); setActive(b,b.floors.length-1); refreshChrome(); }
   else if(k==='-'||k==='_'){ if(b.floors.length>1){ commit(()=>deleteFloor(b,b.floors.length-1), 'Top floor removed', b); refreshChrome(); } }
   else if(k==='c'||k==='C') focusBuilding(b);
+  else if(k==='i'||k==='I') toggleIsolate();
   else if(k==='r'||k==='R') rotateSub();
   else if(k==='Delete'||k==='Backspace'){ if(ui.tab==='shape' && ui.vsel>=0){ pushUndo(b); if(removeVertex(b,ui.vsel)){ touch(b); ui.vsel=-1; overlayRebuild(); renderPanel(); } else undoStack.pop(); } else deleteSub(); }
   else if(ui.tab==='interior'){ const m={v:'select',w:'wall',d:'door',x:'erase',e:'erase',s:'stairs',l:'lift',f:'prop'}[k.toLowerCase()]; if(m) setTool(m); }
@@ -1883,7 +1897,7 @@ function renderPanel(){
   // building switcher: one line when closed, list + new building when open
   const open = ui.bmenu || !b;
   h+=`<div class="sec bsw">`;
-  if(b) h+=`<button class="bswb" data-act="bmenu" aria-expanded="${open}"><span class="sw" style="background:${b.style.wall}"></span><span class="nm">${esc(b.name)}</span><span class="fl mono">${b.floors.length} fl${isShell(b)?' · shell':''}</span><svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="${open?'M2 8l4-4 4 4':'M2 4l4 4 4-4'}" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>`;
+  if(b) h+=`<div class="bswrow"><button class="bswb" data-act="bmenu" aria-expanded="${open}"><span class="sw" style="background:${b.style.wall}"></span><span class="nm">${esc(b.name)}</span><span class="fl mono">${b.floors.length} fl${isShell(b)?' · shell':''}</span><svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="${open?'M2 8l4-4 4 4':'M2 4l4 4 4-4'}" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button><button class="isob ${ui.isolate?'on':''}" data-act="isolate" aria-pressed="${!!ui.isolate}" title="Isolate: fade the other buildings (I)" aria-label="Isolate this building"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="6" y="3" width="6" height="12" rx="1" fill="currentColor"/><rect x="1.5" y="8" width="3" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="1.6 1.4"/><rect x="13.5" y="6" width="3" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="1.6 1.4"/></svg></button></div>`;
   else h+=`<div class="h">Buildings</div>`;
   if(open){
     h+=`<div class="menu">`;
@@ -1983,6 +1997,7 @@ function updateHint(){
   el.hidden = ui.mode!=='edit' || !!b;
   el.textContent='Click a building to edit it · drag to orbit · Shift-drag to pan · scroll to zoom';
 }
+function toggleIsolate(){ ui.isolate=!ui.isolate; const b=selB(); if(ui.isolate && b) focusBuilding(b); toast(ui.isolate?'Isolated — other buildings faded (I to undo)':'All buildings shown'); renderPanel(); }
 function smartPlay(){ const b=selB(); if(b && ui.tab==='interior' && !isShell(b) && activeFloor(b)<b.floors.length) playHere(); else enterPlay(); }
 function setTab(t, silent){ ui.tab=t; ui.sub=null; wallChain=null; hideHL(); tip.hidden=true; if(t!=='facade') ui.facadeTool=null; if(!silent) refreshChrome(); }
 function setTool(t){ ui.tool=t; wallChain=null; snapFx=null; dragItem=null; hideHL(); tip.hidden=true; canvas.style.cursor = t==='select'?'':'crosshair'; renderPanel(); }
@@ -1998,6 +2013,7 @@ panel.addEventListener('click', e=>{
   switch(act){
     case 'ptoggle': panel.classList.toggle('collapsed'); renderPanel(); break;
     case 'bmenu': ui.bmenu=!ui.bmenu; renderPanel(); renderStack(); break;
+    case 'isolate': toggleIsolate(); break;
     case 'interior': { const sh=a.dataset.v==='shell'; if(sh!==isShell(b)){ commit(()=>{ b.interior=!sh; }, sh?'Shell only — facade with no interior':'Walk-in interior restored', b); ui.sub=null; refreshChrome(); } break; }
     case 'sel': ui.bmenu=false; selectBuilding(a.dataset.id); focusBuilding(bById(a.dataset.id)); break;
     case 'new': ui.bmenu=false; newBuilding(a.dataset.shape); break;
@@ -2209,6 +2225,7 @@ $('#bHelp').onclick=()=>{ openModal(`<h2>Shortcuts & data</h2><table>
 <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Undo / redo</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicate building</td></tr>
 <tr><td><kbd>C</kbd> / double-click</td><td>Focus the camera on a building</td></tr>
+<tr><td><kbd>I</kbd></td><td>Isolate the selected building (fade the others)</td></tr>
 <tr><td><kbd>P</kbd></td><td>Play: from the floor you're editing in Interior, otherwise from the spawn point · <kbd>Esc</kbd> to stop</td></tr>
 <tr><td>Mouse</td><td>Left-drag empty space or right-drag to orbit · Shift or middle-drag to pan · wheel to zoom</td></tr>
 <tr><td>Touch</td><td>One finger orbits (or uses the tool) · two fingers pinch, twist and pan</td></tr>
@@ -2269,10 +2286,11 @@ function tick(now){
   resize();
   const tf=performance.now();
   if(dirty.size){ for(const id of dirty){ const b=bById(id); if(b) refreshBuilding(b); } dirty.clear(); }
-  if(ui.mode==='play'){ updatePlayer(dt); updateHUD(); updateLiftUI(); applyCam(camPlay); }
+  if(ui.mode==='play'){ updatePlayer(dt); updateHUD(); updateLiftUI(); applyCam(camPlay); G.uIso.value=0; }
   else {
     const b=selB(); const inInt = b && ui.tab==='interior' && !isShell(b); const desY = inInt ? floorBase(b,activeFloor(b)) : 0;
     camEdit.target.y += (desY-camEdit.target.y)*Math.min(1,dt*8); applyCam(camEdit);
+    { const want = ui.isolate && b ? 1 : 0; G.uIso.value += (want-G.uIso.value)*Math.min(1,dt*10); if(Math.abs(want-G.uIso.value)<0.01) G.uIso.value=want; const r=b&&recs.get(b.id); if(r) G.uIsoBid.value=r.idx; }
     if(inInt){ const bb=bbox(b.footprint); const sx=Math.ceil((bb.x1-bb.x0)+2), sz=Math.ceil((bb.z1-bb.z0)+2), s=Math.max(sx,sz); const key=b.id+s; if(key!==flGridKey){ scene.remove(flGrid); flGrid.geometry.dispose(); const g=new THREE.GridHelper(s, s*2, '#DD5A12', '#8E968C'); flGrid.geometry=g.geometry; flGrid.material=g.material; flGrid.material.transparent=true; flGrid.material.opacity=0.3; flGrid.material.depthWrite=false; scene.add(flGrid); flGridKey=key; }
       flGrid.visible = activeFloor(b)<b.floors.length; flGrid.position.set((bb.x0+bb.x1)/2+b.pos.x, floorBase(b,activeFloor(b))+0.03, (bb.z0+bb.z1)/2+b.pos.z); }
     else flGrid.visible=false;
