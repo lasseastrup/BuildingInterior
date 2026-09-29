@@ -2030,13 +2030,23 @@ function writeOcc(r, b){
     else { const p=clamp((T-(n-1-i)*P.stag)/SINK_DUR,0,1); sc=p>=1 ? 0 : 1-easeIn(p); gone[i]=p>=1; }
     occArr[q]=S[i].y; occArr[q+1]=sc; occArr[q+2]=gone[i]?1:0; occArr[q+3]=(i+1<n && gone[i+1])?1:0; }
 }
+// the player is standing at one of b's doors (within 1.2 m of it, on its floor): about to enter or just leaving,
+// so b is never "in the way" (the cutaway takes over once inside)
+function atDoorOf(b){ const lx=player.x-b.pos.x, lz=player.z-b.pos.z;
+  for(const e of b.entrances){ const k=e.k||0; if(Math.abs(player.y-floorBase(b,k))>1) continue;
+    const fp=fpAt(b,k), a=fp[e.edge], c=fp[(e.edge+1)%fp.length]; if(!a || !c) continue;
+    if(Math.hypot(a.x+(c.x-a.x)*e.t-lx, a.z+(c.z-a.z)*e.t-lz) < 1.2) return true; }
+  return false;
+}
 function updateOccluders(dt){
   const hits=new Set(), m=ui.occ.outside, loc=playerLoc();
   if(ui.mode==='play' && m!=='off'){
-    const c=camera.position, tg=[0.25,1.1,1.75].map(h=>({x:player.x, y:player.y+h, z:player.z}));
+    // rays end 0.5 m short of the player, so the character's own body touching a wall doesn't count as blocked
+    const c=camera.position, dl=Math.hypot(c.x-player.x, c.z-player.z), sh=dl>0.6 ? 0.5/dl : 0;
+    const tg=[0.25,1.1,1.75].map(h=>({x:player.x+(c.x-player.x)*sh, y:player.y+h, z:player.z+(c.z-player.z)*sh}));
     const L=Math.hypot(c.x-player.x, c.z-player.z), steps=Math.ceil(L/16), cand=new Set();
     for(let i=0;i<=steps;i++){ const f=i/Math.max(steps,1); for(const r of nearRecs(c.x+(player.x-c.x)*f, c.z+(player.z-c.z)*f, 17)) cand.add(r); }
-    for(const r of cand){ const b=bById(r.id); if(!b || b===loc.b) continue;
+    for(const r of cand){ const b=bById(r.id); if(!b || b===loc.b || atDoorOf(b)) continue;
       if(tg.some(t=>segHitsBuilding(b,c,t))){ hits.add(r); r.occY=sliceHeight(b); r.occTop=roofY(b)+(isPitched(b)?(roofParts(b)?.rise||0):1.1)+0.5;
         const k=occStorey(b); if(k!==r.occK && !(r.occT>0)) r.occK=k; } } }
   for(const r of hits){ r.occHold=OCC_HOLD; if(!occActive.has(r)){ const i=occSlots.indexOf(null); if(i<0) continue; occSlots[i]=r; r.slot=i; r.occT=0; r.occK=occStorey(bById(r.id)); occActive.add(r); } }
