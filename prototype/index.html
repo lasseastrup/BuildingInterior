@@ -690,6 +690,11 @@ const stateTex = new THREE.DataTexture(stateArr, TEX_W, MAX_B/TEX_W, THREE.RGBAF
 const OCC_SLOTS = 16, OCC_W = 64;
 const occArr = new Float32Array(OCC_W*OCC_SLOTS*4);
 const occTex = new THREE.DataTexture(occArr, OCC_W, OCC_SLOTS, THREE.RGBAFormat, THREE.FloatType); occTex.needsUpdate=true;
+// cutaway walls: how far each wall has slid down (0 up .. 1 down to the stub), indexed by global wall id. LOD0 meshes
+// get a block of ids when installed; the CPU runs the cutaway test per wall and eases the value, the shader lowers the wall
+const WALL_IDS = 65536;
+const wallArr = new Float32Array(WALL_IDS);
+const wallTex = new THREE.DataTexture(wallArr, 256, WALL_IDS/256, THREE.RedFormat, THREE.FloatType); wallTex.needsUpdate=true;
 const PARAM_ROWS = 512;                                         // LOD2 run slots: 8 texels each (colours, window spec, storey height / bands / top / parapet)
 const paramArr = new Float32Array(TEX_W*PARAM_ROWS*4);
 const paramTex = new THREE.DataTexture(paramArr, TEX_W, PARAM_ROWS, THREE.RGBAFormat, THREE.FloatType); paramTex.needsUpdate=true;
@@ -697,8 +702,8 @@ const paramTex = new THREE.DataTexture(paramArr, TEX_W, PARAM_ROWS, THREE.RGBAFo
 const G = { uCam:{value:new THREE.Vector3()}, uFocus:{value:new THREE.Vector3()}, uCutH:{value:1.0}, uCamDir:{value:new THREE.Vector2(0,1)},
   uActive:{value:-1}, uClipY:{value:1e9}, uCutOn:{value:0}, uCutBase:{value:0}, uCutTop:{value:0}, uCap:{value:new THREE.Vector3(0.23,0.25,0.24)},
   uState:{value:stateTex}, uParams:{value:paramTex}, uLodTint:{value:0}, uIso:{value:0}, uIsoBid:{value:-1},
-  uOccT:{value:occTex}, uOccMode:{value:0}, uPZ:{value:1}, uPScr:{value:new THREE.Vector2()}, uHoleR:{value:100} };
-const OCC_VERT_DECL = `attribute vec4 aWall; attribute float aKind; attribute float aTag;
+  uWallT:{value:wallTex}, uOccT:{value:occTex}, uOccMode:{value:0}, uPZ:{value:1}, uPScr:{value:new THREE.Vector2()}, uHoleR:{value:100} };
+const OCC_VERT_DECL = `attribute vec4 aWall; attribute float aKind; attribute float aTag; attribute float aWid; varying float vWid;
 uniform highp sampler2D uState; uniform highp sampler2D uOccT; uniform float uActive;
 varying vec3 vOccW; varying vec4 vWall; varying float vKind; varying float vBid; varying float vLod; varying float vFade; varying float vOcc; varying float vOrigY;`;
 // Sink: squash each storey of a building in the way between its floor lines (runs before projection, so shadows follow)
@@ -721,7 +726,7 @@ const OCC_SINK = `{
       }
     }
   }`;
-const OCC_VERT = `vOccW = (modelMatrix * vec4(transformed, 1.0)).xyz; vWall = aWall; vKind = aKind;
+const OCC_VERT = `vOccW = (modelMatrix * vec4(transformed, 1.0)).xyz; vWall = aWall; vKind = aKind; vWid = aWid;
   vBid = mod(aTag, 65536.0); vLod = floor(aTag / 65536.0);
   {
     int ib = int(vBid + 0.5);
@@ -737,7 +742,7 @@ const MASS_VERT = `vFac = aFac; vFac2 = aFac2; vSlot = aSlot;`;
 const OCC_FRAG_DECL = `
 uniform vec3 uCam; uniform vec3 uFocus; uniform float uCutH; uniform vec2 uCamDir; uniform float uOccMode; uniform float uPZ; uniform vec2 uPScr; uniform float uHoleR;
 uniform float uActive; uniform float uClipY; uniform float uCutOn; uniform float uCutBase; uniform float uCutTop; uniform vec3 uCap; uniform float uLodTint; uniform float uIso; uniform float uIsoBid;
-uniform highp sampler2D uOccT;
+uniform highp sampler2D uOccT; uniform highp sampler2D uWallT; varying float vWid;
 varying vec3 vOccW; varying vec4 vWall; varying float vKind; varying float vBid; varying float vLod; varying float vFade; varying float vOcc; varying float vOrigY;
 float gOccDark = 0.0;   // building in the way: tint toward black
 float occBayer(vec2 p){ int x = int(mod(p.x,4.0)); int y = int(mod(p.y,4.0));
@@ -760,7 +765,11 @@ void occlude(){
   if (act && vOccW.y > uClipY) discard;
   // 2. cutaway: walls between camera and focus drop to stub height; tall parts on the camera side too
   if (actCut && uCutOn > 0.5 && kind > 0.5 && vOccW.y > uCutBase + uCutH && vOccW.y < uCutTop && vOccW.y > uCutBase - 0.05) {
-    if (kind < 1.5) {
+    if (kind < 1.5 && vWid > 0.5) {            // walls slide down to the stub and back up (eased per wall on the CPU)
+      int id = int(vWid + 0.5);
+      float a = texelFetch(uWallT, ivec2(id % 256, id / 256), 0).r;
+      if (a > 0.0 && vOccW.y > mix(uCutTop, uCutBase + uCutH, a * a * (3.0 - 2.0 * a))) discard;
+    } else if (kind < 1.5) {                    // no wall id (none free): the instant test
       float nl = length(vWall.zw); vec2 n = vWall.zw / nl;
       float sc = dot(uCam.xz - vWall.xy, n);
       float sp = dot(uFocus.xz - vWall.xy, n);
@@ -858,9 +867,11 @@ const MAT = {
 /* ---- geometry builder: boxes & polygons with per-vertex colour, building tag and occlusion data ---- */
 const SK = {OUT:1, IN:2, UEND:4, USTART:8, TOP:16, BOT:32};   // faces a box can leave out because something covers them
 class GB {
-  constructor(tag=0, lean=false){ this.p=[]; this.n=[]; this.c=[]; this.w=[]; this.k=[]; this.i=[]; this.W=Z4; this.K=0; this.solids=null; this.tag=tag; this.lean=lean; }
-  ctx(W,K){ this.W=W||Z4; this.K=K||0; return this; }
-  _v(q,nr,c){ this.p.push(q[0],q[1],q[2]); this.n.push(nr[0],nr[1],nr[2]); this.c.push(c[0],c[1],c[2]); if(!this.lean){ this.w.push(this.W[0],this.W[1],this.W[2],this.W[3]); this.k.push(this.K); } }
+  constructor(tag=0, lean=false){ this.p=[]; this.n=[]; this.c=[]; this.w=[]; this.k=[]; this.wi=[]; this.i=[]; this.W=Z4; this.K=0; this.I=0; this.walls=[]; this.solids=null; this.tag=tag; this.lean=lean; }
+  // W: cutaway data (wall start point, normal scaled by 1 + length); K: kind + 8 x (neighbour + 1). Each wall (kind 1)
+  // also gets an id (1-based within the building; 0 = none), so its cutaway can slide down and back up over time
+  ctx(W,K){ this.W=W||Z4; this.K=K||0; this.I = !this.lean && this.K%8===1 ? this.walls.push({W:this.W.slice(), K:this.K}) : 0; return this; }
+  _v(q,nr,c){ this.p.push(q[0],q[1],q[2]); this.n.push(nr[0],nr[1],nr[2]); this.c.push(c[0],c[1],c[2]); if(!this.lean){ this.w.push(this.W[0],this.W[1],this.W[2],this.W[3]); this.k.push(this.K); this.wi.push(this.I); } }
   poly(pts, nr, c){
     const [a,b,d]=pts; const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2], vx=d[0]-a[0],vy=d[1]-a[1],vz=d[2]-a[2];
     if ((uy*vz-uz*vy)*nr[0] + (uz*vx-ux*vz)*nr[1] + (ux*vy-uy*vx)*nr[2] < 0) pts = pts.slice().reverse();
@@ -905,7 +916,7 @@ class GB {
   get tris(){ return this.i.length/3; }
   get verts(){ return this.p.length/3; }
   // compact vertex format: float position, SNorm8 normal, UNorm8 colour, float building tag (+ occlusion data for LOD0)
-  geo(){
+  geo(wbase=-1){
     const g=new THREE.BufferGeometry(), nv=this.p.length/3;
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.p,3));
     const nn=new Int8Array(this.n.length); for(let i=0;i<nn.length;i++) nn[i]=Math.round(this.n[i]*127);
@@ -913,7 +924,8 @@ class GB {
     const cc=new Uint8Array(this.c.length); for(let i=0;i<cc.length;i++) cc[i]=Math.round(clamp(this.c[i],0,1)*255);
     g.setAttribute('color', new THREE.BufferAttribute(cc,3,true));
     g.setAttribute('aTag', new THREE.BufferAttribute(new Float32Array(nv).fill(this.tag),1));
-    if(!this.lean){ g.setAttribute('aWall', new THREE.Float32BufferAttribute(this.w,4)); g.setAttribute('aKind', new THREE.Float32BufferAttribute(this.k,1)); }
+    if(!this.lean){ g.setAttribute('aWall', new THREE.Float32BufferAttribute(this.w,4)); g.setAttribute('aKind', new THREE.Float32BufferAttribute(this.k,1));
+      g.setAttribute('aWid', new THREE.BufferAttribute(Float32Array.from(this.wi, v => v && wbase>=0 ? wbase+v-1 : 0),1)); }   // global wall id (0 = none)
     g.setIndex(new THREE.BufferAttribute(nv>65535 ? new Uint32Array(this.i) : new Uint16Array(this.i), 1));
     g.computeBoundingSphere(); return g;
   }
@@ -1399,6 +1411,7 @@ function* lod0Steps(b, idx){
   partyMemo.delete(b.id);
   const {N, shell, at}=buildCtx(b);
   const op=new GB(idx), gl=new GB(idx), segs=[];
+  gl.walls=op.walls;   // glass shares the wall ids of the walls it sits in
   if(DEBUG_SOLIDS) op.solids=[];
   for(let k=0;k<=N;k++){
     const sg=[], {Wp, ccw, cor, C}=at(k), sb=isSetback(b,k), Cb=at(Math.max(0,k-1)).C;   // decks and parapets take the colours of the storey below
@@ -1545,9 +1558,10 @@ function boundsOf(b){ const bb=bboxAll(b), H=roofY(b)+Math.max(1.1,(roofParts(b)
     x0:bb.x0+b.pos.x-T_EXT, x1:bb.x1+b.pos.x+T_EXT, z0:bb.z0+b.pos.z-T_EXT, z1:bb.z1+b.pos.z+T_EXT, y1:H}; }
 const ready = (r,k) => !!r[k] && r[k].ver===r.ver;
 function addMesh(geo, mat, depth, id){ const m=new THREE.Mesh(geo,mat); m.castShadow=!!depth; m.receiveShadow=true; if(depth) m.customDepthMaterial=depth; m.userData.bid=id; m.matrixAutoUpdate=false; m.visible=false; scene.add(m); return m; }
-function disposeLod(r,k){ const L=r[k]; if(!L) return; for(const m of [L.mesh,L.glass]) if(m){ scene.remove(m); m.geometry.dispose(); } r[k]=null; }
+function disposeLod(r,k){ const L=r[k]; if(!L) return; for(const m of [L.mesh,L.glass]) if(m){ scene.remove(m); m.geometry.dispose(); } if(L.wbase>0) wallRelease(L.wbase, L.walls.length); r[k]=null; }
 function installL0(b,r,{op,gl,segs}){ disposeLod(r,'l0');
-  r.l0={ver:r.ver, segs, used:frameNo, tris:op.tris+gl.tris, verts:op.verts+gl.verts, mesh:addMesh(op.geo(),MAT.opaque,MAT.depth,b.id), glass:gl.i.length?addMesh(gl.geo(),MAT.glass,null,b.id):null};
+  const wbase=wallAlloc(op.walls.length), party=[]; op.walls.forEach((w,i)=>{ if(w.K>=8) party.push(i); });
+  r.l0={ver:r.ver, segs, used:frameNo, tris:op.tris+gl.tris, verts:op.verts+gl.verts, walls:op.walls, wbase, party, mesh:addMesh(op.geo(wbase),MAT.opaque,MAT.depth,b.id), glass:gl.i.length?addMesh(gl.geo(wbase),MAT.glass,null,b.id):null};
   if(r.l0.glass) r.l0.glass.renderOrder=2; }
 function installL1(b,r,{op}){ disposeLod(r,'l1'); r.l1={ver:r.ver, used:frameNo, tris:op.tris, verts:op.verts, mesh:addMesh(op.geo(),MAT.opaque,MAT.depth,b.id)}; }
 // synchronous versions: for the building being edited or walked in, and for collision
@@ -1933,6 +1947,42 @@ function applyView(){
   } else { G.uActive.value=-1; G.uClipY.value=1e9; G.uCutOn.value=0; }
   updateGhosts(ui.mode==='edit' && r && floor!=null ? b : null, floor);
   return r && floor!=null ? b.id : null;
+}
+
+/* Sliding cutaway. Each wall of an installed LOD0 mesh has a global id. Every frame the walls of the building being
+   cut (and neighbours' party walls shared with it) get the same test the shader used to make instantly: does the
+   camera-to-player sightline cross this wall? The answer eases each wall's value over CUT_SLIDE seconds, and the shader
+   lowers the wall's top from the ceiling to the stub by that amount, so walls slide down and back up. */
+const CUT_SLIDE = 0.22, wallAnim = new Map();   // wall id -> value 0..1 while it is not fully up
+let cutSlow = 1;   // test hook: slow the slide down
+let wallFree = [{s:1, n:WALL_IDS-1}];
+function wallAlloc(n){ if(!n) return -1; for(let i=0;i<wallFree.length;i++){ const f=wallFree[i]; if(f.n>=n){ const st=f.s; f.s+=n; f.n-=n; if(!f.n) wallFree.splice(i,1); return st; } } return -1; }
+function wallRelease(st, n){
+  for(let id=st; id<st+n; id++){ wallAnim.delete(id); wallArr[id]=0; } wallTex.needsUpdate=true;
+  wallFree.push({s:st, n}); wallFree.sort((a,b)=>a.s-b.s);
+  for(let i=wallFree.length-1;i>0;i--){ const a=wallFree[i-1], b=wallFree[i]; if(a.s+a.n===b.s){ a.n+=b.n; wallFree.splice(i,1); } }
+}
+// the cutaway test for one wall: it separates camera and player, and the sightline crosses it (±0.5 m for the body)
+function wallBlocks(W){
+  const nl=Math.hypot(W[2],W[3]), nx=W[2]/nl, nz=W[3]/nl, c=G.uCam.value, f=G.uFocus.value;
+  const sc=(c.x-W[0])*nx+(c.z-W[1])*nz, sp=(f.x-W[0])*nx+(f.z-W[1])*nz; if(sc*sp>=0) return false;
+  if(nl<1.01) return true;
+  const t=sc/(sc-sp), x=c.x+(f.x-c.x)*t, z=c.z+(f.z-c.z)*t, st=(x-W[0])*nz-(z-W[1])*nx;
+  return st>-0.5 && st<nl-1+0.5;
+}
+function updateCutaway(dt){
+  const step=dt/(CUT_SLIDE*cutSlow), seen=new Set(); let changed=false;
+  const set=(id,v)=>{ if(wallArr[id]!==v){ wallArr[id]=v; changed=true; } if(v>0) wallAnim.set(id,v); else wallAnim.delete(id); };
+  const ai=G.uActive.value;
+  if(G.uCutOn.value>0.5 && ai>=0){
+    const walk=(L,i)=>{ const id=L.wbase+i, w=L.walls[i]; seen.add(id);
+      const a=wallAnim.get(id)||0, up=wallBlocks(w.W); if(!up && !a) return; set(id, clamp(a+(up?step:-step),0,1)); };
+    for(const r of recs.values()){ const L=r.l0; if(!L || !(L.wbase>0)) continue;
+      if(r.idx===ai) for(let i=0;i<L.walls.length;i++) walk(L,i);
+      else for(const i of L.party) if((L.walls[i].K>>3)-1===ai) walk(L,i); }
+  }
+  for(const [id,a] of wallAnim) if(!seen.has(id)) set(id, Math.max(0,a-step));   // walls no longer cut slide back up
+  if(changed) wallTex.needsUpdate=true;
 }
 
 /* Buildings in the way (play mode). Every frame three rays, from the camera to the player's head, chest and
@@ -3016,7 +3066,7 @@ function tick(now){
     overlayUpdate();
   }
   const f=G.uFocus.value; sun.position.set(f.x+30, f.y+60, f.z+18); sun.target.position.set(f.x, f.y, f.z);
-  const activeId=applyView();
+  const activeId=applyView(); updateCutaway(dt);
   updateLOD(dt, activeId);
   renderer.render(scene,camera);
   perfTick(now, performance.now()-tf);
@@ -3040,5 +3090,5 @@ window.__sb = { geo:(i,lod=0)=>{ const b=state.buildings[i], r=recOf(b); DEBUG_S
   memBytes:()=>{ let by=0, m=0; scene.traverse(o=>{ if(o.isMesh && o.geometry){ m++; for(const a of Object.values(o.geometry.attributes)) by+=a.array.byteLength; if(o.geometry.index) by+=o.geometry.index.array.byteLength; } }); return {meshes:m, MB:+(by/1048576).toFixed(1)}; },
   timeCells:()=>{ const t=performance.now(); let n=0; for(const c of cells.values()){ c.dirty=true; rebuildCell(c); n++; } return {cells:n, msPerCell:+((performance.now()-t)/Math.max(1,n)).toFixed(3)}; },
   snapFx:()=>snapFx, screenOf:(bi,k,x,z)=>{ const b=state.buildings[bi], v=new THREE.Vector3(x+b.pos.x, floorBase(b,k), z+b.pos.z).project(camera), r=canvas.getBoundingClientRect(); return [r.left+(v.x+1)/2*r.width, r.top+(1-v.y)/2*r.height]; },
-  camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); }, party:(b,k0,i)=>partyRanges(b,k0,i), occluders:()=>[...occActive].map(r=>bById(r.id)?.name+':'+(r.occA||0).toFixed(2)), occAt:t=>{ occDbgT=t; }, cutCam:()=>({cam:+camera.position.x.toFixed(3), cut:+G.uCam.value.x.toFixed(3), focus:+G.uFocus.value.x.toFixed(3)}), facadeAt:(x,y)=>{ const b=selB(), h=pickBuilding({clientX:x,clientY:y}, b.id); return {hit:h&&{bid:h.bid,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2))}, ed:facadeEdgeAt({clientX:x,clientY:y},b)}; }, outline:{insetPoly, pushEdge, outlineIssue, simplifyTier, addSetback, tiers, fpAt, touch, refresh:()=>{ touch(); refreshChrome(); overlayRebuild(); }} };
+  camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); }, party:(b,k0,i)=>partyRanges(b,k0,i), occluders:()=>[...occActive].map(r=>bById(r.id)?.name+':'+(r.occA||0).toFixed(2)), occAt:t=>{ occDbgT=t; }, cutSlow:k=>{ cutSlow=k; }, walls:()=>({mid:[...wallAnim.values()].filter(v=>v>0.2&&v<0.8).length, max:+Math.max(0,...wallAnim.values()).toFixed(2), anim:wallAnim.size, down:[...wallAnim.values()].filter(v=>v>=1).length, free:wallFree.reduce((a,f)=>a+f.n,0)}), cutCam:()=>({cam:+camera.position.x.toFixed(3), cut:+G.uCam.value.x.toFixed(3), focus:+G.uFocus.value.x.toFixed(3)}), facadeAt:(x,y)=>{ const b=selB(), h=pickBuilding({clientX:x,clientY:y}, b.id); return {hit:h&&{bid:h.bid,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2))}, ed:facadeEdgeAt({clientX:x,clientY:y},b)}; }, outline:{insetPoly, pushEdge, outlineIssue, simplifyTier, addSetback, tiers, fpAt, touch, refresh:()=>{ touch(); refreshChrome(); overlayRebuild(); }} };
 </script>
