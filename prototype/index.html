@@ -1439,12 +1439,15 @@ function terraceRoofParts(b, k){
   const off=U.map((_,j)=>{ const i=(j-1+n)%n, A=outN(i), B=outN(j), m=[A[0]+B[0],A[1]+B[1]], dd=1+A[0]*B[0]+A[1]*B[1]; return dd<1e-6 ? U[j] : [U[j][0]+m[0]*T/dd, U[j][1]+m[1]*T/dd]; });
   rings.push([[...off, off[0]]]);
   const lower=raw.map(p=>P(p.x+ox,p.z+oz));
-  for(let i=0;i<n;i++){ const a=U[i], c=U[(i+1)%n], L=Math.hypot(c[0]-a[0],c[1]-a[1]); if(L<1e-3) continue; const u=[(c[0]-a[0])/L,(c[1]-a[1])/L], w=outN(i);
+  const D=T+e+0.3, ed=U.map((a,i)=>{ const c=U[(i+1)%n], L=Math.hypot(c[0]-a[0],c[1]-a[1])||1e-6; return {a, L, u:[(c[0]-a[0])/L,(c[1]-a[1])/L], w:outN(i), iv:[]}; });
+  for(const g of ed){ const {a,L,u,w}=g; if(L<1e-3) continue;
     // flush stretches: sample the edge, a point just outside the upper wall that is outside the lower outline too
     const N2=Math.max(2,Math.ceil(L/0.25)); let s0=-1;
     for(let j=0;j<=N2;j++){ const t=j/N2*L, x=a[0]+u[0]*t+w[0]*(T+0.1), z=a[1]+u[1]*t+w[1]*(T+0.1), fl=!pip(lower,x,z);
-      if(fl && s0<0) s0=t; if((!fl || j===N2) && s0>=0){ const s1=fl?t:t-L/N2; if(s1-s0>0.2){ const X=(tt,dw)=>[a[0]+u[0]*tt+w[0]*dw, a[1]+u[1]*tt+w[1]*dw];
-          rings.push([[X(s0,0),X(s1,0),X(s1,T+e+0.3),X(s0,T+e+0.3),X(s0,0)]]); } s0=-1; } } }
+      if(fl && s0<0) s0=t; if((!fl || j===N2) && s0>=0){ const s1=fl?t:t-L/N2; if(s1-s0>0.2) g.iv.push([s0,s1]); s0=-1; } } }
+  // where two flush walls meet at a corner, run both strips on past it, so the eave's corner square goes too
+  for(let i=0;i<n;i++){ const A=ed[(i-1+n)%n], B=ed[i], ea=A.iv.find(v=>v[1]>A.L-0.02), sb=B.iv.find(v=>v[0]<0.02); if(ea && sb){ ea[1]=A.L+D; sb[0]=-D; } }
+  for(const {a,u,w,iv} of ed) for(const [s0,s1] of iv){ const X=(tt,dw)=>[a[0]+u[0]*tt+w[0]*dw, a[1]+u[1]*tt+w[1]*dw]; rings.push([[X(s0,0),X(s1,0),X(s1,D),X(s0,D),X(s0,0)]]); }
   let cut=rings; try{ cut=globalThis.polygonClipping.union(...rings); }catch(err){}
   const val=makeRoof(b, {pitch:tr.pitch??30, eave:e}, 'hip', raw, party, {top:floorBase(b,k), cut});
   terraceRoofMemo.set(b.id+':'+k,{key,val}); return val;
