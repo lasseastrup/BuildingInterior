@@ -712,7 +712,9 @@ const OCC_SINK = `{
 #ifndef OCC_DEPTH
     int ib = int(mod(aTag, 65536.0) + 0.5);
     int slot = int(texelFetch(uState, ivec2(ib % 256, ib / 256), 0).w + 0.5) - 1;
-    if (slot >= 0 && abs(float(ib) - uActive) > 0.5 && aKind < 8.0) {   // a party wall also belongs to the neighbour: it stays
+    int im = int(floor(aKind / 8.0)) - 1;   // a party wall also belongs to the neighbour: it stays unless the neighbour is sinking too
+    bool mateUp = im >= 0 && texelFetch(uState, ivec2(im % 256, im / 256), 0).w < 0.5;
+    if (slot >= 0 && abs(float(ib) - uActive) > 0.5 && !mateUp) {
       int n = int(texelFetch(uOccT, ivec2(0, slot), 0).x + 0.5);
       if (n > 0) {
         float y = vOrigY, f0 = texelFetch(uOccT, ivec2(1, slot), 0).x;
@@ -744,7 +746,7 @@ const MASS_VERT = `vFac = aFac; vFac2 = aFac2; vSlot = aSlot;`;
 const OCC_FRAG_DECL = `
 uniform vec3 uCam; uniform vec3 uFocus; uniform float uCutH; uniform vec2 uCamDir; uniform float uOccMode; uniform float uPZ; uniform vec2 uPScr; uniform float uHoleR;
 uniform float uActive; uniform float uClipY; uniform float uCutOn; uniform float uCutBase; uniform float uCutTop; uniform vec3 uCap; uniform float uLodTint; uniform float uIso; uniform float uIsoBid;
-uniform highp sampler2D uOccT; uniform highp sampler2D uWallT; varying float vWid;
+uniform highp sampler2D uOccT; uniform highp sampler2D uWallT; uniform highp sampler2D uState; varying float vWid;
 varying vec3 vOccW; varying vec4 vWall; varying float vKind; varying float vBid; varying float vLod; varying float vFade; varying float vOcc; varying float vOrigY;
 float gOccDark = 0.0;   // building in the way: tint toward black
 float occBayer(vec2 p){ int x = int(mod(p.x,4.0)); int y = int(mod(p.y,4.0));
@@ -788,7 +790,8 @@ void occlude(){
     } else if (dot(vWall.xy - uFocus.xz, uCamDir) > 0.4) discard;
   }
   // 3. buildings between the camera and the player (never the player's own building, which is sliced above)
-  if (uOccMode > 0.5 && !act && vOcc > -0.5 && mate < 0.0) {
+  bool mateUp = mate >= 0.0 && texelFetch(uState, ivec2(int(mate) % 256, int(mate) / 256), 0).w < 0.5;
+  if (uOccMode > 0.5 && !act && vOcc > -0.5 && !mateUp) {
     int slot = int(vOcc + 0.5);
     vec4 hd = texelFetch(uOccT, ivec2(0, slot), 0);   // segments, dark, clip height, solid base height
     if (vOrigY > hd.z) discard;                        // Slice: the cut plane lowered to the player's storey
@@ -2000,7 +2003,10 @@ function segHitsBuilding(b, p, q){
   for(const t of tiers(b)){ const y0=floorBase(b,t.k0), y1=floorBase(b,t.k1)+(t.k1===N?extra:0), dy=q.y-p.y; let t0=0, t1=1;
     if(Math.abs(dy)<1e-9){ if(p.y<y0 || p.y>y1) continue; } else { let a=(y0-p.y)/dy, c=(y1-p.y)/dy; if(a>c){ const x=a; a=c; c=x; } t0=Math.max(0,a); t1=Math.min(1,c); if(t0>=t1) continue; }
     const fp=fpAt(b,t.k0), A=P(p.x+(q.x-p.x)*t0-b.pos.x, p.z+(q.z-p.z)*t0-b.pos.z), B=P(p.x+(q.x-p.x)*t1-b.pos.x, p.z+(q.z-p.z)*t1-b.pos.z);
-    if(pip(fp,A.x,A.z) || pip(fp,B.x,B.z) || fp.some((v,i)=>segCross(A,B,v,fp[(i+1)%fp.length])) || distToEdges(fp,A)<T_EXT || distToEdges(fp,B)<T_EXT) return true; }
+    // grazing or running along an edge counts too: a ray straight down the seam between two joined buildings
+    // touches neither interior, but both walls are there
+    const near=(v,w)=>segCross(A,B,v,w) || Math.min(segDist(v.x,v.z,A.x,A.z,B.x,B.z).d, segDist(w.x,w.z,A.x,A.z,B.x,B.z).d, segDist(A.x,A.z,v.x,v.z,w.x,w.z).d, segDist(B.x,B.z,v.x,v.z,w.x,w.z).d) < 0.05;
+    if(pip(fp,A.x,A.z) || pip(fp,B.x,B.z) || fp.some((v,i)=>near(v,fp[(i+1)%fp.length])) || distToEdges(fp,A)<T_EXT || distToEdges(fp,B)<T_EXT) return true; }
   return false;
 }
 // Slice: just under the ceiling of the occluder's storey at the player's height (at least head height)
@@ -2028,7 +2034,7 @@ function buildLid(b, k){
   const tris=THREE.ShapeUtils.triangulateShape(Wp.map(q=>new THREE.Vector2(q[0],q[1])), []);
   op.polyTris(Wp.map(q=>[q[0],y+0.02,q[1]]), tris, [0,1,0], [0.02,0.022,0.025]);
   for(let i=0;i<Wp.length;i++){ const {a,L,u,w}=edgeInfo(Wp,i,ccw), m=miter(cor,i,L);
-    const R=minusRanges([span(m,0,T)], partyRanges(b,k0,i).map(q=>[q.s,q.e]));   // party walls stay standing there already
+    const R=minusRanges([span(m,0,T)], partyRanges(b,k0,i).map(q=>[q.s,q.e]));   // never along a party wall: it is standing, or both sides sank and their outlines merge
     stripPieces(op,a,u,w,m,R,y,y+RIM_H,0,T,C.wall,C.wall,SK.BOT); }
   const mesh=new THREE.Mesh(op.geo(), LID_MAT); mesh.receiveShadow=true; mesh.matrixAutoUpdate=false; mesh.visible=false; scene.add(mesh);
   return mesh;
@@ -2078,9 +2084,10 @@ function updateOccluders(dt){
     if(b){ r.plan=sinkPlan(b, Math.min(r.occK, b.floors.length)); r.occT = m==='sink' ? clamp(r.occT+(want?dt:-dt*1.25),0,r.plan.total) : 0; }
     const done = !want && r.occA<=0 && !(r.occT>0);
     if(done || !b || (loc.b && b===loc.b) || ui.mode!=='play'){ r.occA=0; r.occT=0; occActive.delete(r); if(r.slot!=null){ occSlots[r.slot]=null; r.slot=null; } dropLid(r); continue; }
-    if(m==='sink' && r.occK<b.floors.length) lidFor(r, b, r.occK).visible = r.occT>0; else if(r.lid) r.lid.mesh.visible=false;
     if(occDbgT!=null) r.occT=Math.min(occDbgT, r.plan.total);
     writeOcc(r, b); }
+  for(const r of occActive){ const b=bById(r.id); if(!b) continue;
+    if(m==='sink' && r.occK<b.floors.length) lidFor(r, b, r.occK).visible = r.occT>0; else if(r.lid) r.lid.mesh.visible=false; }
   occTex.needsUpdate=true;
   // camera assist: after half a second hidden, tilt the camera a little steeper (never overriding the player's orbit)
   hiddenFor = hits.size ? hiddenFor+dt : 0;
@@ -3124,5 +3131,5 @@ window.__sb = { geo:(i,lod=0)=>{ const b=state.buildings[i], r=recOf(b); DEBUG_S
   memBytes:()=>{ let by=0, m=0; scene.traverse(o=>{ if(o.isMesh && o.geometry){ m++; for(const a of Object.values(o.geometry.attributes)) by+=a.array.byteLength; if(o.geometry.index) by+=o.geometry.index.array.byteLength; } }); return {meshes:m, MB:+(by/1048576).toFixed(1)}; },
   timeCells:()=>{ const t=performance.now(); let n=0; for(const c of cells.values()){ c.dirty=true; rebuildCell(c); n++; } return {cells:n, msPerCell:+((performance.now()-t)/Math.max(1,n)).toFixed(3)}; },
   snapFx:()=>snapFx, screenOf:(bi,k,x,z)=>{ const b=state.buildings[bi], v=new THREE.Vector3(x+b.pos.x, floorBase(b,k), z+b.pos.z).project(camera), r=canvas.getBoundingClientRect(); return [r.left+(v.x+1)/2*r.width, r.top+(1-v.y)/2*r.height]; },
-  camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); }, party:(b,k0,i)=>partyRanges(b,k0,i), occluders:()=>[...occActive].map(r=>bById(r.id)?.name+':'+(r.occA||0).toFixed(2)), occAt:t=>{ occDbgT=t; }, cutSlow:k=>{ cutSlow=k; }, walls:()=>({mid:[...wallAnim.values()].filter(v=>v>0.2&&v<0.8).length, max:+Math.max(0,...wallAnim.values()).toFixed(2), anim:wallAnim.size, down:[...wallAnim.values()].filter(v=>v>=1).length, free:wallFree.reduce((a,f)=>a+f.n,0)}), cutCam:()=>({cam:+camera.position.x.toFixed(3), cut:+G.uCam.value.x.toFixed(3), focus:+G.uFocus.value.x.toFixed(3)}), facadeAt:(x,y)=>{ const b=selB(), h=pickBuilding({clientX:x,clientY:y}, b.id); return {hit:h&&{bid:h.bid,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2))}, ed:facadeEdgeAt({clientX:x,clientY:y},b)}; }, outline:{insetPoly, pushEdge, outlineIssue, simplifyTier, addSetback, tiers, fpAt, touch, refresh:()=>{ touch(); refreshChrome(); overlayRebuild(); }} };
+  camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); }, party:(b,k0,i)=>partyRanges(b,k0,i), occluders:()=>[...occActive].map(r=>bById(r.id)?.name+':'+(r.occA||0).toFixed(2)), occAt:t=>{ occDbgT=t; }, occRays:()=>{ const c=camera.position, dl=Math.hypot(c.x-player.x, c.z-player.z), sh=dl>0.6 ? 0.5/dl : 0; const tg=[0.25,1.1,1.75].map(h=>({x:player.x+(c.x-player.x)*sh, y:player.y+h, z:player.z+(c.z-player.z)*sh})); return {cam:[c.x,c.y,c.z].map(v=>+v.toFixed(2)), hits:state.buildings.map(b=>b.name+':'+tg.map(t=>segHitsBuilding(b,c,t)?1:0).join('')+(atDoorOf(b)?'D':''))}; }, cutSlow:k=>{ cutSlow=k; }, walls:()=>({mid:[...wallAnim.values()].filter(v=>v>0.2&&v<0.8).length, max:+Math.max(0,...wallAnim.values()).toFixed(2), anim:wallAnim.size, down:[...wallAnim.values()].filter(v=>v>=1).length, free:wallFree.reduce((a,f)=>a+f.n,0)}), cutCam:()=>({cam:+camera.position.x.toFixed(3), cut:+G.uCam.value.x.toFixed(3), focus:+G.uFocus.value.x.toFixed(3)}), facadeAt:(x,y)=>{ const b=selB(), h=pickBuilding({clientX:x,clientY:y}, b.id); return {hit:h&&{bid:h.bid,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2))}, ed:facadeEdgeAt({clientX:x,clientY:y},b)}; }, outline:{insetPoly, pushEdge, outlineIssue, simplifyTier, addSetback, tiers, fpAt, touch, refresh:()=>{ touch(); refreshChrome(); overlayRebuild(); }} };
 </script>
