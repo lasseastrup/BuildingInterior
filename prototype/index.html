@@ -2017,9 +2017,28 @@ const easeOutBack = p => { const c=1.6, q=p-1; return 1 + (c+1)*q*q*q + c*q*q; }
 function sinkPlan(b, k){
   const N=b.floors.length, segs=[];
   for(let j=k;j<=N;j++) segs.push({y:floorBase(b,j), h: j<N ? floorH(b,j) : 0});
-  const nc=segs.length-(k<N?1:0), stag=Math.min(0.03, 0.1/Math.max(nc,1));
-  return {segs, stag, total:(nc-1)*stag+Math.max(SINK_DUR, k<N?SINK_BASE:0), squash:k<N};
+  const nc=segs.length, stag=Math.min(0.03, 0.1/Math.max(nc,1));
+  return {segs, stag, total:(nc-1)*stag+SINK_DUR, squash:false};
 }
+// Sink's footprint: once the building has collapsed, a flat black outline of the storey at the player's height with a
+// very low rim of its outer wall around it (no doors, canopies or interior), built once per building version and storey
+const RIM_H = 0.3, LID_MAT = new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9, metalness:0});
+function buildLid(b, k){
+  const {Wp, ccw, cor, C}=buildCtx(b).at(k), y=floorBase(b,k), T=T_EXT, op=new GB(0,true), k0=tierStart(b,k);
+  const tris=THREE.ShapeUtils.triangulateShape(Wp.map(q=>new THREE.Vector2(q[0],q[1])), []);
+  op.polyTris(Wp.map(q=>[q[0],y+0.02,q[1]]), tris, [0,1,0], [0.02,0.022,0.025]);
+  for(let i=0;i<Wp.length;i++){ const {a,L,u,w}=edgeInfo(Wp,i,ccw), m=miter(cor,i,L);
+    const R=minusRanges([span(m,0,T)], partyRanges(b,k0,i).map(q=>[q.s,q.e]));   // party walls stay standing there already
+    stripPieces(op,a,u,w,m,R,y,y+RIM_H,0,T,C.wall,C.wall,SK.BOT); }
+  const mesh=new THREE.Mesh(op.geo(), LID_MAT); mesh.receiveShadow=true; mesh.matrixAutoUpdate=false; mesh.visible=false; scene.add(mesh);
+  return mesh;
+}
+function lidFor(r, b, k){
+  if(r.lid && (r.lid.ver!==r.ver || r.lid.k!==k)) dropLid(r);
+  if(!r.lid) r.lid={ver:r.ver, k, mesh:buildLid(b,k)};
+  return r.lid.mesh;
+}
+function dropLid(r){ if(!r.lid) return; scene.remove(r.lid.mesh); r.lid.mesh.geometry.dispose(); r.lid=null; }
 function writeOcc(r, b){
   const m=ui.occ.outside, o=r.slot*OCC_W*4;
   occArr.fill(0, o, o+OCC_W*4); occArr[o+2]=1e9; occArr[o+3]=-1e9;
@@ -2058,7 +2077,8 @@ function updateOccluders(dt){
     r.occA=clamp((r.occA||0)+(want?dt:-dt)/OCC_FADE,0,1);
     if(b){ r.plan=sinkPlan(b, Math.min(r.occK, b.floors.length)); r.occT = m==='sink' ? clamp(r.occT+(want?dt:-dt*1.25),0,r.plan.total) : 0; }
     const done = !want && r.occA<=0 && !(r.occT>0);
-    if(done || !b || (loc.b && b===loc.b) || ui.mode!=='play'){ r.occA=0; r.occT=0; occActive.delete(r); if(r.slot!=null){ occSlots[r.slot]=null; r.slot=null; } continue; }
+    if(done || !b || (loc.b && b===loc.b) || ui.mode!=='play'){ r.occA=0; r.occT=0; occActive.delete(r); if(r.slot!=null){ occSlots[r.slot]=null; r.slot=null; } dropLid(r); continue; }
+    if(m==='sink' && r.occK<b.floors.length) lidFor(r, b, r.occK).visible = r.occT>0; else if(r.lid) r.lid.mesh.visible=false;
     if(occDbgT!=null) r.occT=Math.min(occDbgT, r.plan.total);
     writeOcc(r, b); }
   occTex.needsUpdate=true;
@@ -2157,7 +2177,7 @@ function updateHUD(){
   $('#locD').textContent=floorShort(loc.b,loc.floor).padStart(2,' '); $('#locN').textContent=loc.b.name; $('#locS').textContent=floorLabel(loc.b,loc.floor)+' of '+loc.b.floors.length;
 }
 const OCC_OUT = [['sink','Sink'],['slice','Slice'],['cutout','Cutout'],['fade','Fade'],['off','Off']];
-const OCC_TIP = { sink:'A building in the way collapses storey by storey into a low dark base, so you can see it and what is inside', slice:'A building in the way is cut down to the storey you are on, showing its rooms', cutout:'A soft hole opens around you in buildings in the way, above a dark base', fade:'Buildings in the way fade to a light ghost above a dark base', off:'Buildings in the way stay solid' };
+const OCC_TIP = { sink:'A building in the way collapses into a black outline with a low rim of its wall, so you always see what you are behind', slice:'A building in the way is cut down to the storey you are on, showing its rooms', cutout:'A soft hole opens around you in buildings in the way, above a dark base', fade:'Buildings in the way fade to a light ghost above a dark base', off:'Buildings in the way stay solid' };
 function renderOcc(){
   const o=ui.occ;
   $('#occ').classList.toggle('closed', !ui.occOpen);
@@ -2165,7 +2185,7 @@ function renderOcc(){
   <div class="sub-h" style="margin-top:0">Buildings in the way</div>
   <div class="seg" style="margin-bottom:4px">${OCC_OUT.map(([v,l])=>`<button data-occout="${v}" class="${o.outside===v?'on':''}" title="${OCC_TIP[v]}">${l}</button>`).join('')}</div>
   <p class="note" style="margin:0 0 6px">${OCC_TIP[o.outside]}.</p>
-  ${['sink','cutout','fade'].includes(o.outside)?`<label class="sl"><span>Base height</span><input type="range" id="occBase" min="0.3" max="2.5" step="0.1" value="${o.baseH}"><output>${o.baseH.toFixed(1)} m</output></label>`:''}
+  ${['cutout','fade'].includes(o.outside)?`<label class="sl"><span>Base height</span><input type="range" id="occBase" min="0.3" max="2.5" step="0.1" value="${o.baseH}"><output>${o.baseH.toFixed(1)} m</output></label>`:''}
   ${o.outside==='cutout'?`<label class="sl"><span>Hole size</span><input type="range" id="occHole" min="1" max="5" step="0.1" value="${o.holeR}"><output>${o.holeR.toFixed(1)} m</output></label>`:''}
   <div class="sub-h">The building you're in</div>
   <label class="chk"><input type="checkbox" id="occCutOn" ${o.cut?'checked':''}> Cut away walls in front of you</label>
