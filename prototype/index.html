@@ -761,9 +761,16 @@ void occlude(){
   // 2. cutaway: walls between camera and focus drop to stub height; tall parts on the camera side too
   if (actCut && uCutOn > 0.5 && kind > 0.5 && vOccW.y > uCutBase + uCutH && vOccW.y < uCutTop && vOccW.y > uCutBase - 0.05) {
     if (kind < 1.5) {
-      float sc = dot(uCam.xz - vWall.xy, vWall.zw);
-      float sp = dot(uFocus.xz - vWall.xy, vWall.zw);
-      if (sc * sp < 0.0) discard;
+      float nl = length(vWall.zw); vec2 n = vWall.zw / nl;
+      float sc = dot(uCam.xz - vWall.xy, n);
+      float sp = dot(uFocus.xz - vWall.xy, n);
+      if (sc * sp < 0.0) {
+        // only if the sightline from the camera to the player crosses the wall itself (plus room for the character's body),
+        // not just the wall's line: a room beside the player keeps its front wall
+        vec2 x = uCam.xz + (uFocus.xz - uCam.xz) * (sc / (sc - sp));
+        float s = dot(x - vWall.xy, vec2(n.y, -n.x));
+        if (nl < 1.01 || (s > -0.5 && s < nl - 1.0 + 0.5)) discard;
+      }
     } else if (dot(vWall.xy - uFocus.xz, uCamDir) > 0.4) discard;
   }
   // 3. buildings between the camera and the player (never the player's own building, which is sliced above)
@@ -1086,7 +1093,7 @@ function buildFacade(op,gl,sg,b,k,Wp,ccw,cor,C,shell){
       if(pc.kind==='skip') continue;
       const pm={S:pc.S,E:pc.E}, party=pc.kind==='party';
       const ops = party ? [] : all.filter(o=>o.u0>=pc.lo && o.u1<=pc.hi);
-      op.ctx([a[0],a[1],w[0],w[1]], party ? 1+8*(pc.r.pIdx+1) : 1); gl.ctx([a[0],a[1],w[0],w[1]],1);   // a party wall is also cut away for the neighbour
+      op.ctx(wallCtx(a,u,w,L), party ? 1+8*(pc.r.pIdx+1) : 1); gl.ctx(wallCtx(a,u,w,L),1);   // a party wall is also cut away for the neighbour
       wallPanel(op,a,u,w,pm,0,T,y,h,ops,party?pc.r.pInner:C.wall,C.inner,{inner:!shell, threshold:k===0, revealFrom: shell ? T*0.45 : 0});
       for(const o of ops){
         if(o.door){
@@ -1103,7 +1110,7 @@ function buildFacade(op,gl,sg,b,k,Wp,ccw,cor,C,shell){
           if((o.u1-o.u0)>1.7){ const mm=(o.u0+o.u1)/2; op.obox(a,u,w,mm-0.03,mm+0.03,y+o.y0,y+o.y1,T*0.3,T*0.6,C.trim,C.trim,SK.TOP|SK.BOT); }
         }
       }
-      if(!party){ op.ctx([a[0],a[1],w[0],w[1]],1); pieceStrips(op,b,k,a,u,w,m,pc,ops,y,h,N,C); }
+      if(!party){ op.ctx(wallCtx(a,u,w,L),1); pieceStrips(op,b,k,a,u,w,m,pc,ops,y,h,N,C); }
       const [cs,ce]=span(pm,T/2,T/2);
       for(const [s1,e1] of (shell||party ? [[cs,ce]] : solidRanges(cs,ce,ops))) pushSeg(sg,a,u,w,s1,e1,T/2,T/2);
     }
@@ -1132,13 +1139,16 @@ function clipWall(fp, wl){
     out.push({a:P(ax+dx*t0, az+dz*t0), b:P(ax+dx*t1, az+dz*t1), doors:wl.doors.filter(d=>d.t>t0 && d.t<t1).map(d=>({t:(d.t-t0)/(t1-t0)}))}); }
   return out;
 }
+// cutaway data for a wall running L metres from a along u: a start point from which the wall runs along (w1, -w0),
+// and the normal scaled by 1 + L (a unit normal means extent unknown: the wall's line is treated as infinite)
+const wallCtx = (a,u,w,L) => { const s = w[1]*u[0]-w[0]*u[1] >= 0 ? a : [a[0]+u[0]*L, a[1]+u[1]*L]; return [s[0], s[1], w[0]*(1+L), w[1]*(1+L)]; };
 function buildInterior(op,sg,b,k,C){
   const y=floorBase(b,k), hh=floorH(b,k)-SLAB, ox=b.pos.x, oz=b.pos.z, E=T_INT/2-0.02, t=T_INT/2+0.025, fp=fpAt(b,k);
   for(const wl of b.floors[k].walls.flatMap(w=>clipWall(fp,w))){
     const a=[wl.a.x+ox, wl.a.z+oz], c=[wl.b.x+ox, wl.b.z+oz]; const dx=c[0]-a[0], dz=c[1]-a[1], L=Math.hypot(dx,dz); if(L<0.05) continue;
     const u=[dx/L,dz/L], w=[-u[1],u[0]];
     const ops=wl.doors.map(d=>{ const mm=clamp(d.t*L, DOOR_INT/2+0.1, L-DOOR_INT/2-0.1); return {u0:mm-DOOR_INT/2,u1:mm+DOOR_INT/2,y0:0,y1:2.2,door:true}; }).sort((p,q)=>p.u0-q.u0);
-    op.ctx([a[0],a[1],w[0],w[1]],1);
+    op.ctx(wallCtx(a,u,w,L),1);
     wallPanel(op,a,u,w,{S:{s:-E,k:0},E:{s:L+E,k:0}},-T_INT/2,T_INT/2,y,hh,ops,C.inner,C.inner,{ends:true});
     for(const o of mergeOps(ops)){
       op.obox(a,u,w,o.u0-0.07,o.u0+0.01,y,y+2.19,-t,t,C.doorTrim,C.doorTrim,SK.BOT); op.obox(a,u,w,o.u1-0.01,o.u1+0.07,y,y+2.19,-t,t,C.doorTrim,C.doorTrim,SK.BOT);
@@ -1155,7 +1165,7 @@ function buildRoof(op,sg,b,Wp,ccw,cor,C){
   for(let i=0;i<n;i++){
     const {a,L,u,w}=edgeInfo(Wp,i,ccw); const m=miter(cor,i,L), cut=partySkips(b,k0,i), c0=cornerCut(b,k0,i,false,y), c1=cornerCut(b,k0,i,true,y);
     const R=r=>minusRanges([[c0?Math.max(r[0],c0.s+c0.k*T):r[0], c1?Math.min(r[1],c1.s+c1.k*T):r[1]]],cut);
-    op.ctx([a[0],a[1],w[0],w[1]],1);
+    op.ctx(wallCtx(a,u,w,L),1);
     if(styleAt(b,b.floors.length).parapet){ stripPieces(op,a,u,w,m,R(span(m,0,T)),y,y+1.0,0,T,C.wall,C.inner,SK.TOP|SK.BOT); stripPieces(op,a,u,w,m,R(span(m,-0.04,T+0.05)),y+1.0,y+1.1,-0.04,T+0.05,C.trim); }
     else stripPieces(op,a,u,w,m,R(span(m,0,T)),y,y+0.3,0,T,C.trim,C.trim,SK.BOT);
     if(sg) for(const [cs,ce] of R(span(m,T/2,T/2))) pushSeg(sg,a,u,w,cs,ce,T/2,T/2);
