@@ -190,7 +190,7 @@ Each workstream ends with something usable; the prototype's demo street is the a
 | 4 | Shaders + table | Five materials, `BuildingTable` buffer, LOD2 facade shader, occlusion include | Visual parity screenshots |
 | 5 | Occlusion + play kit | `OcclusionSystem` (cutaway, floors above, Sink/Slice/Cutout/Fade), play kit sample | Walk the demo street on an iPhone 7; first measured numbers for §6.6 |
 | 6 | Editor tools | Shape/Facade/Interior tools, overlays, inspectors, snapping, ghosts | Designer makes a styled 3-floor building in < 2 min; 10 floors with roof access in < 5 min |
-| 7 | City scale | LOD1/LOD2 bake, HLOD cells, LOD manager, streaming districts | 3,000-building city at SPEC §6.6 numbers on the target devices |
+| 7 | City scale | LOD1/LOD2 bake (**done headless**: `Generate/Lod1`, `Generate/Lod2` with the parameter rows the facade shader reads, census-tested at every LOD), HLOD cells, LOD manager, streaming districts | 3,000-building city at SPEC §6.6 numbers on the target devices |
 | 8 | Hardening | Docs, samples, performance thresholds in CI, registry publishing | 0.1.0 published to the scoped registry |
 
 Estimated effort: workstreams 2–3 and 6 dominate; the rest is glue. Porting order deliberately puts the generator before any editor UI, because the tests that make the generator trustworthy exist already and the editor is where the design will change most in Unity.

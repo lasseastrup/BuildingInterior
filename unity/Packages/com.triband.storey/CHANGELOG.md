@@ -5,6 +5,7 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- LOD1 (exterior shell) and LOD2 (massing quads with facade parameter rows) builders, sharing the storey builders with LOD0 (workstream 7, pulled forward).
 - Facade details: AC units, vents, dishes, fire escapes (climbing through flush setbacks, with drop ladders) and awnings, hand-placed or by the style's seeded rules; `DetailRules` on `FacadeStyle` (workstream 3).
 - Pitched roofs: straight skeleton, hip/gable/shed with eaves, fascias, soffits and gable walls; roofed setbacks cut around the storeys above (`Generate/Skeleton`, `Generate/Roofs`) (workstream 3).
 - LOD0 generator core (`Generate`): slabs with stair holes and terrace decks, wall panels with openings, frames and panes, floor bands and plinths, interior walls with doors, party walls, setbacks with terraces and overhangs, flat roofs with parapets, stair and lift cores sharing building walls; `Validate.CoplanarCheck`; Clipper2 1.5.4 and Earcut 3.0.1 vendored (workstream 2).

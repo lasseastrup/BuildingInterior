@@ -18,16 +18,33 @@ namespace Triband.Storey.Generate
     /// building. A port of the prototype's <c>lod0Steps</c>, storey by storey, so a caller can spread a
     /// building over several frames.
     /// </summary>
-    public sealed class Lod0
+    public static class Lod0
     {
+        /// <summary>Build a building's LOD0. <paramref name="solids"/> records volumes for the coplanar checker.</summary>
+        public static Lod0Result Build(Site site, BuildingData b, bool solids = false)
+        {
+            var self = new Shared(site, b);
+            int idx = site.IndexOf(b);
+            var r = new Lod0Result { Op = new MeshBuilder(idx), Glass = new MeshBuilder(idx) };
+            r.Glass.Walls = r.Op.Walls;   // glass shares the wall ids of the walls it sits in
+            if (solids) r.Op.Solids = new List<Solid>();
+            site.partyMemo.Remove(b.id);
+            foreach (var _ in self.Steps(r)) { }
+            return r;
+        }
+
+        /// <summary>Outline geometry and colours of one setback tier.</summary>
+        public sealed class TierCtx { public List<Vec2> fp = null!; public bool ccw; public List<Vec2> Wp = null!; public Geo.Corner[] cor = null!; public Palette C = null!; }
+
+        /// <summary>The storey builders, shared by the three LODs of one building.</summary>
+        public sealed class Shared
+        {
         readonly Site site; readonly BuildingData b; readonly int N; readonly bool shell;
         readonly Dictionary<int, TierCtx> tiers = new Dictionary<int, TierCtx>();
 
-        sealed class TierCtx { public List<Vec2> fp = null!; public bool ccw; public List<Vec2> Wp = null!; public Geo.Corner[] cor = null!; public Palette C = null!; }
+        public Shared(Site site, BuildingData b) { this.site = site; this.b = b; N = b.floors.Count; shell = !b.interior; }
 
-        Lod0(Site site, BuildingData b) { this.site = site; this.b = b; N = b.floors.Count; shell = !b.interior; }
-
-        TierCtx At(int k)
+        public TierCtx At(int k)
         {
             int j = Derived.TierStart(b, k);
             if (!tiers.TryGetValue(j, out var g))
@@ -40,20 +57,7 @@ namespace Triband.Storey.Generate
             return g;
         }
 
-        /// <summary>Build a building's LOD0. <paramref name="solids"/> records volumes for the coplanar checker.</summary>
-        public static Lod0Result Build(Site site, BuildingData b, bool solids = false)
-        {
-            var self = new Lod0(site, b);
-            int idx = site.IndexOf(b);
-            var r = new Lod0Result { Op = new MeshBuilder(idx), Glass = new MeshBuilder(idx) };
-            r.Glass.Walls = r.Op.Walls;   // glass shares the wall ids of the walls it sits in
-            if (solids) r.Op.Solids = new List<Solid>();
-            site.partyMemo.Remove(b.id);
-            foreach (var _ in self.Steps(r)) { }
-            return r;
-        }
-
-        IEnumerable<int> Steps(Lod0Result r)
+        public IEnumerable<int> Steps(Lod0Result r)
         {
             var op = r.Op; var gl = r.Glass;
             for (int k = 0; k <= N; k++)
@@ -75,7 +79,7 @@ namespace Triband.Storey.Generate
         /// Slab at level k. Where a setback starts, the floor covers the new outline and the rest of the
         /// storey below becomes terrace deck; the underside always covers the storey below.
         /// </summary>
-        void Slab(MeshBuilder op, int k, Palette C, bool shell, bool topOnly)
+        public void Slab(MeshBuilder op, int k, Palette C, bool shell, bool topOnly)
         {
             double y = Derived.FloorBase(b, k), ox = b.pos.x, oz = b.pos.z;
             var below = k > 0 ? Derived.OutlineAt(b, k - 1) : null; var above = k < N ? Derived.OutlineAt(b, k) : null;
@@ -130,7 +134,7 @@ namespace Triband.Storey.Generate
 
         // ---- terraces and overhangs ------------------------------------------------------
 
-        sealed class Run { public Vec2 a, u, w; public double L; public Cut S, E; }
+        public sealed class Run { public Vec2 a, u, w; public double L; public Cut S, E; }
 
         /// <summary>Where a parapet run ends against the setback's wall: the outer face of that wall.</summary>
         static Cut? ParapetEnd(List<Vec2> up, bool uccw, Vec2 V, Vec2 U, Vec2 Wn, double uV, int dir)
@@ -151,7 +155,7 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>Strips along the parts of A's edges outside B; they end on A's mitre at an open corner, or against B's wall.</summary>
-        List<Run> StripRuns(List<Vec2> A, List<Vec2> B, int? kA)
+        public List<Run> StripRuns(List<Vec2> A, List<Vec2> B, int? kA)
         {
             var lo = A; var up = B; bool lccw = Geo.Area2(lo) > 0, uccw = Geo.Area2(up) > 0; int n = lo.Count;
             var Wp = new List<Vec2>(n); foreach (var p in lo) Wp.Add(new Vec2(p.x + b.pos.x, p.z + b.pos.z));
@@ -174,10 +178,10 @@ namespace Triband.Storey.Generate
             return out_;
         }
 
-        List<Run> TerraceRuns(int k) => StripRuns(Derived.OutlineAt(b, k - 1), Derived.OutlineAt(b, k), Derived.TierStart(b, k - 1));
-        List<Run> OverhangRuns(int k) => StripRuns(Derived.OutlineAt(b, k), Derived.OutlineAt(b, k - 1), null);
+        public List<Run> TerraceRuns(int k) => StripRuns(Derived.OutlineAt(b, k - 1), Derived.OutlineAt(b, k), Derived.TierStart(b, k - 1));
+        public List<Run> OverhangRuns(int k) => StripRuns(Derived.OutlineAt(b, k), Derived.OutlineAt(b, k - 1), null);
 
-        void Overhang(MeshBuilder op, int k, Palette C)
+        public void Overhang(MeshBuilder op, int k, Palette C)
         {
             double y = Derived.FloorBase(b, k), T = Dim.T_EXT;
             foreach (var r in OverhangRuns(k))
@@ -187,7 +191,7 @@ namespace Triband.Storey.Generate
             }
         }
 
-        void Terrace(MeshBuilder op, List<Seg>? sg, int k, Palette C)
+        public void Terrace(MeshBuilder op, List<Seg>? sg, int k, Palette C)
         {
             double y = Derived.FloorBase(b, k), T = Dim.T_EXT;
             foreach (var r in TerraceRuns(k))
@@ -203,7 +207,7 @@ namespace Triband.Storey.Generate
         // ---- facade -------------------------------------------------------------------------
 
         /// <summary>LOD0 facade of one storey: panels with window and door holes, recessed panes, frames and trims.</summary>
-        void FacadeStorey(MeshBuilder op, MeshBuilder gl, List<Seg> sg, int k, TierCtx g)
+        public void FacadeStorey(MeshBuilder op, MeshBuilder gl, List<Seg> sg, int k, TierCtx g)
         {
             var Wp = g.Wp; var C = g.C; int n = Wp.Count; double h = Derived.FloorH(b, k), y = Derived.FloorBase(b, k), T = Dim.T_EXT;
             for (int i = 0; i < n; i++)
@@ -247,7 +251,7 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>Floor bands and the ground-floor plinth along one facade piece (ends against a party wall are left open).</summary>
-        void PieceStrips(MeshBuilder op, int k, Frame F, Miter m, Party.Piece pc, List<Opening> ops, double y, double h, Palette C)
+        public void PieceStrips(MeshBuilder op, int k, Frame F, Miter m, Party.Piece pc, List<Opening> ops, double y, double h, Palette C)
         {
             double T = Dim.T_EXT, L = m.E.s; int k0 = Derived.TierStart(b, k), i = pc.i;
             var c0 = pc.s < 0.02 ? Party.CornerCut(site, b, k0, i, false, y, true) : null;
@@ -275,7 +279,7 @@ namespace Triband.Storey.Generate
 
         // ---- interior -----------------------------------------------------------------------
 
-        void Interior(MeshBuilder op, List<Seg> sg, int k, Palette C)
+        public void Interior(MeshBuilder op, List<Seg> sg, int k, Palette C)
         {
             double y = Derived.FloorBase(b, k), hh = Derived.FloorH(b, k) - Dim.SLAB, ox = b.pos.x, oz = b.pos.z, E = Dim.T_INT / 2 - 0.02, t = Dim.T_INT / 2 + 0.025;
             var fp = Derived.OutlineAt(b, k);
@@ -318,7 +322,7 @@ namespace Triband.Storey.Generate
             return out_;
         }
 
-        void Roof(MeshBuilder op, List<Seg>? sg, TierCtx g, Palette C)
+        public void Roof(MeshBuilder op, List<Seg>? sg, TierCtx g, Palette C)
         {
             if (Roofs.Draw(op, Roofs.Parts(site, b), C)) return;   // hip, gable or shed (no roof access, no parapet)
             double y = Derived.RoofY(b), T = Dim.T_EXT; int n = g.Wp.Count, k0 = Derived.TierStart(b, N);
@@ -343,7 +347,7 @@ namespace Triband.Storey.Generate
 
         // ---- cores ---------------------------------------------------------------------------
 
-        void Shafts(MeshBuilder op, List<Seg> sg, int k, Palette C)
+        public void Shafts(MeshBuilder op, List<Seg> sg, int k, Palette C)
         {
             foreach (var s in b.shafts)
             {
@@ -417,5 +421,6 @@ namespace Triband.Storey.Generate
                 }
             }
         }
+    }
     }
 }

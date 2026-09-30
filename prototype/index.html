@@ -1795,7 +1795,7 @@ function buildLOD2(b, idx, rec=null){
         quad([X(s0,yp,0),X(e0,yp,0),X(e1,yp,T),X(s1,yp,T)], [0,1,0], ZZ, [0,3]); }
     }
   });
-  return {pos:new Float32Array(P), nrm:new Int8Array(NR), fac:new Float32Array(F), fac2:new Float32Array(F2), slot:new Float32Array(SL), idx:new Uint32Array(I), tag:idx+2*LOD_TAG, count:P.length/3, tris:I.length/3};
+  return {pos:new Float32Array(P), posD:P, nrm:new Int8Array(NR), fac:new Float32Array(F), fac2:new Float32Array(F2), slot:new Float32Array(SL), idx:new Uint32Array(I), tag:idx+2*LOD_TAG, count:P.length/3, tris:I.length/3};   // posD: the unrounded positions, for the port's tests
 }
 // facade parameters for the LOD2 shader (same numbers the geometry LODs use)
 function specOf(kind,h,st){ const ws=winSpec(kind,h,st); return ws ? [ws.full!=null?ws.full:-1, ws.w||0, ws.y0, ws.y1] : [-1,0,1,0]; }
@@ -3420,7 +3420,9 @@ window.__sb = { roofParts:(i,k)=>{ const b=state.buildings[i]; const R = k==null
   derive:(i)=>{ const b=state.buildings[i]; const ks=b.floors.map((_,k)=>k); return {id:b.id, floorBases:ks.map(k=>floorBase(b,k)), roofY:roofY(b), tierStarts:ks.map(k=>tierStart(b,k)), outlines:ks.concat([b.floors.length]).map(k=>fpAt(b,k).map(p=>[p.x,p.z])), styleWall:ks.map(k=>styleAt(b,k).wall), styleInterior:ks.map(k=>styleAt(b,k).interior), shaftTops:b.shafts.map(s=>shaftTop(b,s)), tris:[0,1,2].map(l=>__sb.geo(i,l).reduce((n,g)=>n+g.i.length/3,0))}; },   // derived values the Unity port is checked against (unity/Fixtures/derived.json)
   geo:(i,lod=0)=>{ const b=state.buildings[i], r=recOf(b); DEBUG_SOLIDS=true; let out;
     if(lod<2){ const g = lod===0 ? buildLOD0(b,r.idx) : buildLOD1(b,r.idx); out=[{p:g.op.p,n:g.op.n,c:g.op.c,i:g.op.i,k:g.op.k,solids:g.op.solids}]; }
-    else { const L=buildLOD2(b,r.idx), c=[]; for(let v=0;v<L.count;v++){ const k=L.fac2[v*2+1]; c.push(k,k,k); } out=[{p:[...L.pos], n:[...L.nrm].map(v=>v/127), c, i:[...L.idx], solids:[]}]; }
+    else { const L=buildLOD2(b,r.idx,r), c=[]; for(let v=0;v<L.count;v++){ const k=L.fac2[v*2+1]; c.push(k,k,k); }
+      const params={}; for(const x of new Set(L.slot)) params[x]=[...paramArr.subarray(x*SLOT_TEXELS*4, x*SLOT_TEXELS*4+24)]; freeSlots(r);   // the runs' parameter rows, for the port's tests
+      out=[{p:L.posD, n:[...L.nrm].map(v=>v/127), c, i:[...L.idx], fac:[...L.fac], fac2:[...L.fac2], slot:[...L.slot], params, solids:[]}]; }
     DEBUG_SOLIDS=false; return out; },
   nb:()=>state.buildings.length, bench:(i=0,lod=0)=>{ const b=state.buildings[i], r=recOf(b), f=[buildLOD0,buildLOD1,buildLOD2][lod]; const t=performance.now(); for(let k=0;k<10;k++) f(b,r.idx); return (performance.now()-t)/10; },
   lodStats, LODCFG, city:generateCity, clearCity, recs, cells, openPerf, renderer,

@@ -91,29 +91,38 @@ const derivedDemo = await derive();
 // Face census of the LOD0 opaque mesh, everything included. Triangles are bucketed by plane (normal to 1e-3, offset to 1 mm) and colour
 // (linear, to 1e-3); each bucket records its area and triangle count. Triangulation-independent, so the C# generator
 // is judged on what surface it produces where, not on how it splits it.
-const census = async () => {
+// LOD0 and LOD1 buckets carry the colour. LOD2 has no colours in the mesh: its quads carry a bay width, a kind and a
+// parameter row (colours, window spec, storey height, bands, run height, parapet) the facade shader reads, so its
+// buckets carry those instead, and the window span (fac.zw) of the quad.
+const census = async (lod) => {
   const n = await page.evaluate(() => __sb.nb()); const out = [];
-  for (let i = 0; i < n; i++) out.push(await page.evaluate(i => {
+  for (let i = 0; i < n; i++) out.push(await page.evaluate(([i, lod]) => {
     const b = __sb.state.buildings[i];
-    const g = __sb.geo(i, 0)[0];
+    const g = __sb.geo(i, lod)[0];
     const B = new Map(); let tris = 0;
     for (let t = 0; t < g.i.length; t += 3) {
-      const ids = [g.i[t], g.i[t + 1], g.i[t + 2]], P = ids.map(j => [g.p[3 * j], g.p[3 * j + 1], g.p[3 * j + 2]]);
-      const nn = [g.n[3 * ids[0]], g.n[3 * ids[0] + 1], g.n[3 * ids[0] + 2]], c = [g.c[3 * ids[0]], g.c[3 * ids[0] + 1], g.c[3 * ids[0] + 2]];
-      const d = nn[0] * P[0][0] + nn[1] * P[0][1] + nn[2] * P[0][2];
+      const ids = [g.i[t], g.i[t + 1], g.i[t + 2]], P = ids.map(j => [g.p[3 * j], g.p[3 * j + 1], g.p[3 * j + 2]]), v0 = ids[0];
+      const nn = [g.n[3 * v0], g.n[3 * v0 + 1], g.n[3 * v0 + 2]];
       const ux = P[1][0] - P[0][0], uy = P[1][1] - P[0][1], uz = P[1][2] - P[0][2], vx = P[2][0] - P[0][0], vy = P[2][1] - P[0][1], vz = P[2][2] - P[0][2];
-      const area = Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) / 2;
-      const key = [nn.map(v => v.toFixed(3)).join(','), d.toFixed(3), c.map(v => v.toFixed(3)).join(',')].join('|');
-      const e = B.get(key) || B.set(key, { n: nn.map(v => +v.toFixed(3)), d: +d.toFixed(3), c: c.map(v => +v.toFixed(3)), area: 0, tris: 0 }).get(key);
+      const cr = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx], cl = Math.hypot(...cr) || 1, area = cl / 2;
+      // the plane offset from the triangle's own (exact) normal, not the stored one: LOD2 stores Int8 normals, and with
+      // a normal that is not quite perpendicular the offset would depend on which vertex the triangulation put first
+      let gn = cr.map(v => v / cl); if (gn[0] * nn[0] + gn[1] * nn[1] + gn[2] * nn[2] < 0) gn = gn.map(v => -v);
+      const d = gn[0] * P[0][0] + gn[1] * P[0][1] + gn[2] * P[0][2];
+      let key, extra;
+      if (lod < 2) { const c = [g.c[3 * v0], g.c[3 * v0 + 1], g.c[3 * v0 + 2]]; key = [nn.map(v => v.toFixed(3)).join(','), d.toFixed(3), c.map(v => v.toFixed(3)).join(',')].join('|'); extra = { c: c.map(v => +v.toFixed(3)) }; }
+      else { const f2 = [g.fac2[2 * v0], g.fac2[2 * v0 + 1]], span = [g.fac[4 * v0 + 2], g.fac[4 * v0 + 3]], pr = g.params[g.slot[v0]].map(v => +v.toFixed(3));
+        extra = { kind: f2[1], bay: +f2[0].toFixed(3), span: span.map(v => +v.toFixed(3)), params: pr }; key = [nn.map(v => v.toFixed(3)).join(','), d.toFixed(3), JSON.stringify(extra)].join('|'); }
+      const e = B.get(key) || B.set(key, { n: nn.map(v => +v.toFixed(3)), d: +d.toFixed(3), ...extra, area: 0, tris: 0 }).get(key);
       e.area += area; e.tris++; tris++;
     }
     return { id: b.id, tris, verts: g.p.length / 3, buckets: [...B.values()].map(e => ({ ...e, area: +e.area.toFixed(5) })).sort((p, q) => p.d - q.d || p.area - q.area) };
-  }, i));
+  }, [i, lod]));
   return out;
 };
-const censusDemo = await census();
+const censusDemo = [await census(0), await census(1), await census(2)];
 await page.evaluate(d => { __sb.state.buildings.length = 0; __sb.state.buildings.push(...JSON.parse(d).buildings); __sb.outline.refresh(); }, variants);
-const censusVariants = await census();
+const censusVariants = [await census(0), await census(1), await census(2)];
 await browser.close();
 
 fs.mkdirSync(out, { recursive: true });
@@ -128,11 +137,13 @@ write('derived.json', {
   demo: derivedDemo,
   variants: derivedVariants,
 });
-write('census.json', {
-  schema: 1,
-  source: 'prototype/index.html: buildLOD0 (opaque mesh)',
+for (const lod of [0, 1, 2]) write(`census${lod}.json`, {
+  schema: 2, lod,
+  source: `prototype/index.html: buildLOD${lod}` + (lod === 0 ? ' (opaque mesh)' : ''),
   tolerance: { area: 0.002, areaRelative: 0.001 },
-  note: 'Per building: triangles by plane and colour with the area they cover. A bucket missing, extra, or off by more than the tolerance is a face the generator put somewhere else.',
-  demo: censusDemo,
-  variants: censusVariants,
+  note: lod < 2
+    ? 'Per building: triangles by plane and colour with the area they cover. A bucket missing, extra, or off by more than the tolerance is a face the generator put somewhere else.'
+    : 'Per building: triangles by plane, quad kind, bay width, window span and the parameter row the facade shader reads (wall, trim, glass, roof colours; window spec; storey height, banded storeys, run height, parapet). Normals are the mesh\'s Int8 ones.',
+  demo: censusDemo[lod],
+  variants: censusVariants[lod],
 });
