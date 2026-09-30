@@ -29,20 +29,20 @@ Recommendation: **three packages, one repository**, released together but versio
 
 | Package | Contents | Why separate |
 |---|---|---|
-| `com.<studio>.storey` (**runtime**) | Data model, generator (bake API), shaders, `BuildingTable`, `LodManager`, `OcclusionSystem`, streaming hooks, colliders. Depends on URP, Burst, Collections, Mathematics. | This is what shipped games carry. It must stay small, allocation-free at runtime, and free of editor code. Games that only consume baked districts need nothing else. |
-| `com.<studio>.storey.authoring` (**editor**) | Inspectors, EditorTools and Overlays, bake pipeline (ScriptedImporter for `.storey` files, district/HLOD bake), prototype JSON importer, city generator, validation (coplanar test) as menu commands. Editor-only assembly; depends on the runtime package. | Level artists install it; build machines don't need it beyond the bake step. Independent cadence: tooling changes weekly, the runtime rarely. |
-| `com.<studio>.storey.playkit` (**sample-grade runtime**) | Third-person controller, follow camera, virtual joystick, lift UI: the prototype's play mode. Also shipped as a *Sample* of the runtime package so it can be imported into a project and edited. | Projects have their own character and camera; the occlusion system exposes an API for them and the kit is only the reference implementation. |
+| `com.triband.storey` (**runtime**) | Data model, generator (bake API), shaders, `BuildingTable`, `LodManager`, `OcclusionSystem`, streaming hooks, colliders. Depends on URP, Burst, Collections, Mathematics. | This is what shipped games carry. It must stay small, allocation-free at runtime, and free of editor code. Games that only consume baked districts need nothing else. |
+| `com.triband.storey.authoring` (**editor**) | Inspectors, EditorTools and Overlays, bake pipeline (ScriptedImporter for `.storey` files, district/HLOD bake), prototype JSON importer, city generator, validation (coplanar test) as menu commands. Editor-only assembly; depends on the runtime package. | Level artists install it; build machines don't need it beyond the bake step. Independent cadence: tooling changes weekly, the runtime rarely. |
+| `com.triband.storey.playkit` (**sample-grade runtime**) | Third-person controller, follow camera, virtual joystick, lift UI: the prototype's play mode. Also shipped as a *Sample* of the runtime package so it can be imported into a project and edited. | Projects have their own character and camera; the occlusion system exposes an API for them and the kit is only the reference implementation. |
 
 Facts that shape this: a package's `dependencies` cannot be git URLs, only the project manifest can hold git deps, so a multi-package split needs the three packages installed together (embedded or git URLs in the project manifest during phases 1–3) and a **scoped registry** (Verdaccio/Cloudsmith, npm protocol) once they are versioned separately. Optional integrations (Splines, Entities) are compile-time `versionDefines` in the asmdef, not more packages.
 
-Repository: `Packages/com.<studio>.storey*` embedded in a Unity 6.3 test project (`UnityProject/`), with the prototype alongside (`prototype/`). Embedded packages are editable in place, and the test project is where tests and the demo scene live.
+Repository: this one. The Unity 6.3 test project lives in `unity/` next to `prototype/` and `docs/`, with the three packages embedded under `unity/Packages/com.triband.storey*`. Embedded packages are editable in place, the test project is where tests and the demo scene live, and the JSON golden files shared with the prototype stay in one repository. Consumers add a package by git URL with a path suffix (`?path=/unity/Packages/com.triband.storey#v0.1.0`), so the layout costs nothing on the install side. The Unity `.gitignore` (Library, Temp, Logs, UserSettings) is added at `unity/`.
 
 ## 3. Package layout and conventions
 
 Standard UPM layout per package (`~` folders are not imported):
 
 ```text
-com.<studio>.storey/
+com.triband.storey/
   package.json          name, version (SemVer, start 0.1.0; MAJOR 0 until the data format is stable), unity "6000.3",
                         dependencies (exact versions), samples []
   README.md  CHANGELOG.md  LICENSE.md  Third Party Notices.md
@@ -51,7 +51,7 @@ com.<studio>.storey/
   Tests/Runtime/<Studio>.Storey.Tests.asmdef  (defineConstraints UNITY_INCLUDE_TESTS)
   Samples~/DemoStreet/                        the prototype's demo buildings imported from JSON, plus the play kit
   Documentation~/                             manual (workflows), reference (settings), API
-com.<studio>.storey.authoring/
+com.triband.storey.authoring/
   Editor/<Studio>.Storey.Editor.asmdef        includePlatforms ["Editor"]
   Tests/Editor/<Studio>.Storey.Editor.Tests.asmdef
 ```
@@ -106,7 +106,8 @@ What the research settled (Unity 6.3 LTS is the current LTS; 6.4–6.6 add WebGP
 ### 6.1 Draw submission
 
 - **SRP Batcher + GPU Resident Drawer (GRD)** on desktop, Vulkan Android, Metal and (6.6+) WebGPU. GRD needs Forward+ or Deferred+, *BatchRendererGroup Variants = Keep All*, plain `MeshRenderer`s with no `MaterialPropertyBlock`, no light probes on the renderer, and **Static Batching off** (it disables instancing and duplicates mesh data). Our design already fits: one merged mesh per building per LOD, five shared materials, all per-building data in a buffer.
-- **OpenGL ES** (low-end Android) has no GRD: the same renderers fall back to the SRP Batcher. Nothing in the package may depend on GRD being present.
+- **Low-end reference device: iPhone 7** (A10 Fusion, 2 GB RAM, Metal, 1334×750, iOS 15 is its last OS). Metal means GRD and the compute-buffer path *are* available there; what it lacks is memory and GPU fill rate. So the low-end budget is set by memory and by the alpha-clip cost on Apple's tile-based GPU, not by the render path. To verify in the editor before workstream 0: Unity 6.3's minimum iOS version must still admit iOS 15 (Unity 6 has been iOS 13+; the 6.x release notes for 6.4–6.7 may raise it, which would rule the device out for later Unity versions).
+- **OpenGL ES** (low-end Android) has no GRD: the same renderers fall back to the SRP Batcher. Nothing in the package may depend on GRD being present. This path is a secondary target, tested but not the one the budgets are tuned on.
 - **GPU occlusion culling** tests each renderer as a bounding sphere, so it works poorly for large merged meshes and tall buildings. Keep HLOD cells compact (≤ 65,535 vertices, roughly square in plan) and treat GPU culling as a per-project toggle measured at street level, not a default.
 - **Per-building data**: the per-vertex building index stays the primary mechanism (portable everywhere, works inside merged cells). `MeshRenderer.SetShaderUserValue` (6.3+, read as `unity_RendererUserValue`) is an option for single-building renderers, but it isn't serialised and its behaviour under GRD instanced draws is not documented, so it is an optimisation to try, not a dependency.
 - The **building table** is one `StructuredBuffer` bound with `Shader.SetGlobalBuffer`, read from a Custom Function node in Shader Graph (file-mode include). Vertex-stage buffer reads need GLES 3.1+ and `SystemInfo.maxComputeBufferInputsVertex > 0`; the GLES fallback is the prototype's float-texture layout, chosen at startup.
@@ -130,18 +131,21 @@ What the research settled (Unity 6.3 LTS is the current LTS; 6.4–6.6 add WebGP
 
 - Meshes are built with `Mesh.AllocateWritableMeshData` + `SetVertexBufferParams` in the prototype's compact format (float3 position, SNorm8×4 normal, UNorm8×4 colour, float tag; attributes must be 4-byte multiples), **16-bit indices** (the default, and the only guaranteed format on old GPUs), `MeshUpdateFlags` to skip validation, and `UploadMeshData(true)` after bake so no CPU copy is kept. Collision is the prototype's 2D wall segments, not mesh colliders, so meshes never need to be readable.
 - Budgets from the prototype's city test, to hold or beat: 3,000 buildings at ~15 MB for LOD2/cells resident, ~90 MB total at street level with LOD0/LOD1 around the player (LRU-bounded); the building table is 8,192 × 16 B. Low-end mobile caps the LOD0 residency (fewer full-detail buildings) rather than changing the content.
-- Unity gives no fixed MB budget; the plan is profiler-driven: the performance tests record peak mesh memory per LOD on device and fail on regression.
+- **iPhone 7 memory ceiling.** A 2 GB device grants an app roughly 1.2–1.4 GB before iOS starts terminating it; a game's own budget after Unity, textures, audio and UI is realistically 200–300 MB for the world. The package's share is set at **≤ 120 MB** for a city of the prototype's size: cells and LOD2 resident (~15 MB), LOD0/LOD1 LRU capped so that ~60 MB of near-detail meshes is the most it ever holds, the building table and occlusion buffers (< 1 MB), and headroom for a district being streamed in. Textures are not part of this (the package is untextured by design; a project's facade materials are its own budget).
+- Unity gives no fixed MB budget; the plan is profiler-driven: the performance tests record peak mesh memory per LOD on device and fail on regression, with the iPhone 7 numbers as the thresholds.
 
 ### 6.6 Performance targets
 
-| Target | Overview (3,000 buildings) | Street level |
-|---|---|---|
-| Draw calls | ~110 (cells) | ≤ 90 |
-| Triangles | ≤ 80k | ≤ 500k desktop, ≤ 250k mobile (LOD0 residency cap) |
-| LOD CPU | < 2 ms/frame | < 2 ms/frame |
-| Frame budget | 60 fps desktop, 30 fps low-end mobile with GLES fallback |
+| Target | Overview (3,000 buildings) | Street level, desktop | Street level, iPhone 7 |
+|---|---|---|---|
+| Draw calls | ~110 (cells) | ≤ 90 | ≤ 60 |
+| Triangles | ≤ 80k | ≤ 500k | ≤ 200k (LOD0 residency cap, LOD1 radius shrunk) |
+| LOD CPU | < 2 ms/frame | < 2 ms/frame | < 3 ms/frame (A10 is ~⅓ of a desktop core) |
+| Package GPU time | – | ≤ 3 ms | ≤ 8 ms of a 33 ms frame at 30 fps; occlusion keyword on near materials only |
+| Package memory | – | ≤ 200 MB | ≤ 120 MB (§6.5) |
+| Frame rate | 60 fps | 60 fps | 30 fps; 60 fps is a stretch goal measured, not promised |
 
-These are the prototype's measured numbers (SPEC §6.6) taken as ceilings; the Unity performance tests turn them into thresholds.
+The desktop column is the prototype's measured numbers (SPEC §6.6) taken as ceilings; the iPhone 7 column is a starting estimate to be replaced by measurements in workstream 5 (the first device run establishes the real numbers, then the performance tests enforce them). Because the iPhone 7 renders at 1334×750, fill rate is the concern rather than resolution: the alpha-clip discard in the near materials and the Fade/Cutout modes at LOD2 are the two things most likely to blow the GPU budget, and both are quality options that a project can turn off.
 
 ## 7. Testing and CI
 
@@ -161,7 +165,7 @@ Each workstream ends with something usable; the prototype's demo street is the a
 | 2 | Generator core | Slabs, wall panels, openings, cores, party walls, setbacks/terraces/overhangs, flat roofs | Coplanar test 0 on the fixture set; triangle counts within 10% of the prototype |
 | 3 | Roofs, details | Straight skeleton, hip/gable/shed, roofed setbacks, facade details | Same tests extended |
 | 4 | Shaders + table | Five materials, `BuildingTable` buffer, LOD2 facade shader, occlusion include | Visual parity screenshots |
-| 5 | Occlusion + play kit | `OcclusionSystem` (cutaway, floors above, Sink/Slice/Cutout/Fade), play kit sample | Walk the demo street on device |
+| 5 | Occlusion + play kit | `OcclusionSystem` (cutaway, floors above, Sink/Slice/Cutout/Fade), play kit sample | Walk the demo street on an iPhone 7; first measured numbers for §6.6 |
 | 6 | Editor tools | Shape/Facade/Interior tools, overlays, inspectors, snapping, ghosts | Designer makes a styled 3-floor building in < 2 min; 10 floors with roof access in < 5 min |
 | 7 | City scale | LOD1/LOD2 bake, HLOD cells, LOD manager, streaming districts | 3,000-building city at SPEC §6.6 numbers on the target devices |
 | 8 | Hardening | Docs, samples, performance thresholds in CI, registry publishing | 0.1.0 published to the scoped registry |
@@ -174,6 +178,7 @@ Estimated effort: workstreams 2–3 and 6 dominate; the rest is glue. Porting or
 - **Straight skeleton robustness** is proven in the prototype on random outlines but not on outlines with collinear or near-collinear edges from snapped user input; keep the fixture set growing.
 - **Party walls across districts:** a building at a district boundary depends on a neighbour in another district; the bake needs the neighbour's outline available (store outlines in a lightweight district index).
 - **Mobile alpha clipping cost** (occlusion discards) is the runtime risk to measure first; the keyword split in §6.3 is the mitigation, and the first device test should compare with/without it.
-- **GRD absent on GLES** means two render paths to test; the SRP-Batcher-only path must hit the low-end budget on its own.
+- **GRD absent on GLES** means two render paths to test; the SRP-Batcher-only path must be correct on Android GLES, but the budgets are tuned on the iPhone 7 (Metal), which is the agreed low-end device.
+- **iPhone 7 OS ceiling (iOS 15).** Each Unity 6.x release can raise the minimum iOS version; if a later LTS drops iOS 15 the reference device has to move (iPhone 8 / A11 is the natural next step, same 2 GB memory class). Check the release notes at each Unity upgrade.
 - **Renderer user values under GRD** are undocumented; the per-vertex index is the safe path, so this is only upside.
 - **Party walls across districts** need a neighbour index; without it a boundary building rebuilds with an open side.

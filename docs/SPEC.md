@@ -379,8 +379,8 @@ All questions from the prototype review have been answered, and every decision t
 Standard UPM layout. Folders ending in `~` aren't imported, and samples must be listed in `package.json`.
 
 ```text
-com.<studio>.storey/
-  package.json            name "com.<studio>.storey", version, displayName, unity "6000.0" (6000.3 for renderer user values), dependencies:
+com.triband.storey/
+  package.json            name "com.triband.storey", version, displayName, unity "6000.0" (6000.3 for renderer user values), dependencies:
                           com.unity.render-pipelines.universal, com.unity.burst, com.unity.collections, com.unity.mathematics
   README.md  CHANGELOG.md  LICENSE.md
   Runtime/                <Studio>.Storey.asmdef       data model, generators (Burst), LOD manager, building table, occlusion globals, colliders
