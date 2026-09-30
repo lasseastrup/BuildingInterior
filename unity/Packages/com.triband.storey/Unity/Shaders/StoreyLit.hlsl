@@ -13,6 +13,22 @@
 #include "StoreyFacade.hlsl"
 #endif
 
+// Material properties. Declared here, after Core.hlsl, because CBUFFER_START is URP's macro: a
+// per-shader HLSLINCLUDE block runs before this file and cannot use it.
+CBUFFER_START(UnityPerMaterial)
+    float _StoreySmoothness;
+    float _StoreyMetallic;
+#ifdef STOREY_GLASS
+    float _StoreyAlpha;
+#endif
+CBUFFER_END
+#ifndef STOREY_GLASS
+static const float _StoreyAlpha = 1.0;
+#endif
+#ifdef STOREY_SHADOW
+float3 _LightDirection;   // set by URP for the shadow caster pass
+#endif
+
 struct Attributes
 {
     float3 positionOS : POSITION;
@@ -54,9 +70,13 @@ Varyings StoreyVert(Attributes IN)
     worldPos = StoreySink(worldPos, IN.tag, kind, origY);
     StoreyVarying v;
     bool shown = StoreyVertex(IN.tag, wall, kind, wid, worldPos, origY, v);
-    OUT.positionCS = TransformWorldToHClip(worldPos);
-    if (!shown) OUT.positionCS = float4(2.0, 2.0, 2.0, 1.0);   // LOD not shown: clip the whole triangle
     OUT.normalWS = TransformObjectToWorldNormal(IN.normalOS.xyz);
+#ifdef STOREY_SHADOW
+    OUT.positionCS = TransformWorldToHClip(ApplyShadowBias(worldPos, OUT.normalWS, _LightDirection));
+#else
+    OUT.positionCS = TransformWorldToHClip(worldPos);
+#endif
+    if (!shown) OUT.positionCS = float4(2.0, 2.0, 2.0, 1.0);   // LOD not shown: clip the whole triangle
     OUT.color = IN.color;
     OUT.wall = wall;
     OUT.misc = float4(kind, wid, v.bid, v.lod);
@@ -88,8 +108,9 @@ float4 StoreyDepthFrag(Varyings IN) : SV_Target
 
 #else
 
-float4 StoreyFrag(Varyings IN, bool isFront : SV_IsFrontFace) : SV_Target
+float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) : SV_Target
 {
+    bool isFront = IS_FRONT_VFACE(cullFace, true, false);
     float dark = StoreyOcclude(StoreyUnpack(IN), IN.positionCS.xy, IN.positionCS.z);
 
 #ifdef STOREY_MASSING
@@ -107,6 +128,7 @@ float4 StoreyFrag(Varyings IN, bool isFront : SV_IsFrontFace) : SV_Target
     inputData.normalWS = normalize(isFront ? IN.normalWS : -IN.normalWS);
     inputData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(IN.worldPos);
     inputData.shadowCoord = IN.shadowCoord;
+    inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(IN.positionCS);
     inputData.bakedGI = SampleSH(inputData.normalWS);
 
     SurfaceData surfaceData = (SurfaceData)0;

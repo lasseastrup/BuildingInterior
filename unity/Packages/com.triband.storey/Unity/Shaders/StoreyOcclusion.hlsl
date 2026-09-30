@@ -45,7 +45,7 @@ struct StoreyVarying
 float StoreyBayer(float2 p)
 {
     int x = (int)fmod(p.x, 4.0); int y = (int)fmod(p.y, 4.0);
-    const float m[16] = { 0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5. };
+    static const float m[16] = { 0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5. };
     return (m[x + y * 4] + 0.5) / 16.0;
 }
 

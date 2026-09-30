@@ -15,11 +15,7 @@ Shader "Storey/Glass"
         Cull Back
 
         HLSLINCLUDE
-        CBUFFER_START(UnityPerMaterial)
-            float _StoreyAlpha;
-            float _StoreySmoothness;
-            float _StoreyMetallic;
-        CBUFFER_END
+        #define STOREY_GLASS
         ENDHLSL
 
         Pass

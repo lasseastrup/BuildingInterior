@@ -14,11 +14,6 @@ Shader "Storey/Massing"
         HLSLINCLUDE
         #define STOREY_MASSING
         #define STOREY_CAP
-        CBUFFER_START(UnityPerMaterial)
-            float _StoreySmoothness;
-            float _StoreyMetallic;
-        CBUFFER_END
-        static const float _StoreyAlpha = 1.0;
         ENDHLSL
 
         Pass
@@ -50,7 +45,9 @@ Shader "Storey/Massing"
             #pragma vertex StoreyVert
             #pragma fragment StoreyDepthFrag
             #pragma multi_compile _ DOTS_INSTANCING_ON
+            #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
             #define STOREY_DEPTH
+            #define STOREY_SHADOW
             #include "StoreyLit.hlsl"
             ENDHLSL
         }
