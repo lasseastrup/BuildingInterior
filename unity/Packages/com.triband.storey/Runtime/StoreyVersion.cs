@@ -1,3 +1,4 @@
+#nullable enable
 namespace Triband.Storey
 {
     /// <summary>
@@ -17,7 +18,8 @@ namespace Triband.Storey
 
         /// <summary>
         /// Version of the prototype JSON schema this package can import
-        /// (the prototype's <c>state.buildings[]</c> layout, SPEC §3).
+        /// (the prototype's <c>state.buildings[]</c> layout, SPEC §3; the prototype
+        /// stores it under the local-storage key <c>storey-builder-v9</c>).
         /// </summary>
         public const int PrototypeSchema = 9;
     }

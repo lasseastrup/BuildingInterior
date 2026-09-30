@@ -39,22 +39,35 @@ Repository: this one. The Unity 6.3 test project lives in `unity/` next to `prot
 
 ## 3. Package layout and conventions
 
-Standard UPM layout per package (`~` folders are not imported):
+Standard UPM layout per package (`~` folders are not imported), with the split the Spline-road-mesh packages proved out: an **engine-free `Runtime/`** and an engine-facing `Unity/`.
 
 ```text
 com.triband.storey/
   package.json          name, version (SemVer, start 0.1.0; MAJOR 0 until the data format is stable), unity "6000.3",
                         dependencies (exact versions), samples []
   README.md  CHANGELOG.md  LICENSE.md  Third Party Notices.md
-  Runtime/<Studio>.Storey.asmdef              (+ AssemblyInfo.cs: InternalsVisibleTo Editor and Tests assemblies)
-  Runtime/Shaders/                            BuildingOcclusion.hlsl, Facade.hlsl, Shader Graphs
-  Tests/Runtime/<Studio>.Storey.Tests.asmdef  (defineConstraints UNITY_INCLUDE_TESTS)
-  Samples~/DemoStreet/                        the prototype's demo buildings imported from JSON, plus the play kit
-  Documentation~/                             manual (workflows), reference (settings), API
+  Runtime/Triband.Storey.asmdef       noEngineReferences: true, references []: data model, generator, LOD logic,
+                                      occlusion maths. Builds as a plain .NET library (unity/Headless) and is
+                                      tested there against the prototype's fixtures.
+  Runtime/ThirdParty/<lib>/           vendored, engine-free
+  Unity/Triband.Storey.Unity.asmdef   MonoBehaviours, ScriptableObjects, mesh upload, Burst jobs, buffers, shaders;
+                                      depends on Runtime + Burst/Collections/Mathematics/URP
+  Unity/Shaders/                      BuildingOcclusion.hlsl, Facade.hlsl, Shader Graphs
+  Samples~/DemoStreet/                the prototype's demo buildings imported from JSON, plus the play kit
+  Documentation~/                     manual (workflows), reference (settings), API
 com.triband.storey.authoring/
-  Editor/<Studio>.Storey.Editor.asmdef        includePlatforms ["Editor"]
-  Tests/Editor/<Studio>.Storey.Editor.Tests.asmdef
+  Editor/Triband.Storey.Editor.asmdef includePlatforms ["Editor"]
+com.triband.storey.playkit/
+  Runtime/Triband.Storey.PlayKit.asmdef
+unity/Headless/                       .NET projects over the same sources: Headless (Runtime/**), Stubs (engine-facing
+                                      code against hand-written UnityEngine/UnityEditor declarations), Tests (xunit)
+unity/Fixtures/                       reference answers emitted by the prototype
+unity/tools/meta.py                   writes the committed .meta files (GUIDs derived from paths)
 ```
+
+Every `.cs` opens with `#nullable enable`; every asset has a committed `.meta`; every source folder is compiled by the headless or the stub project. These and the rest of the layout rules (no duplicate references, editor assemblies constrained to the editor, referenced Unity packages declared, cross-package references declared, one shared version) are enforced by `PackageLayoutTests` in `unity/Headless/Triband.Storey.Tests`, so a package cannot pass its behaviour tests and still refuse to import.
+
+Burst-compiled hot paths (polygon clipping, skeleton, mesh assembly) are a consequence of this split: the algorithm lives in `Runtime/` on plain arrays and is tested there; the `Unity/` layer wraps it in jobs over native containers. Where that duplication is not worth it the algorithm stays in `Runtime/` and runs on the main thread at bake time, which is where it runs anyway.
 
 Rules to hold from day one:
 
@@ -154,10 +167,13 @@ The primary column is the prototype's measured numbers (SPEC §6.6) taken as cei
 
 ## 7. Testing and CI
 
-- **Edit Mode tests** (authoring package): the prototype's checks ported: zero visible coplanar faces at every LOD over the 85-building fixture set (`zfight3`), topology census (no internal faces, no T-junctions), LOD consistency (window positions LOD1 = LOD2 shader), edge remaps for doors and details, placement rules (party walls, doors under fire escapes, flush cores), importer round-trip on the demo JSON.
-- **Play Mode tests** (runtime package): stairs, lifts, roof access, terrace doors, doors onto a neighbour's roof, occlusion detection (buildings in the way), LOD selection on the 3,000-building city.
-- **Performance tests** with `com.unity.test-framework.performance`: bake time per building, LOD CPU time per frame, draw calls and triangles at overview and street level, memory per LOD (the prototype's `city` numbers become thresholds).
-- **CI:** Unity Test Framework in batch mode (`-runTests -testPlatform EditMode|PlayMode`) via GameCI on GitHub Actions or Unity Build Automation; test results as NUnit XML; a nightly device build for the mobile budget.
+The loop has no editor in it. `dotnet test unity/Headless/Triband.Storey.Tests` runs everything below in seconds, in any container with the .NET 8 SDK (`.claude/session-start.sh` installs it), and the GitHub workflow runs the same command with no secrets. An editor is opened for the things a headless harness cannot ask: how it looks, what a frame costs on a device, whether the GPU Resident Drawer behaves.
+
+- **Differential tests** (headless, xunit, the bulk): the prototype emits fixtures into `unity/Fixtures/` (the demo street and the 85-building variant set as `state.buildings[]` JSON with per-LOD triangle counts, vertex buffers for chosen buildings, and the coplanar-face census). The port is judged against them: identity and topology exactly, geometry to a tolerance. This is the prototype's checks ported: zero visible coplanar faces at every LOD, topology census (no internal faces, no T-junctions), LOD consistency (window positions LOD1 = LOD2 shader), edge remaps for doors and details, placement rules (party walls, doors under fire escapes, flush cores), importer round-trip.
+- **Stub compile** (headless): the engine-facing assemblies compile against hand-written declarations of exactly the engine members they use. Catches typos, wrong overloads, missing usings and undeclared package references; proves nothing about behaviour.
+- **Layout rules** (headless): §3's rules, plus source lints as they become needed (no engine object built in a MonoBehaviour field initialiser, no `??`/`?.` on a `UnityEngine.Object`), each written when the mistake it names has happened once.
+- **Benchmarks** (headless): bake time per building and LOD-manager CPU time per frame over the 3,000-building city, as xunit tests that print numbers and fail on regression, like the traffic package's tick benchmark.
+- **In the editor, occasionally**: Play Mode tests for stairs, lifts, roof and terrace doors, and occlusion detection on the demo street; and the device runs that set §6.6's iPhone numbers. These are run by hand and recorded in the plan, not on every push.
 
 ## 8. Workstreams and order
 
@@ -165,7 +181,7 @@ Each workstream ends with something usable; the prototype's demo street is the a
 
 | # | Workstream | Deliverable | Exit test |
 |---|---|---|---|
-| 0 | Repo & packages | Unity 6.3 project (`unity/`), three embedded packages, asmdefs, smoke tests, GameCI workflow. **Skeleton committed**; needs a first open in the editor (pins, URP asset) and the three Unity licence secrets before CI is green. | Green CI |
+| 0 | Repo & packages | `unity/` with three embedded packages, engine-free/engine-facing split, headless .NET projects (behaviour, stub compile, layout rules), `.meta` generator, session hook installing the SDK, secret-free workflow. **Done**: 50 tests green. | `dotnet test` green |
 | 1 | Data + importer | `.storey` ScriptedImporter, data model with versioning, prototype JSON import | Demo JSON imports; fields round-trip |
 | 2 | Generator core | Slabs, wall panels, openings, cores, party walls, setbacks/terraces/overhangs, flat roofs | Coplanar test 0 on the fixture set; triangle counts within 10% of the prototype |
 | 3 | Roofs, details | Straight skeleton, hip/gable/shed, roofed setbacks, facade details | Same tests extended |

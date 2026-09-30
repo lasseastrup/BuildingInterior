@@ -1,28 +1,68 @@
-# Storey Unity test project
+# The Unity packages
 
-Unity 6.3 LTS project that embeds the three Storey packages (`Packages/com.triband.storey*`) so they can be edited in place, tested, and demoed. See `../docs/UNITY-PACKAGE-PLAN.md` for the plan and `../docs/SPEC.md` for what the packages implement.
+Ports of the prototype into Unity packages, and the test harnesses that keep the
+ports honest without an editor. The design is `../docs/SPEC.md`; the port plan
+is `../docs/UNITY-PACKAGE-PLAN.md`.
 
-## First open
+| Package | What it is | Assemblies |
+| --- | --- | --- |
+| `com.triband.storey` | Buildings: data model, geometry generation, LODs, occlusion, streaming hooks. Bake-only runtime. | `Triband.Storey` (engine-free), `Triband.Storey.Unity` |
+| `com.triband.storey.authoring` | Editor tooling: importer, inspectors, tools and overlays, district bake. Editor-only. | `Triband.Storey.Editor` |
+| `com.triband.storey.playkit` | The prototype's play mode: character, follow camera, joystick, lift UI. Sample-grade. | `Triband.Storey.PlayKit` |
 
-1. Open `unity/` with Unity 6.3 LTS (6000.3.x). If the Hub offers a different 6.3 patch, accept it; `ProjectSettings/ProjectVersion.txt` then updates itself and should be committed.
-2. Package resolution: the manifest pins the Unity 6 versions of Burst, Collections, Mathematics and URP. If the editor reports that a version does not exist for 6000.3, take the version the Package Manager suggests and commit `Packages/packages-lock.json`.
-3. URP is a dependency but the project has no pipeline asset yet: `Assets > Create > Rendering > URP Asset (with Universal Renderer)`, assign it under `Project Settings > Graphics`, and set the renderer to **Forward+**, `BatchRendererGroup Variants = Keep All`, `GPU Resident Drawer = Instanced Drawing` (Plan §6.1). Commit the generated `ProjectSettings/*.asset` files and the new assets.
-4. `Window > General > Test Runner` should list `Triband.Storey.Tests`, `Triband.Storey.Editor.Tests` and `Triband.Storey.PlayKit.Tests` with one passing smoke test each.
+## The split everything depends on
+
+`Runtime/` in the runtime package is **engine-free** (`noEngineReferences: true`,
+no references at all). That is what lets the same sources build as a plain .NET
+library and be tested with `dotnet test`, which is where the generation half, the
+half with the risk in it, is judged against the prototype's fixtures. Anything
+that touches `UnityEngine` lives in `Unity/` (or the editor and play kit
+packages) and is compiled headlessly against hand-written stubs of exactly the
+engine members it uses: a compile check, not a behaviour check, and the only one
+that half gets without a licence.
+
+```bash
+# Everything, no editor, no licence. Behaviour against fixtures, the engine-facing
+# code against stubs, and the package layout (asmdefs, manifests, .meta files).
+dotnet test unity/Headless/Triband.Storey.Tests
+
+# The .meta files, without which Unity ignores a package installed from a git URL.
+# Run without --check to write the missing ones (GUIDs derive from the path).
+python3 unity/tools/meta.py --check
+```
+
+A fresh Claude Code session installs the .NET SDK through `.claude/session-start.sh`.
+`.github/workflows/unity-tests.yml` runs the same two commands on pushes touching
+`unity/`; it needs no secrets and can be deleted without losing anything.
 
 ## Layout
 
 ```text
 unity/
-  Assets/                     test scenes, fixtures, the demo street (nothing a consumer needs)
-  Packages/manifest.json      pins + "testables" so the package tests show in this project's Test Runner
-  Packages/com.triband.storey             runtime package (bake API, LOD, occlusion, shaders)
-  Packages/com.triband.storey.authoring   editor package (importer, tools, inspectors, bake)
-  Packages/com.triband.storey.playkit     sample-grade character, camera and lift UI
+  Packages/manifest.json            pins + "testables" for the (optional) editor project
+  Packages/com.triband.storey*/     the packages, with committed .meta files
+  Headless/
+    Triband.Storey.Headless/        Runtime/** as a netstandard2.1 library
+    Triband.Storey.Stubs/           Unity/**, Editor/**, play kit against Stubs/UnityEngine.cs etc.
+    Triband.Storey.Tests/           xunit: fixtures, layout rules, smoke tests
+  Fixtures/                         reference answers emitted by the prototype (workstream 1)
+  tools/meta.py                     .meta generator
+  Assets/, ProjectSettings/         the Unity project, for when a scene is wanted
 ```
+
+## Opening it in Unity (optional)
+
+The folder is also a Unity 6.3 LTS project with the packages embedded, for the
+things a headless harness cannot ask: how it looks, what a frame costs on a
+device, whether GRD instancing behaves. Open `unity/` with 6000.3.x; if the Hub
+offers a different 6.3 patch, accept it and commit `ProjectSettings/ProjectVersion.txt`
+and `Packages/packages-lock.json`. Create a URP asset, assign it under
+Project Settings > Graphics with Forward+, `BatchRendererGroup Variants = Keep All`
+and the GPU Resident Drawer on (Plan §6.1), and commit the generated settings. If the
+editor rewrites any committed `.meta` with a different GUID, `meta.py --check`
+reports it; keep the editor's version.
 
 Consumers install a package by git URL with a path suffix, e.g.
 `https://github.com/lasseastrup/BuildingInterior.git?path=/unity/Packages/com.triband.storey#v0.1.0`.
-
-## CI
-
-`.github/workflows/unity-tests.yml` runs Edit Mode and Play Mode tests with GameCI on every push and pull request. It needs three repository secrets: `UNITY_LICENSE`, `UNITY_EMAIL`, `UNITY_PASSWORD` (see https://game.ci/docs/github/activation). Until they exist the workflow fails at activation, which is expected.
+A package's dependencies cannot be git URLs, so a project installing from git adds
+`com.triband.storey` and `com.triband.storey.authoring` both (Plan §2).

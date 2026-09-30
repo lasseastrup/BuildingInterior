@@ -1,16 +1,12 @@
 {
-  "name": "Triband.Storey.Editor",
-  "rootNamespace": "Triband.Storey.Editor",
+  "name": "Triband.Storey.Unity",
+  "rootNamespace": "Triband.Storey.Unity",
   "references": [
     "Triband.Storey",
-    "Triband.Storey.Unity",
     "Unity.Burst",
     "Unity.Collections",
     "Unity.Mathematics",
     "Unity.RenderPipelines.Universal.Runtime"
-  ],
-  "includePlatforms": [
-    "Editor"
   ],
   "allowUnsafeCode": true,
   "autoReferenced": true,

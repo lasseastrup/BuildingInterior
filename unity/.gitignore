@@ -14,8 +14,10 @@
 .vs/
 .idea/
 .vscode/
-*.csproj
-*.sln
+/*.csproj
+/Assembly-CSharp*.csproj
+/Triband.Storey*.csproj
+/*.sln
 *.suo
 *.user
 *.userprefs
@@ -34,3 +36,7 @@ crashlytics-build.properties
 *.aab
 *.unitypackage
 *.app
+
+# .NET build output of the headless projects
+**/[Bb]in/
+**/[Oo]bj/

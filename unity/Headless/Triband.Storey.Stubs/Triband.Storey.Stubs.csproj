@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A compile check for the engine-facing assemblies of all three packages.
+
+    Unity/*.cs, Editor/*.cs and the play kit reference UnityEngine and UnityEditor, which
+    is the whole point of the assembly split, so the headless project cannot build them.
+    They are built here instead, against hand-written declarations of exactly the engine
+    members they use (Stubs/).
+
+    This catches a typo, a renamed member, a wrong overload, a missing using and a
+    reference to a package the manifest does not declare. It proves nothing about
+    behaviour: every stub body is empty. It is cheaper than an editor round-trip for the
+    class of mistake an editor round-trip would find in its first second, and it is the
+    only check this half gets without a licence.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <AssemblyName>Triband.Storey.Stubs</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsPackable>false</IsPackable>
+    <!--
+      No project-wide nullable setting. Every package source opens with `#nullable enable`
+      (a layout rule enforces it), which leaves the stub files oblivious on purpose: they
+      declare somebody else's API, and annotating them would invent a contract nobody
+      verified.
+    -->
+    <!-- Unused stub parameters, never-assigned fields and hidden members are the point. -->
+    <NoWarn>CS0067;CS0169;CS0414;CS8618;CS0660;CS0661;CS0108;CS0649</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Stubs/**/*.cs" />
+    <Compile Include="../../Packages/com.triband.storey/Runtime/**/*.cs" />
+    <Compile Include="../../Packages/com.triband.storey/Unity/**/*.cs" />
+    <Compile Include="../../Packages/com.triband.storey.authoring/Editor/**/*.cs" />
+    <Compile Include="../../Packages/com.triband.storey.playkit/Runtime/**/*.cs" />
+  </ItemGroup>
+
+</Project>

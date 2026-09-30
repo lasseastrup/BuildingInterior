@@ -1,6 +1,5 @@
 #nullable enable
 using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo("Triband.Storey.Unity")]
 [assembly: InternalsVisibleTo("Triband.Storey.Editor")]
-[assembly: InternalsVisibleTo("Triband.Storey.Tests")]
+[assembly: InternalsVisibleTo("Triband.Storey.PlayKit")]

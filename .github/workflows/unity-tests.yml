@@ -1,55 +1,22 @@
-name: Unity tests
+# The Unity packages' test suite, run with the .NET SDK alone: no Unity editor,
+# no licence, no secrets. See unity/README.md.
+name: Unity packages
 
 on:
   push:
-    paths:
-      - 'unity/**'
-      - '.github/workflows/unity-tests.yml'
+    paths: ['unity/**', '.github/workflows/unity-tests.yml']
   pull_request:
-    paths:
-      - 'unity/**'
-      - '.github/workflows/unity-tests.yml'
-
-concurrency:
-  group: unity-tests-${{ github.ref }}
-  cancel-in-progress: true
+    paths: ['unity/**', '.github/workflows/unity-tests.yml']
 
 jobs:
-  test:
-    name: ${{ matrix.testMode }} tests
+  headless:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        testMode: [editmode, playmode]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Cache Library
-        uses: actions/cache@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          path: unity/Library
-          key: Library-${{ matrix.testMode }}-${{ hashFiles('unity/Packages/manifest.json', 'unity/ProjectSettings/ProjectVersion.txt') }}
-          restore-keys: |
-            Library-${{ matrix.testMode }}-
-            Library-
-
-      - name: Run ${{ matrix.testMode }} tests
-        uses: game-ci/unity-test-runner@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          projectPath: unity
-          testMode: ${{ matrix.testMode }}
-          artifactsPath: test-results/${{ matrix.testMode }}
-          githubToken: ${{ secrets.GITHUB_TOKEN }}
-          checkName: Unity ${{ matrix.testMode }} results
-
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-${{ matrix.testMode }}
-          path: test-results/${{ matrix.testMode }}
+          dotnet-version: '8.0.x'
+      - name: Every asset has its .meta
+        run: python3 unity/tools/meta.py --check
+      - name: Headless tests (behaviour, stub compile, package layout)
+        run: dotnet test unity/Headless/Triband.Storey.Tests --logger "console;verbosity=normal"

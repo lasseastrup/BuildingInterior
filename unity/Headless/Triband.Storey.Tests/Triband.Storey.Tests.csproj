@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The package, judged without an editor: behaviour of the engine-free half against the
+    fixtures the prototype emits, and the package layout, which no amount of correct
+    arithmetic makes importable.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.6.6" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Triband.Storey.Headless/Triband.Storey.Headless.csproj" />
+
+    <!--
+      The engine-facing halves, compiled against stubs. ReferenceOutputAssembly="false"
+      because both projects compile Runtime/**, so importing its output would define every
+      type twice. This is here to make `dotnet test` fail when Unity/*.cs or Editor/*.cs
+      stops compiling, not to be linked against.
+    -->
+    <ProjectReference Include="../Triband.Storey.Stubs/Triband.Storey.Stubs.csproj"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Emitted by the prototype (workstream 1), read here. -->
+    <None Include="../../Fixtures/**/*.json" CopyToOutputDirectory="PreserveNewest" LinkBase="Fixtures" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Where the packages are, handed to PackageLayoutTests at compile time. Those tests read
+      .asmdef and package.json off disk, and a test that guesses at the repository layout by
+      walking up from bin/ is a test that finds the wrong folder somewhere else and passes.
+    -->
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>UnityRoot</_Parameter1>
+      <_Parameter2>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../..'))</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

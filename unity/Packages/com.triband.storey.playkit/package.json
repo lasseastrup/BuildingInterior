@@ -4,10 +4,19 @@
   "version": "0.1.0",
   "description": "Reference third-person controller, follow camera, virtual joystick and lift UI for Storey buildings. Sample-grade: projects are expected to replace it with their own character and camera and drive the occlusion system through its API.",
   "unity": "6000.3",
-  "author": { "name": "Triband" },
-  "keywords": ["procedural", "buildings", "character", "camera", "sample"],
+  "author": {
+    "name": "Triband"
+  },
+  "keywords": [
+    "procedural",
+    "buildings",
+    "character",
+    "camera",
+    "sample"
+  ],
   "dependencies": {
     "com.triband.storey": "0.1.0",
+    "com.unity.mathematics": "1.3.3",
     "com.unity.ugui": "2.0.0"
   }
 }

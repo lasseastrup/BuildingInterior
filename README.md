@@ -12,4 +12,4 @@ A prototype of the building creation workflow, made to write the spec before we 
 
 ## Unity package
 
-The Unity 6.3 port lives in `unity/` (three embedded packages under `unity/Packages/com.triband.storey*`). See `unity/README.md` for how to open it and `docs/UNITY-PACKAGE-PLAN.md` for the plan.
+The Unity 6.3 port lives in `unity/` (three packages under `unity/Packages/com.triband.storey*`), tested with `dotnet test unity/Headless/Triband.Storey.Tests` and no editor. See `unity/README.md` and `docs/UNITY-PACKAGE-PLAN.md`.

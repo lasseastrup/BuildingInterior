@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The same source files Unity compiles through Runtime/Triband.Storey.asmdef, built as a
+    plain .NET library.
+
+    Not a copy: a glob over the package's Runtime folder, so there is one set of sources
+    and two build systems pointing at it. The engine-facing folders are not included;
+    anything that touches UnityEngine belongs in Unity/ (assembly Triband.Storey.Unity)
+    and cannot be built here.
+
+    This is what makes the port testable without an editor or a licence, and the
+    generation half is where the risk is: the prototype's coplanar-face checker, its
+    triangle counts and its JSON fixtures all run against this assembly.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Triband.Storey</AssemblyName>
+    <RootNamespace>Triband.Storey</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../Packages/com.triband.storey/Runtime/**/*.cs" />
+  </ItemGroup>
+
+</Project>
