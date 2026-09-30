@@ -389,9 +389,37 @@ function itemSize(it){ return it.type==='stairs' ? STAIR : LIFT; }
 function itemContains(it, lx, lz, m=0){ const s=itemSize(it), q=toItem(it,lx,lz); return Math.abs(q.x)<=s.W/2+m && Math.abs(q.z)<=s.D/2+m; }
 // the core's oriented rectangle (local coords), grown by a margin
 function itemRect(it, m=0, x=it.x, z=it.z, rot=it.rot){ const s=itemSize(it), a=(rot||0)*Math.PI/180; return {c:[x,z], u:[Math.cos(a),Math.sin(a)], w:[-Math.sin(a),Math.cos(a)], h:[s.W/2+m, s.D/2+m]}; }
-// a core fits an outline when its rectangle's corners and edge midpoints are inside and no outline corner pokes into it
+const CORE_T = 0.15;   // a core's walls sit this far outside its inner size
+/* A core against the building's wall shares it. coreFlush says which of the core's outer faces lie on an outline edge
+   ([-x, +x, front, back] in the core's own frame; the front, where the stairs open or the lift door is, never counts),
+   each as {i, s0, s1}: the edge and the stretch along it in metres. There the core builds no wall of its own on that
+   storey, the editor lets the core sit right on the line (and snaps it there), and a lift's shaft blanks the windows. */
+function coreFlush(fp, it, x=it.x, z=it.z, rot=it.rot){
+  const R=itemRect(it,CORE_T,x,z,rot), P2=(a,c)=>[R.c[0]+R.u[0]*a*R.h[0]+R.w[0]*c*R.h[1], R.c[1]+R.u[1]*a*R.h[0]+R.w[1]*c*R.h[1]];
+  const onEdge=(p,q)=>{ for(let i=0;i<fp.length;i++){ const a=fp[i], c=fp[(i+1)%fp.length], L=Math.hypot(c.x-a.x,c.z-a.z)||1e-6, dx=(c.x-a.x)/L, dz=(c.z-a.z)/L;
+      const off=v=>Math.abs((v[0]-a.x)*dz-(v[1]-a.z)*dx), along=v=>(v[0]-a.x)*dx+(v[1]-a.z)*dz, s0=Math.min(along(p),along(q)), s1=Math.max(along(p),along(q));
+      if(off(p)<0.03 && off(q)<0.03 && s0>-0.05 && s1<L+0.05) return {i, s0:Math.max(0,s0), s1:Math.min(L,s1)}; } return null; };
+  return [onEdge(P2(-1,-1),P2(-1,1)), onEdge(P2(1,-1),P2(1,1)), null, onEdge(P2(-1,1),P2(1,1))];
+}
+// pull a core the last few centimetres onto an outline edge that runs along one of its faces, so it shares that wall
+function snapCore(fp, it, x, z, rot){
+  const R=itemRect(it,CORE_T,x,z,rot), n=[[-R.u[0],-R.u[1]],[R.u[0],R.u[1]],null,[R.w[0],R.w[1]]], hh=[R.h[0],R.h[0],0,R.h[1]];
+  let sx=x, sz=z;
+  for(const sides of [[0,1],[3]]){ let best=null;
+    for(const side of sides){ const nn=n[side], mid=[R.c[0]+nn[0]*hh[side], R.c[1]+nn[1]*hh[side]];
+      fp.forEach((a,i)=>{ const c=fp[(i+1)%fp.length], L=Math.hypot(c.x-a.x,c.z-a.z)||1e-6, dx=(c.x-a.x)/L, dz=(c.z-a.z)/L;
+        if(Math.abs(dx*nn[0]+dz*nn[1])>0.02) return;                       // the edge must run along the face
+        const t=(mid[0]-a.x)*dx+(mid[1]-a.z)*dz; if(t<-0.05 || t>L+0.05) return;
+        const d=(a.x-mid[0])*nn[0]+(a.z-mid[1])*nn[1];                      // gap from the face out to the wall line
+        if(d>-0.05 && d<0.45 && (!best || Math.abs(d)<Math.abs(best.d))) best={d, nn}; }); }
+    if(best){ sx+=best.nn[0]*best.d; sz+=best.nn[1]*best.d; } }
+  return {x:+sx.toFixed(3), z:+sz.toFixed(3)};
+}
+// a core fits an outline when its rectangle's corners and edge midpoints are inside (a shared face may sit on the line)
+// and no outline corner pokes into it
 function coreFits(fp, it, m=0.16, x=it.x, z=it.z, rot=it.rot){
-  const R=itemRect(it,m-0.01,x,z,rot), at=(a,c)=>[R.c[0]+R.u[0]*a*R.h[0]+R.w[0]*c*R.h[1], R.c[1]+R.u[1]*a*R.h[0]+R.w[1]*c*R.h[1]];
+  const fl=coreFlush(fp,it,x,z,rot), R=itemRect(it,0,x,z,rot), mu=a=>(a<0?fl[0]:fl[1]) ? m-0.02 : m-0.01, mw=c=>(c<0?fl[2]:fl[3]) ? m-0.02 : m-0.01;
+  const at=(a,c)=>[R.c[0]+R.u[0]*a*(R.h[0]+mu(a))+R.w[0]*c*(R.h[1]+mw(c)), R.c[1]+R.u[1]*a*(R.h[0]+mu(a))+R.w[1]*c*(R.h[1]+mw(c))];
   for(const [a,c] of [[-1,-1],[1,-1],[1,1],[-1,1],[0,-1],[1,0],[0,1],[-1,0]]){ const q=at(a,c); if(!pip(fp,q[0],q[1])) return false; }
   return !fp.some(p=>{ const dx=p.x-R.c[0], dz=p.z-R.c[1]; return Math.abs(dx*R.u[0]+dz*R.u[1])<R.h[0] && Math.abs(dx*R.w[0]+dz*R.w[1])<R.h[1]; });
 }
@@ -587,7 +615,7 @@ function demoState(){
   A.groundHeight = 4.0;
   A.entrances = [{edge:0,t:0.25},{edge:0,t:0.8}];
   A.floors[0] = { walls:[ W(10.5,0,10.5,8,[0.7]), W(0,13.8,8,13.8,[0.8]), W(8,8,8,5.5), ] };
-  A.shafts = [ {id:nid('s'), type:'stairs', x:3.6, z:10.6, rot:0, bottom:0, top:-1, roof:true}, {id:nid('s'), type:'lift', x:6.4, z:9.45, rot:0, bottom:0, top:-1, roof:false} ];
+  A.shafts = [ {id:nid('s'), type:'stairs', x:3.6, z:10.6, rot:0, bottom:0, top:-1, roof:true}, {id:nid('s'), type:'lift', x:6.65, z:9.45, rot:0, bottom:0, top:-1, roof:false} ];
   const typical = { walls:[ W(0,3.5,16,3.5,[3/16,8/16,13/16]), W(5.5,0,5.5,3.5), W(10.5,0,10.5,3.5), W(8,5.5,16,5.5,[0.25,0.75]), W(12,5.5,12,8), W(8,5.5,8,8), W(0,13.8,8,13.8,[0.8]) ] };
   for(let i=1;i<10;i++) A.floors.push(clone(typical));
   // from floor 6 the L loses its wing: a setback with a terrace on the wing's roof, and a door onto it
@@ -987,12 +1015,13 @@ function bayLayout(st, uS, uE){ const spn=uE-uS; if(spn<=1.2) return {n:0, bay:0
 function facadeOps(b,k,i,L,uS,uE){
   const st=styleAt(b,k), h=floorH(b,k), ops=[], spn=uE-uS;
   for(const e of b.entrances) if((e.k||0)===k && e.edge===i && spn>DOOR_EXT+0.6 && doorOpen(b,e)){ const c=clamp(e.t*L, uS+DOOR_EXT/2+0.3, uE-DOOR_EXT/2-0.3), land = k && !terraceAt(b,k,i,e.t) ? landingAt(b,k,i,e.t) : null; ops.push({u0:c-DOOR_EXT/2, u1:c+DOOR_EXT/2, y0:0, y1:Math.min(2.6,h-0.4), door:true, thr: !!land && land.y < floorBase(b,k)-0.02}); }
+  const shaftHere=[]; for(const s of b.shafts){ if(s.type!=='lift' || !shaftLevels(b,s).includes(k)) continue; for(const f of coreFlush(fpAt(b,k),s)) if(f && f.i===i) shaftHere.push(f); }   // a lift shaft on this wall: no windows into it
   if(!blankAt(b,k).includes(i)){
     const ws = winSpec(k===0 ? groundKind(st) : st.windows, h, st);
     const {n, bay} = bayLayout(st, uS, uE);
     if(ws && ws.y1-ws.y0>0.4 && n){
       for(let j=0;j<n;j++){ const c=uS+(j+0.5)*bay; const ww = ws.full!=null ? bay-ws.full : Math.min(ws.w, bay-0.5); if(ww<0.45) continue;
-        const u0=c-ww/2, u1=c+ww/2; if(ops.some(o=>o.door && u1>o.u0-0.3 && u0<o.u1+0.3)) continue; ops.push({u0,u1,y0:ws.y0,y1:ws.y1,full:ws.full!=null}); }
+        const u0=c-ww/2, u1=c+ww/2; if(ops.some(o=>o.door && u1>o.u0-0.3 && u0<o.u1+0.3) || shaftHere.some(f=>u1>f.s0-0.1 && u0<f.s1+0.1)) continue; ops.push({u0,u1,y0:ws.y0,y1:ws.y1,full:ws.full!=null}); }
     }
   }
   return ops.sort((a,c)=>a.u0-c.u0);
@@ -1358,14 +1387,18 @@ function buildShafts(op,sg,b,k,C){
     const bx=(x0,x1,y0,y1,z0,z1,c,ci,sk)=>op.obox(O,u,w,x0,x1,y0,y1,z0,z1,c,ci,sk||0);
     const S=(p,q,r)=>sg.push(segFrom(f,p,q,r));
     const TB=SK.TOP|SK.BOT;   // core walls stand on the slab and stop under the slab (or bulkhead cap) above
+    // faces on the building's own wall: no wall of the core's there below the roof; at the roof the bulkhead wall is split
+    // at the parapet (or curb) height so its outer face never lies on the parapet's inner face
+    const fl=coreFlush(fpAt(b,k),s), [fL,fR,,fB]=fl.map(Boolean), hp=styleAt(b,N).parapet ? 1.0 : 0.3;
+    const wall=(flush,outer,x0,x1,y0,y1,z0,z1,c,ci,sk)=>{ if(!flush) bx(x0,x1,y0,y1,z0,z1,c,ci,sk); else if(atRoof){ bx(x0,x1,y0,y0+hp,z0,z1,c,ci,sk|outer|SK.TOP); bx(x0,x1,y0+hp,y1,z0,z1,c,ci,sk|SK.BOT); } };
     if(s.type==='stairs'){
-      const h = atRoof ? 2.7 : floorH(b,k)-SLAB;
+      const h = atRoof ? 2.7 : floorH(b,k)-SLAB, zB = fB && !atRoof ? 2.75 : 2.6;   // side walls run on to a shared back wall
       const ends = TB|SK.OUT|(atRoof?SK.IN:0);   // wall ends meet the back wall (and the bulkhead front)
-      op.ctx(Wl(-1.3,-2.6,-1.3,2.6,-1,0),1); bx(-1.45,-1.3,y,y+h,-2.6,2.6,C.core,C.coreIn,ends);
-      op.ctx(Wl(1.3,-2.6,1.3,2.6,1,0),1);  bx(1.3,1.45,y,y+h,-2.6,2.6,C.core,C.coreIn,ends);
-      op.ctx(Wl(-1.45,2.6,1.45,2.6,0,1),1);  bx(-1.45,1.45,y,y+h,2.6,2.75,C.core,C.coreIn,TB);
+      op.ctx(Wl(-1.3,-2.6,-1.3,2.6,-1,0),1); wall(fL,SK.USTART,-1.45,-1.3,y,y+h,-2.6,zB,C.core,C.coreIn,ends);
+      op.ctx(Wl(1.3,-2.6,1.3,2.6,1,0),1);  wall(fR,SK.UEND,1.3,1.45,y,y+h,-2.6,zB,C.core,C.coreIn,ends);
+      op.ctx(Wl(-1.45,2.6,1.45,2.6,0,1),1);  wall(fB,SK.OUT,-1.45,1.45,y,y+h,2.6,2.75,C.core,C.coreIn,TB|(fL&&!atRoof?SK.USTART:0)|(fR&&!atRoof?SK.UEND:0));
       op.ctx(Wl(0,-1.6,0,1.6,1,0),1);    bx(-0.05,0.05,y,y+(atRoof?1.1:h),-1.6,1.6,C.coreIn);
-      S([-1.375,-2.6],[-1.375,2.6],0.075); S([1.375,-2.6],[1.375,2.6],0.075); S([-1.45,2.675],[1.45,2.675],0.075); S([0,-1.6],[0,1.6],0.05);
+      if(!fL||atRoof) S([-1.375,-2.6],[-1.375,2.6],0.075); if(!fR||atRoof) S([1.375,-2.6],[1.375,2.6],0.075); if(!fB||atRoof) S([-1.45,2.675],[1.45,2.675],0.075); S([0,-1.6],[0,1.6],0.05);
       if(atRoof){
         op.ctx(Wl(-1.45,-2.6,1.45,-2.6,0,-1),1);
         const ops=[{u0:-1.15,u1:1.15,y0:0,y1:2.2,door:true}];
@@ -1385,16 +1418,16 @@ function buildShafts(op,sg,b,k,C){
       if(atRoof || (k===T && !shaftRoof(b,s))) rail(-1.3,-0.05);
       if(k===s.bottom) rail(0.05,1.3);
     } else {
-      const h = atRoof ? 2.9 : floorH(b,k)-SLAB;
-      op.ctx(Wl(-1.2,-1.2,-1.2,1.2,-1,0),1); bx(-1.35,-1.2,y,y+h,-1.2,1.2,C.core,C.coreIn,TB|SK.IN|SK.OUT);
-      op.ctx(Wl(1.2,-1.2,1.2,1.2,1,0),1);  bx(1.2,1.35,y,y+h,-1.2,1.2,C.core,C.coreIn,TB|SK.IN|SK.OUT);
-      op.ctx(Wl(-1.35,1.2,1.35,1.2,0,1),1);  bx(-1.35,1.35,y,y+h,1.2,1.35,C.core,C.liftIn,TB);
+      const h = atRoof ? 2.9 : floorH(b,k)-SLAB, zB = fB && !atRoof ? 1.35 : 1.2;
+      op.ctx(Wl(-1.2,-1.2,-1.2,1.2,-1,0),1); wall(fL,SK.USTART,-1.35,-1.2,y,y+h,-1.2,zB,C.core,C.coreIn,TB|SK.IN|SK.OUT);
+      op.ctx(Wl(1.2,-1.2,1.2,1.2,1,0),1);  wall(fR,SK.UEND,1.2,1.35,y,y+h,-1.2,zB,C.core,C.coreIn,TB|SK.IN|SK.OUT);
+      op.ctx(Wl(-1.35,1.2,1.35,1.2,0,1),1);  wall(fB,SK.OUT,-1.35,1.35,y,y+h,1.2,1.35,C.core,C.liftIn,TB|(fL&&!atRoof?SK.USTART:0)|(fR&&!atRoof?SK.UEND:0));
       op.ctx(Wl(-1.35,-1.2,1.35,-1.2,0,-1),1);
       const ops=[{u0:-0.6,u1:0.6,y0:0,y1:2.3,door:true}];
-      wallOps(op,O,u,w,-1.35,1.35,y,h,-1.35,-1.2,ops,C.core,C.coreIn,TB);
+      wallOps(op,O,u,w,-1.35,1.35,y,h,-1.35,-1.2,ops,C.core,C.coreIn,TB|(fL&&!atRoof?SK.USTART:0)|(fR&&!atRoof?SK.UEND:0));
       bx(-0.68,-0.59,y,y+2.29,-1.4,-1.18,C.metal,null,SK.BOT); bx(0.59,0.68,y,y+2.29,-1.4,-1.18,C.metal,null,SK.BOT); bx(-0.68,0.68,y+2.29,y+2.38,-1.4,-1.18,C.metal);
       bx(0.8,0.92,y+1.0,y+1.3,-1.42,-1.35,col('#FFB36B'));
-      S([-1.275,-1.35],[-1.275,1.35],0.075); S([1.275,-1.35],[1.275,1.35],0.075); S([-1.35,1.275],[1.35,1.275],0.075);
+      if(!fL||atRoof) S([-1.275,-1.35],[-1.275,1.35],0.075); if(!fR||atRoof) S([1.275,-1.35],[1.275,1.35],0.075); if(!fB||atRoof) S([-1.35,1.275],[1.35,1.275],0.075);
       for(const [a,e] of solidRanges(-1.35,1.35,ops)) S([a,-1.275],[e,-1.275],0.075);
       op.ctx(Z4,0); bx(-1.2,1.2,y,y+0.03,-1.2,-1.18,C.metal,null,SK.BOT); bx(-1.2,1.2,y,y+0.03,-1.18,1.2,C.metal,null,SK.BOT);
       if(atRoof) bx(-1.45,1.45,y+h,y+h+0.2,-1.45,1.45,C.roof);
@@ -2538,6 +2571,7 @@ function wallPreview(b,k,a,c,e){
 function placingType(){ return ui.tool==='stairs'?'stairs' : ui.tool==='lift'?'lift' : null; }
 function placementAt(b,k,p){
   const type=placingType(), x=cm(p.x), z=cm(p.z), it={type, x, z, rot:(wallAngle(fpAt(b,k),x,z)+ui.placeRot)%360};   // lines up with the nearest wall
+  if(k<b.floors.length){ const sn=snapCore(fpAt(b,k),it,x,z,it.rot); if(fitsLevels(b,it,k,b.floors.length-1,sn.x,sn.z)) Object.assign(it,sn); }   // and shares it when close
   let ok = k<b.floors.length && fitsLevels(b,it,k,b.floors.length-1);
   if(ok) ok = !b.shafts.some(s=>itemsOverlap(s,it));
   return {it, ok};
@@ -2652,7 +2686,8 @@ function toolMove(e, pressed){
       if(dragItem && pressed){
         if(!dragItem.pushed){ pushUndo(b); dragItem.pushed=true; }
         const it=dragItem.it;
-        const nx=cm(p.x+dragItem.off.x), nz=cm(p.z+dragItem.off.z);
+        let nx=cm(p.x+dragItem.off.x), nz=cm(p.z+dragItem.off.z);
+        { const sn=snapCore(fpAt(b,it.bottom),it,nx,nz,it.rot); if(fitsLevels(b,it,it.bottom,shaftTop(b,it),sn.x,sn.z) && !b.shafts.some(s=>s!==it && itemsOverlap(s,it,0.3,sn.x,sn.z))){ nx=sn.x; nz=sn.z; } }
         if(fitsLevels(b,it,it.bottom,shaftTop(b,it),nx,nz) && !b.shafts.some(s=>s!==it && itemsOverlap(s,it,0.3,nx,nz))){ if(nx!==it.x||nz!==it.z){ it.x=nx; it.z=nz; dragItem.moved=true; touch(b); } }
         ghostItem(b,k,it,true); hlMat.color.set('#2F7D4F');
       } else if(!pressed){ const t=hoverTarget(b,k,p); if(t && t.kind==='shaft'){ showTarget(b,k,t,'#2F7D4F'); canvas.style.cursor='move'; } else { canvas.style.cursor=''; if(!ui.sub) hideHL(); } }
@@ -3380,5 +3415,5 @@ window.__sb = { geo:(i,lod=0)=>{ const b=state.buildings[i], r=recOf(b); DEBUG_S
   memBytes:()=>{ let by=0, m=0; scene.traverse(o=>{ if(o.isMesh && o.geometry){ m++; for(const a of Object.values(o.geometry.attributes)) by+=a.array.byteLength; if(o.geometry.index) by+=o.geometry.index.array.byteLength; } }); return {meshes:m, MB:+(by/1048576).toFixed(1)}; },
   timeCells:()=>{ const t=performance.now(); let n=0; for(const c of cells.values()){ c.dirty=true; rebuildCell(c); n++; } return {cells:n, msPerCell:+((performance.now()-t)/Math.max(1,n)).toFixed(3)}; },
   snapFx:()=>snapFx, screenOf:(bi,k,x,z)=>{ const b=state.buildings[bi], v=new THREE.Vector3(x+b.pos.x, floorBase(b,k), z+b.pos.z).project(camera), r=canvas.getBoundingClientRect(); return [r.left+(v.x+1)/2*r.width, r.top+(1-v.y)/2*r.height]; },
-  camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); }, party:(b,k0,i)=>partyRanges(b,k0,i), occluders:()=>[...occActive].map(r=>bById(r.id)?.name+':'+(r.occA||0).toFixed(2)), occAt:t=>{ occDbgT=t; }, details:{at:detailsAt, place:detailPlace, DETAILS, rules:detailRules}, landingAt, facadeOpsOf:(b,k,i)=>{ const f=edgeFrameAt(b,k,i); return facadeOps(b,k,i,f.L,f.span[0],f.span[1]); }, occRays:()=>{ const c=camera.position, dl=Math.hypot(c.x-player.x, c.z-player.z), sh=dl>0.6 ? 0.5/dl : 0; const tg=[0.25,1.1,1.75].map(h=>({x:player.x+(c.x-player.x)*sh, y:player.y+h, z:player.z+(c.z-player.z)*sh})); return {cam:[c.x,c.y,c.z].map(v=>+v.toFixed(2)), hits:state.buildings.map(b=>b.name+':'+tg.map(t=>segHitsBuilding(b,c,t)?1:0).join('')+(atDoorOf(b)?'D':''))}; }, cutSlow:k=>{ cutSlow=k; }, walls:()=>({mid:[...wallAnim.values()].filter(v=>v>0.2&&v<0.8).length, max:+Math.max(0,...wallAnim.values()).toFixed(2), anim:wallAnim.size, down:[...wallAnim.values()].filter(v=>v>=1).length, free:wallFree.reduce((a,f)=>a+f.n,0)}), cutCam:()=>({cam:+camera.position.x.toFixed(3), cut:+G.uCam.value.x.toFixed(3), focus:+G.uFocus.value.x.toFixed(3)}), facadeAt:(x,y)=>{ const b=selB(), h=pickBuilding({clientX:x,clientY:y}, b.id); return {hit:h&&{bid:h.bid,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2))}, ed:facadeEdgeAt({clientX:x,clientY:y},b)}; }, outline:{insetPoly, pushEdge, outlineIssue, simplifyTier, addSetback, tiers, fpAt, touch, insertVertex, removeVertex, refresh:()=>{ touch(); refreshChrome(); overlayRebuild(); }} };
+  camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); }, party:(b,k0,i)=>partyRanges(b,k0,i), occluders:()=>[...occActive].map(r=>bById(r.id)?.name+':'+(r.occA||0).toFixed(2)), occAt:t=>{ occDbgT=t; }, core:{flush:coreFlush, snap:snapCore, fits:coreFits}, details:{at:detailsAt, place:detailPlace, DETAILS, rules:detailRules}, landingAt, facadeOpsOf:(b,k,i)=>{ const f=edgeFrameAt(b,k,i); return facadeOps(b,k,i,f.L,f.span[0],f.span[1]); }, occRays:()=>{ const c=camera.position, dl=Math.hypot(c.x-player.x, c.z-player.z), sh=dl>0.6 ? 0.5/dl : 0; const tg=[0.25,1.1,1.75].map(h=>({x:player.x+(c.x-player.x)*sh, y:player.y+h, z:player.z+(c.z-player.z)*sh})); return {cam:[c.x,c.y,c.z].map(v=>+v.toFixed(2)), hits:state.buildings.map(b=>b.name+':'+tg.map(t=>segHitsBuilding(b,c,t)?1:0).join('')+(atDoorOf(b)?'D':''))}; }, cutSlow:k=>{ cutSlow=k; }, walls:()=>({mid:[...wallAnim.values()].filter(v=>v>0.2&&v<0.8).length, max:+Math.max(0,...wallAnim.values()).toFixed(2), anim:wallAnim.size, down:[...wallAnim.values()].filter(v=>v>=1).length, free:wallFree.reduce((a,f)=>a+f.n,0)}), cutCam:()=>({cam:+camera.position.x.toFixed(3), cut:+G.uCam.value.x.toFixed(3), focus:+G.uFocus.value.x.toFixed(3)}), facadeAt:(x,y)=>{ const b=selB(), h=pickBuilding({clientX:x,clientY:y}, b.id); return {hit:h&&{bid:h.bid,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2))}, ed:facadeEdgeAt({clientX:x,clientY:y},b)}; }, outline:{insetPoly, pushEdge, outlineIssue, simplifyTier, addSetback, tiers, fpAt, touch, insertVertex, removeVertex, refresh:()=>{ touch(); refreshChrome(); overlayRebuild(); }} };
 </script>
