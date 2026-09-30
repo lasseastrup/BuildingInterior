@@ -1,0 +1,158 @@
+#nullable enable
+using System;
+using System.Runtime.InteropServices;
+using Triband.Storey.Generate;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+namespace Triband.Storey.Unity
+{
+    /// <summary>
+    /// Turns generator output into Unity meshes in the prototype's compact vertex formats (Plan §6.5):
+    /// float position, SNorm8 normal, UNorm8 colour, a float building tag, and for LOD0 the cutaway
+    /// data (float4 wall, float kind, float wall id). Sixteen-bit indices where they fit. The CPU copy
+    /// is released after upload; collision uses the generator's 2D segments, never the mesh.
+    /// </summary>
+    public static class MeshUpload
+    {
+        /// <summary>LOD0/LOD1 vertex: 32 bytes (LOD0 adds a 24-byte second stream).</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Vertex
+        {
+            public Vector3 position;
+            public sbyte nx, ny, nz, nw;
+            public byte r, g, b, a;
+            public float tag;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Cutaway
+        {
+            public Vector4 wall;
+            public float kind, wid;
+        }
+
+        /// <summary>LOD2 vertex: position, SNorm8 normal, the facade parameters and the parameter row.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MassVertex
+        {
+            public Vector3 position;
+            public sbyte nx, ny, nz, nw;
+            public Vector4 fac;
+            public Vector2 fac2;
+            public float slot;
+        }
+
+        static sbyte S8(double v) => (sbyte)Math.Round(Math.Max(-1, Math.Min(1, v)) * 127);
+        static byte U8(double v) => (byte)Math.Round(Math.Max(0, Math.Min(1, v)) * 255);
+
+        /// <summary>
+        /// A detail LOD mesh. <paramref name="wallBase"/> is the first global wall id of the building's
+        /// block (LOD0 only; the mesh's 1-based local ids are offset onto it; -1 = no ids).
+        /// </summary>
+        public static Mesh Upload(MeshBuilder gb, string name, int wallBase = -1)
+        {
+            int nv = gb.Verts;
+            var mesh = new Mesh { name = name, indexFormat = nv > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
+            var layout = gb.Lean
+                ? new[]
+                {
+                    new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
+                    new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
+                    new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4),
+                    new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 1),
+                }
+                : new[]
+                {
+                    new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
+                    new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
+                    new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4),
+                    new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 1),
+                    new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 4, 1),
+                    new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, 1, 1),
+                    new VertexAttributeDescriptor(VertexAttribute.TexCoord3, VertexAttributeFormat.Float32, 1, 1),
+                };
+            mesh.SetVertexBufferParams(nv, layout);
+            var verts = new Vertex[nv];
+            var bounds = new Bounds(); bool first = true;
+            for (int i = 0; i < nv; i++)
+            {
+                var p = gb.P[i]; var n = gb.N[i]; var c = gb.C[i];
+                var pos = new Vector3((float)p.x, (float)p.y, (float)p.z);
+                verts[i] = new Vertex { position = pos, nx = S8(n.x), ny = S8(n.y), nz = S8(n.z), r = U8(c.r), g = U8(c.g), b = U8(c.b), a = 255, tag = gb.Tag };
+                if (first) { bounds = new Bounds(pos, Vector3.zero); first = false; } else bounds.Encapsulate(pos);
+            }
+            const MeshUpdateFlags flags = MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontNotifyMeshUsers;
+            mesh.SetVertexBufferData(verts, 0, 0, nv, 0, flags);
+            if (!gb.Lean)
+            {
+                var cut = new Cutaway[nv];
+                for (int i = 0; i < nv; i++)
+                {
+                    int wi = gb.WI[i];
+                    cut[i] = new Cutaway { wall = new Vector4((float)gb.W[i * 4], (float)gb.W[i * 4 + 1], (float)gb.W[i * 4 + 2], (float)gb.W[i * 4 + 3]), kind = gb.K[i], wid = wi > 0 && wallBase >= 0 ? wallBase + wi - 1 : 0 };
+                }
+                mesh.SetVertexBufferData(cut, 0, 0, nv, 1, flags);
+            }
+            SetIndices(mesh, gb.I, nv, flags);
+            mesh.bounds = bounds;
+            mesh.UploadMeshData(true);
+            return mesh;
+        }
+
+        /// <summary>The LOD2 massing mesh. <paramref name="rowBase"/> maps the mesh's local parameter rows onto table rows.</summary>
+        public static Mesh Upload(Lod2Mesh m, string name, int[] rowMap)
+        {
+            int nv = m.Verts;
+            var mesh = new Mesh { name = name, indexFormat = nv > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
+            mesh.SetVertexBufferParams(nv, new[]
+            {
+                new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
+                new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
+                new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 4),
+                new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, 2),
+                new VertexAttributeDescriptor(VertexAttribute.TexCoord3, VertexAttributeFormat.Float32, 1),
+            });
+            var verts = new MassVertex[nv];
+            var bounds = new Bounds(); bool first = true;
+            for (int i = 0; i < nv; i++)
+            {
+                var p = m.P[i]; var n = m.N[i];   // already quantised × 127
+                var pos = new Vector3((float)p.x, (float)p.y, (float)p.z);
+                verts[i] = new MassVertex
+                {
+                    position = pos, nx = (sbyte)n.x, ny = (sbyte)n.y, nz = (sbyte)n.z,
+                    fac = new Vector4((float)m.Fac[i * 4], (float)m.Fac[i * 4 + 1], (float)m.Fac[i * 4 + 2], (float)m.Fac[i * 4 + 3]),
+                    fac2 = new Vector2((float)m.Fac2[i * 2], (float)m.Fac2[i * 2 + 1]),
+                    slot = rowMap[m.Slot[i]],
+                };
+                if (first) { bounds = new Bounds(pos, Vector3.zero); first = false; } else bounds.Encapsulate(pos);
+            }
+            const MeshUpdateFlags flags = MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontNotifyMeshUsers;
+            mesh.SetVertexBufferData(verts, 0, 0, nv, 0, flags);
+            SetIndices(mesh, m.I, nv, flags);
+            mesh.bounds = bounds;
+            mesh.UploadMeshData(true);
+            return mesh;
+        }
+
+        static void SetIndices(Mesh mesh, System.Collections.Generic.List<int> I, int nv, MeshUpdateFlags flags)
+        {
+            int ni = I.Count;
+            if (nv > 65535)
+            {
+                mesh.SetIndexBufferParams(ni, IndexFormat.UInt32);
+                var idx = I.ToArray();
+                mesh.SetIndexBufferData(idx, 0, 0, ni, flags);
+            }
+            else
+            {
+                mesh.SetIndexBufferParams(ni, IndexFormat.UInt16);
+                var idx = new ushort[ni]; for (int i = 0; i < ni; i++) idx[i] = (ushort)I[i];
+                mesh.SetIndexBufferData(idx, 0, 0, ni, flags);
+            }
+            mesh.subMeshCount = 1;
+            mesh.SetSubMesh(0, new SubMeshDescriptor(0, ni), flags);
+        }
+    }
+}

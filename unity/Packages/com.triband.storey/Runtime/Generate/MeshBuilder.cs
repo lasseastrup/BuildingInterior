@@ -41,8 +41,12 @@ namespace Triband.Storey.Generate
         /// <summary>The walls given ids, in id order.</summary>
         public List<(double[] W, int K)> Walls = new List<(double[], int)>();
         public List<Solid>? Solids;
-        public readonly int Tag;
+        /// <summary>Building index + 65536 × LOD, written into every vertex at upload.</summary>
+        public int Tag { get; private set; }
         public readonly bool Lean;
+
+        /// <summary>Change the tag before upload: the generator tags with the site index, a table with its own.</summary>
+        public void RetagForUpload(int tag) => Tag = tag;
 
         double[] curW = Zero4;
         int curK, curI;

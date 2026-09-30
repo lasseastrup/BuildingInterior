@@ -5,6 +5,7 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- Rendering layer: `MeshUpload`, `BuildingTable`, `StoreyGlobals`, the `StoreyStreet` parity harness, and the Storey/Opaque, Storey/Glass and Storey/Massing URP shaders with the occlusion and facade includes (workstream 4; not yet compiled in an editor).
 - LOD1 (exterior shell) and LOD2 (massing quads with facade parameter rows) builders, sharing the storey builders with LOD0 (workstream 7, pulled forward).
 - Facade details: AC units, vents, dishes, fire escapes (climbing through flush setbacks, with drop ladders) and awnings, hand-placed or by the style's seeded rules; `DetailRules` on `FacadeStyle` (workstream 3).
 - Pitched roofs: straight skeleton, hip/gable/shed with eaves, fascias, soffits and gable walls; roofed setbacks cut around the storeys above (`Generate/Skeleton`, `Generate/Roofs`) (workstream 3).

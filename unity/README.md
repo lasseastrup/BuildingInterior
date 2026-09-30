@@ -62,6 +62,15 @@ unity/
   Assets/, ProjectSettings/         the Unity project, for when a scene is wanted
 ```
 
+## The first editor session: shader compile and visual parity
+
+Workstream 4 was written against stubs. The first time the project opens in Unity 6.3:
+
+1. Fix whatever the three shaders under `Packages/com.triband.storey/Unity/Shaders` fail to compile (they include URP's `Core.hlsl` and `Lighting.hlsl` and use `UniversalFragmentPBR`; the include paths and function names are the ones documented for URP 17, but nothing here has been through the compiler).
+2. Make three materials from them (Storey/Opaque, Storey/Glass, Storey/Massing).
+3. Import `unity/Fixtures/demo.json` as a `.storey` file (Tools > Storey > Import Prototype Layout...), add a **Storey Street** component to an empty GameObject, assign the layout and the materials, press Play. `Displayed LOD` switches all buildings between LOD0, LOD1 and LOD2; `Lod Tint` colours them by LOD.
+4. Compare with the prototype at the same camera positions and keep the screenshots under `unity/Parity/`.
+
 ## Opening it in Unity (optional)
 
 The folder is also a Unity 6.3 LTS project with the packages embedded, for the
