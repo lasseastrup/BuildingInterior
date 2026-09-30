@@ -149,6 +149,19 @@ namespace Triband.Storey
         /// <summary>Eave overhang in metres; null = not stored (the generator then uses 0.35 m). Zero is a real value: no overhang.</summary>
         public double? eave;
 
-        public FacadeStyle Clone() => (FacadeStyle)MemberwiseClone();
+        /// <summary>Densities for details placed by rule, as the prototype stores them (percentages); null = the defaults.</summary>
+        public DetailRules? details;
+
+        public FacadeStyle Clone() { var c = (FacadeStyle)MemberwiseClone(); c.details = details?.Clone(); return c; }
+    }
+
+    /// <summary>How often the style's rules place details, in percent (SPEC §4.4).</summary>
+    public sealed class DetailRules
+    {
+        /// <summary>Chance of an AC unit under an upper-floor window; the prototype's default is 30.</summary>
+        public double? ac;
+        /// <summary>Chance of a vent in a window-free stretch of wall; the prototype's default is 12.</summary>
+        public double? vents;
+        public DetailRules Clone() => (DetailRules)MemberwiseClone();
     }
 }

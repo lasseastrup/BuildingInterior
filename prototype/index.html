@@ -1246,7 +1246,7 @@ const k1of = (b,k0) => tierEnd(b,k0);
 function buildDetails(op,b,k,C,lod){
   const items=detailsAt(b,k); if(!items.length) return;
   const g=tierGeo(b,fpAt(b,k)), y=floorBase(b,k), h=floorH(b,k), T=T_EXT;
-  const DC={metal:col('#C9CDCB'), grille:col('#6E7476'), dark:col('#5B5F5E'), rail:C.rail, canvas:C.trim, canvasIn:shade(C.trim,0.8), disc:col('#DDE0DE')};
+  const DC={metal:col('#C9CDCB'), grille:col('#6E7476'), dark:col('#5B5F5E'), rail:C.rail, canvas:C.trim, canvasIn:C.trim.map(v=>v*0.8), disc:col('#DDE0DE')};
   for(const d of items){
     const {a,L,u,w}=edgeInfo(g.Wp,d.i,g.ccw); op.ctx(wallCtx(a,u,w,L),1);
     const X=(uu,yy,ww)=>[a[0]+u[0]*uu+w[0]*ww, yy, a[1]+u[1]*uu+w[1]*ww];

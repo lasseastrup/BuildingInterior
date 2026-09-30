@@ -88,18 +88,14 @@ const derivedVariants = await derive();
 await page.evaluate(d => { __sb.state.buildings.length = 0; __sb.state.buildings.push(...JSON.parse(d).buildings); __sb.outline.refresh(); }, demo);
 const derivedDemo = await derive();
 
-// Face census of the LOD0 opaque mesh with every facade detail suppressed, the style rules' and the hand-placed
-// ones (workstream 2 ports the generator core; details are workstream 3). Triangles are bucketed by plane (normal to 1e-3, offset to 1 mm) and colour
+// Face census of the LOD0 opaque mesh, everything included. Triangles are bucketed by plane (normal to 1e-3, offset to 1 mm) and colour
 // (linear, to 1e-3); each bucket records its area and triangle count. Triangulation-independent, so the C# generator
 // is judged on what surface it produces where, not on how it splits it.
 const census = async () => {
   const n = await page.evaluate(() => __sb.nb()); const out = [];
   for (let i = 0; i < n; i++) out.push(await page.evaluate(i => {
     const b = __sb.state.buildings[i];
-    const styles = [b.style, ...b.floors.map(f => f.style).filter(Boolean)]; const saved = styles.map(s => s.details), savedDetails = b.details;
-    for (const s of styles) s.details = { ac: 0, vents: 0 };
-    b.details = [];   // hand-placed details are workstream 3 too
-    let g; try { g = __sb.geo(i, 0)[0]; } finally { styles.forEach((s, j) => { if (saved[j] === undefined) delete s.details; else s.details = saved[j]; }); b.details = savedDetails; }
+    const g = __sb.geo(i, 0)[0];
     const B = new Map(); let tris = 0;
     for (let t = 0; t < g.i.length; t += 3) {
       const ids = [g.i[t], g.i[t + 1], g.i[t + 2]], P = ids.map(j => [g.p[3 * j], g.p[3 * j + 1], g.p[3 * j + 2]]);
@@ -134,7 +130,7 @@ write('derived.json', {
 });
 write('census.json', {
   schema: 1,
-  source: 'prototype/index.html: buildLOD0 (opaque mesh), facade details suppressed',
+  source: 'prototype/index.html: buildLOD0 (opaque mesh)',
   tolerance: { area: 0.002, areaRelative: 0.001 },
   note: 'Per building: triangles by plane and colour with the area they cover. A bucket missing, extra, or off by more than the tolerance is a face the generator put somewhere else.',
   demo: censusDemo,

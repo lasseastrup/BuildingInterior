@@ -165,7 +165,13 @@ namespace Triband.Storey
                 roofType = c.Enum<RoofType>(o, "roofType", RoofType.Flat, path),
                 pitch = c.Opt(o, "pitch", path), eave = c.Opt(o, "eave", path),
             };
-            c.Check(o, path, "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave");
+            if (o.TryGetValue("details", out var dr) && dr != null)
+            {
+                var dob = c.Obj(dr, path + ".details");
+                s.details = new DetailRules { ac = c.Opt(dob, "ac", path + ".details"), vents = c.Opt(dob, "vents", path + ".details") };
+                c.Check(dob, path + ".details", "ac", "vents");
+            }
+            c.Check(o, path, "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "details");
             return s;
         }
 
@@ -257,6 +263,13 @@ namespace Triband.Storey
             if (s.roofType != RoofType.Flat) o["roofType"] = Lower(s.roofType);
             if (s.pitch.HasValue) o["pitch"] = s.pitch.Value;
             if (s.eave.HasValue) o["eave"] = s.eave.Value;
+            if (s.details != null)
+            {
+                var d = new Dictionary<string, object?>();
+                if (s.details.ac.HasValue) d["ac"] = s.details.ac.Value;
+                if (s.details.vents.HasValue) d["vents"] = s.details.vents.Value;
+                o["details"] = d;
+            }
             return o;
         }
 
