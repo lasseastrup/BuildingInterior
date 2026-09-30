@@ -103,10 +103,4 @@ namespace Triband.Storey.Generate
         }
     }
 
-    /// <summary>Roof type queries. The pitched roofs themselves are workstream 3.</summary>
-    public static class Roofs
-    {
-        public static RoofType TypeOf(BuildingData b) => Derived.StyleAt(b, b.floors.Count).roofType;
-        public static bool IsPitched(BuildingData b) => TypeOf(b) != RoofType.Flat;
-    }
 }

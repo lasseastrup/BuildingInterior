@@ -10,9 +10,7 @@ namespace Triband.Storey.Tests
 {
     /// <summary>
     /// The LOD0 generator against the prototype's face census (<c>census.json</c>): the same surface
-    /// in the same place with the same colour, whatever the triangulation. Workstream 2 covers the
-    /// generator core, so buildings needing a pitched roof or a roofed terrace (workstream 3) are
-    /// left to that workstream; facade details are suppressed in the census and not generated here.
+    /// in the same place with the same colour, whatever the triangulation.
     /// </summary>
     public class GeneratorTests
     {
@@ -32,18 +30,13 @@ namespace Triband.Storey.Tests
             }
         }
 
-        /// <summary>Buildings the workstream-2 generator must reproduce: flat roofs, no roofed terraces.</summary>
+        /// <summary>Every building of both corpora.</summary>
         public static IEnumerable<object[]> Core()
         {
             foreach (var file in new[] { "demo.json", "variants.json" })
             {
                 var (_, doc) = SiteOf(file);
-                for (int i = 0; i < doc.buildings.Count; i++)
-                {
-                    var b = doc.buildings[i];
-                    if (Roofs.IsPitched(b) || b.floors.Any(f => f.terraceRoof != null)) continue;
-                    yield return new object[] { file, i };
-                }
+                for (int i = 0; i < doc.buildings.Count; i++) yield return new object[] { file, i };
             }
         }
 

@@ -16,16 +16,13 @@ namespace Triband.Storey.Generate
     /// <summary>
     /// LOD0: everything. Interior, frames, see-through glass; one opaque mesh and one glass mesh per
     /// building. A port of the prototype's <c>lod0Steps</c>, storey by storey, so a caller can spread a
-    /// building over several frames. Facade details, roofed terraces and pitched roofs are
-    /// workstream 3 and hook in through <see cref="Extras"/>.
+    /// building over several frames. Facade details are workstream 3 and hook in through <see cref="Extras"/>.
     /// </summary>
     public sealed class Lod0
     {
         /// <summary>Hooks for the parts a later workstream fills in. Each returns whether it built anything.</summary>
         public static class Extras
         {
-            public static Func<MeshBuilder, Site, BuildingData, int, Palette, bool> TerraceRoof = (op, site, b, k, C) => false;
-            public static Func<MeshBuilder, Site, BuildingData, Palette, bool> PitchedRoof = (op, site, b, C) => false;
             public static Action<MeshBuilder, Site, BuildingData, int, Palette, int> Details = (op, site, b, k, C, lod) => { };
         }
 
@@ -69,7 +66,7 @@ namespace Triband.Storey.Generate
             {
                 var sg = new List<Seg>(); var g = At(k); bool sb = Derived.IsSetback(b, k); var Cb = At(Math.Max(0, k - 1)).C;
                 if (!shell || k == N || sb) Slab(op, k, Cb, shell, false);
-                if (sb) { if (!Extras.TerraceRoof(op, site, b, k, Cb)) Terrace(op, sg, k, Cb); Overhang(op, k, g.C); }
+                if (sb) { if (!Roofs.Draw(op, Roofs.TerraceRoof(site, b, k), Cb)) Terrace(op, sg, k, Cb); Overhang(op, k, g.C); }
                 if (k < N) { FacadeStorey(op, gl, sg, k, g); Extras.Details(op, site, b, k, g.C, 0); if (!shell) Interior(op, sg, k, g.C); }
                 else Roof(op, sg, g, Cb);
                 if (!shell) Shafts(op, sg, k, g.C);
@@ -329,7 +326,7 @@ namespace Triband.Storey.Generate
 
         void Roof(MeshBuilder op, List<Seg>? sg, TierCtx g, Palette C)
         {
-            if (Extras.PitchedRoof(op, site, b, C)) return;
+            if (Roofs.Draw(op, Roofs.Parts(site, b), C)) return;   // hip, gable or shed (no roof access, no parapet)
             double y = Derived.RoofY(b), T = Dim.T_EXT; int n = g.Wp.Count, k0 = Derived.TierStart(b, N);
             bool parapet = Derived.StyleAt(b, N).parapet;
             for (int i = 0; i < n; i++)
