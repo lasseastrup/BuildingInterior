@@ -249,7 +249,7 @@ namespace Triband.Storey.Tests
             foreach (var file in p.Sources)
             {
                 var relative = p.RelativeTo(file);
-                if (relative.Split('/').Any(part => part == "Editor")) continue;
+                if (relative.Split('/').Any(part => part == "Editor") || relative.Contains("/ThirdParty/")) continue;
                 var code = Code(File.ReadAllText(file));
                 foreach (var banned in new[] { "UnityEditor", "UNITY_EDITOR", "PrefabUtility" })
                     Assert.False(code.Contains(banned, StringComparison.Ordinal), $"{relative} names {banned}, which belongs in an editor assembly");
@@ -289,7 +289,8 @@ namespace Triband.Storey.Tests
         public void EverySourceFileDeclaresItsNullability(string package)
         {
             var p = Layout.Get(package);
-            var missing = p.Sources.Where(f => !Declares(f)).Select(p.RelativeTo).ToList();
+            // Vendored code keeps its upstream text; it is compiled by the headless project, where nullable is a project setting.
+            var missing = p.Sources.Where(f => !p.RelativeTo(f).Contains("/ThirdParty/") && !Declares(f)).Select(p.RelativeTo).ToList();
             Assert.True(missing.Count == 0, "no #nullable directive at the top of: " + string.Join(", ", missing));
         }
 

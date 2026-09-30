@@ -87,6 +87,37 @@ const derive = async () => { const n = await page.evaluate(() => __sb.nb()); con
 const derivedVariants = await derive();
 await page.evaluate(d => { __sb.state.buildings.length = 0; __sb.state.buildings.push(...JSON.parse(d).buildings); __sb.outline.refresh(); }, demo);
 const derivedDemo = await derive();
+
+// Face census of the LOD0 opaque mesh with every facade detail suppressed, the style rules' and the hand-placed
+// ones (workstream 2 ports the generator core; details are workstream 3). Triangles are bucketed by plane (normal to 1e-3, offset to 1 mm) and colour
+// (linear, to 1e-3); each bucket records its area and triangle count. Triangulation-independent, so the C# generator
+// is judged on what surface it produces where, not on how it splits it.
+const census = async () => {
+  const n = await page.evaluate(() => __sb.nb()); const out = [];
+  for (let i = 0; i < n; i++) out.push(await page.evaluate(i => {
+    const b = __sb.state.buildings[i];
+    const styles = [b.style, ...b.floors.map(f => f.style).filter(Boolean)]; const saved = styles.map(s => s.details), savedDetails = b.details;
+    for (const s of styles) s.details = { ac: 0, vents: 0 };
+    b.details = [];   // hand-placed details are workstream 3 too
+    let g; try { g = __sb.geo(i, 0)[0]; } finally { styles.forEach((s, j) => { if (saved[j] === undefined) delete s.details; else s.details = saved[j]; }); b.details = savedDetails; }
+    const B = new Map(); let tris = 0;
+    for (let t = 0; t < g.i.length; t += 3) {
+      const ids = [g.i[t], g.i[t + 1], g.i[t + 2]], P = ids.map(j => [g.p[3 * j], g.p[3 * j + 1], g.p[3 * j + 2]]);
+      const nn = [g.n[3 * ids[0]], g.n[3 * ids[0] + 1], g.n[3 * ids[0] + 2]], c = [g.c[3 * ids[0]], g.c[3 * ids[0] + 1], g.c[3 * ids[0] + 2]];
+      const d = nn[0] * P[0][0] + nn[1] * P[0][1] + nn[2] * P[0][2];
+      const ux = P[1][0] - P[0][0], uy = P[1][1] - P[0][1], uz = P[1][2] - P[0][2], vx = P[2][0] - P[0][0], vy = P[2][1] - P[0][1], vz = P[2][2] - P[0][2];
+      const area = Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) / 2;
+      const key = [nn.map(v => v.toFixed(3)).join(','), d.toFixed(3), c.map(v => v.toFixed(3)).join(',')].join('|');
+      const e = B.get(key) || B.set(key, { n: nn.map(v => +v.toFixed(3)), d: +d.toFixed(3), c: c.map(v => +v.toFixed(3)), area: 0, tris: 0 }).get(key);
+      e.area += area; e.tris++; tris++;
+    }
+    return { id: b.id, tris, verts: g.p.length / 3, buckets: [...B.values()].map(e => ({ ...e, area: +e.area.toFixed(5) })).sort((p, q) => p.d - q.d || p.area - q.area) };
+  }, i));
+  return out;
+};
+const censusDemo = await census();
+await page.evaluate(d => { __sb.state.buildings.length = 0; __sb.state.buildings.push(...JSON.parse(d).buildings); __sb.outline.refresh(); }, variants);
+const censusVariants = await census();
 await browser.close();
 
 fs.mkdirSync(out, { recursive: true });
@@ -100,4 +131,12 @@ write('derived.json', {
   note: 'Identity, counts and tier starts are compared exactly; heights and outline coordinates to the tolerance. Triangle counts per LOD are targets for the generator (workstream 2), not part of the data-model tests.',
   demo: derivedDemo,
   variants: derivedVariants,
+});
+write('census.json', {
+  schema: 1,
+  source: 'prototype/index.html: buildLOD0 (opaque mesh), facade details suppressed',
+  tolerance: { area: 0.002, areaRelative: 0.001 },
+  note: 'Per building: triangles by plane and colour with the area they cover. A bucket missing, extra, or off by more than the tolerance is a face the generator put somewhere else.',
+  demo: censusDemo,
+  variants: censusVariants,
 });
