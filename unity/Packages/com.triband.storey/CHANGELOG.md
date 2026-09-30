@@ -5,4 +5,5 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- Data model (`BuildingData` and friends, SPEC §3), `PrototypeJson` read/write of the prototype's layout with unknown-key reporting, `Derived` (floor bases, tiers, outlines, styles, shaft tops), `DocumentSummary`, an owned JSON reader/writer, `StoreyDocumentAsset`, `StoreyQualitySettings` (workstream 1).
 - Package skeleton: assembly definitions, `StoreyVersion`, smoke tests (workstream 0).

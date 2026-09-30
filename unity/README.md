@@ -29,7 +29,19 @@ dotnet test unity/Headless/Triband.Storey.Tests
 # The .meta files, without which Unity ignores a package installed from a git URL.
 # Run without --check to write the missing ones (GUIDs derive from the path).
 python3 unity/tools/meta.py --check
+
+# Reference answers, from the implementation that works (needs npm; ~2 min headless).
+cd prototype/tools && npm install && npm run fixtures
 ```
+
+## Getting a layout into Unity
+
+Copy the text from the prototype's **Layout data** panel into a file with the `.storey`
+extension anywhere under `Assets/`, or use **Tools > Storey > Import Prototype Layout...**.
+The importer makes a `StoreyDocumentAsset`: the text plus a summary (buildings, floors,
+walk-in count, cores, details, unknown keys). Nothing is generated at import; that is a
+separate step from workstream 2 on. A key the model does not know is an import warning
+here and a failing fixture test in the headless suite.
 
 A fresh Claude Code session installs the .NET SDK through `.claude/session-start.sh`.
 `.github/workflows/unity-tests.yml` runs the same two commands on pushes touching

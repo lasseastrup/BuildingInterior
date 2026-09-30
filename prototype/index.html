@@ -3416,7 +3416,8 @@ touch();
 ui.sel = state.buildings[0]?.id || null;
 refreshChrome();
 requestAnimationFrame(tick);
-window.__sb = { geo:(i,lod=0)=>{ const b=state.buildings[i], r=recOf(b); DEBUG_SOLIDS=true; let out;
+window.__sb = { derive:(i)=>{ const b=state.buildings[i]; const ks=b.floors.map((_,k)=>k); return {id:b.id, floorBases:ks.map(k=>floorBase(b,k)), roofY:roofY(b), tierStarts:ks.map(k=>tierStart(b,k)), outlines:ks.concat([b.floors.length]).map(k=>fpAt(b,k).map(p=>[p.x,p.z])), styleWall:ks.map(k=>styleAt(b,k).wall), styleInterior:ks.map(k=>styleAt(b,k).interior), shaftTops:b.shafts.map(s=>shaftTop(b,s)), tris:[0,1,2].map(l=>__sb.geo(i,l).reduce((n,g)=>n+g.i.length/3,0))}; },   // derived values the Unity port is checked against (unity/Fixtures/derived.json)
+  geo:(i,lod=0)=>{ const b=state.buildings[i], r=recOf(b); DEBUG_SOLIDS=true; let out;
     if(lod<2){ const g = lod===0 ? buildLOD0(b,r.idx) : buildLOD1(b,r.idx); out=[{p:g.op.p,n:g.op.n,c:g.op.c,i:g.op.i,k:g.op.k,solids:g.op.solids}]; }
     else { const L=buildLOD2(b,r.idx), c=[]; for(let v=0;v<L.count;v++){ const k=L.fac2[v*2+1]; c.push(k,k,k); } out=[{p:[...L.pos], n:[...L.nrm].map(v=>v/127), c, i:[...L.idx], solids:[]}]; }
     DEBUG_SOLIDS=false; return out; },

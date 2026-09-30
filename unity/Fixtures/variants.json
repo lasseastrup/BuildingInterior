@@ -1,0 +1,9608 @@
+{
+ "v": 2,
+ "seq": 16,
+ "buildings": [
+  {
+   "id": "t0",
+   "name": "rect/punched",
+   "pos": {
+    "x": 90,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 9
+    },
+    {
+     "x": 0,
+     "z": 9
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "zs1",
+     "type": "stairs",
+     "x": 1.3,
+     "z": 6.4,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": true
+    },
+    {
+     "id": "zl1",
+     "type": "lift",
+     "x": 10.8,
+     "z": 7.8,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": false
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t1",
+   "name": "rect/tall",
+   "pos": {
+    "x": 120,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 9
+    },
+    {
+     "x": 0,
+     "z": 9
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "zs2",
+     "type": "stairs",
+     "x": 1.3,
+     "z": 6.4,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": true
+    },
+    {
+     "id": "zl2",
+     "type": "lift",
+     "x": 10.8,
+     "z": 7.8,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": false
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t2",
+   "name": "rect/ribbon",
+   "pos": {
+    "x": 150,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 9
+    },
+    {
+     "x": 0,
+     "z": 9
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "zs3",
+     "type": "stairs",
+     "x": 1.3,
+     "z": 6.4,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": true
+    },
+    {
+     "id": "zl3",
+     "type": "lift",
+     "x": 10.8,
+     "z": 7.8,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": false
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.7
+    },
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.2
+    },
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.8
+    },
+    {
+     "kind": "dish",
+     "k": 1,
+     "edge": 1,
+     "t": 0.5,
+     "y": 1.9
+    },
+    {
+     "kind": "vent",
+     "k": 2,
+     "edge": 2,
+     "t": 0.3,
+     "y": 0.4
+    },
+    {
+     "kind": "ac",
+     "k": 1,
+     "edge": 2,
+     "t": 0.7,
+     "y": 0.3
+    }
+   ]
+  },
+  {
+   "id": "t3",
+   "name": "rect/curtain",
+   "pos": {
+    "x": 180,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 9
+    },
+    {
+     "x": 0,
+     "z": 9
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "zs4",
+     "type": "stairs",
+     "x": 1.3,
+     "z": 6.4,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": true
+    },
+    {
+     "id": "zl4",
+     "type": "lift",
+     "x": 10.8,
+     "z": 7.8,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": false
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "curtain",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "t4",
+   "name": "rect/none",
+   "pos": {
+    "x": 210,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 9
+    },
+    {
+     "x": 0,
+     "z": 9
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "zs5",
+     "type": "stairs",
+     "x": 1.3,
+     "z": 6.4,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": true
+    },
+    {
+     "id": "zl5",
+     "type": "lift",
+     "x": 10.8,
+     "z": 7.8,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": false
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "none",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t5",
+   "name": "L/punched",
+   "pos": {
+    "x": 240,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t6",
+   "name": "L/tall",
+   "pos": {
+    "x": 270,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t7",
+   "name": "L/ribbon",
+   "pos": {
+    "x": 300,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": false,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.7
+    },
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.2
+    },
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.8
+    },
+    {
+     "kind": "dish",
+     "k": 1,
+     "edge": 1,
+     "t": 0.5,
+     "y": 1.9
+    },
+    {
+     "kind": "vent",
+     "k": 2,
+     "edge": 2,
+     "t": 0.3,
+     "y": 0.4
+    },
+    {
+     "kind": "ac",
+     "k": 1,
+     "edge": 2,
+     "t": 0.7,
+     "y": 0.3
+    }
+   ]
+  },
+  {
+   "id": "t8",
+   "name": "L/curtain",
+   "pos": {
+    "x": 330,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "curtain",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t9",
+   "name": "L/none",
+   "pos": {
+    "x": 360,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "none",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t10",
+   "name": "U/punched",
+   "pos": {
+    "x": 390,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 14
+    },
+    {
+     "x": 0,
+     "z": 14
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t11",
+   "name": "U/tall",
+   "pos": {
+    "x": 420,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 14
+    },
+    {
+     "x": 0,
+     "z": 14
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "t12",
+   "name": "U/ribbon",
+   "pos": {
+    "x": 450,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 14
+    },
+    {
+     "x": 0,
+     "z": 14
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.7
+    },
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.2
+    },
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.8
+    },
+    {
+     "kind": "dish",
+     "k": 1,
+     "edge": 1,
+     "t": 0.5,
+     "y": 1.9
+    },
+    {
+     "kind": "vent",
+     "k": 2,
+     "edge": 2,
+     "t": 0.3,
+     "y": 0.4
+    },
+    {
+     "kind": "ac",
+     "k": 1,
+     "edge": 2,
+     "t": 0.7,
+     "y": 0.3
+    }
+   ]
+  },
+  {
+   "id": "t13",
+   "name": "U/curtain",
+   "pos": {
+    "x": 480,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 14
+    },
+    {
+     "x": 0,
+     "z": 14
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "curtain",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t14",
+   "name": "U/none",
+   "pos": {
+    "x": 510,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 14
+    },
+    {
+     "x": 0,
+     "z": 14
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "none",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t15",
+   "name": "T/punched",
+   "pos": {
+    "x": 540,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 7
+    },
+    {
+     "x": 0,
+     "z": 7
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "t16",
+   "name": "T/tall",
+   "pos": {
+    "x": 570,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 7
+    },
+    {
+     "x": 0,
+     "z": 7
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t17",
+   "name": "T/ribbon",
+   "pos": {
+    "x": 600,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 7
+    },
+    {
+     "x": 0,
+     "z": 7
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.7
+    },
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.2
+    },
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.8
+    },
+    {
+     "kind": "dish",
+     "k": 1,
+     "edge": 1,
+     "t": 0.5,
+     "y": 1.9
+    },
+    {
+     "kind": "vent",
+     "k": 2,
+     "edge": 2,
+     "t": 0.3,
+     "y": 0.4
+    },
+    {
+     "kind": "ac",
+     "k": 1,
+     "edge": 2,
+     "t": 0.7,
+     "y": 0.3
+    }
+   ]
+  },
+  {
+   "id": "t18",
+   "name": "T/curtain",
+   "pos": {
+    "x": 630,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 7
+    },
+    {
+     "x": 0,
+     "z": 7
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "curtain",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t19",
+   "name": "T/none",
+   "pos": {
+    "x": 660,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 7
+    },
+    {
+     "x": 0,
+     "z": 7
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "none",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "t20",
+   "name": "oct/punched",
+   "pos": {
+    "x": 690,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t21",
+   "name": "oct/tall",
+   "pos": {
+    "x": 720,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t22",
+   "name": "oct/ribbon",
+   "pos": {
+    "x": 750,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.7
+    },
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.2
+    },
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.8
+    },
+    {
+     "kind": "dish",
+     "k": 1,
+     "edge": 1,
+     "t": 0.5,
+     "y": 1.9
+    },
+    {
+     "kind": "vent",
+     "k": 2,
+     "edge": 2,
+     "t": 0.3,
+     "y": 0.4
+    },
+    {
+     "kind": "ac",
+     "k": 1,
+     "edge": 2,
+     "t": 0.7,
+     "y": 0.3
+    }
+   ]
+  },
+  {
+   "id": "t23",
+   "name": "oct/curtain",
+   "pos": {
+    "x": 780,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "curtain",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "t24",
+   "name": "oct/none",
+   "pos": {
+    "x": 810,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "none",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t25",
+   "name": "skew/punched",
+   "pos": {
+    "x": 840,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 2
+    },
+    {
+     "x": 11,
+     "z": 10
+    },
+    {
+     "x": 3,
+     "z": 12
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t26",
+   "name": "skew/tall",
+   "pos": {
+    "x": 870,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 2
+    },
+    {
+     "x": 11,
+     "z": 10
+    },
+    {
+     "x": 3,
+     "z": 12
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t27",
+   "name": "skew/ribbon",
+   "pos": {
+    "x": 900,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 2
+    },
+    {
+     "x": 11,
+     "z": 10
+    },
+    {
+     "x": 3,
+     "z": 12
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": false,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.7
+    },
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.2
+    },
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.8
+    },
+    {
+     "kind": "dish",
+     "k": 1,
+     "edge": 1,
+     "t": 0.5,
+     "y": 1.9
+    },
+    {
+     "kind": "vent",
+     "k": 2,
+     "edge": 2,
+     "t": 0.3,
+     "y": 0.4
+    },
+    {
+     "kind": "ac",
+     "k": 1,
+     "edge": 2,
+     "t": 0.7,
+     "y": 0.3
+    }
+   ]
+  },
+  {
+   "id": "t28",
+   "name": "skew/curtain",
+   "pos": {
+    "x": 930,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 2
+    },
+    {
+     "x": 11,
+     "z": 10
+    },
+    {
+     "x": 3,
+     "z": 12
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "curtain",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "t29",
+   "name": "skew/none",
+   "pos": {
+    "x": 960,
+    "z": 60
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 2
+    },
+    {
+     "x": 11,
+     "z": 10
+    },
+    {
+     "x": 3,
+     "z": 12
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "none",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "s30",
+   "name": "rect/punched/setback",
+   "pos": {
+    "x": 90,
+    "z": 105
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 9
+    },
+    {
+     "x": 0,
+     "z": 9
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": 0
+      },
+      {
+       "x": 12,
+       "z": 0
+      },
+      {
+       "x": 12,
+       "z": 7.4
+      },
+      {
+       "x": 0,
+       "z": 7.4
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.75
+    }
+   ]
+  },
+  {
+   "id": "s31",
+   "name": "rect/punched/setback2",
+   "pos": {
+    "x": 90,
+    "z": 150
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 9
+    },
+    {
+     "x": 0,
+     "z": 9
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 1.6,
+       "z": 1.6
+      },
+      {
+       "x": 10.4,
+       "z": 1.6
+      },
+      {
+       "x": 10.4,
+       "z": 7.4
+      },
+      {
+       "x": 1.6,
+       "z": 7.4
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 3,
+       "z": 3
+      },
+      {
+       "x": 9,
+       "z": 3
+      },
+      {
+       "x": 9,
+       "z": 6
+      },
+      {
+       "x": 3,
+       "z": 6
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "s32",
+   "name": "L/punched/setback",
+   "pos": {
+    "x": 240,
+    "z": 105
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": 0
+      },
+      {
+       "x": 16,
+       "z": 0
+      },
+      {
+       "x": 16,
+       "z": 6.4
+      },
+      {
+       "x": 8,
+       "z": 6.4
+      },
+      {
+       "x": 8,
+       "z": 16
+      },
+      {
+       "x": 0,
+       "z": 16
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "curtain",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.75
+    }
+   ]
+  },
+  {
+   "id": "s33",
+   "name": "L/punched/setback2",
+   "pos": {
+    "x": 240,
+    "z": 150
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 1.6,
+       "z": 1.6
+      },
+      {
+       "x": 14.4,
+       "z": 1.6
+      },
+      {
+       "x": 14.4,
+       "z": 6.4
+      },
+      {
+       "x": 6.4,
+       "z": 6.4
+      },
+      {
+       "x": 6.4,
+       "z": 14.4
+      },
+      {
+       "x": 1.6,
+       "z": 14.4
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 3,
+       "z": 3
+      },
+      {
+       "x": 13,
+       "z": 3
+      },
+      {
+       "x": 13,
+       "z": 5
+      },
+      {
+       "x": 5,
+       "z": 5
+      },
+      {
+       "x": 5,
+       "z": 13
+      },
+      {
+       "x": 3,
+       "z": 13
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "none",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "s34",
+   "name": "U/punched/setback",
+   "pos": {
+    "x": 390,
+    "z": 105
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 14
+    },
+    {
+     "x": 0,
+     "z": 14
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": 0
+      },
+      {
+       "x": 18,
+       "z": 0
+      },
+      {
+       "x": 18,
+       "z": 12.4
+      },
+      {
+       "x": 12,
+       "z": 12.4
+      },
+      {
+       "x": 12,
+       "z": 6
+      },
+      {
+       "x": 6,
+       "z": 6
+      },
+      {
+       "x": 6,
+       "z": 14
+      },
+      {
+       "x": 0,
+       "z": 14
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.75
+    }
+   ]
+  },
+  {
+   "id": "s35",
+   "name": "U/punched/setback2",
+   "pos": {
+    "x": 390,
+    "z": 150
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 14
+    },
+    {
+     "x": 0,
+     "z": 14
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 1.6,
+       "z": 1.6
+      },
+      {
+       "x": 16.4,
+       "z": 1.6
+      },
+      {
+       "x": 16.4,
+       "z": 12.4
+      },
+      {
+       "x": 13.6,
+       "z": 12.4
+      },
+      {
+       "x": 13.6,
+       "z": 4.4
+      },
+      {
+       "x": 4.4,
+       "z": 4.4
+      },
+      {
+       "x": 4.4,
+       "z": 12.4
+      },
+      {
+       "x": 1.6,
+       "z": 12.4
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "s36",
+   "name": "T/punched/setback",
+   "pos": {
+    "x": 540,
+    "z": 105
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 7
+    },
+    {
+     "x": 0,
+     "z": 7
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": 0
+      },
+      {
+       "x": 18,
+       "z": 0
+      },
+      {
+       "x": 18,
+       "z": 5.4
+      },
+      {
+       "x": 12,
+       "z": 5.4
+      },
+      {
+       "x": 12,
+       "z": 15
+      },
+      {
+       "x": 6,
+       "z": 15
+      },
+      {
+       "x": 6,
+       "z": 7
+      },
+      {
+       "x": 0,
+       "z": 7
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": false,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.75
+    }
+   ]
+  },
+  {
+   "id": "s37",
+   "name": "T/punched/setback2",
+   "pos": {
+    "x": 540,
+    "z": 150
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 7
+    },
+    {
+     "x": 0,
+     "z": 7
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 1.6,
+       "z": 1.6
+      },
+      {
+       "x": 16.4,
+       "z": 1.6
+      },
+      {
+       "x": 16.4,
+       "z": 5.4
+      },
+      {
+       "x": 10.4,
+       "z": 5.4
+      },
+      {
+       "x": 10.4,
+       "z": 13.4
+      },
+      {
+       "x": 7.6,
+       "z": 13.4
+      },
+      {
+       "x": 7.6,
+       "z": 5.4
+      },
+      {
+       "x": 1.6,
+       "z": 5.4
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "curtain",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "s38",
+   "name": "oct/punched/setback",
+   "pos": {
+    "x": 690,
+    "z": 105
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 3.5,
+       "z": 0
+      },
+      {
+       "x": 8.5,
+       "z": 0
+      },
+      {
+       "x": 10.4,
+       "z": 1.9
+      },
+      {
+       "x": 10.4,
+       "z": 10.1
+      },
+      {
+       "x": 8.5,
+       "z": 12
+      },
+      {
+       "x": 3.5,
+       "z": 12
+      },
+      {
+       "x": 0,
+       "z": 8.5
+      },
+      {
+       "x": 0,
+       "z": 3.5
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "none",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "s39",
+   "name": "oct/punched/setback2",
+   "pos": {
+    "x": 690,
+    "z": 150
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 4.16,
+       "z": 1.6
+      },
+      {
+       "x": 7.84,
+       "z": 1.6
+      },
+      {
+       "x": 10.4,
+       "z": 4.16
+      },
+      {
+       "x": 10.4,
+       "z": 7.84
+      },
+      {
+       "x": 7.84,
+       "z": 10.4
+      },
+      {
+       "x": 4.16,
+       "z": 10.4
+      },
+      {
+       "x": 1.6,
+       "z": 7.84
+      },
+      {
+       "x": 1.6,
+       "z": 4.16
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "s40",
+   "name": "skew/punched/setback",
+   "pos": {
+    "x": 840,
+    "z": 105
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 2
+    },
+    {
+     "x": 11,
+     "z": 10
+    },
+    {
+     "x": 3,
+     "z": 12
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": 0
+      },
+      {
+       "x": 14,
+       "z": 2
+      },
+      {
+       "x": 11.68,
+       "z": 8.18
+      },
+      {
+       "x": 2.61,
+       "z": 10.45
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.75
+    }
+   ]
+  },
+  {
+   "id": "s41",
+   "name": "skew/punched/setback2",
+   "pos": {
+    "x": 840,
+    "z": 150
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 2
+    },
+    {
+     "x": 11,
+     "z": 10
+    },
+    {
+     "x": 3,
+     "z": 12
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 2.13,
+       "z": 1.92
+      },
+      {
+       "x": 11.8,
+       "z": 3.3
+      },
+      {
+       "x": 9.8,
+       "z": 8.65
+      },
+      {
+       "x": 4.16,
+       "z": 10.06
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 4,
+       "z": 3.6
+      },
+      {
+       "x": 9.88,
+       "z": 4.44
+      },
+      {
+       "x": 8.75,
+       "z": 7.47
+      },
+      {
+       "x": 5.18,
+       "z": 8.36
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "o42",
+   "name": "rect/punched/overhang",
+   "pos": {
+    "x": 90,
+    "z": 195
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 9
+    },
+    {
+     "x": 0,
+     "z": 9
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "h": 4.2
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": -2
+      },
+      {
+       "x": 12,
+       "z": -2
+      },
+      {
+       "x": 12,
+       "z": 9
+      },
+      {
+       "x": 0,
+       "z": 9
+      }
+     ],
+     "blank": [],
+     "style": {
+      "label": "Brick walk-up",
+      "wall": "#C3CCD0",
+      "trim": "#ECE5D8",
+      "interior": "#EFECE5",
+      "floor": "#B88D62",
+      "roof": "#6E716B",
+      "core": "#C9C4BB",
+      "glass": "#8DB3C8",
+      "windows": "curtain",
+      "winW": 1.2,
+      "bay": 2.6,
+      "ground": "match",
+      "bands": true,
+      "parapet": false,
+      "preset": "brick"
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "zs1",
+     "type": "stairs",
+     "x": 1.3,
+     "z": 6.4,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": true
+    },
+    {
+     "id": "zl1",
+     "type": "lift",
+     "x": 10.8,
+     "z": 7.8,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": false
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "o43",
+   "name": "L/punched/overhang",
+   "pos": {
+    "x": 240,
+    "z": 195
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "h": 4.2
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": -2
+      },
+      {
+       "x": 16,
+       "z": -2
+      },
+      {
+       "x": 16,
+       "z": 8
+      },
+      {
+       "x": 8,
+       "z": 8
+      },
+      {
+       "x": 8,
+       "z": 16
+      },
+      {
+       "x": 0,
+       "z": 16
+      }
+     ],
+     "blank": [],
+     "style": {
+      "label": "Brick walk-up",
+      "wall": "#C3CCD0",
+      "trim": "#ECE5D8",
+      "interior": "#EFECE5",
+      "floor": "#B88D62",
+      "roof": "#6E716B",
+      "core": "#C9C4BB",
+      "glass": "#8DB3C8",
+      "windows": "curtain",
+      "winW": 1.2,
+      "bay": 2.6,
+      "ground": "storefront",
+      "bands": true,
+      "parapet": true,
+      "preset": "brick"
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "o44",
+   "name": "U/punched/overhang",
+   "pos": {
+    "x": 390,
+    "z": 195
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 14
+    },
+    {
+     "x": 0,
+     "z": 14
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "h": 4.2
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": -2
+      },
+      {
+       "x": 18,
+       "z": -2
+      },
+      {
+       "x": 18,
+       "z": 14
+      },
+      {
+       "x": 12,
+       "z": 14
+      },
+      {
+       "x": 12,
+       "z": 6
+      },
+      {
+       "x": 6,
+       "z": 6
+      },
+      {
+       "x": 6,
+       "z": 14
+      },
+      {
+       "x": 0,
+       "z": 14
+      }
+     ],
+     "blank": [],
+     "style": {
+      "label": "Brick walk-up",
+      "wall": "#C3CCD0",
+      "trim": "#ECE5D8",
+      "interior": "#EFECE5",
+      "floor": "#B88D62",
+      "roof": "#6E716B",
+      "core": "#C9C4BB",
+      "glass": "#8DB3C8",
+      "windows": "curtain",
+      "winW": 1.2,
+      "bay": 2.6,
+      "ground": "solid",
+      "bands": true,
+      "parapet": false,
+      "preset": "brick"
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "o45",
+   "name": "T/punched/overhang",
+   "pos": {
+    "x": 540,
+    "z": 195
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 7
+    },
+    {
+     "x": 0,
+     "z": 7
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "h": 4.2
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": -2
+      },
+      {
+       "x": 18,
+       "z": -2
+      },
+      {
+       "x": 18,
+       "z": 7
+      },
+      {
+       "x": 12,
+       "z": 7
+      },
+      {
+       "x": 12,
+       "z": 15
+      },
+      {
+       "x": 6,
+       "z": 15
+      },
+      {
+       "x": 6,
+       "z": 7
+      },
+      {
+       "x": 0,
+       "z": 7
+      }
+     ],
+     "blank": [],
+     "style": {
+      "label": "Brick walk-up",
+      "wall": "#C3CCD0",
+      "trim": "#ECE5D8",
+      "interior": "#EFECE5",
+      "floor": "#B88D62",
+      "roof": "#6E716B",
+      "core": "#C9C4BB",
+      "glass": "#8DB3C8",
+      "windows": "curtain",
+      "winW": 1.2,
+      "bay": 2.6,
+      "ground": "match",
+      "bands": true,
+      "parapet": true,
+      "preset": "brick"
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "o46",
+   "name": "oct/punched/overhang",
+   "pos": {
+    "x": 690,
+    "z": 195
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "h": 4.2
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 5.5,
+       "z": -2
+      },
+      {
+       "x": 6.5,
+       "z": -2
+      },
+      {
+       "x": 12,
+       "z": 3.5
+      },
+      {
+       "x": 12,
+       "z": 8.5
+      },
+      {
+       "x": 8.5,
+       "z": 12
+      },
+      {
+       "x": 3.5,
+       "z": 12
+      },
+      {
+       "x": 0,
+       "z": 8.5
+      },
+      {
+       "x": 0,
+       "z": 3.5
+      }
+     ],
+     "blank": [],
+     "style": {
+      "label": "Brick walk-up",
+      "wall": "#C3CCD0",
+      "trim": "#ECE5D8",
+      "interior": "#EFECE5",
+      "floor": "#B88D62",
+      "roof": "#6E716B",
+      "core": "#C9C4BB",
+      "glass": "#8DB3C8",
+      "windows": "curtain",
+      "winW": 1.2,
+      "bay": 2.6,
+      "ground": "storefront",
+      "bands": true,
+      "parapet": false,
+      "preset": "brick"
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "o47",
+   "name": "skew/punched/overhang",
+   "pos": {
+    "x": 840,
+    "z": 195
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 2
+    },
+    {
+     "x": 11,
+     "z": 10
+    },
+    {
+     "x": 3,
+     "z": 12
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "h": 4.2
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": -0.52,
+       "z": -2.1
+      },
+      {
+       "x": 14.72,
+       "z": 0.08
+      },
+      {
+       "x": 11,
+       "z": 10
+      },
+      {
+       "x": 3,
+       "z": 12
+      }
+     ],
+     "blank": [],
+     "style": {
+      "label": "Brick walk-up",
+      "wall": "#C3CCD0",
+      "trim": "#ECE5D8",
+      "interior": "#EFECE5",
+      "floor": "#B88D62",
+      "roof": "#6E716B",
+      "core": "#C9C4BB",
+      "glass": "#8DB3C8",
+      "windows": "curtain",
+      "winW": 1.2,
+      "bay": 2.6,
+      "ground": "solid",
+      "bands": true,
+      "parapet": true,
+      "preset": "brick"
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "q48",
+   "name": "rect/punched/setback/roofed",
+   "pos": {
+    "x": 90,
+    "z": 405
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 9
+    },
+    {
+     "x": 0,
+     "z": 9
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": 0
+      },
+      {
+       "x": 12,
+       "z": 0
+      },
+      {
+       "x": 12,
+       "z": 7.4
+      },
+      {
+       "x": 0,
+       "z": 7.4
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 20
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.75
+    }
+   ]
+  },
+  {
+   "id": "q49",
+   "name": "rect/punched/setback2/roofed",
+   "pos": {
+    "x": 90,
+    "z": 450
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 9
+    },
+    {
+     "x": 0,
+     "z": 9
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 1.6,
+       "z": 1.6
+      },
+      {
+       "x": 10.4,
+       "z": 1.6
+      },
+      {
+       "x": 10.4,
+       "z": 7.4
+      },
+      {
+       "x": 1.6,
+       "z": 7.4
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 30
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 3,
+       "z": 3
+      },
+      {
+       "x": 9,
+       "z": 3
+      },
+      {
+       "x": 9,
+       "z": 6
+      },
+      {
+       "x": 3,
+       "z": 6
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 45
+     }
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "q50",
+   "name": "L/punched/setback/roofed",
+   "pos": {
+    "x": 240,
+    "z": 405
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": 0
+      },
+      {
+       "x": 16,
+       "z": 0
+      },
+      {
+       "x": 16,
+       "z": 6.4
+      },
+      {
+       "x": 8,
+       "z": 6.4
+      },
+      {
+       "x": 8,
+       "z": 16
+      },
+      {
+       "x": 0,
+       "z": 16
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 20
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "curtain",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.75
+    }
+   ]
+  },
+  {
+   "id": "q51",
+   "name": "L/punched/setback2/roofed",
+   "pos": {
+    "x": 240,
+    "z": 450
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 1.6,
+       "z": 1.6
+      },
+      {
+       "x": 14.4,
+       "z": 1.6
+      },
+      {
+       "x": 14.4,
+       "z": 6.4
+      },
+      {
+       "x": 6.4,
+       "z": 6.4
+      },
+      {
+       "x": 6.4,
+       "z": 14.4
+      },
+      {
+       "x": 1.6,
+       "z": 14.4
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 30
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 3,
+       "z": 3
+      },
+      {
+       "x": 13,
+       "z": 3
+      },
+      {
+       "x": 13,
+       "z": 5
+      },
+      {
+       "x": 5,
+       "z": 5
+      },
+      {
+       "x": 5,
+       "z": 13
+      },
+      {
+       "x": 3,
+       "z": 13
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 45
+     }
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "none",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "q52",
+   "name": "U/punched/setback/roofed",
+   "pos": {
+    "x": 390,
+    "z": 405
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 14
+    },
+    {
+     "x": 0,
+     "z": 14
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": 0
+      },
+      {
+       "x": 18,
+       "z": 0
+      },
+      {
+       "x": 18,
+       "z": 12.4
+      },
+      {
+       "x": 12,
+       "z": 12.4
+      },
+      {
+       "x": 12,
+       "z": 6
+      },
+      {
+       "x": 6,
+       "z": 6
+      },
+      {
+       "x": 6,
+       "z": 14
+      },
+      {
+       "x": 0,
+       "z": 14
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 20
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.75
+    }
+   ]
+  },
+  {
+   "id": "q53",
+   "name": "U/punched/setback2/roofed",
+   "pos": {
+    "x": 390,
+    "z": 450
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 14
+    },
+    {
+     "x": 0,
+     "z": 14
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 1.6,
+       "z": 1.6
+      },
+      {
+       "x": 16.4,
+       "z": 1.6
+      },
+      {
+       "x": 16.4,
+       "z": 12.4
+      },
+      {
+       "x": 13.6,
+       "z": 12.4
+      },
+      {
+       "x": 13.6,
+       "z": 4.4
+      },
+      {
+       "x": 4.4,
+       "z": 4.4
+      },
+      {
+       "x": 4.4,
+       "z": 12.4
+      },
+      {
+       "x": 1.6,
+       "z": 12.4
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 30
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "q54",
+   "name": "T/punched/setback/roofed",
+   "pos": {
+    "x": 540,
+    "z": 405
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 7
+    },
+    {
+     "x": 0,
+     "z": 7
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": 0
+      },
+      {
+       "x": 18,
+       "z": 0
+      },
+      {
+       "x": 18,
+       "z": 5.4
+      },
+      {
+       "x": 12,
+       "z": 5.4
+      },
+      {
+       "x": 12,
+       "z": 15
+      },
+      {
+       "x": 6,
+       "z": 15
+      },
+      {
+       "x": 6,
+       "z": 7
+      },
+      {
+       "x": 0,
+       "z": 7
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 45
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": false,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.75
+    }
+   ]
+  },
+  {
+   "id": "q55",
+   "name": "T/punched/setback2/roofed",
+   "pos": {
+    "x": 540,
+    "z": 450
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 7
+    },
+    {
+     "x": 0,
+     "z": 7
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 1.6,
+       "z": 1.6
+      },
+      {
+       "x": 16.4,
+       "z": 1.6
+      },
+      {
+       "x": 16.4,
+       "z": 5.4
+      },
+      {
+       "x": 10.4,
+       "z": 5.4
+      },
+      {
+       "x": 10.4,
+       "z": 13.4
+      },
+      {
+       "x": 7.6,
+       "z": 13.4
+      },
+      {
+       "x": 7.6,
+       "z": 5.4
+      },
+      {
+       "x": 1.6,
+       "z": 5.4
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 20
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "curtain",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "q56",
+   "name": "oct/punched/setback/roofed",
+   "pos": {
+    "x": 690,
+    "z": 405
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 3.5,
+       "z": 0
+      },
+      {
+       "x": 8.5,
+       "z": 0
+      },
+      {
+       "x": 10.4,
+       "z": 1.9
+      },
+      {
+       "x": 10.4,
+       "z": 10.1
+      },
+      {
+       "x": 8.5,
+       "z": 12
+      },
+      {
+       "x": 3.5,
+       "z": 12
+      },
+      {
+       "x": 0,
+       "z": 8.5
+      },
+      {
+       "x": 0,
+       "z": 3.5
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 30
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "none",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "q57",
+   "name": "oct/punched/setback2/roofed",
+   "pos": {
+    "x": 690,
+    "z": 450
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 4.16,
+       "z": 1.6
+      },
+      {
+       "x": 7.84,
+       "z": 1.6
+      },
+      {
+       "x": 10.4,
+       "z": 4.16
+      },
+      {
+       "x": 10.4,
+       "z": 7.84
+      },
+      {
+       "x": 7.84,
+       "z": 10.4
+      },
+      {
+       "x": 4.16,
+       "z": 10.4
+      },
+      {
+       "x": 1.6,
+       "z": 7.84
+      },
+      {
+       "x": 1.6,
+       "z": 4.16
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 45
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "q58",
+   "name": "skew/punched/setback/roofed",
+   "pos": {
+    "x": 840,
+    "z": 405
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 2
+    },
+    {
+     "x": 11,
+     "z": 10
+    },
+    {
+     "x": 3,
+     "z": 12
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 0,
+       "z": 0
+      },
+      {
+       "x": 14,
+       "z": 2
+      },
+      {
+       "x": 11.68,
+       "z": 8.18
+      },
+      {
+       "x": 2.61,
+       "z": 10.45
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 20
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 0,
+     "edge": 0,
+     "t": 0.75
+    }
+   ]
+  },
+  {
+   "id": "q59",
+   "name": "skew/punched/setback2/roofed",
+   "pos": {
+    "x": 840,
+    "z": 450
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 2
+    },
+    {
+     "x": 11,
+     "z": 10
+    },
+    {
+     "x": 3,
+     "z": 12
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 2.13,
+       "z": 1.92
+      },
+      {
+       "x": 11.8,
+       "z": 3.3
+      },
+      {
+       "x": 9.8,
+       "z": 8.65
+      },
+      {
+       "x": 4.16,
+       "z": 10.06
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 30
+     }
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": [],
+     "shape": [
+      {
+       "x": 4,
+       "z": 3.6
+      },
+      {
+       "x": 9.88,
+       "z": 4.44
+      },
+      {
+       "x": 8.75,
+       "z": 7.47
+      },
+      {
+       "x": 5.18,
+       "z": 8.36
+      }
+     ],
+     "blank": [],
+     "terraceRoof": {
+      "pitch": 45
+     }
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.5,
+     "k": 2
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick"
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "r60",
+   "name": "rect/tall/hip",
+   "pos": {
+    "x": 120,
+    "z": 240
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 9
+    },
+    {
+     "x": 0,
+     "z": 9
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "zs2",
+     "type": "stairs",
+     "x": 1.3,
+     "z": 6.4,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": true
+    },
+    {
+     "id": "zl2",
+     "type": "lift",
+     "x": 10.8,
+     "z": 7.8,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": false
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick",
+    "roofType": "hip",
+    "pitch": 25,
+    "eave": 0.35
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "r61",
+   "name": "rect/tall/gable",
+   "pos": {
+    "x": 120,
+    "z": 280
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 9
+    },
+    {
+     "x": 0,
+     "z": 9
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "zs2",
+     "type": "stairs",
+     "x": 1.3,
+     "z": 6.4,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": true
+    },
+    {
+     "id": "zl2",
+     "type": "lift",
+     "x": 10.8,
+     "z": 7.8,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": false
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick",
+    "roofType": "gable",
+    "pitch": 35,
+    "eave": 0
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "r62",
+   "name": "rect/tall/shed",
+   "pos": {
+    "x": 120,
+    "z": 320
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 9
+    },
+    {
+     "x": 0,
+     "z": 9
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "zs2",
+     "type": "stairs",
+     "x": 1.3,
+     "z": 6.4,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": true
+    },
+    {
+     "id": "zl2",
+     "type": "lift",
+     "x": 10.8,
+     "z": 7.8,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": false
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick",
+    "roofType": "shed",
+    "pitch": 14,
+    "eave": 0.8
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "r63",
+   "name": "L/tall/hip",
+   "pos": {
+    "x": 270,
+    "z": 240
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick",
+    "roofType": "hip",
+    "pitch": 25,
+    "eave": 0.35
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "r64",
+   "name": "L/tall/gable",
+   "pos": {
+    "x": 270,
+    "z": 280
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick",
+    "roofType": "gable",
+    "pitch": 35,
+    "eave": 0
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "r65",
+   "name": "L/tall/shed",
+   "pos": {
+    "x": 270,
+    "z": 320
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick",
+    "roofType": "shed",
+    "pitch": 14,
+    "eave": 0.8
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "r66",
+   "name": "U/tall/hip",
+   "pos": {
+    "x": 420,
+    "z": 240
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 14
+    },
+    {
+     "x": 0,
+     "z": 14
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick",
+    "roofType": "hip",
+    "pitch": 25,
+    "eave": 0.35
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "r67",
+   "name": "U/tall/gable",
+   "pos": {
+    "x": 420,
+    "z": 280
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 14
+    },
+    {
+     "x": 0,
+     "z": 14
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick",
+    "roofType": "gable",
+    "pitch": 35,
+    "eave": 0
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "r68",
+   "name": "U/tall/shed",
+   "pos": {
+    "x": 420,
+    "z": 320
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 14
+    },
+    {
+     "x": 12,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 6
+    },
+    {
+     "x": 6,
+     "z": 14
+    },
+    {
+     "x": 0,
+     "z": 14
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick",
+    "roofType": "shed",
+    "pitch": 14,
+    "eave": 0.8
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "r69",
+   "name": "T/tall/hip",
+   "pos": {
+    "x": 570,
+    "z": 240
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 7
+    },
+    {
+     "x": 0,
+     "z": 7
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick",
+    "roofType": "hip",
+    "pitch": 25,
+    "eave": 0.35
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "r70",
+   "name": "T/tall/gable",
+   "pos": {
+    "x": 570,
+    "z": 280
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 7
+    },
+    {
+     "x": 0,
+     "z": 7
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick",
+    "roofType": "gable",
+    "pitch": 35,
+    "eave": 0
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "r71",
+   "name": "T/tall/shed",
+   "pos": {
+    "x": 570,
+    "z": 320
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 0
+    },
+    {
+     "x": 18,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 7
+    },
+    {
+     "x": 12,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 15
+    },
+    {
+     "x": 6,
+     "z": 7
+    },
+    {
+     "x": 0,
+     "z": 7
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "solid",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick",
+    "roofType": "shed",
+    "pitch": 14,
+    "eave": 0.8
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "r72",
+   "name": "oct/tall/hip",
+   "pos": {
+    "x": 720,
+    "z": 240
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick",
+    "roofType": "hip",
+    "pitch": 25,
+    "eave": 0.35
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "r73",
+   "name": "oct/tall/gable",
+   "pos": {
+    "x": 720,
+    "z": 280
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick",
+    "roofType": "gable",
+    "pitch": 35,
+    "eave": 0
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "r74",
+   "name": "oct/tall/shed",
+   "pos": {
+    "x": 720,
+    "z": 320
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    },
+    {
+     "edge": 4,
+     "t": 0.3
+    },
+    {
+     "edge": 5,
+     "t": 0.3
+    },
+    {
+     "edge": 6,
+     "t": 0.3
+    },
+    {
+     "edge": 7,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick",
+    "roofType": "shed",
+    "pitch": 14,
+    "eave": 0.8
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "r75",
+   "name": "skew/tall/hip",
+   "pos": {
+    "x": 870,
+    "z": 240
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 2
+    },
+    {
+     "x": 11,
+     "z": 10
+    },
+    {
+     "x": 3,
+     "z": 12
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick",
+    "roofType": "hip",
+    "pitch": 25,
+    "eave": 0.35
+   },
+   "interior": false,
+   "details": []
+  },
+  {
+   "id": "r76",
+   "name": "skew/tall/gable",
+   "pos": {
+    "x": 870,
+    "z": 280
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 2
+    },
+    {
+     "x": 11,
+     "z": 10
+    },
+    {
+     "x": 3,
+     "z": 12
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick",
+    "roofType": "gable",
+    "pitch": 35,
+    "eave": 0
+   },
+   "interior": true,
+   "details": []
+  },
+  {
+   "id": "r77",
+   "name": "skew/tall/shed",
+   "pos": {
+    "x": 870,
+    "z": 320
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 2
+    },
+    {
+     "x": 11,
+     "z": 10
+    },
+    {
+     "x": 3,
+     "z": 12
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    },
+    {
+     "edge": 1,
+     "t": 0.3
+    },
+    {
+     "edge": 2,
+     "t": 0.3
+    },
+    {
+     "edge": 3,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "#9A4B38",
+    "trim": "#ECE5D8",
+    "interior": "#EFECE5",
+    "floor": "#B88D62",
+    "roof": "#6E716B",
+    "core": "#C9C4BB",
+    "glass": "#8DB3C8",
+    "windows": "tall",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": false,
+    "preset": "brick",
+    "roofType": "shed",
+    "pitch": 14,
+    "eave": 0.8
+   },
+   "interior": false,
+   "details": []
+  }
+ ],
+ "spawn": {
+  "x": -1,
+  "z": -8.6
+ }
+}

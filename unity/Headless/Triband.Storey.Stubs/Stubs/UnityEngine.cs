@@ -23,6 +23,7 @@ namespace UnityEngine
 
     public class ScriptableObject : Object
     {
+        public static T CreateInstance<T>() where T : ScriptableObject, new() => new T();
     }
 
     public static class Debug
@@ -54,6 +55,12 @@ namespace UnityEngine
     public sealed class RangeAttribute : PropertyAttribute
     {
         public RangeAttribute(float min, float max) { }
+    }
+
+    public sealed class TextAreaAttribute : PropertyAttribute
+    {
+        public TextAreaAttribute() { }
+        public TextAreaAttribute(int minLines, int maxLines) { }
     }
 
     public sealed class SerializeField : System.Attribute

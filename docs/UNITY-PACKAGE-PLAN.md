@@ -49,6 +49,8 @@ com.triband.storey/
   Runtime/Triband.Storey.asmdef       noEngineReferences: true, references []: data model, generator, LOD logic,
                                       occlusion maths. Builds as a plain .NET library (unity/Headless) and is
                                       tested there against the prototype's fixtures.
+  Runtime/Data/                       BuildingData & co., PrototypeJson (read/write), Derived, DocumentSummary
+  Runtime/Text/Json.cs                the JSON reader/writer (owned, ~300 lines; Unity has no engine-free one)
   Runtime/ThirdParty/<lib>/           vendored, engine-free
   Unity/Triband.Storey.Unity.asmdef   MonoBehaviours, ScriptableObjects, mesh upload, Burst jobs, buffers, shaders;
                                       depends on Runtime + Burst/Collections/Mathematics/URP
@@ -61,7 +63,7 @@ com.triband.storey.playkit/
   Runtime/Triband.Storey.PlayKit.asmdef
 unity/Headless/                       .NET projects over the same sources: Headless (Runtime/**), Stubs (engine-facing
                                       code against hand-written UnityEngine/UnityEditor declarations), Tests (xunit)
-unity/Fixtures/                       reference answers emitted by the prototype
+unity/Fixtures/                       reference answers emitted by prototype/tools/export-fixtures.mjs
 unity/tools/meta.py                   writes the committed .meta files (GUIDs derived from paths)
 ```
 
@@ -72,7 +74,7 @@ Burst-compiled hot paths (polygon clipping, skeleton, mesh assembly) are a conse
 Rules to hold from day one:
 
 - **Versioning:** SemVer as Unity defines it (MAJOR = breaking public API or data format, MINOR = additions, PATCH = fixes). The data format version lives inside the asset too (`BuildingData.version`) with migration code, so old scenes load after a MINOR bump.
-- **Data format:** the prototype's JSON schema (SPEC §3) is the interchange format. The importer reads `state.buildings[]` and writes `.storey` assets; the same JSON is committed as test fixtures so the Unity generator can be compared against the prototype's numbers (triangle counts, coplanar test).
+- **Data format:** the prototype's JSON schema (SPEC §3) is the interchange format, field names included. A `.storey` file *is* that JSON; the importer stores the text on a `StoreyDocumentAsset` with a summary for the inspector and parses on demand, because Unity's serializer cannot hold the model's optional sub-objects and the model must stay engine-free. `PrototypeJson.Read` reports every key it has no field for, and a fixture test fails on any, so the model cannot silently lag the prototype. Absent and zero differ for `eave`, `pitch`, floor `h` and detail `y` (the prototype defaults absent ones), so those are nullable.
 - **Third-party code** is vendored under `Runtime/ThirdParty/<lib>/` with its licence in `Third Party Notices.md` (see §5).
 - **Tests are testable from a consuming project:** the test project's `manifest.json` lists the packages under `"testables"`.
 
@@ -182,7 +184,7 @@ Each workstream ends with something usable; the prototype's demo street is the a
 | # | Workstream | Deliverable | Exit test |
 |---|---|---|---|
 | 0 | Repo & packages | `unity/` with three embedded packages, engine-free/engine-facing split, headless .NET projects (behaviour, stub compile, layout rules), `.meta` generator, session hook installing the SDK, secret-free workflow. **Done**: 50 tests green. | `dotnet test` green |
-| 1 | Data + importer | `.storey` ScriptedImporter, data model with versioning, prototype JSON import | Demo JSON imports; fields round-trip |
+| 1 | Data + importer | Engine-free data model (`Runtime/Data`), JSON reader/writer, prototype layout read/write with unknown-key reporting, derived values (floor bases, tiers, outlines, styles, shaft tops), `.storey` ScriptedImporter and import menu, fixture exporter in `prototype/tools`. **Done**: demo and 78-variant corpora round-trip structurally identical; derived values match the prototype; 411 tests. | Demo JSON imports; fields round-trip |
 | 2 | Generator core | Slabs, wall panels, openings, cores, party walls, setbacks/terraces/overhangs, flat roofs | Coplanar test 0 on the fixture set; triangle counts within 10% of the prototype |
 | 3 | Roofs, details | Straight skeleton, hip/gable/shed, roofed setbacks, facade details | Same tests extended |
 | 4 | Shaders + table | Five materials, `BuildingTable` buffer, LOD2 facade shader, occlusion include | Visual parity screenshots |
