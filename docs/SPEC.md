@@ -275,7 +275,7 @@ Why semantic LODs rather than decimation: automatic simplification of boxy archi
   The prototype uses two float textures with the same layout.
 - **Finding a building's row:** merged meshes carry the building index per vertex. A single-building renderer can use the vertex attribute too, or, on Unity 6.3+, `MeshRenderer.SetShaderUserValue(uint)` / `unity_RendererUserValue`, which is compatible with the SRP Batcher and the GPU Resident Drawer.
 - **Do not use MaterialPropertyBlocks.** A renderer with a MaterialPropertyBlock is SRP-Batcher-incompatible and is excluded from the GPU Resident Drawer.
-- **Reading the buffer from Shader Graph:** use a Custom Function node with a file-mode HLSL include. Declare the buffer globally, guard the preview with `SHADERGRAPH_PREVIEW`, and set it with `SetGlobalBuffer`. Vertex-stage buffer reads need storage-buffer support (`SystemInfo.maxComputeBufferInputsVertex` > 0), so OpenGL ES targets would need a texture fallback like the prototype's.
+- **Reading the buffer from Shader Graph:** use a Custom Function node with a file-mode HLSL include. Declare the buffer globally, guard the preview with `SHADERGRAPH_PREVIEW`, and set it with `SetGlobalBuffer`. Vertex-stage buffer reads need storage-buffer support (`SystemInfo.maxComputeBufferInputsVertex` > 0), which all targets (Metal, DX12, Vulkan) have; the prototype's texture layout is not needed in Unity.
 
 ### 6.5 Generation, memory and streaming
 
@@ -301,7 +301,7 @@ The coplanar check passes with 0 visible overlaps at LOD0, LOD1 and LOD2 across 
 
 ### 6.7 Unity rendering setup for a city
 
-- **Pipeline:** URP with the Forward+ (or Deferred+) rendering path, the SRP Batcher on, and the **GPU Resident Drawer** set to *Instanced Drawing*. This needs *BatchRendererGroup Variants = Keep All*. It doesn't run on OpenGL ES, and only MeshRenderers qualify.
+- **Pipeline:** URP with the Forward+ (or Deferred+) rendering path, the SRP Batcher on, and the **GPU Resident Drawer** set to *Instanced Drawing*. This needs *BatchRendererGroup Variants = Keep All*. Only MeshRenderers qualify.
 - **GPU occlusion culling** is worth turning on for dense street-level views, where most buildings hide behind the first row. It needs the GPU Resident Drawer and Render Graph, and can cost more than it saves in open views.
 - **No static batching:** it isn't compatible with the GPU Resident Drawer, and cells already merge the far geometry.
 - **Mesh LOD (Unity 6.2+)** is not a substitute for the semantic building LODs: it can't change materials or renderers between LODs, and Unity recommends against combining it with LODGroup. It could still help imported objects inside LOD0.
@@ -370,7 +370,7 @@ All questions from the prototype review have been answered, and every decision t
 | 9 | Dim floors below the player? | **Leave as is.** | Floors below draw normally. |
 | 10 | Art pipeline? | **Procedural first.** | Keep the generator and add materials and textures (trim sheets, tiling wall materials). Modular kits can come later from the same data, because only the generator changes. |
 | 11 | Buildings sharing walls? | **Yes.** Done in the prototype (§4.3). | Party walls are derived from outlines that run along each other, never stored. The taller building owns the wall and builds it blank; the other leaves its wall out. Moving a building snaps it onto a neighbour's edge. The demo's Row House shares walls with two neighbours. |
-| 12 | Platforms? | **PC / Mac, high-end mobile, low-end mobile.** | Low-end mobile sets the floor: OpenGL ES fallback, so the GPU Resident Drawer is optional (on for desktop and Vulkan/Metal only). 16-bit indices everywhere (cells split under 65,535 vertices). A texture fallback for the building table. Per-platform `LODCFG` (px/m thresholds, cell size, cache sizes). Budgets are still needed per tier; proposed starting points are ≤ 150 draws and ≤ 300k triangles on low-end mobile, ≤ 250 draws and ≤ 800k triangles on high-end mobile, and ≤ 1,000 draws and ≤ 3M triangles on desktop. |
+| 12 | Platforms? | **PC / Mac and iOS; no Android.** Low-end reference device: iPhone 7. | Metal, DX12 and Vulkan everywhere, so one render path: GPU Resident Drawer on, building table as a structured buffer, no texture fallback. 16-bit indices kept anyway (cells split under 65,535 vertices) for memory. Per-platform `LODCFG` (px/m thresholds, cell size, cache sizes). Budgets per tier are in the package plan §6.6: ≤ 60 draws, ≤ 200k triangles and ≤ 120 MB on the iPhone 7; the desktop street-level numbers above as ceilings on PC / Mac. |
 | 13 | World size and streaming? | **Streaming districts.** | Districts are separate scenes or Addressables groups. HLOD cells are baked per district at edit time. Building data is loaded per district, and LOD0/1 are generated at runtime or baked per platform. A district border must not split a cell. |
 | 14 | LOD1 for tall glass towers? | **Merge openings.** | At LOD1, flush glass openings (curtain wall, ribbon, shopfront) on one storey of one wall become a single recess. That cuts the 38-floor glass tower from about 26.8k to about 3k triangles at LOD1. |
 

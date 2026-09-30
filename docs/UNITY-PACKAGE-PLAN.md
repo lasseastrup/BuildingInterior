@@ -101,16 +101,18 @@ Unity 6.3 idioms, not a 1:1 port of the DOM panels:
 
 ## 6. Rendering, runtime performance and memory
 
-What the research settled (Unity 6.3 LTS is the current LTS; 6.4–6.6 add WebGPU with the GPU Resident Drawer, a GLES 3.1 minimum on Android, and Content Directories; the Built-in pipeline is deprecated from 6.5, so URP is the right bet):
+Targets are **iOS and desktop (Windows, macOS)** only; no Android. That fixes the graphics APIs to Metal, DirectX 12 and Vulkan, which all support compute buffers, the GPU Resident Drawer and 32-bit indices, so the plan has a single render path.
+
+What the research settled (Unity 6.3 LTS is the current LTS; 6.4–6.6 add WebGPU with the GPU Resident Drawer and Content Directories; the Built-in pipeline is deprecated from 6.5, so URP is the right bet):
 
 ### 6.1 Draw submission
 
-- **SRP Batcher + GPU Resident Drawer (GRD)** on desktop, Vulkan Android, Metal and (6.6+) WebGPU. GRD needs Forward+ or Deferred+, *BatchRendererGroup Variants = Keep All*, plain `MeshRenderer`s with no `MaterialPropertyBlock`, no light probes on the renderer, and **Static Batching off** (it disables instancing and duplicates mesh data). Our design already fits: one merged mesh per building per LOD, five shared materials, all per-building data in a buffer.
+- **SRP Batcher + GPU Resident Drawer (GRD)** on every target (Metal, DX12, Vulkan). GRD needs Forward+ or Deferred+, *BatchRendererGroup Variants = Keep All*, plain `MeshRenderer`s with no `MaterialPropertyBlock`, no light probes on the renderer, and **Static Batching off** (it disables instancing and duplicates mesh data). Our design already fits: one merged mesh per building per LOD, five shared materials, all per-building data in a buffer.
 - **Low-end reference device: iPhone 7** (A10 Fusion, 2 GB RAM, Metal, 1334×750, iOS 15 is its last OS). Metal means GRD and the compute-buffer path *are* available there; what it lacks is memory and GPU fill rate. So the low-end budget is set by memory and by the alpha-clip cost on Apple's tile-based GPU, not by the render path. To verify in the editor before workstream 0: Unity 6.3's minimum iOS version must still admit iOS 15 (Unity 6 has been iOS 13+; the 6.x release notes for 6.4–6.7 may raise it, which would rule the device out for later Unity versions).
-- **OpenGL ES** (low-end Android) has no GRD: the same renderers fall back to the SRP Batcher. Nothing in the package may depend on GRD being present. This path is a secondary target, tested but not the one the budgets are tuned on.
+- GRD stays a project setting rather than a hard dependency (a consuming project may have it off), so everything must also render correctly with the SRP Batcher alone; that is a correctness test, not a tuned path.
 - **GPU occlusion culling** tests each renderer as a bounding sphere, so it works poorly for large merged meshes and tall buildings. Keep HLOD cells compact (≤ 65,535 vertices, roughly square in plan) and treat GPU culling as a per-project toggle measured at street level, not a default.
 - **Per-building data**: the per-vertex building index stays the primary mechanism (portable everywhere, works inside merged cells). `MeshRenderer.SetShaderUserValue` (6.3+, read as `unity_RendererUserValue`) is an option for single-building renderers, but it isn't serialised and its behaviour under GRD instanced draws is not documented, so it is an optimisation to try, not a dependency.
-- The **building table** is one `StructuredBuffer` bound with `Shader.SetGlobalBuffer`, read from a Custom Function node in Shader Graph (file-mode include). Vertex-stage buffer reads need GLES 3.1+ and `SystemInfo.maxComputeBufferInputsVertex > 0`; the GLES fallback is the prototype's float-texture layout, chosen at startup.
+- The **building table** is one `StructuredBuffer` bound with `Shader.SetGlobalBuffer`, read from a Custom Function node in Shader Graph (file-mode include). Vertex-stage buffer reads are available on all three APIs, so the prototype's float-texture fallback is not ported; a startup assert on `SystemInfo.maxComputeBufferInputsVertex > 0` documents the assumption.
 
 ### 6.2 LODs
 
@@ -178,7 +180,6 @@ Estimated effort: workstreams 2–3 and 6 dominate; the rest is glue. Porting or
 - **Straight skeleton robustness** is proven in the prototype on random outlines but not on outlines with collinear or near-collinear edges from snapped user input; keep the fixture set growing.
 - **Party walls across districts:** a building at a district boundary depends on a neighbour in another district; the bake needs the neighbour's outline available (store outlines in a lightweight district index).
 - **Mobile alpha clipping cost** (occlusion discards) is the runtime risk to measure first; the keyword split in §6.3 is the mitigation, and the first device test should compare with/without it.
-- **GRD absent on GLES** means two render paths to test; the SRP-Batcher-only path must be correct on Android GLES, but the budgets are tuned on the iPhone 7 (Metal), which is the agreed low-end device.
 - **iPhone 7 OS ceiling (iOS 15).** Each Unity 6.x release can raise the minimum iOS version; if a later LTS drops iOS 15 the reference device has to move (iPhone 8 / A11 is the natural next step, same 2 GB memory class). Check the release notes at each Unity upgrade.
 - **Renderer user values under GRD** are undocumented; the per-vertex index is the safe path, so this is only upside.
 - **Party walls across districts** need a neighbour index; without it a boundary building rebuilds with an open side.
