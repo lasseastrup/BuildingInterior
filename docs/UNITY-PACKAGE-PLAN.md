@@ -101,7 +101,47 @@ Unity 6.3 idioms, not a 1:1 port of the DOM panels:
 
 ## 6. Rendering, runtime performance and memory
 
-_Filled in from the runtime research (see the second report)._
+What the research settled (Unity 6.3 LTS is the current LTS; 6.4–6.6 add WebGPU with the GPU Resident Drawer, a GLES 3.1 minimum on Android, and Content Directories; the Built-in pipeline is deprecated from 6.5, so URP is the right bet):
+
+### 6.1 Draw submission
+
+- **SRP Batcher + GPU Resident Drawer (GRD)** on desktop, Vulkan Android, Metal and (6.6+) WebGPU. GRD needs Forward+ or Deferred+, *BatchRendererGroup Variants = Keep All*, plain `MeshRenderer`s with no `MaterialPropertyBlock`, no light probes on the renderer, and **Static Batching off** (it disables instancing and duplicates mesh data). Our design already fits: one merged mesh per building per LOD, five shared materials, all per-building data in a buffer.
+- **OpenGL ES** (low-end Android) has no GRD: the same renderers fall back to the SRP Batcher. Nothing in the package may depend on GRD being present.
+- **GPU occlusion culling** tests each renderer as a bounding sphere, so it works poorly for large merged meshes and tall buildings. Keep HLOD cells compact (≤ 65,535 vertices, roughly square in plan) and treat GPU culling as a per-project toggle measured at street level, not a default.
+- **Per-building data**: the per-vertex building index stays the primary mechanism (portable everywhere, works inside merged cells). `MeshRenderer.SetShaderUserValue` (6.3+, read as `unity_RendererUserValue`) is an option for single-building renderers, but it isn't serialised and its behaviour under GRD instanced draws is not documented, so it is an optimisation to try, not a dependency.
+- The **building table** is one `StructuredBuffer` bound with `Shader.SetGlobalBuffer`, read from a Custom Function node in Shader Graph (file-mode include). Vertex-stage buffer reads need GLES 3.1+ and `SystemInfo.maxComputeBufferInputsVertex > 0`; the GLES fallback is the prototype's float-texture layout, chosen at startup.
+
+### 6.2 LODs
+
+- Our LODs are **semantic** (interior / shell / massing) with different vertex sets, and the transition is by feature scale, not screen size, so the prototype's `LodManager` (state table, cross-fade dither, storey-by-storey generation queue, LRU cache) is ported as is. Unity 6.2's **Mesh LOD** (index-range LODs in one mesh, selected by screen size) doesn't fit that; it may later be used *inside* LOD0/LOD1 for facade detail meshes, and it needs GRD for cross-fade.
+- **HLOD**: no GameObject HLOD ships with Unity 6 (the HLODSystem repo targets 2021.3; Entities Graphics has one for entities). Cells are baked by the package as in SPEC §6.3.
+
+### 6.3 Occlusion shader on mobile
+
+- Alpha clipping (our `discard`) costs early-Z/hidden-surface removal on tile-based mobile GPUs and hurts batching on URP. Mitigation: the occlusion code is behind a **shader keyword**, compiled into the near materials (LOD0/LOD1, always the few buildings around the player) and left out of the LOD2 and HLOD-cell materials on mobile quality levels. Buildings in the way are forced to LOD0 for Sink/Slice anyway; Cutout/Fade at LOD2 become a quality option.
+- **Colour-pass only**: keep Alpha Clipping on and force alpha = 1 under `SHADERPASS_SHADOWCASTER` in the include, which is the documented pattern and what the prototype's `OCC_DEPTH` define does.
+- The three rays for buildings in the way run on the CPU against outline prisms (a Burst job over the grid's candidates); no physics raycasts needed.
+
+### 6.4 Streaming
+
+- **Districts = Addressables additive scenes**, one small group per district (Unity's guidance is small groups), loaded by distance; each district carries its buildings' assets, HLOD cells and a lightweight index of neighbour outlines for party walls across boundaries. Content Directories (6.6) are Addressables-compatible and can replace bundles later without code changes. Entities sub-scene streaming is not used (the package is GameObject-based).
+
+### 6.5 Memory
+
+- Meshes are built with `Mesh.AllocateWritableMeshData` + `SetVertexBufferParams` in the prototype's compact format (float3 position, SNorm8×4 normal, UNorm8×4 colour, float tag; attributes must be 4-byte multiples), **16-bit indices** (the default, and the only guaranteed format on old GPUs), `MeshUpdateFlags` to skip validation, and `UploadMeshData(true)` after bake so no CPU copy is kept. Collision is the prototype's 2D wall segments, not mesh colliders, so meshes never need to be readable.
+- Budgets from the prototype's city test, to hold or beat: 3,000 buildings at ~15 MB for LOD2/cells resident, ~90 MB total at street level with LOD0/LOD1 around the player (LRU-bounded); the building table is 8,192 × 16 B. Low-end mobile caps the LOD0 residency (fewer full-detail buildings) rather than changing the content.
+- Unity gives no fixed MB budget; the plan is profiler-driven: the performance tests record peak mesh memory per LOD on device and fail on regression.
+
+### 6.6 Performance targets
+
+| Target | Overview (3,000 buildings) | Street level |
+|---|---|---|
+| Draw calls | ~110 (cells) | ≤ 90 |
+| Triangles | ≤ 80k | ≤ 500k desktop, ≤ 250k mobile (LOD0 residency cap) |
+| LOD CPU | < 2 ms/frame | < 2 ms/frame |
+| Frame budget | 60 fps desktop, 30 fps low-end mobile with GLES fallback |
+
+These are the prototype's measured numbers (SPEC §6.6) taken as ceilings; the Unity performance tests turn them into thresholds.
 
 ## 7. Testing and CI
 
@@ -133,4 +173,7 @@ Estimated effort: workstreams 2–3 and 6 dominate; the rest is glue. Porting or
 - **Clipper2 on the main thread** is fine for bake-only; if runtime generation is ever wanted, a NativeList-based boolean is the first thing to write.
 - **Straight skeleton robustness** is proven in the prototype on random outlines but not on outlines with collinear or near-collinear edges from snapped user input; keep the fixture set growing.
 - **Party walls across districts:** a building at a district boundary depends on a neighbour in another district; the bake needs the neighbour's outline available (store outlines in a lightweight district index).
-- **Mobile alpha clipping cost** (occlusion discards) is the runtime risk to measure first; see §6.
+- **Mobile alpha clipping cost** (occlusion discards) is the runtime risk to measure first; the keyword split in §6.3 is the mitigation, and the first device test should compare with/without it.
+- **GRD absent on GLES** means two render paths to test; the SRP-Batcher-only path must hit the low-end budget on its own.
+- **Renderer user values under GRD** are undocumented; the per-vertex index is the safe path, so this is only upside.
+- **Party walls across districts** need a neighbour index; without it a boundary building rebuilds with an open side.
