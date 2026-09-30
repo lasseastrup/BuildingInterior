@@ -517,7 +517,18 @@ function styleAt(b,k){ let j=tierStart(b,k); while(j && !b.floors[j].style) j=ti
   let m=styleMix.get(own); const key=JSON.stringify(own)+b.style.interior+b.style.floor+b.style.core+b.style.ground;   // edits to either style show up at once
   if(!m || m.key!==key){ m={st:{...own, interior:b.style.interior, floor:b.style.floor, core:b.style.core, ground:b.style.ground}, key}; styleMix.set(own,m); }
   return m.st; }
-const doorOpen = (b,e) => !e.k || terraceAt(b,e.k,e.edge,e.t);
+// a neighbour's flat roof or terrace at this floor's level, right in front of edge i at t (within 35 cm up or down):
+// a door on an upper floor can open onto it, so connected buildings join up
+function landingAt(b,k,i,t){
+  if(!k) return null; const fp=fpAt(b,k), a=fp[i], c=fp[(i+1)%fp.length]; if(!a||!c) return null;
+  const L=Math.hypot(c.x-a.x,c.z-a.z)||1, sg=area2(fp)>0?1:-1, nx=sg*(c.z-a.z)/L, nz=-sg*(c.x-a.x)/L, d=T_EXT+0.5;
+  const wx=a.x+(c.x-a.x)*t+nx*d+b.pos.x, wz=a.z+(c.z-a.z)*t+nz*d+b.pos.z, y=floorBase(b,k);
+  for(const r of nearRecs(wx,wz,1)){ const p=bById(r.id); if(!p || p===b) continue; const lx=wx-p.pos.x, lz=wz-p.pos.z, N=p.floors.length;
+    if(!isPitched(p) && Math.abs(roofY(p)-y)<=0.35 && pip(fpAt(p,N),lx,lz)) return {b:p, k:N, y:roofY(p)};
+    for(const tr of tiers(p)) if(tr.k0 && hasTerrace(p,tr.k0) && Math.abs(floorBase(p,tr.k0)-y)<=0.35 && pip(fpAt(p,tr.k0-1),lx,lz) && !pip(fpAt(p,tr.k0),lx,lz)) return {b:p, k:tr.k0, y:floorBase(p,tr.k0)}; }
+  return null;
+}
+const doorOpen = (b,e) => !e.k || terraceAt(b,e.k,e.edge,e.t) || !!landingAt(b,e.k,e.edge,e.t);
 // a core must fit inside the outline of every level it serves
 function fitsLevels(b,it,k0,k1,x=it.x,z=it.z,rot=it.rot){ for(let k=k0;k<=k1;k++) if(!coreFits(fpAt(b,k),it,0.16,x,z,rot)) return false; return true; }
 const shaftFits = (b,s,x=s.x,z=s.z,rot=s.rot) => fitsLevels(b,s,s.bottom,shaftTop(b,s),x,z,rot);
@@ -591,9 +602,9 @@ function demoState(){
   B.footprint = [[0,0],[10,0],[10,8],[0,8]].map(([x,z])=>P(x,z));
   B.entrances = [{edge:0,t:0.3}];
   B.details = [{kind:'awning', k:0, edge:0, t:0.62}, {kind:'awning', k:0, edge:0, t:0.88}, {kind:'dish', k:2, edge:3, t:0.34, y:1.9}];
-  B.shafts = [{id:nid('s'), type:'stairs', x:8.2, z:4.2, rot:0, bottom:0, top:-1, roof:true}];
+  B.shafts = [{id:nid('s'), type:'stairs', x:2.0, z:4.2, rot:0, bottom:0, top:-1, roof:true}];   // on the west side: the roof by the Row House wall stays clear for its door
   B.floors[0] = { walls:[ W(6.2,0,6.2,8,[0.22]) ] };
-  B.floors.push({ walls:[ W(0,4.4,6.75,4.4,[0.5]) ] });
+  B.floors.push({ walls:[ W(3.6,4.4,10,4.4,[0.5]) ] });
   B.floors.push(clone(B.floors[1]));
   state.buildings.push(B);
 
@@ -621,6 +632,7 @@ function demoState(){
   // Row House: built wall to wall between the Corner Shop and the Dockside Store (two party walls it owns)
   const H = makeBuilding('rect', P(22,-6), 'stucco', 'Row House');
   H.footprint = [[0,0],[6,0],[6,8],[0,8]].map(([x,z])=>P(x,z)); H.entrances = [{edge:0,t:0.5}];
+  H.entrances.push({edge:3, t:0.5, k:3});   // floor 3 opens onto the Corner Shop's roof next door (both at 9.6 m)
   H.style = {...H.style, wall:'#EAD9B8', preset:null};
   H.floors[0] = { walls:[] }; for(let i=1;i<4;i++) H.floors.push({ walls:[ W(0,2.2,6,2.2,[0.25]) ] });
   H.shafts = [{id:nid('s'), type:'stairs', x:3.0, z:4.9, rot:0, bottom:0, top:-1, roof:false}];
@@ -974,7 +986,7 @@ const groundKind = st => st.ground==='match' ? st.windows : st.ground==='solid' 
 function bayLayout(st, uS, uE){ const spn=uE-uS; if(spn<=1.2) return {n:0, bay:0}; const n=Math.max(1,Math.round(spn/st.bay)); return {n, bay:spn/n}; }
 function facadeOps(b,k,i,L,uS,uE){
   const st=styleAt(b,k), h=floorH(b,k), ops=[], spn=uE-uS;
-  for(const e of b.entrances) if((e.k||0)===k && e.edge===i && spn>DOOR_EXT+0.6 && doorOpen(b,e)){ const c=clamp(e.t*L, uS+DOOR_EXT/2+0.3, uE-DOOR_EXT/2-0.3); ops.push({u0:c-DOOR_EXT/2, u1:c+DOOR_EXT/2, y0:0, y1:Math.min(2.6,h-0.4), door:true}); }
+  for(const e of b.entrances) if((e.k||0)===k && e.edge===i && spn>DOOR_EXT+0.6 && doorOpen(b,e)){ const c=clamp(e.t*L, uS+DOOR_EXT/2+0.3, uE-DOOR_EXT/2-0.3), land = k && !terraceAt(b,k,i,e.t) ? landingAt(b,k,i,e.t) : null; ops.push({u0:c-DOOR_EXT/2, u1:c+DOOR_EXT/2, y0:0, y1:Math.min(2.6,h-0.4), door:true, thr: !!land && land.y < floorBase(b,k)-0.02}); }
   if(!blankAt(b,k).includes(i)){
     const ws = winSpec(k===0 ? groundKind(st) : st.windows, h, st);
     const {n, bay} = bayLayout(st, uS, uE);
@@ -1026,7 +1038,7 @@ function wallPanel(gb,O,u,w,m,w0,w1,y0,h,ops,cOut,cIn,opt={}){
   for(const o of os){
     gb.poly([X(o.u0,o.y0,rw),X(o.u0,o.y0,w1),X(o.u0,o.y1,w1),X(o.u0,o.y1,rw)],[u[0],0,u[1]],rc);
     gb.poly([X(o.u1,o.y0,rw),X(o.u1,o.y0,w1),X(o.u1,o.y1,w1),X(o.u1,o.y1,rw)],[-u[0],0,-u[1]],rc);
-    if(o.y0>1e-3 || opt.threshold) gb.poly([X(o.u0,o.y0,rw),X(o.u1,o.y0,rw),X(o.u1,o.y0,w1),X(o.u0,o.y0,w1)],[0,1,0],rc);
+    if(o.y0>1e-3 || opt.threshold || o.thr) gb.poly([X(o.u0,o.y0,rw),X(o.u1,o.y0,rw),X(o.u1,o.y0,w1),X(o.u0,o.y0,w1)],[0,1,0],rc);
     if(o.y1<h-1e-3) gb.poly([X(o.u0,o.y1,rw),X(o.u1,o.y1,rw),X(o.u1,o.y1,w1),X(o.u0,o.y1,w1)],[0,-1,0],rc);
   }
   if(opt.ends){ const s0=mAt(m.S,w0), s1=mAt(m.S,w1), e0=mAt(m.E,w0), e1=mAt(m.E,w1);
@@ -2023,9 +2035,9 @@ function floorShort(b,k){ return k===b.floors.length ? 'R' : k===0 ? 'G' : Strin
    ========================================================================= */
 const tierFp = (b,k0) => k0 ? b.floors[k0].shape : b.footprint;
 function tierBlank(b,k0,v){ const f=k0?b.floors[k0]:b; if(v) f.blank=v; return f.blank; }
-const tierDoor = (e,k0) => (e.k||0)===k0;
+const tierDoor = (b,e,k0) => tierStart(b,e.k||0)===k0;   // a door anchored to tier k0's outline
 // apply an edge remap to everything anchored to tier k0's edges: doors and details (fn returns [] to drop one)
-function remapEdgeItems(b,k0,fn){ b.entrances=b.entrances.flatMap(e=>tierDoor(e,k0) ? fn(e) : [e]); b.details=(b.details||[]).flatMap(d=>tierStart(b,d.k)===k0 ? fn(d) : [d]); }
+function remapEdgeItems(b,k0,fn){ b.entrances=b.entrances.flatMap(e=>tierDoor(b,e,k0) ? fn(e) : [e]); b.details=(b.details||[]).flatMap(d=>tierStart(b,d.k)===k0 ? fn(d) : [d]); }
 function insertVertex(b,i,k0=0){
   const fp=tierFp(b,k0), a=fp[i], c=fp[(i+1)%fp.length];
   fp.splice(i+1,0,P(cm((a.x+c.x)/2), cm((a.z+c.z)/2)));
@@ -2122,17 +2134,17 @@ function addSetback(b,k0){
   const t=tiers(b).find(x=>x.k0===k0), k=t.k0+Math.ceil((t.k1-t.k0)/2);
   const f=b.floors[k]; f.shape=clone(tierFp(b,t.k0)); f.blank=clone(tierBlank(b,t.k0)); return k;
 }
-function removeSetback(b,k0){ b.details=(b.details||[]).filter(d=>tierStart(b,d.k)!==k0); const f=b.floors[k0]; delete f.shape; delete f.blank; delete f.terraceRoof; b.entrances=b.entrances.filter(e=>!tierDoor(e,k0)); }
+function removeSetback(b,k0){ b.details=(b.details||[]).filter(d=>tierStart(b,d.k)!==k0); b.entrances=b.entrances.filter(e=>!tierDoor(b,e,k0)); const f=b.floors[k0]; delete f.shape; delete f.blank; delete f.terraceRoof; }
 function moveSetback(b,k0,k){
-  const tb=(b.details||[]).map(d=>tierStart(b,d.k));   // a detail whose storey changes outline goes
+  const tb=(b.details||[]).map(d=>tierStart(b,d.k)), te=b.entrances.map(e=>(e.k||0)===k0 ? -1 : tierStart(b,e.k||0));   // a detail or door whose storey changes outline goes (terrace doors move with the setback)
   const f=b.floors[k0], g=b.floors[k]; g.shape=f.shape; g.blank=f.blank; delete f.shape; delete f.blank; if(f.terraceRoof){ g.terraceRoof=f.terraceRoof; delete f.terraceRoof; }
-  for(const e of b.entrances) if(tierDoor(e,k0)) e.k=k;
-  b.details=(b.details||[]).filter((d,j)=>tierStart(b,d.k)===tb[j]);
+  for(const e of b.entrances) if((e.k||0)===k0) e.k=k;
+  b.details=(b.details||[]).filter((d,j)=>tierStart(b,d.k)===tb[j]); b.entrances=b.entrances.filter((e,j)=>te[j]<0 || tierStart(b,e.k||0)===te[j]);
   return !b.shafts.some(s=>!shaftFits(b,s)) && !outlineIssue(b,k,g.shape);
 }
 function applyShape(b,key){
   b.details=(b.details||[]).filter(d=>tierStart(b,d.k)!==0);
-  b.footprint=FOOTPRINTS[key]().map(([x,z])=>P(x,z)); b.entrances=[{edge:0,t:0.5}, ...b.entrances.filter(e=>e.k)]; b.blank=[];
+  b.footprint=FOOTPRINTS[key]().map(([x,z])=>P(x,z)); b.entrances=[{edge:0,t:0.5}, ...b.entrances.filter(e=>e.k && tierStart(b,e.k)!==0)]; b.blank=[];
   for(const t of tiers(b)) if(t.k0 && outlineIssue(b,t.k0,fpAt(b,t.k0))) removeSetback(b,t.k0);   // setbacks that no longer fit go
   b.shafts=b.shafts.filter(s=>shaftFits(b,s));
 }
@@ -2323,12 +2335,13 @@ const keys = {};
 const joy = {x:0, y:0, id:null};
 function surfaceAt(x,z,y){
   let best = y+0.6 >= 0 ? 0 : -1e9;
-  for(const r of nearRecs(x,z,0)){
+  for(const r of nearRecs(x,z,T_EXT+0.05)){
     const b=bById(r.id); if(!b) continue;
-    const lx=x-b.pos.x, lz=z-b.pos.z; if(!inBuilding(b,lx,lz)) continue;
+    const lx=x-b.pos.x, lz=z-b.pos.z, q=P(lx,lz), on=fp=>pip(fp,lx,lz) || distToEdges(fp,q)<=T_EXT+0.02;   // slabs run out under the walls
+    if(!tiers(b).some(t=>on(fpAt(b,t.k0)))) continue;
     const N=b.floors.length;
     for(let k=0;k<=N;k++){ const yk=floorBase(b,k); if(yk>y+0.6 || yk<=best) continue;
-      if(!(k>0 && pip(fpAt(b,k-1),lx,lz)) && !(k<N && pip(fpAt(b,k),lx,lz))) continue;   // level k: the storey below's roof or terrace, or this storey's floor
+      if(!(k>0 && on(fpAt(b,k-1))) && !(k<N && on(fpAt(b,k)))) continue;   // level k: the storey below's roof or terrace, or this storey's floor
       if(b.shafts.some(s=>stairHoleAt(b,s,k) && (()=>{ const q=toItem(s,lx,lz); return Math.abs(q.x)<1.3 && q.z>-1.6 && q.z<2.6; })())) continue; best=yk; }
     for(const s of b.shafts){ if(s.type!=='stairs') continue; const q=toItem(s,lx,lz); if(Math.abs(q.x)>=1.3 || q.z<=-1.6 || q.z>=2.6) continue;
       for(let k=s.bottom;k<=N;k++){ if(!hasFlight(b,s,k)) continue; const yb=floorBase(b,k), half=floorH(b,k)/2; let hy;
@@ -2537,7 +2550,7 @@ function ghostItem(b,k,it,ok){
 function hoverTarget(b,k,p){
   const s=shaftAt(b,k,p); if(s) return {kind:'shaft',s};
   const w=nearestWall(b,k,p,0.45); if(w){ const L=Math.hypot(w.w.b.x-w.w.a.x,w.w.b.z-w.w.a.z); const di=w.w.doors.findIndex(d=>Math.abs(d.t*L-w.t*L)<DOOR_INT*0.6); return di>=0 ? {kind:'door',wi:w.i,di} : {kind:'wall',wi:w.i}; }
-  if(k===0 || hasTerrace(b,k)){ const e=nearestEdge(b,p,0.6,k); if(e){ const ei=b.entrances.findIndex(x=>(x.k||0)===k && x.edge===e.i && Math.abs(x.t*e.L-e.t*e.L)<DOOR_EXT*0.7); if(ei>=0) return {kind:'entrance',ei}; } }
+  { const e=nearestEdge(b,p,0.6,k); if(e){ const ei=b.entrances.findIndex(x=>(x.k||0)===k && x.edge===e.i && Math.abs(x.t*e.L-e.t*e.L)<DOOR_EXT*0.7); if(ei>=0) return {kind:'entrance',ei}; } }
   return null;
 }
 function showTarget(b,k,t,color){
@@ -2553,9 +2566,9 @@ function showTarget(b,k,t,color){
 // exterior doors go on the ground floor, or onto a terrace from the first floor of a setback
 function doorAt(b,k,p,extOnly){
   const w=extOnly ? null : nearestWall(b,k,p,0.6);
-  const e = k===0 || hasTerrace(b,k) ? nearestEdge(b,p,0.7,k) : null;
+  const e = nearestEdge(b,p,0.7,k);
   if(w && (!e || w.d<=e.d)){ const L=Math.hypot(w.w.b.x-w.w.a.x,w.w.b.z-w.w.a.z); if(L<DOOR_INT+0.3) return null; const t=clamp(w.t*L,DOOR_INT/2+0.1,L-DOOR_INT/2-0.1)/L; const di=w.w.doors.findIndex(d=>Math.abs(d.t-t)*L<DOOR_INT*0.8); return {kind:'int',wi:w.i,t,di,L,w:w.w}; }
-  if(e){ if(e.L<DOOR_EXT+0.6) return null; const t=clamp(e.t*e.L,DOOR_EXT/2+0.3,e.L-DOOR_EXT/2-0.3)/e.L; if(k>0 && !terraceAt(b,k,e.i,t)) return null; const ei=b.entrances.findIndex(x=>(x.k||0)===k && x.edge===e.i && Math.abs(x.t-t)*e.L<DOOR_EXT*0.8); return {kind:'ext',edge:e.i,t,ei,L:e.L,k}; }
+  if(e){ if(e.L<DOOR_EXT+0.6) return null; const t=clamp(e.t*e.L,DOOR_EXT/2+0.3,e.L-DOOR_EXT/2-0.3)/e.L; if(k>0 && !terraceAt(b,k,e.i,t) && !landingAt(b,k,e.i,t)) return null; const ei=b.entrances.findIndex(x=>(x.k||0)===k && x.edge===e.i && Math.abs(x.t-t)*e.L<DOOR_EXT*0.8); return {kind:'ext',edge:e.i,t,ei,L:e.L,k}; }
   return null;
 }
 function showDoorGhost(b,k,d){
@@ -2580,8 +2593,13 @@ function facadeEdgeAt(e,b){
 }
 const entrance = d => d.k ? {edge:d.edge, t:d.t, k:d.k} : {edge:d.edge, t:d.t};
 // the facade Entrance tool: ground-floor walls, or a setback's walls (the door goes on its terrace level)
-function facadeDoor(b,ed){ const k=ed.k0; if(!k && ed.y>floorH(b,0)+0.05) return {err:'Entrances go on the ground floor or onto a terrace'}; const fp=fpAt(b,k), a=fp[ed.i], c=fp[(ed.i+1)%fp.length];
-  const d=doorAt(b,k,P(a.x+(c.x-a.x)*ed.t, a.z+(c.z-a.z)*ed.t),true); return d ? {d} : {err: k ? 'No terrace in front of this wall' : 'That wall is too short for an entrance'}; }
+// the facade Entrance tool: the ground floor, a setback's first floor (onto its terrace), or any floor where a neighbour's
+// roof or terrace lies in front at the same level
+function facadeDoor(b,ed){ const kc=ed.k, k0=ed.k0, ter=k=>hasTerrace(b,k) && terraceAt(b,k,ed.i,ed.t);
+  const k = kc===0 ? 0 : ter(kc) ? kc : landingAt(b,kc,ed.i,ed.t) ? kc : ter(k0) ? k0 : -1;
+  if(k<0) return {err:'No terrace, and no neighbour’s roof or terrace at this level, in front of this wall'};
+  const fp=fpAt(b,k), a=fp[ed.i], c=fp[(ed.i+1)%fp.length];
+  const d=doorAt(b,k,P(a.x+(c.x-a.x)*ed.t, a.z+(c.z-a.z)*ed.t),true); return d ? {d} : {err:'That wall is too short for an entrance'}; }
 
 function toolDown(e){
   const b=selB(); if(!b) return false;
@@ -2591,7 +2609,7 @@ function toolDown(e){
     else if(ui.facadeTool.startsWith('d:')){ const kind=ui.facadeTool.slice(2), r=detailPlace(b,ed,kind); if(r.err){ toast(r.err); return true; }
       commit(()=>{ if(r.ei>=0) b.details.splice(r.ei,1); else (b.details ??= []).push(r.d); }, r.ei>=0 ? 'Detail removed' : DETAILS[kind].label+' added', b); }
     else { const r=facadeDoor(b,ed); if(r.err){ toast(r.err); return true; } const d=r.d;
-      commit(()=>{ if(d.ei>=0) b.entrances.splice(d.ei,1); else b.entrances.push(entrance(d)); }, d.ei>=0?'Entrance removed':(d.k?'Terrace door added':'Entrance added'), b); }
+      commit(()=>{ if(d.ei>=0) b.entrances.splice(d.ei,1); else b.entrances.push(entrance(d)); }, d.ei>=0?'Entrance removed':(d.k ? (terraceAt(b,d.k,d.edge,d.t) ? 'Terrace door added' : 'Door onto the neighbour’s '+(landingAt(b,d.k,d.edge,d.t)?.k===landingAt(b,d.k,d.edge,d.t)?.b.floors.length ? 'roof' : 'terrace')+' added') : 'Entrance added'), b); }
     return true;
   }
   if(ui.tab!=='interior' || isShell(b)) return false;
@@ -3362,5 +3380,5 @@ window.__sb = { geo:(i,lod=0)=>{ const b=state.buildings[i], r=recOf(b); DEBUG_S
   memBytes:()=>{ let by=0, m=0; scene.traverse(o=>{ if(o.isMesh && o.geometry){ m++; for(const a of Object.values(o.geometry.attributes)) by+=a.array.byteLength; if(o.geometry.index) by+=o.geometry.index.array.byteLength; } }); return {meshes:m, MB:+(by/1048576).toFixed(1)}; },
   timeCells:()=>{ const t=performance.now(); let n=0; for(const c of cells.values()){ c.dirty=true; rebuildCell(c); n++; } return {cells:n, msPerCell:+((performance.now()-t)/Math.max(1,n)).toFixed(3)}; },
   snapFx:()=>snapFx, screenOf:(bi,k,x,z)=>{ const b=state.buildings[bi], v=new THREE.Vector3(x+b.pos.x, floorBase(b,k), z+b.pos.z).project(camera), r=canvas.getBoundingClientRect(); return [r.left+(v.x+1)/2*r.width, r.top+(1-v.y)/2*r.height]; },
-  camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); }, party:(b,k0,i)=>partyRanges(b,k0,i), occluders:()=>[...occActive].map(r=>bById(r.id)?.name+':'+(r.occA||0).toFixed(2)), occAt:t=>{ occDbgT=t; }, details:{at:detailsAt, place:detailPlace, DETAILS, rules:detailRules}, occRays:()=>{ const c=camera.position, dl=Math.hypot(c.x-player.x, c.z-player.z), sh=dl>0.6 ? 0.5/dl : 0; const tg=[0.25,1.1,1.75].map(h=>({x:player.x+(c.x-player.x)*sh, y:player.y+h, z:player.z+(c.z-player.z)*sh})); return {cam:[c.x,c.y,c.z].map(v=>+v.toFixed(2)), hits:state.buildings.map(b=>b.name+':'+tg.map(t=>segHitsBuilding(b,c,t)?1:0).join('')+(atDoorOf(b)?'D':''))}; }, cutSlow:k=>{ cutSlow=k; }, walls:()=>({mid:[...wallAnim.values()].filter(v=>v>0.2&&v<0.8).length, max:+Math.max(0,...wallAnim.values()).toFixed(2), anim:wallAnim.size, down:[...wallAnim.values()].filter(v=>v>=1).length, free:wallFree.reduce((a,f)=>a+f.n,0)}), cutCam:()=>({cam:+camera.position.x.toFixed(3), cut:+G.uCam.value.x.toFixed(3), focus:+G.uFocus.value.x.toFixed(3)}), facadeAt:(x,y)=>{ const b=selB(), h=pickBuilding({clientX:x,clientY:y}, b.id); return {hit:h&&{bid:h.bid,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2))}, ed:facadeEdgeAt({clientX:x,clientY:y},b)}; }, outline:{insetPoly, pushEdge, outlineIssue, simplifyTier, addSetback, tiers, fpAt, touch, insertVertex, removeVertex, refresh:()=>{ touch(); refreshChrome(); overlayRebuild(); }} };
+  camTo:(x,z,dist,pitch,yaw)=>{ camEdit.target.set(x,0,z); camEdit.dist=dist; if(pitch!=null) camEdit.pitch=pitch; if(yaw!=null) camEdit.yaw=yaw; }, sim:(n,dt,k)=>{ Object.assign(keys,k||{}); for(let i=0;i<n;i++) updatePlayer(dt); for(const c in k||{}) keys[c]=false; return {x:+player.x.toFixed(2),y:+player.y.toFixed(2),z:+player.z.toFixed(2)}; }, liftHere:()=>{ const L=liftHere(); return L && L.s.id; }, loc:()=>{ const l=playerLoc(); return l.b ? l.b.name+':'+l.floor : 'out'; }, get state(){return state;}, ui, enterPlay, exitPlay, setTab, setTool, stepFloor, selectBuilding, player, camEdit, camPlay, playHere, setFloorCount:(n)=>{ const b=selB(); commit(()=>setFloorCount(b,n),null,b); refreshChrome(); }, party:(b,k0,i)=>partyRanges(b,k0,i), occluders:()=>[...occActive].map(r=>bById(r.id)?.name+':'+(r.occA||0).toFixed(2)), occAt:t=>{ occDbgT=t; }, details:{at:detailsAt, place:detailPlace, DETAILS, rules:detailRules}, landingAt, facadeOpsOf:(b,k,i)=>{ const f=edgeFrameAt(b,k,i); return facadeOps(b,k,i,f.L,f.span[0],f.span[1]); }, occRays:()=>{ const c=camera.position, dl=Math.hypot(c.x-player.x, c.z-player.z), sh=dl>0.6 ? 0.5/dl : 0; const tg=[0.25,1.1,1.75].map(h=>({x:player.x+(c.x-player.x)*sh, y:player.y+h, z:player.z+(c.z-player.z)*sh})); return {cam:[c.x,c.y,c.z].map(v=>+v.toFixed(2)), hits:state.buildings.map(b=>b.name+':'+tg.map(t=>segHitsBuilding(b,c,t)?1:0).join('')+(atDoorOf(b)?'D':''))}; }, cutSlow:k=>{ cutSlow=k; }, walls:()=>({mid:[...wallAnim.values()].filter(v=>v>0.2&&v<0.8).length, max:+Math.max(0,...wallAnim.values()).toFixed(2), anim:wallAnim.size, down:[...wallAnim.values()].filter(v=>v>=1).length, free:wallFree.reduce((a,f)=>a+f.n,0)}), cutCam:()=>({cam:+camera.position.x.toFixed(3), cut:+G.uCam.value.x.toFixed(3), focus:+G.uFocus.value.x.toFixed(3)}), facadeAt:(x,y)=>{ const b=selB(), h=pickBuilding({clientX:x,clientY:y}, b.id); return {hit:h&&{bid:h.bid,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2))}, ed:facadeEdgeAt({clientX:x,clientY:y},b)}; }, outline:{insetPoly, pushEdge, outlineIssue, simplifyTier, addSetback, tiers, fpAt, touch, insertVertex, removeVertex, refresh:()=>{ touch(); refreshChrome(); overlayRebuild(); }} };
 </script>
