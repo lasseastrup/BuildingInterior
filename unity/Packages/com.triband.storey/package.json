@@ -1,0 +1,25 @@
+{
+  "name": "com.triband.storey",
+  "version": "0.1.0",
+  "displayName": "Storey",
+  "description": "Procedural buildings with walk-in interiors: data model, bake-time geometry generation, semantic LODs, occlusion and streaming hooks. Runtime package; authoring tools are in com.triband.storey.authoring.",
+  "unity": "6000.3",
+  "documentationUrl": "https://github.com/lasseastrup/BuildingInterior/tree/main/unity/Packages/com.triband.storey/Documentation~",
+  "changelogUrl": "https://github.com/lasseastrup/BuildingInterior/blob/main/unity/Packages/com.triband.storey/CHANGELOG.md",
+  "licensesUrl": "https://github.com/lasseastrup/BuildingInterior/blob/main/unity/Packages/com.triband.storey/LICENSE.md",
+  "keywords": ["procedural", "buildings", "city", "lod", "urp"],
+  "author": { "name": "Triband" },
+  "dependencies": {
+    "com.unity.burst": "1.8.16",
+    "com.unity.collections": "2.6.3",
+    "com.unity.mathematics": "1.3.3",
+    "com.unity.render-pipelines.universal": "17.3.0"
+  },
+  "samples": [
+    {
+      "displayName": "Demo Street",
+      "description": "The prototype's demo buildings imported from JSON, plus the play kit scene.",
+      "path": "Samples~/DemoStreet"
+    }
+  ]
+}

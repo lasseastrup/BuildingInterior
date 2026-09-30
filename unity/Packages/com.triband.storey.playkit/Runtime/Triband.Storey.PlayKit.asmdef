@@ -1,0 +1,17 @@
+{
+    "name": "Triband.Storey.PlayKit",
+    "rootNamespace": "Triband.Storey.PlayKit",
+    "references": [
+        "Triband.Storey",
+        "Unity.Mathematics"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

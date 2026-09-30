@@ -9,3 +9,7 @@ A prototype of the building creation workflow, made to write the spec before we 
   - Per-floor storey heights, stairs and lifts at any angle, and shared (party) walls between buildings built wall to wall.
   - City scale: three generated LODs per building, merged far-distance cells, on-demand generation. The bar-chart button opens LOD stats and a 1,000/3,000-building stress test.
 - `docs/SPEC.md`: findings and the Unity plan. Covers the data model, z-fighting and topology rules, occlusion, LODs and city-scale rendering, the implementation plan, the editor UI mapping, the UPM package layout and the decisions from the prototype review.
+
+## Unity package
+
+The Unity 6.3 port lives in `unity/` (three embedded packages under `unity/Packages/com.triband.storey*`). See `unity/README.md` for how to open it and `docs/UNITY-PACKAGE-PLAN.md` for the plan.

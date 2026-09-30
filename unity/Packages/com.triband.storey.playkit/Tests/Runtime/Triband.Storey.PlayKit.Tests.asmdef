@@ -1,0 +1,23 @@
+{
+    "name": "Triband.Storey.PlayKit.Tests",
+    "rootNamespace": "Triband.Storey.PlayKit.Tests",
+    "references": [
+        "Triband.Storey",
+        "Triband.Storey.PlayKit",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

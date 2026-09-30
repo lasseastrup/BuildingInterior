@@ -1,0 +1,12 @@
+{
+  "name": "com.triband.storey.authoring",
+  "displayName": "Storey Authoring",
+  "version": "0.1.0",
+  "description": "Editor tooling for Storey: building inspector, shape/facade/interior tools and overlays, .storey importer, prototype JSON import, district and HLOD bake, validation. Editor-only; adds nothing to builds.",
+  "unity": "6000.3",
+  "author": { "name": "Triband" },
+  "keywords": ["procedural", "buildings", "editor", "tools"],
+  "dependencies": {
+    "com.triband.storey": "0.1.0"
+  }
+}

@@ -165,7 +165,7 @@ Each workstream ends with something usable; the prototype's demo street is the a
 
 | # | Workstream | Deliverable | Exit test |
 |---|---|---|---|
-| 0 | Repo & packages | Unity 6.3 project, three embedded packages, asmdefs, CI running an empty test | Green CI |
+| 0 | Repo & packages | Unity 6.3 project (`unity/`), three embedded packages, asmdefs, smoke tests, GameCI workflow. **Skeleton committed**; needs a first open in the editor (pins, URP asset) and the three Unity licence secrets before CI is green. | Green CI |
 | 1 | Data + importer | `.storey` ScriptedImporter, data model with versioning, prototype JSON import | Demo JSON imports; fields round-trip |
 | 2 | Generator core | Slabs, wall panels, openings, cores, party walls, setbacks/terraces/overhangs, flat roofs | Coplanar test 0 on the fixture set; triangle counts within 10% of the prototype |
 | 3 | Roofs, details | Straight skeleton, hip/gable/shed, roofed setbacks, facade details | Same tests extended |
