@@ -1103,7 +1103,7 @@ function buildTerrace(op,sg,b,k,C){
   }
 }
 
-/* Facade details: AC units, vents, downpipes, fire escapes, awnings and dishes on the outside of a wall.
+/* Facade details: AC units, vents, dishes, fire escapes and awnings on the outside of a wall.
    Each is anchored to a storey and an outline edge (floor k, edge i of outline(k), t along it as a fraction, y above
    the floor), placed by hand (b.details) or by the style's rules (seeded per building, storey and edge, so nothing
    reshuffles when something else is edited). Geometry is built per storey with the host wall's cutaway data, so a
@@ -1113,14 +1113,31 @@ const DETAILS = {
   ac:     {label:'AC unit',     w:0.75, h:0.55, d:0.45, anchor:'wall'},
   vent:   {label:'Vent',        w:0.5,  h:0.5,  d:0.16, anchor:'wall'},
   dish:   {label:'Dish',        w:0.6,  h:0.6,  d:0.4,  anchor:'wall'},
-  pipe:   {label:'Downpipe',    w:0.14, h:0,    d:0.2,  anchor:'tier'},      // runs the height of its tier
   escape: {label:'Fire escape', w:2.6,  h:0,    d:1.1,  anchor:'tier'},      // from its floor to the top of the tier
   awning: {label:'Awning',      w:0,    h:0.5,  d:1.0,  anchor:'opening'},   // over a ground-floor window or door
 };
 const hash01 = (...a) => { let h=2166136261; for(const v of a){ const q=String(v); for(let i=0;i<q.length;i++){ h^=q.charCodeAt(i); h=Math.imul(h,16777619); } } return ((h>>>0)%10000)/10000; };
 // the style's rules: densities are stored as percentages
-const detailRules = st => { const d=st.details||{}; return {ac:(d.ac??30)/100, vents:(d.vents??12)/100, pipes:d.pipes??true}; };
+const detailRules = st => { const d=st.details||{}; return {ac:(d.ac??30)/100, vents:(d.vents??12)/100}; };
 const edgeFrameAt = (b,k,i) => { const g=tierGeo(b,fpAt(b,k)), e=edgeInfo(g.Wp,i,g.ccw), m=miter(g.cor,i,e.L); return {...e, m, span:facadeSpan(m,e.L)}; };
+// the storeys a fire escape anchored at (kA, edge i, u metres) climbs: up its own tier, then on through any setback whose
+// outline has an edge on the same line covering the escape's width (a flush wall), as {k, i, u} per storey
+function escapeRun(b, kA, i, u){
+  const N=b.floors.length, fp0=fpAt(b,kA), a=fp0[i], c=fp0[(i+1)%fp0.length], L0=Math.hypot(c.x-a.x,c.z-a.z)||1e-6, d=[(c.x-a.x)/L0,(c.z-a.z)/L0];
+  const run=[]; let k=kA, cur={i, u};
+  while(k<N){
+    if(tierStart(b,k)!==tierStart(b,kA) && (k===tierStart(b,k))){   // a new outline starts here: find the flush edge, or stop
+      const fp=fpAt(b,k), s=cur.s ?? u; let found=null;   // s: position along the anchor line, from a
+      for(let j=0;j<fp.length;j++){ const p=fp[j], q=fp[(j+1)%fp.length];
+        const off=v=>Math.abs((v.x-a.x)*d[1]-(v.z-a.z)*d[0]), along=v=>(v.x-a.x)*d[0]+(v.z-a.z)*d[1];
+        if(off(p)>0.03 || off(q)>0.03) continue; const t0=along(p), t1=along(q); if(t1<=t0) continue;   // same line, same direction
+        if(t0<=s-1.4 && t1>=s+1.4){ found={i:j, u:s-t0, s}; break; } }
+      if(!found) break; cur=found; }
+    run.push({k, i:cur.i, u:cur.u}); k++;
+    if(k<N && tierStart(b,k)===tierStart(b,k-1)) continue;
+  }
+  return run.length ? run : [{k:kA, i, u}];
+}
 // every detail on storey k, resolved to metres along its edge: the hand-placed ones, then the style's
 function detailsAt(b,k){
   const N=b.floors.length; if(k>=N) return [];
@@ -1132,8 +1149,9 @@ function detailsAt(b,k){
   for(const d of b.details||[]){
     const spec=DETAILS[d.kind]; if(!spec || d.edge>=n) continue; const L=edgeLen(fp,d.edge), u=d.t*L;
     if(spec.anchor==='tier'){
-      if(tierStart(b,d.k)===k0 && k>=d.k) push({...spec, kind:d.kind, i:d.edge, u, y:0, ka:d.k, k1, man:d});
-      else if(d.kind==='escape' && k===d.k-1 && tierStart(b,d.k)===k0) push({...spec, kind:'escape', i:d.edge, u, ladder:true, ka:d.k, k1, man:d}); }
+      if(d.k>=N) continue; const run=escapeRun(b,d.k,d.edge,d.t*edgeLen(fpAt(b,d.k),d.edge)), at=run.find(r=>r.k===k);
+      if(at) push({...spec, kind:d.kind, i:at.i, u:at.u, y:0, ka:d.k, k1:run.at(-1).k+1, man:d});
+      else if(d.kind==='escape' && k===d.k-1 && tierStart(b,d.k)===k0) push({...spec, kind:'escape', i:d.edge, u, ladder:true, ka:d.k, k1:run.at(-1).k+1, man:d}); }
     else if(d.k!==k) continue;
     else if(spec.anchor==='opening'){ const {ops}=opsOf(d.edge); let best=null;   // snaps to the nearest window or door
       for(const o of ops){ const c=(o.u0+o.u1)/2, dd=Math.abs(c-u); if(dd<Math.max(0.6,(o.u1-o.u0)/2+0.3) && (!best||dd<best.dd)) best={o,dd}; }
@@ -1147,7 +1165,6 @@ function detailsAt(b,k){
     if(R.ac>0 && k>0) ops.forEach((o,j)=>{ if(o.door || o.full || hash01(b.id,'ac',k,i,j)>=R.ac) return; const y=o.y0-0.62; if(y>=0.25) push({...DETAILS.ac, kind:'ac', i, u:(o.u0+o.u1)/2, y}); });
     if(R.vents>0){ const gaps=[]; let prev=uS; for(const o of ops){ if(o.u0-prev>=1.0) gaps.push([prev,o.u0]); prev=Math.max(prev,o.u1); } if(uE-prev>=1.0) gaps.push([prev,uE]);
       gaps.forEach((g,j)=>{ if(hash01(b.id,'vent',k,i,j)<R.vents) push({...DETAILS.vent, kind:'vent', i, u:(g[0]+g[1])/2, y:h-0.95}); }); }
-    if(R.pipes && L>=3 && hash01(b.id,'pipe',k0,i)<0.5) push({...DETAILS.pipe, kind:'pipe', i, u:uS+0.22, y:0, ka:k0, k1});
   }
   return out;
 }
@@ -1171,10 +1188,11 @@ function detailPlace(b, ed, kind){
   const half=spec.w/2+0.15; if(L<2*half+0.2) return {err:'That wall is too short'};
   u=clamp(u, half, L-half);
   if(kind==='escape'){   // not across a door (and its canopy) on any storey it climbs past, nor with the drop ladder coming down over one
-    for(let kk=Math.max(k0,k-1); kk<k1of(b,k0); kk++){ const fb=edgeFrameAt(b,kk,ed.i), o2=facadeOps(b,kk,ed.i,L,fb.span[0],fb.span[1]), reach = kk<k ? 0.7 : spec.w/2+0.35;
-      if(o2.some(o=>o.door && Math.abs((o.u0+o.u1)/2-u)<(o.u1-o.u0)/2+reach)) return {err: kk<k ? 'The ladder would come down over a door' : 'A fire escape can’t run across a door'}; } }
-  if(spec.anchor==='tier'){ const kk = kind==='pipe' ? k0 : k, yb=floorBase(b,kk), yt=floorBase(b,k1of(b,k0));
-    return {d:{kind, k:kk, edge:ed.i, t:u/L}, box:box(u, yb, yt, spec.w, spec.d)}; }
+    const steps=escapeRun(b,k,ed.i,u).map(r=>({...r, reach:spec.w/2+0.35})); if(k>k0) steps.unshift({k:k-1, i:ed.i, u, reach:0.7});
+    for(const st of steps){ const fb=edgeFrameAt(b,st.k,st.i), o2=facadeOps(b,st.k,st.i,fb.L,fb.span[0],fb.span[1]);
+      if(o2.some(o=>o.door && Math.abs((o.u0+o.u1)/2-st.u)<(o.u1-o.u0)/2+st.reach)) return {err: st.k<k ? 'The ladder would come down over a door' : 'A fire escape can’t run across a door'}; } }
+  if(spec.anchor==='tier'){ const run=escapeRun(b,k,ed.i,u), yb=floorBase(b,k), yt=floorBase(b,run.at(-1).k)+floorH(b,run.at(-1).k);
+    return {d:{kind, k, edge:ed.i, t:u/L}, box:box(u, yb, yt, spec.w, spec.d)}; }
   y=clamp(y, 0.15, h-spec.h-0.1);
   if(ops.some(o=>u+spec.w/2>o.u0-0.05 && u-spec.w/2<o.u1+0.05 && y+spec.h>o.y0-0.05 && y<o.y1+0.05)) return {err:'That would sit across a window or door'};
   return {d:{kind, k, edge:ed.i, t:u/L, y:+y.toFixed(2)}, box:box(u, floorBase(b,k)+y, floorBase(b,k)+y+spec.h, spec.w, spec.d)};
@@ -1195,8 +1213,6 @@ function buildDetails(op,b,k,C,lod){
         if(!lod){ bx(uc-0.3,uc+0.3,yb+0.08,yb+0.47,T+0.45,T+0.47,DC.grille,null,SK.IN); for(const q of [-1,1]) bx(uc+q*0.31-0.02,uc+q*0.31+0.02,yb-0.06,yb,T,T+0.42,DC.dark,null,SK.IN|SK.TOP); } break; }
       case 'vent': { const yb=y+d.y; bx(uc-0.25,uc+0.25,yb,yb+0.5,T,T+0.12,DC.dark,null,SK.IN);
         if(!lod) for(let j=0;j<4;j++) bx(uc-0.22,uc+0.22,yb+0.08+j*0.1,yb+0.11+j*0.1,T+0.12,T+0.16,DC.metal,null,SK.IN); break; }
-      case 'pipe': { bx(uc-0.07,uc+0.07,y,y+h-(k+1<d.k1?0:0.06),T+0.05,T+0.19,DC.dark,null,(k+1<d.k1?SK.TOP:0)|(k>d.ka?SK.BOT:0));
-        if(!lod) bx(uc-0.1,uc+0.1,y+0.5,y+0.56,T,T+0.21,DC.dark,null,SK.IN); break; }
       case 'dish': { const yb=y+d.y, c0=X(uc,yb+0.3,T+0.38), nn=[w[0]*0.8,0.6,w[1]*0.8], e1=[u[0],0,u[1]];
         const e2=[nn[1]*e1[2]-nn[2]*e1[1], nn[2]*e1[0]-nn[0]*e1[2], nn[0]*e1[1]-nn[1]*e1[0]];
         const ring=off=>Array.from({length:8},(_,j)=>{ const an=j/8*Math.PI*2, cx=Math.cos(an)*0.3, cz=Math.sin(an)*0.3; return [0,1,2].map(q=>c0[q]+e1[q]*cx+e2[q]*cz+nn[q]*off); });
@@ -2914,8 +2930,7 @@ function renderPanel(){
     }
     h+=`<div class="sub-h">Click walls to add</div><div class="seg">${[['entrance','Entrance'],['blank','Blank wall']].map(([t,l])=>`<button data-act="ftool" data-t="${t}" class="${ui.facadeTool===t?'on':''}">${l}</button>`).join('')}</div>
       <div class="seg" style="margin-top:6px">${Object.entries(DETAILS).map(([t,x])=>`<button data-act="ftool" data-t="d:${t}" class="${ui.facadeTool==='d:'+t?'on':''}" title="Click a wall to add ${x.label.toLowerCase()} there; click one again to remove it">${x.label}</button>`).join('')}</div>`;
-    if(!k0 || own){ const R=detailRules(st); h+=`<div class="sub-h">Details by rule</div>${slider(sp+'.details.ac','AC units',Math.round(R.ac*100),0,100,5,'%',0)}${slider(sp+'.details.vents','Vents',Math.round(R.vents*100),0,100,5,'%',0)}
-      <label class="chk"><input type="checkbox" data-bool="${sp}.details.pipes" id="pipesChk" ${R.pipes?'checked':''}> Downpipes</label>`; }
+    if(!k0 || own){ const R=detailRules(st); h+=`<div class="sub-h">Details by rule</div>${slider(sp+'.details.ac','AC units',Math.round(R.ac*100),0,100,5,'%',0)}${slider(sp+'.details.vents','Vents',Math.round(R.vents*100),0,100,5,'%',0)}`; }
     if(!k0 || own) h+=`<details class="more" ${ui.moreOpen?'open':''} id="moreFacade"><summary>More options</summary>
         ${slider(sp+'.winW','Window width',st.winW,0.6,2.4,0.1,' m')}${slider(sp+'.bay','Bay spacing',st.bay,1.4,5,0.1,' m')}
         ${k0?'':`<div class="field"><span>Ground floor</span>${seg('style.ground',st.ground,[['storefront','Shopfront'],['match','Match'],['solid','Solid']])}</div>`}
@@ -3025,7 +3040,7 @@ panel.addEventListener('click', e=>{
     case 'tierStyle': { const k0=shapeTier(b); commit(()=>{ b.floors[k0].style=clone(styleAt(b,k0-1)); /* starts as what it looks like now */ }, 'The setback has its own style now — pick a preset or colours', b); renderPanel(); break; }
     case 'tierStyleOff': { const k0=shapeTier(b); commit(()=>{ delete b.floors[k0].style; }, 'The setback matches the floors below again', b); renderPanel(); break; }
     case 'hReset': { const k=activeFloor(b); commit(()=>{ delete b.floors[k].h; }, floorLabel(b,k)+' uses the default height', b); renderPanel(); break; }
-    case 'ftool': ui.facadeTool = ui.facadeTool===a.dataset.t ? null : a.dataset.t; hideHL(); canvas.style.cursor=ui.facadeTool?'crosshair':''; renderPanel(); if(ui.facadeTool) toast(ui.facadeTool==='entrance'?'Click a ground-floor wall (or a wall facing a terrace) to add or remove a door':ui.facadeTool==='blank'?'Click a wall to switch its windows off or on':({ac:'Click a wall to hang an AC unit; click it again to take it down', vent:'Click a wall to add a vent', dish:'Click a wall to add a dish', pipe:'Click a wall: the downpipe runs the full height of that outline', escape:'Click a wall: the fire escape climbs from that floor to the top of its outline', awning:'Click a ground-floor window or door to put an awning over it'})[ui.facadeTool.slice(2)]); break;
+    case 'ftool': ui.facadeTool = ui.facadeTool===a.dataset.t ? null : a.dataset.t; hideHL(); canvas.style.cursor=ui.facadeTool?'crosshair':''; renderPanel(); if(ui.facadeTool) toast(ui.facadeTool==='entrance'?'Click a ground-floor wall (or a wall facing a terrace) to add or remove a door':ui.facadeTool==='blank'?'Click a wall to switch its windows off or on':({ac:'Click a wall to hang an AC unit; click it again to take it down', vent:'Click a wall to add a vent', dish:'Click a wall to add a dish', escape:'Click a wall: the fire escape climbs from that floor as far as the wall goes on, through setbacks where the wall above is flush', awning:'Click a ground-floor window or door to put an awning over it'})[ui.facadeTool.slice(2)]); break;
     case 'tool': setTool(a.dataset.t); break;
     case 'playHere': playHere(); break;
     case 'copyUp': { const k=activeFloor(b); commit(()=>{ for(let j=k+1;j<b.floors.length;j++) b.floors[j].walls=clone(b.floors[k].walls); }, `Layout copied to ${b.floors.length-1-k} floor${b.floors.length-2-k?'s':''}`, b); break; }
