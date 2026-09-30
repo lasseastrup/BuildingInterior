@@ -3,7 +3,7 @@
 A prototype of the building creation workflow, made to write the spec before we build it in Unity as an editor-only package.
 
 - `prototype/index.html`: self-contained three.js prototype (edit mode + play mode). Open it in a browser; it loads three.js and polygon-clipping from jsDelivr.
-  - Buildings: footprint, facade styles, floors, interiors, stairs and lifts, dynamic floor occlusion in play mode.
+  - Buildings: footprint, facade styles, facade details (AC units, fire escapes, awnings…), floors, interiors, stairs and lifts, dynamic floor occlusion in play mode.
   - Setbacks: any floor can start a new outline that the floors above inherit, stepping in (a walkable terrace with a parapet and a door) or out (an overhang), with its own facade style.
   - Roofs: flat, hip, gable or shed (straight-skeleton roofs on any outline), with pitch and eaves.
   - Per-floor storey heights, stairs and lifts at any angle, and shared (party) walls between buildings built wall to wall.
