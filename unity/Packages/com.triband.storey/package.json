@@ -20,6 +20,11 @@
       "displayName": "Demo Street",
       "description": "The prototype's demo buildings imported from JSON, plus the play kit scene.",
       "path": "Samples~/DemoStreet"
+    },
+    {
+      "displayName": "Color Palette Lit lighting",
+      "description": "Storey's materials lit like the Flamingo/Color Palette/ColorPallete-Lit shader graph; a template for lighting Storey with a project's own model.",
+      "path": "Samples~/ColorPaletteLit"
     }
   ]
 }

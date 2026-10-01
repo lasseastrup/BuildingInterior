@@ -28,7 +28,7 @@ Needs Unity 6.3 (6000.3), URP 17.3, Linear colour space and a working Color Pipe
    ```
    Then check that the assembly `Triband.Storey.ColorPipeline` exists (for example in the Project window under the package's `ColorPipeline` folder, its asmdef is not greyed out). If it is missing, the version define did not match and Storey reports it when the harness starts.
 2. **Layout.** Copy `demo-project.storey` anywhere under `Assets/`. Its inspector should list 7 buildings and no unknown keys.
-3. **Materials.** Create three materials with the shaders `Storey/Opaque`, `Storey/Glass` and `Storey/Massing`. Fix and report any shader compile errors.
+3. **Materials.** Create three materials with the shaders `Storey/Opaque`, `Storey/Glass` and `Storey/Massing`. Fix and report any shader compile errors. To light the buildings like the project's props, import the package's *Color Palette Lit lighting* sample and use `Flamingo/Storey/Opaque`, `Flamingo/Storey/Glass` and `Flamingo/Storey/Massing` instead. Put a building next to a prop of the same palette colour: lit faces, shadowed faces, the shadow edge and the player's blob should match.
 4. **Scene.** Put an empty GameObject in a scene, add **Storey Street (parity harness)**, assign the layout and the three materials, and press Play.
    - The Console should show **no Storey warnings**. "not in the Color Pipeline palette" means the palette changed since the mapping: run the tool again.
    - Switch **Displayed LOD** between 0, 1 and 2. At LOD2 the windows must stay in place.

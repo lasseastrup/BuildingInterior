@@ -3,6 +3,11 @@
 //   Storey/Glass    palette colour from the vertex's colour reference, transparent, no depth write
 //   Storey/Massing  LOD2: colour from StoreyFacadeColor()
 // each with a shadow-caster / depth pass that defines STOREY_DEPTH. Keywords: STOREY_MASSING, STOREY_CAP.
+//
+// Lighting is one function, StoreyLighting(StoreySurface), so a project can light the buildings like the rest
+// of its world (the Color Palette Lit sample is one). By default it is URP's PBR. A project shader
+// instead defines STOREY_CUSTOM_LIGHTING (and, for its own material properties, STOREY_MATERIAL_PROPERTIES) in
+// every pass, includes this file, defines StoreyLighting and then includes StoreyFragment.hlsl.
 #ifndef STOREY_LIT_INCLUDED
 #define STOREY_LIT_INCLUDED
 
@@ -21,6 +26,9 @@ CBUFFER_START(UnityPerMaterial)
     float _StoreyMetallic;
 #ifdef STOREY_GLASS
     float _StoreyAlpha;
+#endif
+#ifdef STOREY_MATERIAL_PROPERTIES
+    STOREY_MATERIAL_PROPERTIES   // a project shader's own; the same in every pass, for the SRP Batcher
 #endif
 CBUFFER_END
 #ifndef STOREY_GLASS
@@ -111,42 +119,41 @@ float4 StoreyDepthFrag(Varyings IN) : SV_Target
 
 #else
 
-float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) : SV_Target
+// What the lighting gets: the surface after Storey's occlusion, LOD and isolate handling.
+struct StoreySurface
 {
-    bool isFront = IS_FRONT_VFACE(cullFace, true, false);
-    float dark = StoreyOcclude(StoreyUnpack(IN), IN.positionCS.xy, IN.positionCS.z);
+    float3 albedo;        // linear palette colour × shade, LOD/isolate tint applied
+    float  alpha;
+    float3 positionWS;    // after Sink
+    float3 normalWS;      // normalised, towards the viewer on back faces
+    float4 shadowCoord;   // main light, from the vertex
+    float4 positionCS;    // SV_Position: pixel coordinates in xy
+    bool   isFront;
+};
 
-#ifdef STOREY_MASSING
-    float3 albedo = StoreyFacadeColor(IN.fac, IN.fac2.xy, IN.fac2.z);
-    float alpha = 1.0;
-#else
-    float3 albedo = IN.color.rgb;
-    float alpha = _StoreyAlpha;
-#endif
-    if (_StoreyLodTint > 0.5) albedo = lerp(albedo, StoreyLodTint(IN.misc.w), 0.65);
-    if (_StoreyIso.x > 0.001 && abs(IN.misc.z - _StoreyIso.y) > 0.5) albedo = lerp(albedo, float3(0.78, 0.82, 0.83), _StoreyIso.x * 0.7);
-
+#ifndef STOREY_CUSTOM_LIGHTING
+// URP's PBR with the material's fixed smoothness and metallic and spherical-harmonics ambient.
+float4 StoreyLighting(StoreySurface s)
+{
     InputData inputData = (InputData)0;
-    inputData.positionWS = IN.worldPos;
-    inputData.normalWS = normalize(isFront ? IN.normalWS : -IN.normalWS);
-    inputData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(IN.worldPos);
-    inputData.shadowCoord = IN.shadowCoord;
-    inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(IN.positionCS);
-    inputData.bakedGI = SampleSH(inputData.normalWS);
+    inputData.positionWS = s.positionWS;
+    inputData.normalWS = s.normalWS;
+    inputData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(s.positionWS);
+    inputData.shadowCoord = s.shadowCoord;
+    inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(s.positionCS);
+    inputData.bakedGI = SampleSH(s.normalWS);
 
     SurfaceData surfaceData = (SurfaceData)0;
-    surfaceData.albedo = albedo;
-    surfaceData.alpha = alpha;
+    surfaceData.albedo = s.albedo;
+    surfaceData.alpha = s.alpha;
     surfaceData.metallic = _StoreyMetallic;
     surfaceData.smoothness = _StoreySmoothness;
     surfaceData.occlusion = 1.0;
-
-    float4 color = UniversalFragmentPBR(inputData, surfaceData);
-#ifdef STOREY_CAP
-    if (!isFront) color.rgb = _StoreyCap.rgb;   // a cut exposes a wall's inside: the section cap
-#endif
-    return StoreyDarken(color, dark);
+    return UniversalFragmentPBR(inputData, surfaceData);
 }
+
+#include "StoreyFragment.hlsl"
+#endif
 
 #endif
 #endif
