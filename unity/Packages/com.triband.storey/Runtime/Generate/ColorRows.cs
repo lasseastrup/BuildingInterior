@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Triband.Storey.Generate
 {
@@ -9,6 +10,18 @@ namespace Triband.Storey.Generate
     {
         /// <summary>The palette index (atlas column) of a colour reference: a CSS literal or a palette id.</summary>
         int IndexOf(string colorRef);
+
+        /// <summary>The project's colours for slots a style leaves out.</summary>
+        StyleDefaults Defaults { get; }
+
+        /// <summary>
+        /// Register a remap (palette id → palette id, pairwise) and return its atlas row; 0 for an empty one. Rows
+        /// handed out before <see cref="Invalidated"/> are stale and must be registered again.
+        /// </summary>
+        int RegisterRemap(IReadOnlyList<string> original, IReadOnlyList<string> overwrite);
+
+        /// <summary>Raised when palette indices or remap rows may have moved. May fire inside <see cref="RegisterRemap"/>.</summary>
+        event Action? Invalidated;
     }
 
     /// <summary>
@@ -29,7 +42,7 @@ namespace Triband.Storey.Generate
         public static int[] Indices(FacadeStyle st, IColorPalette palette)
         {
             var r = new int[Slots];
-            for (int s = 0; s < Slots; s++) r[s] = palette.IndexOf(StyleColors.Of(st, (ColorSlot)s));
+            for (int s = 0; s < Slots; s++) r[s] = palette.IndexOf(StyleColors.Of(st, (ColorSlot)s, palette.Defaults));
             return r;
         }
 
@@ -85,6 +98,18 @@ namespace Triband.Storey.Generate
         /// <summary>Bumped whenever a colour is added, so the texture is uploaded only when it changed.</summary>
         public int Version { get; private set; }
 
+        public StyleDefaults Defaults { get; } = new StyleDefaults();
+
+        /// <summary>Remaps need Color Pipeline's atlas; only the empty remap (row 0) exists here.</summary>
+        public int RegisterRemap(IReadOnlyList<string> original, IReadOnlyList<string> overwrite)
+        {
+            if (original.Count == 0 && overwrite.Count == 0) return 0;
+            throw new NotSupportedException("colour remaps need Color Pipeline; the built-in palette has no remap rows");
+        }
+
+        /// <summary>Never raised: indices never move, colours are only added.</summary>
+        public event Action? Invalidated { add { } remove { } }
+
         public int IndexOf(string colorRef)
         {
             if (ColorRef.IsPaletteId(colorRef))
@@ -104,5 +129,102 @@ namespace Triband.Storey.Generate
             if (h.Length == 3) h = new string(new[] { h[0], h[0], h[1], h[1], h[2], h[2] });
             return "#" + h;
         }
+    }
+}
+
+namespace Triband.Storey.Generate
+{
+    /// <summary>Where colour rows live: the GPU building table, or a test's array.</summary>
+    public interface IColorRowSink
+    {
+        int AllocColorRow();
+        void ReleaseColorRow(int row);
+        void WriteColorRow(int row, int[] paletteIndices, int remapRow);
+    }
+
+    /// <summary>
+    /// The colour rows of a site (docs/COLOURS.md §3.3, §3.6): one per style a mesh names, written with the
+    /// palette's current indices and the building's remap row. A colour change or a palette invalidation
+    /// rewrites rows, never meshes. Engine-free so the bookkeeping is tested headlessly; the Unity layer
+    /// passes its building table as the sink and the active palette.
+    /// </summary>
+    public sealed class ColorRowBook : IDisposable
+    {
+        readonly ColorResolver colors;
+        readonly IColorPalette palette;
+        readonly IColorRowSink sink;
+        readonly Dictionary<StyleRef, int> rows = new Dictionary<StyleRef, int>();
+        readonly Dictionary<int, (string[] original, string[] overwrite)> remaps = new Dictionary<int, (string[], string[])>();
+        readonly Dictionary<int, int> remapRows = new Dictionary<int, int>();
+        bool rewriting, again;
+
+        public ColorRowBook(ColorResolver colors, IColorPalette palette, IColorRowSink sink)
+        {
+            this.colors = colors; this.palette = palette; this.sink = sink;
+            palette.Invalidated += Rewrite;
+        }
+
+        public IReadOnlyDictionary<StyleRef, int> Rows => rows;
+
+        /// <summary>The colour row of a style, allocated and written the first time a mesh names it.</summary>
+        public int RowOf(StyleRef s)
+        {
+            if (rows.TryGetValue(s, out int row)) return row;
+            row = sink.AllocColorRow();
+            rows[s] = row;
+            Write(s, row);
+            return row;
+        }
+
+        /// <summary>The atlas row of a building's remap; 0 = none.</summary>
+        public int RemapRowOf(int building) => remapRows.TryGetValue(building, out int r) ? r : 0;
+
+        /// <summary>
+        /// Remap a building's colours (palette ids, pairwise), as a <c>ColorRemap</c> would a renderer's. Empty
+        /// arrays clear it. Rewrites the building's rows only.
+        /// </summary>
+        public void SetRemap(int building, IReadOnlyList<string> original, IReadOnlyList<string> overwrite)
+        {
+            if (original.Count != overwrite.Count) throw new ArgumentException("a remap pairs each original colour with an overwrite colour");
+            if (original.Count == 0) { remaps.Remove(building); remapRows.Remove(building); }
+            else
+            {
+                var r = (original.ToArray(), overwrite.ToArray());
+                remaps[building] = r;
+                remapRows[building] = palette.RegisterRemap(r.Item1, r.Item2);
+            }
+            foreach (var kv in rows.ToList()) if (kv.Key.building == building) Write(kv.Key, kv.Value);
+        }
+
+        /// <summary>
+        /// Register every remap again and write every row: the palette's indices or the atlas rows moved. Safe
+        /// when the palette raises its event again from inside a registration (Color Pipeline creates its atlas lazily).
+        /// </summary>
+        public void Rewrite()
+        {
+            if (rewriting) { again = true; return; }
+            rewriting = true;
+            try
+            {
+                do
+                {
+                    again = false;
+                    foreach (var kv in remaps.ToList()) remapRows[kv.Key] = palette.RegisterRemap(kv.Value.original, kv.Value.overwrite);
+                    foreach (var kv in rows.ToList()) Write(kv.Key, kv.Value);
+                } while (again);
+            }
+            finally { rewriting = false; }
+        }
+
+        void Write(StyleRef s, int row) => sink.WriteColorRow(row, ColorRows.Indices(colors.StyleOf(s), palette), RemapRowOf(s.building));
+
+        /// <summary>Free every row (the site is being rebuilt); remaps are kept.</summary>
+        public void Clear()
+        {
+            foreach (var row in rows.Values) sink.ReleaseColorRow(row);
+            rows.Clear();
+        }
+
+        public void Dispose() { Clear(); palette.Invalidated -= Rewrite; }
     }
 }

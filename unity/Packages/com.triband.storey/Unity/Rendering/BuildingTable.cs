@@ -13,7 +13,7 @@ namespace Triband.Storey.Unity
     /// so thousands of buildings need no per-object material state and merged meshes can still
     /// switch individual buildings. Written on the CPU into arrays, uploaded when dirty, once per frame.
     /// </summary>
-    public sealed class BuildingTable : IDisposable
+    public sealed class BuildingTable : IDisposable, Generate.IColorRowSink
     {
         public const int MaxBuildings = 8192;
         public const int OccSlots = 16, OccWidth = 64;

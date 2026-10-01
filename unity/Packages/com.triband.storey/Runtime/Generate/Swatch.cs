@@ -50,6 +50,20 @@ namespace Triband.Storey.Generate
     }
 
     /// <summary>
+    /// The project's colours for the optional slots, used where a style leaves one out (docs/COLOURS.md §3.1).
+    /// Defaults are the prototype's fixed colours; with Color Pipeline, <c>StoreyColorSettings</c> supplies palette ids.
+    /// </summary>
+    public sealed class StyleDefaults
+    {
+        public string door = StyleColors.Door, metal = StyleColors.Metal, rail = StyleColors.Rail, ceiling = StyleColors.Ceiling,
+            liftInterior = StyleColors.LiftInterior, liftButton = StyleColors.LiftButton, detailMetal = StyleColors.DetailMetal,
+            grille = StyleColors.Grille, detailDark = StyleColors.DetailDark, dish = StyleColors.Dish;
+
+        /// <summary>The prototype's fixed colours.</summary>
+        public static readonly StyleDefaults Prototype = new StyleDefaults();
+    }
+
+    /// <summary>
     /// The value of each slot of a style: its own field, or the project default for the optional
     /// slots (the prototype's fixed colours) when the style leaves one out.
     /// </summary>
@@ -58,16 +72,20 @@ namespace Triband.Storey.Generate
         public const string Door = "#3B3129", Metal = "#A3ABAE", Rail = "#3D4448", Ceiling = "#F3F2EE", LiftInterior = "#8E9A9E",
             LiftButton = "#FFB36B", DetailMetal = "#C9CDCB", Grille = "#6E7476", DetailDark = "#5B5F5E", Dish = "#DDE0DE";
 
-        public static string Of(FacadeStyle st, ColorSlot slot) => slot switch
+        public static string Of(FacadeStyle st, ColorSlot slot, StyleDefaults? defaults = null)
         {
-            ColorSlot.Wall => st.wall, ColorSlot.Trim => st.trim, ColorSlot.Interior => st.interior, ColorSlot.Floor => st.floor,
-            ColorSlot.Roof => st.roof, ColorSlot.Core => st.core, ColorSlot.Glass => st.glass,
-            ColorSlot.Door => st.door ?? Door, ColorSlot.Metal => st.metal ?? Metal, ColorSlot.Rail => st.rail ?? Rail,
-            ColorSlot.Ceiling => st.ceiling ?? Ceiling, ColorSlot.LiftInterior => st.liftInterior ?? LiftInterior,
-            ColorSlot.LiftButton => st.liftButton ?? LiftButton, ColorSlot.DetailMetal => st.detailMetal ?? DetailMetal,
-            ColorSlot.Grille => st.grille ?? Grille, ColorSlot.DetailDark => st.detailDark ?? DetailDark, ColorSlot.Dish => st.dish ?? Dish,
-            _ => throw new ArgumentOutOfRangeException(nameof(slot)),
-        };
+            var d = defaults ?? StyleDefaults.Prototype;
+            return slot switch
+            {
+                ColorSlot.Wall => st.wall, ColorSlot.Trim => st.trim, ColorSlot.Interior => st.interior, ColorSlot.Floor => st.floor,
+                ColorSlot.Roof => st.roof, ColorSlot.Core => st.core, ColorSlot.Glass => st.glass,
+                ColorSlot.Door => st.door ?? d.door, ColorSlot.Metal => st.metal ?? d.metal, ColorSlot.Rail => st.rail ?? d.rail,
+                ColorSlot.Ceiling => st.ceiling ?? d.ceiling, ColorSlot.LiftInterior => st.liftInterior ?? d.liftInterior,
+                ColorSlot.LiftButton => st.liftButton ?? d.liftButton, ColorSlot.DetailMetal => st.detailMetal ?? d.detailMetal,
+                ColorSlot.Grille => st.grille ?? d.grille, ColorSlot.DetailDark => st.detailDark ?? d.detailDark, ColorSlot.Dish => st.dish ?? d.dish,
+                _ => throw new ArgumentOutOfRangeException(nameof(slot)),
+            };
+        }
     }
 
     /// <summary>
@@ -81,7 +99,10 @@ namespace Triband.Storey.Generate
         readonly Func<string, Rgb>? palette;
         readonly Dictionary<StyleRef, FacadeStyle> styles = new Dictionary<StyleRef, FacadeStyle>();
 
-        public ColorResolver(Site site, Func<string, Rgb>? palette = null) { this.site = site; this.palette = palette; }
+        readonly StyleDefaults defaults;
+
+        public ColorResolver(Site site, Func<string, Rgb>? palette = null, StyleDefaults? defaults = null)
+        { this.site = site; this.palette = palette; this.defaults = defaults ?? StyleDefaults.Prototype; }
 
         public FacadeStyle StyleOf(StyleRef s)
         {
@@ -91,7 +112,7 @@ namespace Triband.Storey.Generate
 
         public Rgb Resolve(Swatch s)
         {
-            string v = StyleColors.Of(StyleOf(s.style), s.slot);
+            string v = StyleColors.Of(StyleOf(s.style), s.slot, defaults);
             if (ColorRef.IsPaletteId(v))
             {
                 if (palette == null) throw new FormatException($"{s}: palette id {v} and no palette to resolve it");

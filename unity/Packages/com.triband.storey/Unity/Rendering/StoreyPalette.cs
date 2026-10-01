@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using Triband.Storey.Generate;
 using UnityEngine;
 
@@ -14,15 +15,16 @@ namespace Triband.Storey.Unity
     {
         /// <summary>Bind the atlas globals if this palette owns them. Called once per frame before rendering.</summary>
         void Bind();
-        /// <summary>Raised when palette indices may have moved: every colour row must be written again.</summary>
-        event Action? Invalidated;
     }
 
     public static class StoreyPalettes
     {
         static IStoreyPalette? active;
 
-        /// <summary>Set by the Color Pipeline bridge at load. Read by everything that writes colour rows.</summary>
+        /// <summary>The bridge's palette type, found by name: the bridge is optional, so nothing here can reference it.</summary>
+        const string BridgeType = "Triband.Storey.ColorPipeline.ColorPipelinePalette, Triband.Storey.ColorPipeline";
+
+        /// <summary>The palette everything that writes colour rows uses. A project may set its own.</summary>
         public static IStoreyPalette Active
         {
             get => active ??= Default();
@@ -32,8 +34,11 @@ namespace Triband.Storey.Unity
         static IStoreyPalette Default()
         {
 #if STOREY_HAS_COLORPIPELINE
-            // The built-in palette would replace the atlas every other Color Pipeline object samples.
-            throw new InvalidOperationException("Color Pipeline is installed but no Storey palette is registered: Storey's bridge needs com.triband.colorpipeline 2.1.11 up to 3.0 (docs/COLOURS.md §3.7).");
+            // Never the built-in palette here: it would replace the atlas every other Color Pipeline object samples.
+            var t = Type.GetType(BridgeType);
+            if (t == null)
+                throw new InvalidOperationException("Color Pipeline is installed but Storey's bridge did not compile: it needs com.triband.colorpipeline 2.1.11 up to 3.0 (docs/COLOURS.md §3.7).");
+            return (IStoreyPalette)Activator.CreateInstance(t)!;
 #else
             return new HexPalette();
 #endif
@@ -52,9 +57,11 @@ namespace Triband.Storey.Unity
         Texture2D? texture;
         int uploaded = -1;
 
-        public event Action? Invalidated { add { } remove { } }   // indices never move: colours are only added
+        public event Action? Invalidated { add => index.Invalidated += value; remove => index.Invalidated -= value; }
 
+        public StyleDefaults Defaults => index.Defaults;
         public int IndexOf(string colorRef) => index.IndexOf(colorRef);
+        public int RegisterRemap(IReadOnlyList<string> original, IReadOnlyList<string> overwrite) => index.RegisterRemap(original, overwrite);
 
         public void Bind()
         {

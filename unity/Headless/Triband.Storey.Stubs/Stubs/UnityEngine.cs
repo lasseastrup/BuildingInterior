@@ -119,10 +119,21 @@ namespace UnityEngine
         public static void SetGlobalVector(int nameID, Vector4 value) { }
         public static void SetGlobalFloat(int nameID, float value) { }
         public static void SetGlobalInt(int nameID, int value) { }
+        public static int GetGlobalInt(int nameID) => 0;
         public static void SetGlobalTexture(int nameID, Texture value) { }
     }
 
     public enum TextureFormat { RGBAHalf = 17 }
+
+    public static class ColorUtility
+    {
+        public static bool TryParseHtmlString(string htmlString, out Color color) { color = default; return false; }
+    }
+
+    public static class Resources
+    {
+        public static T Load<T>(string path) where T : Object => null;
+    }
 
     public class Texture : Object
     {
@@ -226,4 +237,11 @@ namespace UnityEngine.Rendering
 {
     public enum ShadowCastingMode { Off, On, TwoSided, ShadowsOnly }
     public enum LightProbeUsage { Off = 0, BlendProbes = 1, UseProxyVolume = 2, CustomProvided = 4 }
+}
+
+namespace UnityEngine.Scripting
+{
+    public class PreserveAttribute : System.Attribute
+    {
+    }
 }

@@ -1,0 +1,16 @@
+{
+  "name": "Triband.Storey.ColorPipeline",
+  "rootNamespace": "Triband.Storey.ColorPipeline",
+  "references": [
+    "Triband.Storey",
+    "Triband.Storey.Unity",
+    "Triband.ColorPipeline.Runtime",
+    "Triband.Core.Runtime"
+  ],
+  "defineConstraints": ["STOREY_COLORPIPELINE"],
+  "versionDefines": [
+    { "name": "com.triband.colorpipeline", "expression": "[2.1.11,3.0.0-0)", "define": "STOREY_COLORPIPELINE" }
+  ],
+  "autoReferenced": true,
+  "noEngineReferences": false
+}

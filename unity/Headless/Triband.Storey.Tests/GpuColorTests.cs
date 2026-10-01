@@ -19,24 +19,19 @@ namespace Triband.Storey.Tests
 
         public static IEnumerable<object[]> Files => new[] { new object[] { "demo.json" }, new object[] { "variants.json" } };
 
-        /// <summary>A site's colour rows as the harness writes them: one per style named, packed into the table's words.</summary>
-        sealed class Table : IColorPalette
+        /// <summary>A site's colour rows as the harness writes them: a <see cref="ColorRowBook"/> over the hex palette, packed into the table's words.</summary>
+        sealed class Table : IColorRowSink
         {
             public readonly HexPaletteIndex Palette = new HexPaletteIndex();
-            public readonly Dictionary<StyleRef, int> Rows = new Dictionary<StyleRef, int>();
             public uint[] Words = new uint[0];
-            readonly ColorResolver colors;
-            public Table(ColorResolver colors) { this.colors = colors; }
-            public int IndexOf(string c) => Palette.IndexOf(c);
+            public readonly ColorRowBook Book;
+            int next;
+            public Table(ColorResolver colors) { Book = new ColorRowBook(colors, Palette, this); }
+            public int RowOf(StyleRef s) => Book.RowOf(s);
 
-            public int RowOf(StyleRef s)
-            {
-                if (Rows.TryGetValue(s, out int r)) return r;
-                r = Rows.Count; Rows[s] = r;
-                Array.Resize(ref Words, (r + 1) * ColorRows.Words);
-                ColorRows.Pack(ColorRows.Indices(colors.StyleOf(s), this), 0, Words, r * ColorRows.Words);
-                return r;
-            }
+            public int AllocColorRow() { Array.Resize(ref Words, (next + 1) * ColorRows.Words); return next++; }
+            public void ReleaseColorRow(int row) { }
+            public void WriteColorRow(int row, int[] paletteIndices, int remapRow) => ColorRows.Pack(paletteIndices, remapRow, Words, row * ColorRows.Words);
 
             /// <summary>StoreyPaletteColor, remap row 0.</summary>
             public Rgb Shade(int row, ColorSlot slot, double tone)

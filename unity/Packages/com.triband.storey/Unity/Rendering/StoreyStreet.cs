@@ -27,10 +27,10 @@ namespace Triband.Storey.Unity
 
         BuildingTable? table;
         readonly List<Built> built = new List<Built>();
-        // one colour row per style the meshes name (docs/COLOURS.md §3.3); written again when the palette invalidates
-        readonly Dictionary<StyleRef, int> colorRows = new Dictionary<StyleRef, int>();
-        ColorResolver? colors;
+        // one colour row per style the meshes name (docs/COLOURS.md §3.3), rewritten when the palette invalidates
+        ColorRowBook? book;
         IStoreyPalette? palette;
+        readonly Dictionary<int, (string[] original, string[] overwrite)> remaps = new Dictionary<int, (string[], string[])>();
         int shownLod = -1;
 
         sealed class Built
@@ -41,7 +41,7 @@ namespace Triband.Storey.Unity
 
         void Start() { Rebuild(); }
 
-        void OnDestroy() { Clear(); if (palette != null) palette.Invalidated -= WriteColorRows; table?.Dispose(); table = null; }
+        void OnDestroy() { Clear(); book?.Dispose(); book = null; table?.Dispose(); table = null; }
 
         void LateUpdate()
         {
@@ -68,8 +68,10 @@ namespace Triband.Storey.Unity
             if (layout == null || opaque == null || glass == null || massing == null) return;
             var doc = layout.Document;
             var site = new Site(doc.buildings);
-            colors = new ColorResolver(site);
-            if (palette == null) { palette = StoreyPalettes.Active; palette.Invalidated += WriteColorRows; }
+            palette ??= StoreyPalettes.Active;
+            book?.Dispose();
+            book = new ColorRowBook(new ColorResolver(site), palette, table);
+            foreach (var kv in remaps) book.SetRemap(kv.Key, kv.Value.original, kv.Value.overwrite);
             foreach (var b in doc.buildings)
             {
                 var bt = new Built { idx = table.AllocIndex() };
@@ -94,23 +96,16 @@ namespace Triband.Storey.Unity
             shownLod = -1;
         }
 
-        /// <summary>The colour row of a style, allocated and written the first time a mesh names it.</summary>
-        int RowOf(StyleRef s)
-        {
-            if (colorRows.TryGetValue(s, out int row)) return row;
-            row = table!.AllocColorRow();
-            colorRows[s] = row;
-            WriteColorRow(s, row);
-            return row;
-        }
+        int RowOf(StyleRef s) => book!.RowOf(s);
 
-        void WriteColorRow(StyleRef s, int row) => table!.WriteColorRow(row, ColorRows.Indices(colors!.StyleOf(s), palette!), 0);
-
-        /// <summary>The palette's indices may have moved: every row again, no mesh rebuilt.</summary>
-        void WriteColorRows()
+        /// <summary>
+        /// Remap building <paramref name="building"/>'s colours (its index in the layout; palette ids, pairwise), as a
+        /// <c>ColorRemap</c> would a renderer's. Needs Color Pipeline. Empty arrays clear it. No mesh is rebuilt.
+        /// </summary>
+        public void SetRemap(int building, string[] original, string[] overwrite)
         {
-            if (table == null || colors == null) return;
-            foreach (var kv in colorRows) WriteColorRow(kv.Key, kv.Value);
+            if (original.Length == 0) remaps.Remove(building); else remaps[building] = (original, overwrite);
+            book?.SetRemap(building, original, overwrite);
         }
 
         /// <summary>The generator tags meshes with the site index; the table hands out its own, so retag before upload.</summary>
@@ -138,8 +133,7 @@ namespace Triband.Storey.Unity
                     if (b.root != null) Destroy(b.root);
                 }
             built.Clear();
-            if (table != null) foreach (var r in colorRows.Values) table.ReleaseColorRow(r);
-            colorRows.Clear();
+            book?.Clear();
         }
     }
 }

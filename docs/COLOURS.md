@@ -145,7 +145,7 @@ ColorMappingManager.SetupColorRemap(d, out int offset);
 int atlasRow = offset / Shader.GetGlobalInt("_ColorAtlasWidth"); // goes into entry 23 of each of the building's rows
 ```
 
-- Keep every descriptor that has been registered and register them all again in `OnMappingsInvalidated`, because offsets handed out before it are stale.
+- Keep every descriptor that has been registered and register them all again in `OnMappingsInvalidated`, because offsets handed out before it are stale. `ColorRowBook` (engine-free) does this bookkeeping: rows per style, remaps per building, and a re-entrancy-safe rewrite.
 - A building and a `ColorRemap` prop with the same mapping share one atlas row, since they have the same hash.
 - Remaps are for gameplay and theming (a repainted house, a district palette), not for giving each building its colours. The rows do that; §4 explains why.
 
@@ -163,7 +163,7 @@ int atlasRow = offset / Shader.GetGlobalInt("_ColorAtlasWidth"); // goes into en
 ```
 
 - The `-0` in the upper bound matters. Semver sorts `3.0.0-preview2` below `3.0.0`, so `[2.1.11,3.0.0)` would compile this assembly against the 3.0 preview, which has no `ColorRemapDescriptor`.
-- The assembly holds `ColorPipelinePalette` (palette ids to indices, remaps, invalidation) and `StoreyColorSettings`, and registers itself as Storey's palette at load.
+- The assembly holds `ColorPipelinePalette` (palette ids to indices, remaps, invalidation) and `StoreyColorSettings` (loaded from `Resources/StoreyColorSettings`). Runtime assemblies may not name `UnityEditor` (a layout rule), so instead of registering itself at load the bridge is found by `StoreyPalettes` by type name when Color Pipeline is installed, which works in edit mode, play mode and players (`[Preserve]` keeps it from being stripped).
 - **Fallback, `HexPalette`** (no Color Pipeline): it indexes the distinct hex literals in use, writes them as `Color.linear` into a 512 × 1 RGBAHalf texture, and binds that as `_GlobalColorPaletteTex` with `_ColorAtlasWidth` = 512. That is the same contract, so the shaders can't tell the difference. There are no remaps. The parity harness runs this way and still matches the prototype.
 - **The fallback must never run next to Color Pipeline**, because it would replace the global that every other object in the project samples. `Triband.Storey.Unity` therefore gets a version define for *any* Color Pipeline version (`"expression": "0.0.1"`) and compiles the fallback out whenever the package is present. If the version is outside the bridge's range, Storey reports the unsupported version instead.
 - With Color Pipeline installed, a hex literal that hasn't been mapped yet renders as the nearest palette colour (`ColorPaletteDefinition.GetIDOfClosestColor`), with a warning naming the document.
@@ -206,7 +206,7 @@ Detail models go through the Model Remapper like any prop. The detail validator'
 
 1. **Runtime, headless (done):** `ColorSlot`, `StyleRef`, `Swatch`, the swatch `Palette`, `ColorResolver`, swatches in `ParamRow`, the ten optional style colours, and parsing colour references. Every existing census test passes with the fixtures untouched; `MeshUpload` still uploads RGB, through the resolver.
 2. **Unity layer (done headless; editor check outstanding):** colour rows (and the empty detail table) in `BuildingTable`, the encoding in `MeshUpload`, `StoreyPalette.hlsl`, the `StoreyLit` and `StoreyFacade` changes, `HexPalette` and `StoreyPalettes`. `GpuColorTests` emulates the shader lookups for every vertex and LOD2 row of the fixture corpora against the census colours. Still to do in an editor: compile the shaders and confirm the parity harness matches the prototype with Color Pipeline not installed.
-3. **Bridge:** the assembly, `ColorPipelinePalette`, `StoreyColorSettings`, the layout-test rule and the stubs. Done when it stub-compiles headlessly and three things hold in the editor: a palette value edit recolours buildings without regenerating them, deleting a palette entry leaves every building correct, and a building remap shares its atlas row with a `ColorRemap` prop that has the same mapping.
+3. **Bridge (done headless; editor check outstanding):** the assembly, `ColorPipelinePalette`, `StoreyColorSettings`, `ColorRowBook`, `StoreyStreet.SetRemap`, the layout-test rule (`OptionalIntegrationsAreGatedByTheirPackage`) and the Color Pipeline stubs. It stub-compiles headlessly and `ColorRowBookTests` cover the bookkeeping against a palette that behaves like 2.1.11. Still to check in the editor: a palette value edit recolours buildings without regenerating them, deleting a palette entry leaves every building correct, and a building remap shares its atlas row with a `ColorRemap` prop that has the same mapping.
 4. **Authoring:** the palette picker with the curated subsets, *Map colours to palette…*, presets as `FacadeStyle` assets, and the `palette` snapshot block with its prototype reader.
 5. **Later:** facade-detail models (§3.9) and 3.0 (§6).
 

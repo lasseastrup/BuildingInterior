@@ -105,11 +105,44 @@ namespace Triband.Storey.Tests
             var defined = Layout.Packages.SelectMany(p => p.Asmdefs).Select(a => a.Name).ToHashSet(StringComparer.Ordinal);
             foreach (var a in Layout.Packages.SelectMany(p => p.Asmdefs))
             {
-                foreach (var r in a.References.Where(r => r.StartsWith("Triband.", StringComparison.Ordinal)))
+                foreach (var r in a.References.Where(r => r.StartsWith("Triband.", StringComparison.Ordinal) && !OptionalTribandAssemblies.ContainsKey(r)))
                 {
                     Assert.True(defined.Contains(r),
                         $"{a.Relative} references {r}, which no .asmdef in any package defines " +
                         $"(defined: {string.Join(", ", defined.OrderBy(x => x, StringComparer.Ordinal))}).");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Triband assemblies outside this repository that an optional integration may reference, with the
+        /// package whose presence gates it (Color Pipeline brings Triband Core). docs/COLOURS.md §3.7.
+        /// </summary>
+        private static readonly Dictionary<string, string> OptionalTribandAssemblies = new(StringComparer.Ordinal)
+        {
+            ["Triband.ColorPipeline.Runtime"] = "com.triband.colorpipeline",
+            ["Triband.Core.Runtime"] = "com.triband.colorpipeline",
+        };
+
+        /// <summary>
+        /// An assembly referencing a package the manifest does not declare compiles only where that package
+        /// happens to be installed. That is allowed for an optional integration and nowhere else: the assembly
+        /// must be switched off, through <c>defineConstraints</c>, by a <c>versionDefines</c> entry on the
+        /// package, and the manifest must not declare it (or it would not be optional).
+        /// </summary>
+        [Theory, MemberData(nameof(Packages))]
+        public void OptionalIntegrationsAreGatedByTheirPackage(string package)
+        {
+            var p = Layout.Get(package);
+            foreach (var a in p.Asmdefs)
+            {
+                foreach (var r in a.References.Where(OptionalTribandAssemblies.ContainsKey))
+                {
+                    string gate = OptionalTribandAssemblies[r];
+                    var defines = a.VersionDefines.Where(v => v.name == gate).Select(v => v.define).ToList();
+                    Assert.True(defines.Any(a.DefineConstraints.Contains),
+                        $"{a.Relative} references {r} but is not gated: it needs a versionDefines entry on {gate} whose define is in its defineConstraints.");
+                    Assert.False(p.Dependencies.Contains(gate), $"{p.Name}/package.json declares {gate}, so {a.Relative} is not an optional integration.");
                 }
             }
         }
@@ -495,6 +528,8 @@ namespace Triband.Storey.Tests
             public List<string> References = new();
             public List<string> PrecompiledReferences = new();
             public List<string> IncludePlatforms = new();
+            public List<string> DefineConstraints = new();
+            public List<(string name, string define)> VersionDefines = new();
             public List<string> ImpliedReferences = new();
             public bool NoEngineReferences;
             private JsonDocument _doc = JsonDocument.Parse("{}");
@@ -511,6 +546,10 @@ namespace Triband.Storey.Tests
                     References = Strings(r, "references"),
                     PrecompiledReferences = Strings(r, "precompiledReferences"),
                     IncludePlatforms = Strings(r, "includePlatforms"),
+                    DefineConstraints = Strings(r, "defineConstraints"),
+                    VersionDefines = r.TryGetProperty("versionDefines", out var vd) && vd.ValueKind == JsonValueKind.Array
+                        ? vd.EnumerateArray().Select(v => (v.GetProperty("name").GetString() ?? "", v.GetProperty("define").GetString() ?? "")).ToList()
+                        : new List<(string, string)>(),
                     NoEngineReferences = r.TryGetProperty("noEngineReferences", out var e) && e.GetBoolean(),
                 };
                 if (Strings(r, "optionalUnityReferences").Contains("TestAssemblies")) a.ImpliedReferences = ImpliedByTestAssemblies.ToList();

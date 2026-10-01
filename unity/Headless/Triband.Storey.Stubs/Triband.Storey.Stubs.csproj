@@ -35,6 +35,7 @@
     <Compile Include="Stubs/**/*.cs" />
     <Compile Include="../../Packages/com.triband.storey/Runtime/**/*.cs" />
     <Compile Include="../../Packages/com.triband.storey/Unity/**/*.cs" />
+    <Compile Include="../../Packages/com.triband.storey/ColorPipeline/**/*.cs" />
     <Compile Include="../../Packages/com.triband.storey.authoring/Editor/**/*.cs" />
     <Compile Include="../../Packages/com.triband.storey.playkit/Runtime/**/*.cs" />
   </ItemGroup>
