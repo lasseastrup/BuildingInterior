@@ -385,7 +385,7 @@ namespace Triband.Storey.Generate
             op.Ctx(null, 0);
             foreach (var p in R.Parts)
             {
-                var col = p.Kind == RoofKind.Roof ? C.roof : p.Kind == RoofKind.Trim ? C.trim : p.Kind == RoofKind.Soffit ? C.trim.Shade(0.8) : C.wall;
+                var col = p.Kind == RoofKind.Roof ? C.roof : p.Kind == RoofKind.Trim ? C.trim : p.Kind == RoofKind.Soffit ? C.trimShade : C.wall;
                 var pts = new List<P3>(p.Pts); foreach (var h in p.Holes) pts.AddRange(h);
                 op.PolyTris(pts, Triangulate.Planar(p.Pts, p.Holes, p.N), p.N, col);
             }

@@ -155,9 +155,19 @@ namespace Triband.Storey
             {
                 preset = o.TryGetValue("preset", out var p) && p is string ps ? ps : null,
                 label = c.Str(o, "label", "", path),
-                wall = c.Str(o, "wall", "#9A4B38", path), trim = c.Str(o, "trim", "#ECE5D8", path),
-                interior = c.Str(o, "interior", "#EFECE5", path), floor = c.Str(o, "floor", "#B88D62", path),
-                roof = c.Str(o, "roof", "#6E716B", path), core = c.Str(o, "core", "#C9C4BB", path), glass = c.Str(o, "glass", "#8DB3C8", path),
+                wall = c.Color(o, "wall", "#9A4B38", path), trim = c.Color(o, "trim", "#ECE5D8", path),
+                interior = c.Color(o, "interior", "#EFECE5", path), floor = c.Color(o, "floor", "#B88D62", path),
+                roof = c.Color(o, "roof", "#6E716B", path), core = c.Color(o, "core", "#C9C4BB", path), glass = c.Color(o, "glass", "#8DB3C8", path),
+                door = c.OptColor(o, "door", path),
+                rail = c.OptColor(o, "rail", path),
+                metal = c.OptColor(o, "metal", path),
+                ceiling = c.OptColor(o, "ceiling", path),
+                liftInterior = c.OptColor(o, "liftInterior", path),
+                liftButton = c.OptColor(o, "liftButton", path),
+                detailMetal = c.OptColor(o, "detailMetal", path),
+                grille = c.OptColor(o, "grille", path),
+                detailDark = c.OptColor(o, "detailDark", path),
+                dish = c.OptColor(o, "dish", path),
                 windows = c.Enum<WindowType>(o, "windows", WindowType.Punched, path),
                 winW = c.Num(o, "winW", 1.2, path), bay = c.Num(o, "bay", 2.6, path),
                 ground = c.Enum<GroundType>(o, "ground", GroundType.Storefront, path),
@@ -171,7 +181,8 @@ namespace Triband.Storey
                 s.details = new DetailRules { ac = c.Opt(dob, "ac", path + ".details"), vents = c.Opt(dob, "vents", path + ".details") };
                 c.Check(dob, path + ".details", "ac", "vents");
             }
-            c.Check(o, path, "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "details");
+            c.Check(o, path, "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "details",
+                "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish");
             return s;
         }
 
@@ -263,6 +274,16 @@ namespace Triband.Storey
             if (s.roofType != RoofType.Flat) o["roofType"] = Lower(s.roofType);
             if (s.pitch.HasValue) o["pitch"] = s.pitch.Value;
             if (s.eave.HasValue) o["eave"] = s.eave.Value;
+            if (s.door != null) o["door"] = s.door;
+            if (s.rail != null) o["rail"] = s.rail;
+            if (s.metal != null) o["metal"] = s.metal;
+            if (s.ceiling != null) o["ceiling"] = s.ceiling;
+            if (s.liftInterior != null) o["liftInterior"] = s.liftInterior;
+            if (s.liftButton != null) o["liftButton"] = s.liftButton;
+            if (s.detailMetal != null) o["detailMetal"] = s.detailMetal;
+            if (s.grille != null) o["grille"] = s.grille;
+            if (s.detailDark != null) o["detailDark"] = s.detailDark;
+            if (s.dish != null) o["dish"] = s.dish;
             if (s.details != null)
             {
                 var d = new Dictionary<string, object?>();
@@ -327,6 +348,18 @@ namespace Triband.Storey
                 if (!o.TryGetValue(key, out var v) || v == null) return dflt;
                 return v is string s ? s : throw new FormatException($"{At(path, key)}: expected a string");
             }
+
+            /// <summary>A colour reference: a CSS literal or a palette id (docs/COLOURS.md §3.1).</summary>
+            public string Color(Dictionary<string, object?> o, string key, string dflt, string path)
+            {
+                string s = Str(o, key, dflt, path);
+                if (!ColorRef.IsHex(s) && !ColorRef.IsPaletteId(s)) throw new FormatException($"{At(path, key)}: '{s}' is neither a #RRGGBB colour nor a palette id");
+                return s;
+            }
+
+            /// <summary>An optional colour reference; absent means the project default.</summary>
+            public string? OptColor(Dictionary<string, object?> o, string key, string path) =>
+                o.TryGetValue(key, out var v) && v != null ? Color(o, key, "", path) : null;
 
             public T Enum<T>(Dictionary<string, object?> o, string key, T dflt, string path) where T : struct
             {

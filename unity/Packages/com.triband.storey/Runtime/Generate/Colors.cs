@@ -15,6 +15,7 @@ namespace Triband.Storey.Generate
         public static Rgb Col(string hex)
         {
             if (cache.TryGetValue(hex, out var v)) return v;
+            if (!ColorRef.IsHex(hex)) throw new FormatException($"\"{hex}\" is not a CSS colour; palette ids resolve through a palette (ColorResolver)");
             string h = hex.TrimStart('#');
             if (h.Length == 3) h = new string(new[] { h[0], h[0], h[1], h[1], h[2], h[2] });
             int n = int.Parse(h, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
@@ -26,18 +27,28 @@ namespace Triband.Storey.Generate
         public static Rgb Shade(string hex, double f) => Col(hex).Shade(f);
     }
 
-    /// <summary>The palette a storey is built with (the prototype's <c>colorsOf</c>).</summary>
+    /// <summary>
+    /// The colours a storey is built with (the prototype's <c>colorsOf</c>), as swatches of one style:
+    /// what each surface is coloured with, not the colour itself (docs/COLOURS.md §3.2).
+    /// </summary>
     public sealed class Palette
     {
-        public Rgb wall, trim, inner, core, coreIn, liftIn, roof, step, glass, glassDark, door, metal, rail, doorTrim, plinth, floor, ceil;
+        public readonly StyleRef style;
+        public readonly Swatch wall, trim, inner, core, coreIn, liftIn, roof, step, glass, glassDark, door, metal, rail, doorTrim, plinth, floor, ceil;
+        /// <summary>Colours the prototype wrote as literals at their call sites: slab sides, soffits and awning undersides, the lift button, facade details.</summary>
+        public readonly Swatch slabSide, trimShade, liftButton, detailMetal, grille, detailDark, dish;
 
-        public Palette(FacadeStyle st)
+        public Palette(StyleRef s)
         {
-            wall = Colors.Col(st.wall); trim = Colors.Col(st.trim); inner = Colors.Col(st.interior); core = Colors.Col(st.core);
-            coreIn = Colors.Shade(st.core, 1.08); liftIn = Colors.Col("#8E9A9E"); roof = Colors.Col(st.roof);
-            step = Colors.Shade(st.core, 0.82); glass = Colors.Col(st.glass); glassDark = Colors.Shade(st.glass, 0.42);
-            door = Colors.Col("#3B3129"); metal = Colors.Col("#A3ABAE"); rail = Colors.Col("#3D4448"); doorTrim = Colors.Shade(st.interior, 0.72);
-            plinth = Colors.Shade(st.wall, 0.72); floor = Colors.Col(st.floor); ceil = Colors.Col("#F3F2EE");
+            style = s;
+            Swatch W(ColorSlot slot, double tone = 1) => new Swatch(s, slot, tone);
+            wall = W(ColorSlot.Wall); trim = W(ColorSlot.Trim); inner = W(ColorSlot.Interior); core = W(ColorSlot.Core);
+            coreIn = W(ColorSlot.Core, 1.08); liftIn = W(ColorSlot.LiftInterior); roof = W(ColorSlot.Roof);
+            step = W(ColorSlot.Core, 0.82); glass = W(ColorSlot.Glass); glassDark = W(ColorSlot.Glass, 0.42);
+            door = W(ColorSlot.Door); metal = W(ColorSlot.Metal); rail = W(ColorSlot.Rail); doorTrim = W(ColorSlot.Interior, 0.72);
+            plinth = W(ColorSlot.Wall, 0.72); floor = W(ColorSlot.Floor); ceil = W(ColorSlot.Ceiling);
+            slabSide = W(ColorSlot.Core, 0.85); trimShade = W(ColorSlot.Trim, 0.8); liftButton = W(ColorSlot.LiftButton);
+            detailMetal = W(ColorSlot.DetailMetal); grille = W(ColorSlot.Grille); detailDark = W(ColorSlot.DetailDark); dish = W(ColorSlot.Dish);
         }
     }
 }

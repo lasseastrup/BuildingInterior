@@ -52,7 +52,7 @@ namespace Triband.Storey.Generate
                 var fp = Derived.OutlineAt(b, k);
                 var Wp = new List<Vec2>(fp.Count); foreach (var p in fp) Wp.Add(new Vec2(p.x + b.pos.x, p.z + b.pos.z));
                 bool ccw = Geo.Area2(fp) > 0;
-                tiers[j] = g = new TierCtx { fp = fp, ccw = ccw, Wp = Wp, cor = Geo.Corners(fp, ccw), C = new Palette(Derived.StyleAt(b, k)) };
+                tiers[j] = g = new TierCtx { fp = fp, ccw = ccw, Wp = Wp, cor = Geo.Corners(fp, ccw), C = new Palette(new StyleRef(site.IndexOf(b), j)) };
             }
             return g;
         }
@@ -93,7 +93,7 @@ namespace Triband.Storey.Generate
                         holes.Add(new List<Vec2> { f.At2(-1.3, -1.6), f.At2(1.3, -1.6), f.At2(1.3, 2.6), f.At2(-1.3, 2.6) });
                     }
             List<Vec2> V2(List<Vec2> pts) { var o = new List<Vec2>(pts.Count); foreach (var p in pts) o.Add(new Vec2(p.x + ox, p.z + oz)); return o; }
-            void Surf(List<Vec2> contour, List<List<Vec2>> hs, double yy, P3 nr, Rgb c)
+            void Surf(List<Vec2> contour, List<List<Vec2>> hs, double yy, P3 nr, Swatch c)
             {
                 var tris = Triangulate.Shape(contour, hs);
                 var pts = new List<P3>();
@@ -101,7 +101,7 @@ namespace Triband.Storey.Generate
                 foreach (var h in hs) foreach (var p in h) pts.Add(new P3(p.x, yy, p.z));
                 op.PolyTris(pts, tris, nr, c);
             }
-            var side = Colors.Shade(b.style.core, 0.85); double yb = k == 0 ? y - 0.05 : y - Dim.SLAB;
+            var side = C.slabSide; double yb = k == 0 ? y - 0.05 : y - Dim.SLAB;
             var outer = V2(below ?? above!);
             op.Ctx(null, 0);
             if (op.Solids != null)
@@ -358,7 +358,7 @@ namespace Triband.Storey.Generate
                     var a = f.At2(x0, z0); var c = f.At2(x1, z1); double L = Geo.Hypot(c.x - a.x, c.z - a.z);
                     return Geo.WallCtx(a, new Vec2((c.x - a.x) / L, (c.z - a.z) / L), new Vec2(f.u.x * nx + f.w.x * nz, f.u.z * nx + f.w.z * nz), L);
                 }
-                void Bx(double x0, double x1, double y0, double y1, double z0, double z1, Rgb c, Rgb? ci = null, Skip sk = Skip.None) => op.OBox(f, x0, x1, y0, y1, z0, z1, c, ci, sk);
+                void Bx(double x0, double x1, double y0, double y1, double z0, double z1, Swatch c, Swatch? ci = null, Skip sk = Skip.None) => op.OBox(f, x0, x1, y0, y1, z0, z1, c, ci, sk);
                 void S(double px, double pz, double qx, double qz, double r) { var a = f.At2(px, pz); var c = f.At2(qx, qz); sg.Add(new Seg(a.x, a.z, c.x, c.z, r)); }
                 const Skip TB = Skip.Top | Skip.Bot;
                 var fl = Cores.CoreFlush(Derived.OutlineAt(b, k), s); bool fL = fl[0] != null, fR = fl[1] != null, fB = fl[3] != null; double TE = Dim.T_EXT;
@@ -411,7 +411,7 @@ namespace Triband.Storey.Generate
                     var ops = new List<Opening> { new Opening { u0 = -0.6, u1 = 0.6, y0 = 0, y1 = 2.3, door = true } };
                     Facade.WallOps(op, f, xL, xR, y, h, -1.35, -1.2, ops, C.core, C.coreIn, TB | (fL ? Skip.UStart : Skip.None) | (fR ? Skip.UEnd : Skip.None));
                     Bx(-0.68, -0.59, y, y + 2.29, -1.4, -1.18, C.metal, null, Skip.Bot); Bx(0.59, 0.68, y, y + 2.29, -1.4, -1.18, C.metal, null, Skip.Bot); Bx(-0.68, 0.68, y + 2.29, y + 2.38, -1.4, -1.18, C.metal);
-                    Bx(0.8, 0.92, y + 1.0, y + 1.3, -1.42, -1.35, Colors.Col("#FFB36B"));
+                    Bx(0.8, 0.92, y + 1.0, y + 1.3, -1.42, -1.35, C.liftButton);
                     if (!fL) S(-1.275, -1.35, -1.275, 1.35, 0.075); else if (atRoof) S(-1.2 - TE / 2, -1.35, -1.2 - TE / 2, 1.35, TE / 2);
                     if (!fR) S(1.275, -1.35, 1.275, 1.35, 0.075); else if (atRoof) S(1.2 + TE / 2, -1.35, 1.2 + TE / 2, 1.35, TE / 2);
                     if (!fB) S(-1.35, 1.275, 1.35, 1.275, 0.075); else if (atRoof) S(-1.5, 1.2 + TE / 2, 1.5, 1.2 + TE / 2, TE / 2);

@@ -7,15 +7,17 @@ namespace Triband.Storey.Generate
     /// <summary>One row of the LOD2 parameter table: what the facade shader reads for a run of storeys.</summary>
     public sealed class ParamRow
     {
-        public Rgb wall, trim, glass, roof;
+        /// <summary>The tier's colours as swatches: wall, trim, glass (darkened, as LOD1's opaque panes) and roof.</summary>
+        public Swatch wall, trim, glass, roof;
         /// <summary>Window spec: gap for full-width styles (&lt;0: fixed width), width, sill, head.</summary>
         public double[] spec = { -1, 0, 1, 0 };
         /// <summary>Storey height, storeys with a band, run height (1e9 = not the top), parapet 0 none / 1 wall / 2 curb.</summary>
         public double[] run = { 3, 0, 1e9, 0 };
-        /// <summary>The 24 floats as the table stores them (six texels: wall, trim, glass, roof, spec, run).</summary>
-        public double[] Texels()
+        /// <summary>The 24 floats as the table stores them (six texels: wall, trim, glass, roof, spec, run), colours resolved to linear RGB.</summary>
+        public double[] Texels(ColorResolver colors)
         {
-            return new[] { wall.r, wall.g, wall.b, 1, trim.r, trim.g, trim.b, 1, glass.r, glass.g, glass.b, 1, roof.r, roof.g, roof.b, 1, spec[0], spec[1], spec[2], spec[3], run[0], run[1], run[2], run[3] };
+            Rgb w = colors.Resolve(wall), t = colors.Resolve(trim), g = colors.Resolve(glass), r = colors.Resolve(roof);
+            return new[] { w.r, w.g, w.b, 1, t.r, t.g, t.b, 1, g.r, g.g, g.b, 1, r.r, r.g, r.b, 1, spec[0], spec[1], spec[2], spec[3], run[0], run[1], run[2], run[3] };
         }
     }
 

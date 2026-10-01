@@ -57,26 +57,20 @@ So no vertex needs a free RGB value: (style, slot, shade) describes all of them.
 The generator stops producing `Rgb`. `MeshBuilder.C` becomes a list of swatches, and `Palette` keeps its 17 names, but each one is now a swatch:
 
 ```csharp
-public enum ColorSlot : byte
-{
-    Wall, Trim, Interior, Floor, Roof, Core, Glass,              // all from the style's colour row
-    Door, Metal, Rail, Ceiling, LiftInterior, LiftButton,
-    DetailMetal, Grille, DetailDark, Dish,                       // 0..16; 24 and up: facade-detail models (§3.9)
-}
+public enum ColorSlot : byte { Wall, Trim, Interior, Floor, Roof, Core, Glass, Door, Metal, Rail, Ceiling, LiftInterior, LiftButton, DetailMetal, Grille, DetailDark, Dish }
 
-/// <summary>A colour by reference: one of the mesh's styles (index into MeshBuilder.Styles), a slot and a shade.</summary>
-public struct Swatch
-{
-    public int style; public ColorSlot slot; public double tone;
-    public Swatch(int style, ColorSlot slot, double tone) { this.style = style; this.slot = slot; this.tone = tone; }
-}
+/// <summary>The style a colour comes from: building (site index) and the floor its setback tier starts at; resolves to Derived.StyleAt.</summary>
+public readonly struct StyleRef { public readonly int building, tier; … }
 
-// Palette: plinth = new Swatch(s, ColorSlot.Wall, 0.72), coreIn = new Swatch(s, ColorSlot.Core, 1.08), door = new Swatch(s, ColorSlot.Door, 1), …
+/// <summary>A colour by reference: a slot of a style at a shade.</summary>
+public readonly struct Swatch { public readonly StyleRef style; public readonly ColorSlot slot; public readonly double tone; … }
+
+// Palette: plinth = (s, Wall, 0.72), coreIn = (s, Core, 1.08), door = (s, Door, 1), …
 ```
 
-- `MeshBuilder.Styles` lists the styles a mesh uses as (building, tier start): its own tiers, plus a neighbour's for party-wall faces.
+- A swatch names its style as (building, tier start), so a party-wall face simply names its neighbour; the upload turns the distinct style references of a mesh into colour rows. `ColorResolver` turns swatches back into linear RGB through the site.
 - The census tests resolve a swatch to RGB with today's arithmetic (`Colors.Shade(hex of the slot, tone)`). **The fixtures stay as they are** and keep judging the port.
-- LOD2's `ParamRow` replaces its four RGB texels with a reference to the tier's colour row and the glass shade (0.42).
+- LOD2's `ParamRow` holds its four colours as swatches. Step 1 resolves them to RGB texels as today; step 2 replaces the four texels with a reference to the tier's colour row and the glass shade (0.42).
 
 ### 3.3 GPU data: colour rows
 
@@ -210,7 +204,7 @@ Detail models go through the Model Remapper like any prop. The detail validator'
 
 ## 7. Order of work
 
-1. **Runtime, headless:** `ColorSlot`, `Swatch`, the swatch `Palette`, `MeshBuilder.Styles`, the `ParamRow` colour reference, census resolution through swatches, and parsing colour references. Done when every existing census test passes with the fixtures untouched.
+1. **Runtime, headless (done):** `ColorSlot`, `StyleRef`, `Swatch`, the swatch `Palette`, `ColorResolver`, swatches in `ParamRow`, the ten optional style colours, and parsing colour references. Every existing census test passes with the fixtures untouched; `MeshUpload` still uploads RGB, through the resolver.
 2. **Unity layer:** colour rows (and the empty detail table) in `BuildingTable`, the encoding in `MeshUpload`, `StoreyPalette.hlsl`, the `StoreyLit` and `StoreyFacade` changes, and `HexPalette`. Done when the parity harness matches the prototype with Color Pipeline not installed.
 3. **Bridge:** the assembly, `ColorPipelinePalette`, `StoreyColorSettings`, the layout-test rule and the stubs. Done when it stub-compiles headlessly and three things hold in the editor: a palette value edit recolours buildings without regenerating them, deleting a palette entry leaves every building correct, and a building remap shares its atlas row with a `ColorRemap` prop that has the same mapping.
 4. **Authoring:** the palette picker with the curated subsets, *Map colours to palette…*, presets as `FacadeStyle` assets, and the `palette` snapshot block with its prototype reader.

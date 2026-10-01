@@ -51,8 +51,9 @@ namespace Triband.Storey
 
         /// <summary>
         /// Exterior style of storey <paramref name="k"/>: the nearest tier at or below it with a
-        /// style of its own, with the interior, floor, core and ground values always taken from
-        /// the building's style (a setback changes the outside only).
+        /// style of its own, with the interior, floor, core and ground values and the indoor colours
+        /// (rail, metal, ceiling, lift interior and button) always taken from the building's style (a
+        /// setback changes the outside only).
         /// </summary>
         public static FacadeStyle StyleAt(BuildingData b, int k)
         {
@@ -65,6 +66,11 @@ namespace Triband.Storey
             mixed.floor = b.style.floor;
             mixed.core = b.style.core;
             mixed.ground = b.style.ground;
+            mixed.rail = b.style.rail;
+            mixed.metal = b.style.metal;
+            mixed.ceiling = b.style.ceiling;
+            mixed.liftInterior = b.style.liftInterior;
+            mixed.liftButton = b.style.liftButton;
             return mixed;
         }
 

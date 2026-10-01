@@ -171,12 +171,12 @@ namespace Triband.Storey.Generate
             var fp = Derived.OutlineAt(b, k); bool ccw = Geo.Area2(fp) > 0;
             var Wp = new List<Vec2>(fp.Count); foreach (var p in fp) Wp.Add(new Vec2(p.x + b.pos.x, p.z + b.pos.z));
             double y = Derived.FloorBase(b, k), h = Derived.FloorH(b, k), T = Dim.T_EXT;
-            Rgb metal = Colors.Col("#C9CDCB"), grille = Colors.Col("#6E7476"), dark = Colors.Col("#5B5F5E"), rail = C.rail, canvas = C.trim, canvasIn = C.trim.Shade(0.8), disc = Colors.Col("#DDE0DE");
+            Swatch metal = C.detailMetal, grille = C.grille, dark = C.detailDark, rail = C.rail, canvas = C.trim, canvasIn = C.trimShade, disc = C.dish;
             foreach (var d in items)
             {
                 var e = Geo.EdgeInfo(Wp, d.i, ccw); var F = e.F; var u = e.u; var w = e.w; op.Ctx(Geo.WallCtx(e.a, u, w, e.L), 1);
                 P3 X(double uu, double yy, double ww) => F.At(uu, yy, ww);
-                void Bx(double u0, double u1, double y0, double y1, double w0, double w1, Rgb c, Rgb? cIn = null, Skip sk = Skip.None) => op.OBox(F, u0, u1, y0, y1, w0, w1, c, cIn, sk);
+                void Bx(double u0, double u1, double y0, double y1, double w0, double w1, Swatch c, Swatch? cIn = null, Skip sk = Skip.None) => op.OBox(F, u0, u1, y0, y1, w0, w1, c, cIn, sk);
                 double uc = d.u;
                 switch (d.kind)
                 {

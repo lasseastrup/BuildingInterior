@@ -149,7 +149,7 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>A wall as stacked boxes around its openings (used for core fronts).</summary>
-        public static void WallOps(MeshBuilder gb, Frame F, double uA, double uB, double y0, double h, double w0, double w1, List<Opening> ops, Rgb c, Rgb? cIn, Skip skip = Skip.None)
+        public static void WallOps(MeshBuilder gb, Frame F, double uA, double uB, double y0, double h, double w0, double w1, List<Opening> ops, Swatch c, Swatch? cIn, Skip skip = Skip.None)
         {
             double cur = uA;
             foreach (var o in ops)
@@ -169,7 +169,7 @@ namespace Triband.Storey.Generate
         public sealed class PanelOpt
         {
             public bool outer = true, inner = true, ends, threshold;
-            public double? revealFrom; public Rgb? revealC;
+            public double? revealFrom; public Swatch? revealC;
         }
 
         /// <summary>
@@ -177,12 +177,12 @@ namespace Triband.Storey.Generate
         /// surfaces: outer face, inner face (optional), the reveals of each opening, end faces for
         /// free-standing walls.
         /// </summary>
-        public static void WallPanel(MeshBuilder gb, Frame F, Miter m, double w0, double w1, double y0, double h, List<Opening> ops, Rgb cOut, Rgb cIn, PanelOpt? opt = null)
+        public static void WallPanel(MeshBuilder gb, Frame F, Miter m, double w0, double w1, double y0, double h, List<Opening> ops, Swatch cOut, Swatch cIn, PanelOpt? opt = null)
         {
             opt ??= new PanelOpt();
             var os = MergeOps(ops);
             P3 X(double uu, double yy, double wv) => F.At(uu, y0 + yy, wv);
-            void Face(double wv, int sign, Rgb c)
+            void Face(double wv, int sign, Swatch c)
             {
                 double s = m.S.At(wv), e = m.E.At(wv);
                 var cont = new List<Vec2> { new Vec2(s, 0) };
@@ -200,7 +200,7 @@ namespace Triband.Storey.Generate
             }
             if (opt.outer) Face(w1, 1, cOut);
             if (opt.inner) Face(w0, -1, cIn);
-            double rw = opt.revealFrom ?? w0; Rgb rc = opt.revealC ?? cOut;
+            double rw = opt.revealFrom ?? w0; Swatch rc = opt.revealC ?? cOut;
             var nu = new P3(F.u.x, 0, F.u.z);
             foreach (var o in os)
             {
@@ -228,7 +228,7 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>A glass or door pane filling an opening: one quad (two for glass seen from both sides).</summary>
-        public static void Pane(MeshBuilder gb, Frame F, double u0, double u1, double y0, double y1, double wv, Rgb c, bool two)
+        public static void Pane(MeshBuilder gb, Frame F, double u0, double u1, double y0, double y1, double wv, Swatch c, bool two)
         {
             var q = new[] { F.At(u0, y0, wv), F.At(u1, y0, wv), F.At(u1, y1, wv), F.At(u0, y1, wv) };
             gb.Poly(q, new P3(F.w.x, 0, F.w.z), c);
@@ -236,7 +236,7 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>A strip split into pieces at ranges; the first and last take the mitred ends.</summary>
-        public static void StripPieces(MeshBuilder gb, Frame F, Miter m, List<(double, double)> ranges, double y0, double y1, double wa, double wb, Rgb c, Rgb? cIn, Skip skip = Skip.None)
+        public static void StripPieces(MeshBuilder gb, Frame F, Miter m, List<(double, double)> ranges, double y0, double y1, double wa, double wb, Swatch c, Swatch? cIn, Skip skip = Skip.None)
         {
             var (s0, e0) = m.Span(wa, wb);
             foreach (var (a, bb) in ranges)

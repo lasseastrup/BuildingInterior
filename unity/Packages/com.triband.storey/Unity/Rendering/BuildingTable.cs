@@ -84,10 +84,10 @@ namespace Triband.Storey.Unity
         }
 
         /// <summary>A parameter row, written from a generator row; rows are freed with <see cref="ReleaseRow"/>.</summary>
-        public int WriteRow(Generate.ParamRow row)
+        public int WriteRow(Generate.ParamRow row, Generate.ColorResolver colors)
         {
             int x = freeRow.Count > 0 ? freeRow.Pop() : Math.Min(nextRow++, ParamRows - 1);
-            var t = row.Texels(); int o = x * ParamTexels;
+            var t = row.Texels(colors); int o = x * ParamTexels;
             for (int i = 0; i < ParamTexels; i++) Params[o + i] = new Vector4((float)t[i * 4], (float)t[i * 4 + 1], (float)t[i * 4 + 2], (float)t[i * 4 + 3]);
             paramsDirty = true;
             return x;

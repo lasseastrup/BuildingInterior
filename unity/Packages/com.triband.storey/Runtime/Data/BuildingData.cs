@@ -129,13 +129,22 @@ namespace Triband.Storey
     public enum GroundType { Storefront, Match, Solid }
     public enum RoofType { Flat, Hip, Gable, Shed }
 
-    /// <summary>Exterior style. Colours are CSS hex strings as the prototype stores them.</summary>
+    /// <summary>
+    /// Exterior style. Colours are colour references (<see cref="ColorRef"/>): CSS hex as the prototype
+    /// stores them, or Color Pipeline palette ids.
+    /// </summary>
     public sealed class FacadeStyle
     {
         /// <summary>Preset key the style was taken from; null when edited freely.</summary>
         public string? preset;
         public string label = "";
         public string wall = "#9A4B38", trim = "#ECE5D8", interior = "#EFECE5", floor = "#B88D62", roof = "#6E716B", core = "#C9C4BB", glass = "#8DB3C8";
+        /// <summary>
+        /// The colours the prototype fixed for every building, now per style (docs/COLOURS.md §3.1); null = the
+        /// project default (<c>Generate.StyleColors</c>). Door and the facade-detail colours follow the tier's style;
+        /// the indoor ones (rail, metal, ceiling, lift interior and button) come from the building's, as interior does.
+        /// </summary>
+        public string? door, rail, metal, ceiling, liftInterior, liftButton, detailMetal, grille, detailDark, dish;
         public WindowType windows = WindowType.Punched;
         public double winW = 1.2;
         public double bay = 2.6;
@@ -153,6 +162,22 @@ namespace Triband.Storey
         public DetailRules? details;
 
         public FacadeStyle Clone() { var c = (FacadeStyle)MemberwiseClone(); c.details = details?.Clone(); return c; }
+    }
+
+    /// <summary>
+    /// What a style colour field holds (docs/COLOURS.md §3.1): a CSS literal <c>#RRGGBB</c> (or <c>#RGB</c>),
+    /// as the prototype writes it, or a palette id: a Color Pipeline <c>SerializableGUID</c> as its 32 hex digits.
+    /// </summary>
+    public static class ColorRef
+    {
+        public static bool IsHex(string? s) => s != null && (s.Length == 7 || s.Length == 4) && s[0] == '#' && AllHex(s, 1);
+        public static bool IsPaletteId(string? s) => s != null && s.Length == 32 && AllHex(s, 0);
+
+        static bool AllHex(string s, int from)
+        {
+            for (int i = from; i < s.Length; i++) if (!System.Uri.IsHexDigit(s[i])) return false;
+            return true;
+        }
     }
 
     /// <summary>How often the style's rules place details, in percent (SPEC §4.4).</summary>

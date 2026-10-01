@@ -63,6 +63,7 @@ namespace Triband.Storey.Unity
             if (layout == null || opaque == null || glass == null || massing == null) return;
             var doc = layout.Document;
             var site = new Site(doc.buildings);
+            var colors = new ColorResolver(site);
             foreach (var b in doc.buildings)
             {
                 var bt = new Built { idx = table.AllocIndex() };
@@ -72,13 +73,13 @@ namespace Triband.Storey.Unity
 
                 var l0 = Lod0.Build(site, b);
                 bt.wallCount = l0.Op.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
-                Add(root, "LOD0", MeshUpload.Upload(Tagged(l0.Op, bt.idx), b.name + " LOD0", bt.wallBase), opaque, true);
-                Add(root, "LOD0 glass", MeshUpload.Upload(Tagged(l0.Glass, bt.idx), b.name + " glass", bt.wallBase), glass, false);
-                Add(root, "LOD1", MeshUpload.Upload(Tagged(Lod1.Build(site, b), bt.idx + Lod1.LOD_TAG), b.name + " LOD1"), opaque, true);
+                Add(root, "LOD0", MeshUpload.Upload(Tagged(l0.Op, bt.idx), b.name + " LOD0", colors, bt.wallBase), opaque, true);
+                Add(root, "LOD0 glass", MeshUpload.Upload(Tagged(l0.Glass, bt.idx), b.name + " glass", colors, bt.wallBase), glass, false);
+                Add(root, "LOD1", MeshUpload.Upload(Tagged(Lod1.Build(site, b), bt.idx + Lod1.LOD_TAG), b.name + " LOD1", colors), opaque, true);
 
                 var l2 = Lod2.Build(site, b);
                 var rowMap = new int[l2.Rows.Count];
-                for (int r = 0; r < l2.Rows.Count; r++) { rowMap[r] = table.WriteRow(l2.Rows[r]); bt.rows.Add(rowMap[r]); }
+                for (int r = 0; r < l2.Rows.Count; r++) { rowMap[r] = table.WriteRow(l2.Rows[r], colors); bt.rows.Add(rowMap[r]); }
                 l2.Tag = bt.idx + 2 * Lod1.LOD_TAG;
                 Add(root, "LOD2", MeshUpload.Upload(l2, b.name + " LOD2", rowMap), massing, true);
 

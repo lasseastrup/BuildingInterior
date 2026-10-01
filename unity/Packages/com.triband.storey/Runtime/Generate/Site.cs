@@ -70,7 +70,7 @@ namespace Triband.Storey.Generate
             public double s, e, sRaw, eRaw, Hp;
             public bool own;
             public int pIdx;
-            public Rgb pInner;
+            public Swatch pInner;
         }
 
         /// <summary>How high b's outlines run along world segment a–c, counting tiers up from the base.</summary>
@@ -150,7 +150,7 @@ namespace Triband.Storey.Generate
                 {
                     s = s0, e = e0, sRaw = sRaw, eRaw = eRaw, Hp = Hp,
                     own = Hm > Hp + 1e-3 || (Math.Abs(Hm - Hp) <= 1e-3 && string.CompareOrdinal(b.id, p.id) < 0),
-                    pIdx = site.IndexOf(p), pInner = Colors.Col(p.style.interior),
+                    pIdx = site.IndexOf(p), pInner = new Swatch(new StyleRef(site.IndexOf(p), 0), ColorSlot.Interior),
                 });
             }
             out_.Sort((x, y) => x.s.CompareTo(y.s));

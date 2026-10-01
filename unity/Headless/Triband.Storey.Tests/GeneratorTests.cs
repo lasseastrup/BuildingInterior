@@ -53,7 +53,7 @@ namespace Triband.Storey.Tests
         }
 
         /// <summary>The LOD2 mesh as a colour-free census: plane, quad kind, bay, window span and the parameter row.</summary>
-        static Dictionary<string, Bucket> CensusOf(Lod2Mesh m)
+        static Dictionary<string, Bucket> CensusOf(Lod2Mesh m, ColorResolver colors)
         {
             var B = new Dictionary<string, Bucket>(StringComparer.Ordinal);
             for (int t = 0; t < m.I.Count; t += 3)
@@ -61,7 +61,7 @@ namespace Triband.Storey.Tests
                 int a = m.I[t], bb = m.I[t + 1], c = m.I[t + 2];
                 P3 A = m.P[a], Bp = m.P[bb], Cp = m.P[c]; var n = m.N[a] * (1.0 / 127);
                 var (d, area) = Plane(A, Bp, Cp, n);
-                var row = m.Rows[m.Slot[a]].Texels();
+                var row = m.Rows[m.Slot[a]].Texels(colors);
                 string key = $"{R(n.x)},{R(n.y)},{R(n.z)}|{R(d)}|{R(m.Fac2[2 * a + 1])}|{R(m.Fac2[2 * a])}|{R(m.Fac[4 * a + 2])},{R(m.Fac[4 * a + 3])}|{string.Join(",", Array.ConvertAll(row, R))}";
                 B[key] = B.TryGetValue(key, out var e) ? new Bucket(key, e.Area + area, e.Tris + 1) : new Bucket(key, area, 1);
             }
@@ -102,13 +102,13 @@ namespace Triband.Storey.Tests
         static string Key(P3 n, double d, Rgb c) =>
             $"{R(n.x)},{R(n.y)},{R(n.z)}|{R(d)}|{R(c.r)},{R(c.g)},{R(c.b)}";
 
-        static Dictionary<string, Bucket> CensusOf(MeshBuilder gb)
+        static Dictionary<string, Bucket> CensusOf(MeshBuilder gb, ColorResolver colors)
         {
             var B = new Dictionary<string, Bucket>(StringComparer.Ordinal);
             for (int t = 0; t < gb.I.Count; t += 3)
             {
                 int a = gb.I[t], bb = gb.I[t + 1], c = gb.I[t + 2];
-                P3 A = gb.P[a], Bp = gb.P[bb], Cp = gb.P[c]; var n = gb.N[a]; var col = gb.C[a];
+                P3 A = gb.P[a], Bp = gb.P[bb], Cp = gb.P[c]; var n = gb.N[a]; var col = colors.Resolve(gb.C[a]);
                 var (d, area) = Plane(A, Bp, Cp, n);
                 string key = Key(n, d, col);
                 B[key] = B.TryGetValue(key, out var e) ? new Bucket(key, e.Area + area, e.Tris + 1) : new Bucket(key, area, 1);
@@ -137,7 +137,8 @@ namespace Triband.Storey.Tests
             var e = Expected(file, i, lod);
             Assert.Equal(b.id, e.GetProperty("id").GetString());
 
-            var got = lod == 0 ? CensusOf(Lod0.Build(site, b).Op) : lod == 1 ? CensusOf(Lod1.Build(site, b)) : CensusOf(Lod2.Build(site, b));
+            var colors = new ColorResolver(site);
+            var got = lod == 0 ? CensusOf(Lod0.Build(site, b).Op, colors) : lod == 1 ? CensusOf(Lod1.Build(site, b), colors) : CensusOf(Lod2.Build(site, b), colors);
             var want = lod < 2 ? CensusOf(e) : Census2Of(e);
             var tol = Census[lod].Value.RootElement.GetProperty("tolerance");
             double abs = tol.GetProperty("area").GetDouble(), rel = tol.GetProperty("areaRelative").GetDouble();

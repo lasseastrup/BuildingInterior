@@ -30,7 +30,8 @@ namespace Triband.Storey.Generate
     {
         public readonly List<P3> P = new List<P3>();
         public readonly List<P3> N = new List<P3>();
-        public readonly List<Rgb> C = new List<Rgb>();
+        /// <summary>Colour per vertex, by reference (docs/COLOURS.md §3.2); <see cref="ColorResolver"/> gives the RGB.</summary>
+        public readonly List<Swatch> C = new List<Swatch>();
         /// <summary>Cutaway data per vertex: wall start (x, z) and normal scaled by 1 + length.</summary>
         public readonly List<double> W = new List<double>();
         /// <summary>Kind per vertex: 0 slab/roof, 1 wall, 2 tall part; + 8 × (neighbour index + 1) for party walls.</summary>
@@ -66,14 +67,14 @@ namespace Triband.Storey.Generate
             return this;
         }
 
-        void V(P3 q, P3 nr, Rgb c)
+        void V(P3 q, P3 nr, Swatch c)
         {
             P.Add(q); N.Add(nr); C.Add(c);
             if (!Lean) { W.Add(curW[0]); W.Add(curW[1]); W.Add(curW[2]); W.Add(curW[3]); K.Add(curK); WI.Add(curI); }
         }
 
         /// <summary>A convex planar polygon, fanned; winding fixed to face along <paramref name="nr"/>.</summary>
-        public void Poly(P3[] pts, P3 nr, Rgb c)
+        public void Poly(P3[] pts, P3 nr, Swatch c)
         {
             P3 a = pts[0], b = pts[1], d = pts[2];
             var cr = P3.Cross(b - a, d - a);
@@ -84,7 +85,7 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>A triangulated planar polygon (earcut output): one vertex per corner, shared by its triangles.</summary>
-        public void PolyTris(List<P3> pts, List<int> tris, P3 nr, Rgb c)
+        public void PolyTris(List<P3> pts, List<int> tris, P3 nr, Swatch c)
         {
             if (tris.Count == 0) return;
             int bse = P.Count;
@@ -99,10 +100,10 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>An axis-aligned box in frame F: u0..u1 along, y0..y1 up, w0..w1 across.</summary>
-        public void OBox(Frame F, double u0, double u1, double y0, double y1, double w0, double w1, Rgb c, Rgb? cIn = null, Skip skip = Skip.None)
+        public void OBox(Frame F, double u0, double u1, double y0, double y1, double w0, double w1, Swatch c, Swatch? cIn = null, Skip skip = Skip.None)
         {
             if (u1 - u0 < 1e-4 || y1 - y0 < 1e-4 || w1 - w0 < 1e-4) return;
-            Rgb ci = cIn ?? c;
+            Swatch ci = cIn ?? c;
             Solids?.Add(new Solid { F = F, u0 = u0, u1 = u1, y0 = y0, y1 = y1, w0 = w0, w1 = w1 });
             P3 Pt(double a, double y, double b) => F.At(a, y, b);
             var nu = new P3(F.u.x, 0, F.u.z); var nw = new P3(F.w.x, 0, F.w.z);
@@ -115,11 +116,11 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>A box whose start and end faces are slanted: u_start(w) = sA + kA·w, u_end(w) = eB + kB·w.</summary>
-        public void MBox(Frame F, double sA, double kA, double eB, double kB, double y0, double y1, double w0, double w1, Rgb c, Rgb? cIn = null, Skip skip = Skip.None)
+        public void MBox(Frame F, double sA, double kA, double eB, double kB, double y0, double y1, double w0, double w1, Swatch c, Swatch? cIn = null, Skip skip = Skip.None)
         {
             double s0 = sA + kA * w0, s1 = sA + kA * w1, e0 = eB + kB * w0, e1 = eB + kB * w1;
             if (e0 - s0 < 1e-4 || e1 - s1 < 1e-4 || y1 - y0 < 1e-4 || w1 - w0 < 1e-4) return;
-            Rgb ci = cIn ?? c;
+            Swatch ci = cIn ?? c;
             Solids?.Add(new Solid { F = F, Mitred = true, sA = sA, kA = kA, eB = eB, kB = kB, y0 = y0, y1 = y1, w0 = w0, w1 = w1 });
             P3 Pt(double a, double y, double b) => F.At(a, y, b);
             var nw = new P3(F.w.x, 0, F.w.z);

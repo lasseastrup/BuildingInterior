@@ -15,6 +15,7 @@ namespace Triband.Storey.Validate
     {
         public sealed class Overlap
         {
+            /// <summary>SameColour: both faces use the same swatch, so they show the same colour whatever the palette.</summary>
             public P3 At; public P3 N; public bool SameColour; public double Area;
             public override string ToString() => $"{(SameColour ? "same colour" : "different colours")} at {At}, normal {N}, area {Area:0.####}";
         }
@@ -25,7 +26,7 @@ namespace Triband.Storey.Validate
             public List<Overlap> Overlaps = new List<Overlap>();
         }
 
-        sealed class Tri { public P3[] P = null!; public P3 n; public Rgb c; public double d; }
+        sealed class Tri { public P3[] P = null!; public P3 n; public Swatch c; public double d; }
 
         public static Report Run(MeshBuilder gb) => Run(new[] { gb });
 
@@ -72,7 +73,7 @@ namespace Triband.Storey.Validate
                         if (Inside(p3)) { report.Buried++; continue; }
                         if (n.y < -0.9 && Math.Abs(d) < 0.01) { report.Buried++; continue; }
                         var ca = arr[a].c; var cb = arr[c].c;
-                        bool same = Math.Abs(ca.r - cb.r) < 1e-3 && Math.Abs(ca.g - cb.g) < 1e-3 && Math.Abs(ca.b - cb.b) < 1e-3;
+                        bool same = ca.Equals(cb);
                         report.Overlaps.Add(new Overlap { At = arr[a].P[0], N = n, SameColour = same, Area = Math.Abs(Area(o)) });
                     }
             }
