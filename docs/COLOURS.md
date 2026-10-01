@@ -6,8 +6,8 @@ How Storey's materials get their colours from Triband's Color Pipeline (`com.tri
 
 1. **The palette is the only source of colour values.** Every Storey material reads its albedo from Color Pipeline's atlas (`_GlobalColorPaletteTex`) at draw time. A palette edit reaches every building without regenerating anything, and buildings follow the same remaps as every other Color Pipeline object (and, from 3.0, the same palette grading).
 2. **Styles reference palette entries, not RGB.** A `FacadeStyle` colour holds a palette id (a `SerializableGUID` as its 32-digit string) instead of a CSS hex. Hex stays legal as a literal so prototype layouts still import; the editor maps literals to palette entries.
-3. **Vertices name a colour instead of carrying one.** The generator emits a *swatch* per vertex in the 4 bytes the vertex colour uses today: which style (a colour row), which slot (wall, trim, … or a fixed colour such as the door) and a shade factor. The shade keeps derived colours tied to their base (the plinth is 72 % of the wall), so they follow palette edits and remaps.
-4. **Colour rows are per-building data in the building table**, as LOD2's parameter rows already are (SPEC §6.4): one row per building tier holds the palette indices of that style's seven colours. A colour change on a building, or a palette change that moves indices, rewrites rows and never meshes; HLOD cells never rebuild for colour.
+3. **Vertices name a colour instead of carrying one.** The generator emits a *swatch* per vertex in the 4 bytes the vertex colour uses today: which style (a colour row), which slot (wall, trim, door, rail, …) and a shade factor. The shade keeps derived colours tied to their base (the plinth is 72 % of the wall), so they follow palette edits and remaps.
+4. **Colour rows are per-building data in the building table**, as LOD2's parameter rows already are (SPEC §6.4): one row per building tier holds the palette indices of that style's seventeen colours. A colour change on a building, or a palette change that moves indices, rewrites rows and never meshes; HLOD cells never rebuild for colour.
 5. **Per-building remaps use 2.1.11's `ColorMappingManager.SetupColorRemap(ColorRemapDescriptor, out int offset)`.** The offset is stored in the building's rows and registered again on `OnMappingsInvalidated`. Never a `ColorRemap` component or a `MaterialPropertyBlock` on a Storey renderer.
 6. **The Color Pipeline glue is one optional assembly** (`versionDefines` on `com.triband.colorpipeline` from 2.1.11 up to 3.0, its previews excluded), with a built-in hex palette when the package is absent. The headless tests, CI and the prototype parity harness then need neither a palette nor the private registry.
 
@@ -25,7 +25,7 @@ Every colour the generator emits is one of three kinds. This was checked against
 | Kind | Colours |
 |---|---|
 | A style colour at a fixed shade | wall ×1, ×0.72 (plinth) · trim ×1, ×0.8 (soffit, awning underside) · interior ×1, ×0.72 (door trim) · floor · roof · core ×1, ×1.08 (core inside), ×0.82 (stair steps), ×0.85 (slab sides) · glass ×1, ×0.42 (opaque glass, LOD2 windows) |
-| A fixed colour | door `#3B3129`, metal `#A3ABAE`, rail `#3D4448`, ceiling `#F3F2EE`, lift interior `#8E9A9E`, lift button `#FFB36B`, detail metal `#C9CDCB`, grille `#6E7476`, detail dark `#5B5F5E`, dish `#DDE0DE` |
+| A fixed colour (becomes a style colour, §3.1) | door `#3B3129`, metal `#A3ABAE`, rail `#3D4448`, ceiling `#F3F2EE`, lift interior `#8E9A9E`, lift button `#FFB36B`, detail metal `#C9CDCB`, grille `#6E7476`, detail dark `#5B5F5E`, dish `#DDE0DE` |
 | A neighbour's interior | the outside face of a party wall (SPEC §4.3) |
 
 So no vertex needs a free RGB value: (style, slot, shade) describes all of them. The play kit's lift car (`#8E979A`, `#DAD8D2`) is a separate prop and is coloured like any other Color Pipeline object.
@@ -45,7 +45,10 @@ So no vertex needs a free RGB value: (style, slot, shade) describes all of them.
 ### 3.1 Data: colour references
 
 - A style colour is a **colour reference string**: either `#RRGGBB`, a literal as the prototype writes it, or a palette id (`SerializableGUID.ToString()`, 32 hex digits, read back with `new SerializableGUID(string)`). It is the same field and the same JSON type, so `PrototypeJson`, `StyleAt` and the fixtures are unchanged and the engine-free model never needs Color Pipeline.
-- **Fixed colours** (the second row of the table above) become project settings: `StoreyColorSettings` in the bridge assembly (§3.7), with `[ColorReference]` `SerializableGUID` fields, which gives Color Pipeline's drawer and picker for free. Without Color Pipeline the prototype's hex values are the defaults.
+- **The ten fixed colours become style colours** (decided: per style, §8). `FacadeStyle` gains ten optional fields: `door`, `rail`, `metal` (lift frames), `ceiling`, `liftInterior`, `liftButton`, `detailMetal`, `grille`, `detailDark` and `dish`. Each holds a colour reference like the other seven.
+  - **An absent field means the project default**, which comes from `StoreyColorSettings` in the bridge assembly (§3.7). That asset has `[ColorReference]` `SerializableGUID` fields, so Color Pipeline's drawer and picker come for free, and its defaults are the prototype's hex values. Existing styles and prototype files need no new keys, and the prototype keeps working without them; the writer omits a field that equals the default.
+  - **Which tier wins** follows today's rule for interior, floor and core (`Derived.StyleAt`). The indoor ones (`ceiling`, `liftInterior`, `liftButton`, `rail`, `metal`) come from the building's style, so a setback changes the outside only. `door` and the four detail colours follow the tier's style, like the walls.
+  - The inspector shows them under a *More colours* foldout, as the prototype keeps interior colours under one.
 - **Presets** (`FacadeStyle` assets, Plan §4.1) reference palette ids like any other style.
 - **Prototype compatibility, for now:** when Unity writes a `.storey` file it adds a top-level `palette` block with the name and current hex of every palette id the file uses (`"palette": { "<id>": { "name": "BrickRed", "hex": "#9A4B38" } }`). The prototype resolves ids through it, so the file still opens there, and headless tools can render ids without Unity. `PrototypeJson` learns the key; the block is a snapshot written at save and is never the source of truth. Edits made in the prototype on an id-coloured style write hex literals, which the next *Map colours to palette…* maps back.
 
@@ -56,9 +59,9 @@ The generator stops producing `Rgb`. `MeshBuilder.C` becomes a list of swatches,
 ```csharp
 public enum ColorSlot : byte
 {
-    Wall, Trim, Interior, Floor, Roof, Core, Glass,              // from the style's colour row
-    Door = 8, Metal, Rail, Ceiling, LiftInterior, LiftButton,    // from the fixed table
-    DetailMetal, Grille, DetailDark, Dish,
+    Wall, Trim, Interior, Floor, Roof, Core, Glass,              // all from the style's colour row
+    Door, Metal, Rail, Ceiling, LiftInterior, LiftButton,
+    DetailMetal, Grille, DetailDark, Dish,                       // 0..16; 24 and up: facade-detail models (§3.9)
 }
 
 /// <summary>A colour by reference: one of the mesh's styles (index into MeshBuilder.Styles), a slot and a shade.</summary>
@@ -71,16 +74,16 @@ public struct Swatch
 // Palette: plinth = new Swatch(s, ColorSlot.Wall, 0.72), coreIn = new Swatch(s, ColorSlot.Core, 1.08), door = new Swatch(s, ColorSlot.Door, 1), …
 ```
 
-- `MeshBuilder.Styles` lists the styles a mesh uses as (building, tier start): its own tiers, plus a neighbour's for party-wall faces. Fixed slots carry the style too, so a building's remap reaches its doors and rails.
+- `MeshBuilder.Styles` lists the styles a mesh uses as (building, tier start): its own tiers, plus a neighbour's for party-wall faces.
 - The census tests resolve a swatch to RGB with today's arithmetic (`Colors.Shade(hex of the slot, tone)`). **The fixtures stay as they are** and keep judging the port.
 - LOD2's `ParamRow` replaces its four RGB texels with a reference to the tier's colour row and the glass shade (0.42).
 
-### 3.3 GPU data: colour rows and the fixed table
+### 3.3 GPU data: colour rows
 
 Two buffers join the building table and are allocated and freed like LOD2's parameter rows:
 
-- `_StoreyColors` (`StructuredBuffer<uint4>`): **one row per building tier**, with eight 16-bit entries. These are the palette indices of wall, trim, interior, floor, roof, core and glass, plus the **atlas row of the building's remap** (0 = none). At 16 bytes a row this is about 70 KiB for the 3,000-building test city, at 1.5 tiers per building.
-- `_StoreyFixedColors` (`StructuredBuffer<uint>`): the palette index of each fixed slot (slot − 8), from `StoreyColorSettings`. Later it also holds the colours of facade-detail models (§3.9).
+- `_StoreyColors` (`StructuredBuffer<uint4>`): **one row per building tier** of three `uint4`, 24 16-bit entries. Entries 0–16 are the palette indices of the style's seventeen colours in `ColorSlot` order, 17–22 are spare, and entry 23 is the **atlas row of the building's remap** (0 = none). At 48 bytes a row this is about 210 KiB for the 3,000-building test city, at 1.5 tiers per building.
+- `_StoreyDetailColors` (`StructuredBuffer<uint>`): the palette index of each colour used by facade-detail models (slot − 24, §3.9), written once from the detail catalogue. Empty until detail models exist.
 
 The CPU writes a row when a building is uploaded or its colours change. It rewrites every row when the palette's indices may have moved (`OnMappingsInvalidated`), resolving each palette id to its current index through `ColorPaletteDefinition.Instance`. Party-wall faces point at the neighbour's row, so the neighbour's interior colour follows it without a rebuild. Party walls already rebuild when a neighbour's structure changes.
 
@@ -105,23 +108,24 @@ One new include, `StoreyPalette.hlsl`, is Storey's whole view of Color Pipeline.
 ```hlsl
 TEXTURE2D(_GlobalColorPaletteTex);          // ColorMappingManager's atlas, or Storey's hex palette (§3.7)
 uint _ColorAtlasWidth;
-StructuredBuffer<uint4> _StoreyColors;      // per colour row: 8 x uint16 (7 style colours, remap row)
-StructuredBuffer<uint>  _StoreyFixedColors; // per fixed slot: palette index
+StructuredBuffer<uint4> _StoreyColors;       // per colour row, 3 x uint4: 24 x uint16 (17 style colours, spare, remap row)
+StructuredBuffer<uint>  _StoreyDetailColors; // per facade-detail colour: palette index
 
 // Color Pipeline 2.1.11's SampleColorPalette, same addressing
 float4 StoreyAtlas(uint i) { return LOAD_TEXTURE2D(_GlobalColorPaletteTex, int2(i % _ColorAtlasWidth, i / _ColorAtlasWidth)); }
 
 uint StoreyRowEntry(uint row, uint e)
 {
-    uint4 r = _StoreyColors[row];
-    uint w = e < 2 ? r.x : e < 4 ? r.y : e < 6 ? r.z : r.w;
+    uint4 r = _StoreyColors[row * 3 + (e >> 3)];
+    uint q = (e >> 1) & 3;
+    uint w = q == 0 ? r.x : q == 1 ? r.y : q == 2 ? r.z : r.w;
     return (e & 1) ? w >> 16 : w & 0xFFFF;
 }
 
 float3 StoreyPaletteColor(uint row, uint slot, float tone)
 {
-    uint index = slot < 8 ? StoreyRowEntry(row, slot) : _StoreyFixedColors[slot - 8];
-    return StoreyAtlas(StoreyRowEntry(row, 7) * _ColorAtlasWidth + index).rgb * tone;
+    uint index = slot < 24 ? StoreyRowEntry(row, slot) : _StoreyDetailColors[slot - 24];
+    return StoreyAtlas(StoreyRowEntry(row, 23) * _ColorAtlasWidth + index).rgb * tone;
 }
 
 float3 StoreyVertexColor(float4 c)   // the vertex Color attribute (§3.4)
@@ -137,14 +141,14 @@ float3 StoreyVertexColor(float4 c)   // the vertex Color attribute (§3.4)
 | `Storey/Massing` | `StoreyFacadeColor` reads wall, trim, glass (times the row's shade) and roof through the parameter row's colour row. That is four atlas reads per fragment, alongside the parameter reads it already does. |
 | Section cap, isolate ghost, Sink darkening, LOD tint | Unchanged: these are presentation colours, not palette colours. The cap could take a palette entry from `StoreyColorSettings` later. |
 
-Nothing is per material: no `_ColorPaletteOffset` and no property blocks, so the SRP Batcher and the GPU Resident Drawer are unaffected (Plan §6.1). The cost is a row read and a texture load per vertex, plus a table read for fixed colours. Vertex texture loads are fine on Metal, Vulkan and DX12.
+Nothing is per material: no `_ColorPaletteOffset` and no property blocks, so the SRP Batcher and the GPU Resident Drawer are unaffected (Plan §6.1). The cost is a row read and a texture load per vertex, plus a table read for facade-detail colours. Vertex texture loads are fine on Metal, Vulkan and DX12.
 
 ### 3.6 Remaps
 
 ```csharp
 var d = new ColorRemapDescriptor(original, overwrite);           // SerializableGUID[] each
 ColorMappingManager.SetupColorRemap(d, out int offset);
-int atlasRow = offset / Shader.GetGlobalInt("_ColorAtlasWidth"); // goes into entry 7 of each of the building's rows
+int atlasRow = offset / Shader.GetGlobalInt("_ColorAtlasWidth"); // goes into entry 23 of each of the building's rows
 ```
 
 - Keep every descriptor that has been registered and register them all again in `OnMappingsInvalidated`, because offsets handed out before it are stale.
@@ -178,7 +182,7 @@ int atlasRow = offset / Shader.GetGlobalInt("_ColorAtlasWidth"); // goes into en
 
 ### 3.9 Facade details (imported models, SPEC §4.4)
 
-Detail models go through the Model Remapper like any prop. The detail validator's rule that "the material is the building material" becomes: one submesh, Color Pipeline's default material, and colour indices in the configured UV channel. At import the `FacadeDetailDefinition` stores the palette **ids** of its vertices rather than the indices, which go stale when the palette loses an entry. When a detail is merged into a building mesh its colours become fixed-table slots, so a palette change rewrites the table and not the buildings.
+Detail models go through the Model Remapper like any prop. The detail validator's rule that "the material is the building material" becomes: one submesh, Color Pipeline's default material, and colour indices in the configured UV channel. At import the `FacadeDetailDefinition` stores the palette **ids** of its vertices rather than the indices, which go stale when the palette loses an entry. When a detail is merged into a building mesh its colours become detail-table slots (24 and up), so a palette change rewrites the table and not the buildings.
 
 ## 4. Alternatives considered
 
@@ -207,7 +211,7 @@ Detail models go through the Model Remapper like any prop. The detail validator'
 ## 7. Order of work
 
 1. **Runtime, headless:** `ColorSlot`, `Swatch`, the swatch `Palette`, `MeshBuilder.Styles`, the `ParamRow` colour reference, census resolution through swatches, and parsing colour references. Done when every existing census test passes with the fixtures untouched.
-2. **Unity layer:** colour rows and the fixed table in `BuildingTable`, the encoding in `MeshUpload`, `StoreyPalette.hlsl`, the `StoreyLit` and `StoreyFacade` changes, and `HexPalette`. Done when the parity harness matches the prototype with Color Pipeline not installed.
+2. **Unity layer:** colour rows (and the empty detail table) in `BuildingTable`, the encoding in `MeshUpload`, `StoreyPalette.hlsl`, the `StoreyLit` and `StoreyFacade` changes, and `HexPalette`. Done when the parity harness matches the prototype with Color Pipeline not installed.
 3. **Bridge:** the assembly, `ColorPipelinePalette`, `StoreyColorSettings`, the layout-test rule and the stubs. Done when it stub-compiles headlessly and three things hold in the editor: a palette value edit recolours buildings without regenerating them, deleting a palette entry leaves every building correct, and a building remap shares its atlas row with a `ColorRemap` prop that has the same mapping.
 4. **Authoring:** the palette picker with the curated subsets, *Map colours to palette…*, presets as `FacadeStyle` assets, and the `palette` snapshot block with its prototype reader.
 5. **Later:** facade-detail models (§3.9) and 3.0 (§6).
@@ -216,5 +220,5 @@ Detail models go through the Model Remapper like any prop. The detail validator'
 
 1. **Every project that uses Storey has Color Pipeline** (decided). So `HexPalette` is no longer a feature for projects. It stays only as the path the headless tests, CI and the prototype parity harness take, which keeps them free of a palette asset and the private registry. The bridge stays an optional assembly for the same reason, and the rule that the fallback never runs next to Color Pipeline still holds.
 2. **Unity-written `.storey` files still open in the prototype**, for now (decided): the `palette` snapshot block (§3.1).
-3. **Fixed colours per project or per style?** Open. Door, rail, lift-frame, ceiling, lift and detail colours are hard-coded today, so every building has the same ones. Per project means one palette choice each in `StoreyColorSettings`. Per style means each `FacadeStyle` may choose its own, at the cost of up to ten more style fields and a second `uint4` per colour row. The recommendation is per project now, promoting individual slots (doors are the likely first) to the style when a style needs them.
+3. **Fixed colours are per style** (decided, §3.1): ten optional `FacadeStyle` fields with project defaults in `StoreyColorSettings`, and a colour row of three `uint4`.
 4. **The prototype's swatch rows become curated palette subsets per field** (decided, §3.8).
