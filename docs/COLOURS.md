@@ -47,6 +47,7 @@ So no vertex needs a free RGB value: (style, slot, shade) describes all of them.
 - A style colour is a **colour reference string**: either `#RRGGBB`, a literal as the prototype writes it, or a palette id (`SerializableGUID.ToString()`, 32 hex digits, read back with `new SerializableGUID(string)`). It is the same field and the same JSON type, so `PrototypeJson`, `StyleAt` and the fixtures are unchanged and the engine-free model never needs Color Pipeline.
 - **Fixed colours** (the second row of the table above) become project settings: `StoreyColorSettings` in the bridge assembly (§3.7), with `[ColorReference]` `SerializableGUID` fields, which gives Color Pipeline's drawer and picker for free. Without Color Pipeline the prototype's hex values are the defaults.
 - **Presets** (`FacadeStyle` assets, Plan §4.1) reference palette ids like any other style.
+- **Prototype compatibility, for now:** when Unity writes a `.storey` file it adds a top-level `palette` block with the name and current hex of every palette id the file uses (`"palette": { "<id>": { "name": "BrickRed", "hex": "#9A4B38" } }`). The prototype resolves ids through it, so the file still opens there, and headless tools can render ids without Unity. `PrototypeJson` learns the key; the block is a snapshot written at save and is never the source of truth. Edits made in the prototype on an id-coloured style write hex literals, which the next *Map colours to palette…* maps back.
 
 ### 3.2 Generator: swatches instead of RGB
 
@@ -172,7 +173,7 @@ int atlasRow = offset / Shader.GetGlobalInt("_ColorAtlasWidth"); // goes into en
 
 ### 3.8 Editor
 
-- **Picking:** every style colour opens Color Pipeline's own picker (`PaletteColorPickerWindow.Open`, which is public) and shows the swatch and the palette name. The prototype's per-field swatch rows can become a short list of suggested palette ids. Its free colour picker has no equivalent: an off-palette colour has to become a new palette entry, which is how Color Pipeline is meant to be used.
+- **Picking:** every style colour opens Color Pipeline's own picker (`PaletteColorPickerWindow.Open`, which is public) and shows the swatch and the palette name. The prototype's per-field swatch rows become curated palette subsets: `StoreyColorSettings` holds a short list of suggested palette ids for wall, trim, roof, interior and floor, shown above the full picker and seeded by mapping the prototype's `PALETTE` lists. Its free colour picker has no equivalent: an off-palette colour has to become a new palette entry, which is how Color Pipeline is meant to be used.
 - **Importing prototype layouts:** *Map colours to palette…* on a `.storey` asset lists each distinct hex literal with its best palette match and the similarity (`GetColorSimilarity`, the Model Remapper's measure). Exact matches are accepted automatically; the rest are accepted, changed, or added to the palette (`ColorPaletteDefinition.Colors.Add`, `Save`, `ColorMappingManager.Reset`). The file is then rewritten with palette ids. It uses the Model Remapper's vocabulary, so artists already know it.
 
 ### 3.9 Facade details (imported models, SPEC §4.4)
@@ -208,12 +209,12 @@ Detail models go through the Model Remapper like any prop. The detail validator'
 1. **Runtime, headless:** `ColorSlot`, `Swatch`, the swatch `Palette`, `MeshBuilder.Styles`, the `ParamRow` colour reference, census resolution through swatches, and parsing colour references. Done when every existing census test passes with the fixtures untouched.
 2. **Unity layer:** colour rows and the fixed table in `BuildingTable`, the encoding in `MeshUpload`, `StoreyPalette.hlsl`, the `StoreyLit` and `StoreyFacade` changes, and `HexPalette`. Done when the parity harness matches the prototype with Color Pipeline not installed.
 3. **Bridge:** the assembly, `ColorPipelinePalette`, `StoreyColorSettings`, the layout-test rule and the stubs. Done when it stub-compiles headlessly and three things hold in the editor: a palette value edit recolours buildings without regenerating them, deleting a palette entry leaves every building correct, and a building remap shares its atlas row with a `ColorRemap` prop that has the same mapping.
-4. **Authoring:** the palette picker on style colours, *Map colours to palette…*, and presets as `FacadeStyle` assets.
+4. **Authoring:** the palette picker with the curated subsets, *Map colours to palette…*, presets as `FacadeStyle` assets, and the `palette` snapshot block with its prototype reader.
 5. **Later:** facade-detail models (§3.9) and 3.0 (§6).
 
-## 8. Open questions
+## 8. Decisions and open questions
 
-1. **Will every project that uses Storey also have Color Pipeline?** If so, the fallback could go. It is small, but it is what keeps the tests and the parity harness free of a palette asset and the private registry, so the recommendation is to keep it.
-2. **Should `.storey` files written by Unity still open in the prototype?** The prototype only understands CSS colours. A small `palette` block (id → name, hex) written next to `buildings` would let it render palette ids, and so could headless tools.
-3. **Fixed colours per project or per style?** Per project for now, since the prototype has no per-style doors. A style slot can be added later; the row has no spare entry, so that means a second `uint4`.
-4. **The prototype's swatch rows:** a curated palette subset per field, or the whole palette?
+1. **Every project that uses Storey has Color Pipeline** (decided). So `HexPalette` is no longer a feature for projects. It stays only as the path the headless tests, CI and the prototype parity harness take, which keeps them free of a palette asset and the private registry. The bridge stays an optional assembly for the same reason, and the rule that the fallback never runs next to Color Pipeline still holds.
+2. **Unity-written `.storey` files still open in the prototype**, for now (decided): the `palette` snapshot block (§3.1).
+3. **Fixed colours per project or per style?** Open. Door, rail, lift-frame, ceiling, lift and detail colours are hard-coded today, so every building has the same ones. Per project means one palette choice each in `StoreyColorSettings`. Per style means each `FacadeStyle` may choose its own, at the cost of up to ten more style fields and a second `uint4` per colour row. The recommendation is per project now, promoting individual slots (doors are the likely first) to the style when a style needs them.
+4. **The prototype's swatch rows become curated palette subsets per field** (decided, §3.8).
