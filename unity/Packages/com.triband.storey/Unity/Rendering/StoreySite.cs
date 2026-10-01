@@ -32,6 +32,9 @@ namespace Triband.Storey.Unity
         readonly HashSet<string> pending = new HashSet<string>(StringComparer.Ordinal);
         bool pendingAll;
 
+        /// <summary>Set by the editor's Storey tools each frame they are active: the storey being edited, isolate. Null draws the plain layout.</summary>
+        public SiteView? View { get; set; }
+
         /// <summary>The layout as shown: the unsaved edit while there is one, otherwise the asset's.</summary>
         public StoreyDocument? Shown => preview ?? (layout != null ? layout.Document : null);
 
@@ -76,7 +79,7 @@ namespace Triband.Storey.Unity
             else if (pending.Count > 0) site.Rebuild(preview, pending);
             pendingAll = false; pending.Clear();
             site.Lod = displayedLod;
-            site.Frame(lodTint);
+            site.Frame(lodTint, View);
         }
     }
 }

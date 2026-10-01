@@ -1,0 +1,22 @@
+{
+  "name": "Triband.Storey.Editor.ColorPipeline",
+  "rootNamespace": "Triband.Storey.Editor.ColorPipeline",
+  "references": [
+    "Triband.Storey",
+    "Triband.Storey.Unity",
+    "Triband.Storey.ColorPipeline",
+    "Triband.Storey.Editor",
+    "Triband.ColorPipeline.Runtime",
+    "Triband.ColorPipeline.Editor",
+    "Triband.Core.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "defineConstraints": ["STOREY_COLORPIPELINE"],
+  "versionDefines": [
+    { "name": "com.triband.colorpipeline", "expression": "[2.1.11,3.0.0-0)", "define": "STOREY_COLORPIPELINE" }
+  ],
+  "autoReferenced": true,
+  "noEngineReferences": false
+}

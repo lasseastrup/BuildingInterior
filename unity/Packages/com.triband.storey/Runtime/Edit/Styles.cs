@@ -56,10 +56,13 @@ namespace Triband.Storey.Edit
         public static bool HasOwn(BuildingData b, int k0) => k0 == 0 || b.floors[k0].style != null;
 
         /// <summary>Apply a preset to the style tier k0 edits, keeping its roof (presets never change the roof).</summary>
-        public static void ApplyPreset(BuildingData b, int k0, string key)
+        public static void ApplyPreset(BuildingData b, int k0, string key) => Apply(b, k0, Preset(key));
+
+        /// <summary>Apply a style (a project's preset asset, say) to the style tier k0 edits, keeping its roof.</summary>
+        public static void Apply(BuildingData b, int k0, FacadeStyle style)
         {
             var cur = Edited(b, k0);
-            var ns = Preset(key); ns.roofType = cur.roofType; ns.pitch = cur.pitch; ns.eave = cur.eave;
+            var ns = style.Clone(); ns.roofType = cur.roofType; ns.pitch = cur.pitch; ns.eave = cur.eave;
             if (k0 > 0 && b.floors[k0].style != null) b.floors[k0].style = ns; else b.style = ns;
         }
 

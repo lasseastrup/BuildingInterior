@@ -74,8 +74,8 @@ namespace Triband.Storey.Unity
             }
         }
 
-        /// <summary>Per frame: the neutral view globals (no player, no cutaway), the palette, the LODs, the table upload.</summary>
-        public void Frame(bool lodTint)
+        /// <summary>Per frame: the view globals (neutral unless the editor set a view), the palette, the LODs, the table upload.</summary>
+        public void Frame(bool lodTint, SiteView? view = null)
         {
             if (shownLod != lod)
             {
@@ -83,8 +83,13 @@ namespace Triband.Storey.Unity
                 shownLod = lod;
             }
             StoreyGlobals.SetLodTint(lodTint);
-            StoreyGlobals.SetActive(-1, 1e9f);
-            StoreyGlobals.SetCut(false, 1, 0, 0, 1e9f);
+            var v = view ?? SiteView.Neutral;
+            int active = v.activeId != null ? TableIndexOf(v.activeId) : -1;
+            StoreyGlobals.SetActive(active, active >= 0 ? v.clipY : 1e9f);
+            if (active >= 0 && v.cut) { StoreyGlobals.SetCamera(v.camera, v.focus, v.cameraDir); StoreyGlobals.SetCut(true, v.stubHeight, v.cutBase, v.cutTop, v.clipY); }
+            else StoreyGlobals.SetCut(false, 1, 0, 0, active >= 0 ? v.clipY : 1e9f);
+            int iso = v.isolateId != null ? TableIndexOf(v.isolateId) : -1;
+            StoreyGlobals.SetIsolate(iso >= 0 ? 1 : 0, iso);
             StoreyGlobals.SetOcclusion(StoreyGlobals.OcclusionMode.Off, Vector2.zero, 1, 100);
             StoreyGlobals.SetCap(new Color(0.23f, 0.25f, 0.24f));
             palette.Bind();
@@ -171,5 +176,28 @@ namespace Triband.Storey.Unity
             (palette as IDisposable)?.Dispose();   // Color Pipeline's palette listens for invalidations
             table.Dispose();
         }
+    }
+}
+
+namespace Triband.Storey.Unity
+{
+    /// <summary>
+    /// How the editor wants a site drawn this frame (docs/EDITOR.md slices 6.4, 6.6): the building being edited with its
+    /// storey clipped and cut away as in play (SPEC principle 4), and an isolated building.
+    /// </summary>
+    public struct SiteView
+    {
+        /// <summary>The building whose storey is shown: everything above clipY is clipped. Null for none.</summary>
+        public string? activeId;
+        public float clipY;
+        /// <summary>The cutaway: walls between the camera and the focus drop to a stub on the active storey.</summary>
+        public bool cut;
+        public float stubHeight, cutBase, cutTop;
+        public Vector3 camera, focus;
+        public Vector2 cameraDir;
+        /// <summary>Every other building hidden. Null for none.</summary>
+        public string? isolateId;
+
+        public static SiteView Neutral => new SiteView { clipY = 1e9f, stubHeight = 1 };
     }
 }

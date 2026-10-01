@@ -121,5 +121,18 @@ namespace Triband.Storey.Tests
             // from inside, looking out, nothing faces the ray
             Assert.Null(Facades.Pick(b, new Vec3d(mx - nx * 2, 2, mz - nz * 2), new Vec3d(nx, 0, nz)));
         }
+
+        [Fact]
+        public void AStyleRoundTripsOnItsOwn()
+        {
+            foreach (var b in Data.Value.Demo.buildings)
+            {
+                string json = PrototypeJson.WriteStyle(b.style);
+                var unknown = new List<string>();
+                var back = PrototypeJson.ReadStyle(json, unknown);
+                Assert.Empty(unknown);
+                Assert.Equal(json, PrototypeJson.WriteStyle(back));
+            }
+        }
     }
 }

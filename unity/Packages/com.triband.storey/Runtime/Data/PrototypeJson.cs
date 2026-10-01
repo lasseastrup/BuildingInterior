@@ -63,6 +63,15 @@ namespace Triband.Storey
             return r;
         }
 
+        /// <summary>A facade style on its own, as a style preset asset stores it.</summary>
+        public static FacadeStyle ReadStyle(string json, List<string>? unknown = null)
+        {
+            var root = Json.Parse(json) as Dictionary<string, object?> ?? throw new FormatException("a style is a JSON object");
+            return Style(new Ctx(unknown ?? new List<string>()), root, "style");
+        }
+
+        public static string WriteStyle(FacadeStyle s) => Json.Write(Style(s));
+
         /// <summary>A single building, as the prototype copies one to the clipboard.</summary>
         public static BuildingData ReadBuilding(string json, List<string>? unknown = null)
         {

@@ -23,7 +23,7 @@ namespace Triband.Storey.Editor
         [SerializeField] string path = "";
         [SerializeField] string text = "";
         [SerializeField] SavedText? file;   // what the file holds: kept out of undo, so undoing past a save still shows unsaved
-        [SerializeField] internal int selected;
+        [SerializeField] StoreyEditView? view;   // what is selected: kept out of undo too
 
         EditSession? core;
         static readonly List<StoreyEdit> open = new List<StoreyEdit>();
@@ -32,6 +32,43 @@ namespace Triband.Storey.Editor
         public bool Dirty => file == null || text != file.text;
         public StoreyDocument Document => Core.Document;
         public string Path => path;
+        public StoreyEditView View => view != null ? view : (view = NewView());
+
+        StoreyEditView NewView()
+        {
+            var v = CreateInstance<StoreyEditView>(); v.hideFlags = HideFlags.DontSave;
+            if (Core.Document.buildings.Count > 0) v.selectedId = Core.Document.buildings[0].id;
+            return v;
+        }
+
+        /// <summary>The selected building, if it still exists.</summary>
+        public BuildingData? Selected => Document.buildings.FirstOrDefault(b => b.id == View.selectedId);
+
+        /// <summary>
+        /// One edit of the selected building (or the one with <paramref name="id"/>), as <see cref="Apply"/>. The operation
+        /// gets the building from the current document, so it is right after an undo too.
+        /// </summary>
+        public bool ApplyTo(string undoName, Func<BuildingData, bool> op, string? id = null)
+        {
+            string bid = id ?? View.selectedId;
+            return Apply(undoName, d => { var b = d.buildings.FirstOrDefault(x => x.id == bid); return b != null && op(b); });
+        }
+
+        int group = -1;
+
+        /// <summary>Start a drag: every edit until <see cref="EndDrag"/> becomes one undo step.</summary>
+        public void BeginDrag(string undoName)
+        {
+            Undo.IncrementCurrentGroup();
+            Undo.SetCurrentGroupName(undoName);
+            group = Undo.GetCurrentGroup();
+        }
+
+        public void EndDrag()
+        {
+            if (group >= 0) Undo.CollapseUndoOperations(group);
+            group = -1;
+        }
         EditSession Core => core ??= new EditSession(text);
 
         /// <summary>The edit open on a site, if any.</summary>
@@ -123,6 +160,8 @@ namespace Triband.Storey.Editor
             Undo.ClearUndo(this);
             Poke();
             if (file != null) DestroyImmediate(file);
+            if (view != null) DestroyImmediate(view);
+            if (site != null) site.View = null;
             DestroyImmediate(this);
         }
 

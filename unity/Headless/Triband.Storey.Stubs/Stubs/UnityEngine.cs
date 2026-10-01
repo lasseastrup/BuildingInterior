@@ -29,12 +29,6 @@ namespace UnityEngine
 
     public sealed class ExecuteAlways : System.Attribute { }
 
-    public sealed class GUILayoutOption { }
-
-    public static class GUILayout
-    {
-        public static bool Button(string text, params GUILayoutOption[] options) => false;
-    }
 
     public static class Application
     {
@@ -107,6 +101,8 @@ namespace UnityEngine
         public float x, y;
         public Vector2(float x, float y) { this.x = x; this.y = y; }
         public static Vector2 zero => default;
+        public float sqrMagnitude => 0;
+        public Vector2 normalized => this;
         public static implicit operator Vector4(Vector2 v) => new Vector4(v.x, v.y, 0, 0);
     }
 
@@ -115,6 +111,14 @@ namespace UnityEngine
         public float x, y, z;
         public Vector3(float x, float y, float z) { this.x = x; this.y = y; this.z = z; }
         public static Vector3 zero => default;
+        public static Vector3 one => default;
+        public static Vector3 up => default;
+        public static Vector3 right => default;
+        public static Vector3 forward => default;
+        public static float Dot(Vector3 a, Vector3 b) => 0;
+        public static Vector3 operator +(Vector3 a, Vector3 b) => a;
+        public static Vector3 operator -(Vector3 a, Vector3 b) => a;
+        public static Vector3 operator *(Vector3 a, float d) => a;
         public static implicit operator Vector4(Vector3 v) => new Vector4(v.x, v.y, v.z, 0);
     }
 
@@ -128,6 +132,109 @@ namespace UnityEngine
     {
         public float r, g, b, a;
         public Color(float r, float g, float b, float a = 1) { this.r = r; this.g = g; this.b = b; this.a = a; }
+        public static Color white => default;
+    }
+
+    public struct Quaternion
+    {
+        public static Quaternion LookRotation(Vector3 forward, Vector3 upwards) => default;
+    }
+
+    public struct Matrix4x4
+    {
+        public static Matrix4x4 TRS(Vector3 pos, Quaternion q, Vector3 s) => default;
+    }
+
+    public struct Ray
+    {
+        public Vector3 origin => default;
+        public Vector3 direction => default;
+        public Vector3 GetPoint(float distance) => default;
+    }
+
+    public struct Rect
+    {
+        public Rect(float x, float y, float width, float height) { this.x = x; this.yMax = y + height; this.width = width; }
+        public float x, yMax, width;
+    }
+
+    public class Camera : Behaviour { }
+
+    public sealed class GUIContent
+    {
+        public GUIContent(string text) { }
+        public GUIContent(string text, string tooltip) { }
+        public static GUIContent none => new GUIContent("");
+    }
+
+    public class GUIStyle
+    {
+        public static GUIStyle none => new GUIStyle();
+    }
+
+    public sealed class GUILayoutOption { }
+
+    public static class GUILayout
+    {
+        public static bool Button(string text, params GUILayoutOption[] options) => false;
+        public static bool Button(string text, GUIStyle style, params GUILayoutOption[] options) => false;
+        public static bool Button(GUIContent content, params GUILayoutOption[] options) => false;
+        public static bool Button(GUIContent content, GUIStyle style, params GUILayoutOption[] options) => false;
+        public static bool Toggle(bool value, string text, GUIStyle style, params GUILayoutOption[] options) => value;
+        public static bool Toggle(bool value, GUIContent content, GUIStyle style, params GUILayoutOption[] options) => value;
+        public static int Toolbar(int selected, string[] texts, params GUILayoutOption[] options) => selected;
+        public static void Label(string text, params GUILayoutOption[] options) { }
+        public static void Label(string text, GUIStyle style, params GUILayoutOption[] options) { }
+        public static void Space(float pixels) { }
+        public static void FlexibleSpace() { }
+        public static GUILayoutOption Width(float width) => new GUILayoutOption();
+        public static GUILayoutOption Height(float height) => new GUILayoutOption();
+
+        public sealed class HorizontalScope : System.IDisposable
+        {
+            public HorizontalScope(params GUILayoutOption[] options) { }
+            public void Dispose() { }
+        }
+    }
+
+    public static class GUI
+    {
+        public static void Label(Rect position, string text, GUIStyle style) { }
+        public static bool Button(Rect position, GUIContent content, GUIStyle style) => false;
+    }
+
+    public static class GUILayoutUtility
+    {
+        public static Rect GetRect(float width, float height, params GUILayoutOption[] options) => default;
+    }
+
+    public enum FocusType { Keyboard = 0, Passive = 2 }
+
+    public static class GUIUtility
+    {
+        public static int hotControl { get; set; }
+        public static int GetControlID(FocusType focus) => 0;
+        public static int GetControlID(int hint, FocusType focus) => 0;
+        public static Vector2 GUIToScreenPoint(Vector2 guiPoint) => guiPoint;
+    }
+
+    public enum EventType { MouseDown = 0, MouseUp = 1, MouseMove = 2, MouseDrag = 3, KeyDown = 4, Repaint = 7, Layout = 8, Used = 12 }
+
+    public enum KeyCode { Backspace = 8, Escape = 27, LeftBracket = 91, RightBracket = 93, D = 100, I = 105, L = 108, R = 114, S = 115, V = 118, W = 119, X = 120, Delete = 127 }
+
+    public sealed class Event
+    {
+        public static Event current => new Event();
+        public EventType type => default;
+        public EventType rawType => default;
+        public int button => 0;
+        public int clickCount => 0;
+        public bool alt => false;
+        public bool control => false;
+        public bool command => false;
+        public KeyCode keyCode => default;
+        public Vector2 mousePosition => default;
+        public void Use() { }
     }
 
     public struct Bounds
@@ -231,6 +338,7 @@ namespace UnityEngine
 
     public sealed class Transform : Component
     {
+        public Vector3 position => default;
         public void SetParent(Transform parent, bool worldPositionStays) { }
     }
 
@@ -239,6 +347,7 @@ namespace UnityEngine
         public GameObject(string name) { }
         public Transform transform { get; } = new Transform();
         public T AddComponent<T>() where T : Component, new() => new T();
+        public T GetComponent<T>() => default!;
     }
 
     public sealed class MeshFilter : Component

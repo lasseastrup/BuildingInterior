@@ -1,5 +1,5 @@
 // Hand-written declarations of the Color Pipeline 2.1.11 and Triband Core members Storey's bridge
-// (Packages/com.triband.storey/ColorPipeline) uses, transcribed from Bitbucket triband/colorpipeline
+// (Packages/com.triband.storey/ColorPipeline) and the editor's picker (com.triband.storey.authoring/Editor/ColorPipeline) use, transcribed from Bitbucket triband/colorpipeline
 // (master, 2.1.11) and triband/core. Same rules as UnityEngine.cs: exactly what is used, bodies empty.
 
 namespace Triband.Core.Utils
@@ -25,6 +25,7 @@ namespace Triband.ColorPipeline.Runtime
     {
         public string Name => "";
         public UnityEngine.Color Color => default;
+        public SerializableGUID ID => default;
     }
 
     public class ColorPaletteDefinition
@@ -44,5 +45,20 @@ namespace Triband.ColorPipeline.Runtime
     {
         public static event System.Action OnMappingsInvalidated;
         public static void SetupColorRemap(ColorRemapDescriptor colorRemap, out int colorPaletteOffset) { colorPaletteOffset = 0; }
+    }
+}
+
+namespace Triband.ColorPipeline.Editor
+{
+    using Triband.Core.Utils;
+
+    public class PaletteColorPickerWindow : UnityEditor.EditorWindow
+    {
+        public delegate void WindowClosedDelegate();
+        public delegate void ColorSelectedDelegate(SerializableGUID colorId);
+        public delegate void ColorPreviewedDelegate(SerializableGUID colorId);
+
+        public static void Open(UnityEngine.Vector2 position, int selectedIndex, WindowClosedDelegate windowClosedCallback = null,
+            ColorSelectedDelegate colorSelectedCallback = null, ColorPreviewedDelegate colorPreviewedCallback = null) { }
     }
 }
