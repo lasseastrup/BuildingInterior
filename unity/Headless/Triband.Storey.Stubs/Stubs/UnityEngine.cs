@@ -19,7 +19,26 @@ namespace UnityEngine
     public class Object
     {
         public string name { get; set; } = "";
+        public HideFlags hideFlags { get; set; }
         public static void Destroy(Object obj) { }
+        public static void DestroyImmediate(Object obj) { }
+    }
+
+    [System.Flags]
+    public enum HideFlags { None = 0, HideInHierarchy = 1, HideInInspector = 2, DontSaveInEditor = 4, NotEditable = 8, DontSaveInBuild = 16, DontUnloadUnusedAsset = 32, DontSave = 52, HideAndDontSave = 61 }
+
+    public sealed class ExecuteAlways : System.Attribute { }
+
+    public sealed class GUILayoutOption { }
+
+    public static class GUILayout
+    {
+        public static bool Button(string text, params GUILayoutOption[] options) => false;
+    }
+
+    public static class Application
+    {
+        public static bool isPlaying => false;
     }
 
     public class ScriptableObject : Object
@@ -250,4 +269,9 @@ namespace UnityEngine.Scripting
     public class PreserveAttribute : System.Attribute
     {
     }
+}
+
+namespace UnityEngine.SceneManagement
+{
+    public struct Scene { }
 }

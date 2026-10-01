@@ -33,78 +33,30 @@ namespace Triband.Storey.Unity
         [Tooltip("Palette ids to show instead, pairwise with the ones above.")]
         public string remapTo = "";
 
-        BuildingTable? table;
-        readonly List<Built> built = new List<Built>();
-        // one colour row per style the meshes name (docs/COLOURS.md §3.3), rewritten when the palette invalidates
-        ColorRowBook? book;
-        IStoreyPalette? palette;
-        readonly Dictionary<int, (string[] original, string[] overwrite)> remaps = new Dictionary<int, (string[], string[])>();
-        int shownLod = -1;
-
-        sealed class Built
-        {
-            public int idx; public int wallBase, wallCount; public List<int> rows = new List<int>();
-            public GameObject? root;
-        }
+        SiteRenderer? site;
 
         void Start() { Rebuild(); }
 
-        void OnDestroy() { Clear(); book?.Dispose(); book = null; table?.Dispose(); table = null; }
+        void OnDestroy() { site?.Dispose(); site = null; }
 
         void LateUpdate()
         {
-            if (table == null) return;
-            if (shownLod != displayedLod)
-            {
-                foreach (var b in built) table.SetLod(b.idx, displayedLod, displayedLod, 1);
-                shownLod = displayedLod;
-            }
-            StoreyGlobals.SetLodTint(lodTint);
-            StoreyGlobals.SetActive(-1, 1e9f);
-            StoreyGlobals.SetCut(false, 1, 0, 0, 1e9f);
-            StoreyGlobals.SetOcclusion(StoreyGlobals.OcclusionMode.Off, Vector2.zero, 1, 100);
-            StoreyGlobals.SetCap(new Color(0.23f, 0.25f, 0.24f));
-            palette?.Bind();
-            table.Upload();
+            if (site == null) return;
+            site.Lod = displayedLod;
+            site.Frame(lodTint);
         }
 
         /// <summary>Generate and upload everything again (after the layout or the materials changed).</summary>
         public void Rebuild()
         {
-            Clear();
-            table ??= new BuildingTable();
+            site?.Dispose(); site = null;
             if (layout == null || opaque == null || glass == null || massing == null) return;
-            var doc = layout.Document;
-            var site = new Site(doc.buildings);
-            palette ??= StoreyPalettes.Active;
-            book?.Dispose();
-            book = new ColorRowBook(new ColorResolver(site), palette, table);
-            foreach (var kv in remaps) book.SetRemap(kv.Key, kv.Value.original, kv.Value.overwrite);
-            foreach (var b in doc.buildings)
-            {
-                var bt = new Built { idx = table.AllocIndex() };
-                var root = new GameObject(b.name);
-                root.transform.SetParent(transform, false);
-                bt.root = root;
-
-                var l0 = Lod0.Build(site, b);
-                bt.wallCount = l0.Op.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
-                Add(root, "LOD0", MeshUpload.Upload(Tagged(l0.Op, bt.idx), b.name + " LOD0", RowOf, bt.wallBase), opaque, true);
-                Add(root, "LOD0 glass", MeshUpload.Upload(Tagged(l0.Glass, bt.idx), b.name + " glass", RowOf, bt.wallBase), glass, false);
-                Add(root, "LOD1", MeshUpload.Upload(Tagged(Lod1.Build(site, b), bt.idx + Lod1.LOD_TAG), b.name + " LOD1", RowOf), opaque, true);
-
-                var l2 = Lod2.Build(site, b);
-                var rowMap = new int[l2.Rows.Count];
-                for (int r = 0; r < l2.Rows.Count; r++) { rowMap[r] = table.WriteRow(l2.Rows[r], RowOf(l2.Rows[r].wall.style)); bt.rows.Add(rowMap[r]); }
-                l2.Tag = bt.idx + 2 * Lod1.LOD_TAG;
-                Add(root, "LOD2", MeshUpload.Upload(l2, b.name + " LOD2", rowMap), massing, true);
-
-                built.Add(bt);
-            }
-            shownLod = -1;
+            site = new SiteRenderer(transform, opaque, glass, massing);
+            foreach (var kv in remaps) site.SetRemap(kv.Key, kv.Value.original, kv.Value.overwrite);
+            site.Show(layout.Document);
         }
 
-        int RowOf(StyleRef s) => book!.RowOf(s);
+        readonly Dictionary<int, (string[] original, string[] overwrite)> remaps = new Dictionary<int, (string[], string[])>();
 
         static string[] Ids(string s) => s.Split(new[] { ',', ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
 
@@ -119,35 +71,7 @@ namespace Triband.Storey.Unity
         public void SetRemap(int building, string[] original, string[] overwrite)
         {
             if (original.Length == 0) remaps.Remove(building); else remaps[building] = (original, overwrite);
-            book?.SetRemap(building, original, overwrite);
-        }
-
-        /// <summary>The generator tags meshes with the site index; the table hands out its own, so retag before upload.</summary>
-        static MeshBuilder Tagged(MeshBuilder gb, int tag) { gb.RetagForUpload(tag); return gb; }
-
-        static void Add(GameObject root, string name, Mesh mesh, Material mat, bool shadows)
-        {
-            var go = new GameObject(name);
-            go.transform.SetParent(root.transform, false);
-            go.AddComponent<MeshFilter>().sharedMesh = mesh;
-            var mr = go.AddComponent<MeshRenderer>();
-            mr.sharedMaterial = mat;
-            mr.shadowCastingMode = shadows ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;   // the GPU Resident Drawer wants no probes on the renderer
-        }
-
-        void Clear()
-        {
-            if (table != null)
-                foreach (var b in built)
-                {
-                    table.ReleaseIndex(b.idx);
-                    if (b.wallBase >= 0) table.ReleaseWalls(b.wallBase, b.wallCount);
-                    foreach (var r in b.rows) table.ReleaseRow(r);
-                    if (b.root != null) Destroy(b.root);
-                }
-            built.Clear();
-            book?.Clear();
+            site?.SetRemap(building, original, overwrite);
         }
     }
 }

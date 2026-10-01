@@ -141,7 +141,7 @@ namespace Triband.Storey.Generate
     /// </summary>
     public sealed class ColorRowBook : IDisposable
     {
-        readonly ColorResolver colors;
+        ColorResolver colors;
         readonly IColorPalette palette;
         readonly IColorRowSink sink;
         readonly Dictionary<StyleRef, int> rows = new Dictionary<StyleRef, int>();
@@ -208,6 +208,18 @@ namespace Triband.Storey.Generate
         }
 
         void Write(StyleRef s, int row) => sink.WriteColorRow(row, ColorRows.Indices(colors.StyleOf(s), palette), RemapRowOf(s.building));
+
+        /// <summary>
+        /// Resolve styles from another site (the layout was edited or undone; building indices unchanged) and write every
+        /// row again, keeping each row's number so meshes that are not rebuilt stay right.
+        /// </summary>
+        public void Retarget(ColorResolver resolver) { colors = resolver; Rewrite(); }
+
+        /// <summary>Free one building's rows before its meshes are built again (its tiers may have changed).</summary>
+        public void ReleaseBuilding(int building)
+        {
+            foreach (var kv in rows.Where(kv => kv.Key.building == building).ToList()) { sink.ReleaseColorRow(kv.Value); rows.Remove(kv.Key); }
+        }
 
         /// <summary>Free every row (the site is being rebuilt); remaps are kept.</summary>
         public void Clear()

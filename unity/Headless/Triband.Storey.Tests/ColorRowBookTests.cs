@@ -140,5 +140,32 @@ namespace Triband.Storey.Tests
             Assert.Equal(0, p.RegisterRemap(Array.Empty<string>(), Array.Empty<string>()));
             Assert.Throws<NotSupportedException>(() => p.RegisterRemap(new[] { Teal }, new[] { Rust }));
         }
+
+        /// <summary>An edited style reaches its row without the row moving, so meshes that are not rebuilt stay right.</summary>
+        [Fact]
+        public void RetargetingRewritesRowsInPlace()
+        {
+            var (book, palette, sink, _) = Make();
+            int a = book.RowOf(new StyleRef(0, 0)), b = book.RowOf(new StyleRef(1, 0));
+            var doc = PrototypeJson.Read(Fixtures.Text("demo.json")).Document;
+            doc.buildings[0].style.wall = Teal;
+            var edited = new ColorResolver(new Site(doc.buildings));
+            book.Retarget(edited);
+            Assert.Equal(a, book.RowOf(new StyleRef(0, 0)));
+            Assert.Equal(Expected(edited, new StyleRef(0, 0), palette), sink.Rows[a].idx);
+            Assert.Equal(Expected(edited, new StyleRef(1, 0), palette), sink.Rows[b].idx);
+            Assert.Equal(palette.IndexOf(Teal), sink.Rows[a].idx[(int)ColorSlot.Wall]);
+        }
+
+        [Fact]
+        public void ReleasingABuildingFreesOnlyItsRows()
+        {
+            var (book, _, sink, _) = Make();
+            int a0 = book.RowOf(new StyleRef(0, 0)), a1 = book.RowOf(new StyleRef(0, 1)), b = book.RowOf(new StyleRef(1, 0));
+            book.ReleaseBuilding(0);
+            Assert.Equal(new[] { a0, a1 }, sink.Released.OrderBy(x => x).ToArray());
+            Assert.Equal(b, book.RowOf(new StyleRef(1, 0)));
+            Assert.DoesNotContain(new StyleRef(0, 0), book.Rows.Keys);
+        }
     }
 }
