@@ -5,7 +5,8 @@
   "description": "Headless harnesses for the prototype: fixture export for the Unity packages.",
   "scripts": {
     "fixtures": "node export-fixtures.mjs ../../unity/Fixtures",
-    "check:palette": "node check-palette.mjs"
+    "check:palette": "node check-palette.mjs",
+    "ops": "node export-ops.mjs ../../unity/Fixtures/ops.json"
   },
   "dependencies": {
     "playwright-core": "1.63.0",
