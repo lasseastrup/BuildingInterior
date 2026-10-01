@@ -209,7 +209,7 @@ namespace Triband.Storey.Edit
                 double ed = 0.35;
                 foreach (var q in ns) for (int j = 0; j < q.Count; j++)
                 {
-                    var v = q[j]; var c = q[(j + 1) % q.Count]; var r = Geo.SegDist(wx, wz, v.x, v.z, c.x, c.z);
+                    var v = q[j]; var c = q[(j + 1) % q.Count]; var r = Tiers.SegDist(wx, wz, v.x, v.z, c.x, c.z);
                     if (r.d < ed) { ed = r.d; best = new Vec2(Tiers.Cm(r.cx - b.pos.x), Tiers.Cm(r.cz - b.pos.z)); }
                 }
                 if (best != null) return best.Value;
@@ -222,7 +222,7 @@ namespace Triband.Storey.Edit
                 double ed = 0.35;
                 for (int j = 0; j < lo.Count; j++)
                 {
-                    var v = lo[j]; var c = lo[(j + 1) % lo.Count]; var r = Geo.SegDist(x, z, v.x, v.z, c.x, c.z);
+                    var v = lo[j]; var c = lo[(j + 1) % lo.Count]; var r = Tiers.SegDist(x, z, v.x, v.z, c.x, c.z);
                     if (r.d < ed) { ed = r.d; best = new Vec2(Tiers.Cm(r.cx), Tiers.Cm(r.cz)); }
                 }
                 if (best != null) return best.Value;

@@ -52,7 +52,7 @@ namespace Triband.Storey.Edit
         }
 
         /// <summary>The prototype's <c>cm</c>: editing is free-form, coordinates are kept to the centimetre (JavaScript's rounding, halves up).</summary>
-        public static double Cm(double v) => Math.Floor(v * 100 + 0.5) / 100;
+        public static double Cm(double v) => JsRound(v * 100) / 100;
 
         /// <summary>
         /// JavaScript's <c>Math.hypot</c> as V8 computes it (scaled, Kahan-summed), so lengths, and the door positions
@@ -72,6 +72,25 @@ namespace Triband.Storey.Edit
             }
             return Math.Sqrt(sum) * max;
         }
+
+        /// <summary>The prototype's <c>segDist</c>, with <see cref="Hypot"/>: distance from p to segment a–b, where along it, and the nearest point.</summary>
+        public static Geo.SegHit SegDist(double px, double pz, double ax, double az, double bx, double bz)
+        {
+            double dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz;
+            double t = L2 != 0 ? ((px - ax) * dx + (pz - az) * dz) / L2 : 0;
+            t = Math.Max(0, Math.Min(1, t));
+            double cx = ax + dx * t, cz = az + dz * t;
+            return new Geo.SegHit { d = Hypot(px - cx, pz - cz), t = t, cx = cx, cz = cz };
+        }
+
+        /// <summary>JavaScript's <c>Math.round</c> (halves up).</summary>
+        public static double JsRound(double v) => Math.Floor(v + 0.5);
+
+        /// <summary>JavaScript's <c>+v.toFixed(digits)</c>.</summary>
+        public static double Fixed(double v, int digits) =>
+            double.Parse(v.ToString("F" + digits, System.Globalization.CultureInfo.InvariantCulture), System.Globalization.CultureInfo.InvariantCulture);
+
+        public static double Clamp(double v, double a, double b) => Math.Max(a, Math.Min(b, v));
 
         public static double EdgeLen(List<Vec2> fp, int i) { var a = fp[i]; var c = fp[(i + 1) % fp.Count]; return Hypot(c.x - a.x, c.z - a.z); }
 
