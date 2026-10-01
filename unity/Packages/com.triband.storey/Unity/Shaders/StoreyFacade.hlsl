@@ -3,7 +3,8 @@
 //
 // Each facade quad covers a run of storeys with one height and window type. fac = (u along the wall, height
 // above the run's base, window span start, window span end); fac2 = (bay width, kind); slot = the run's row in
-// _StoreyParams: six texels (wall, trim, glass, roof colours; window spec; run data).
+// _StoreyParams: six texels ((colour row, wall, trim and glass shades), (roof shade), two unused, window spec, run
+// data). Wall, trim, glass and roof come from the palette through the colour row (StoreyPalette.hlsl).
 #ifndef STOREY_FACADE_INCLUDED
 #define STOREY_FACADE_INCLUDED
 
@@ -15,7 +16,9 @@ float4 StoreyParam(float slot, int i) { return _StoreyParams[(int)(slot + 0.5) *
 float3 StoreyFacadeColor(float4 fac, float2 fac2, float slot)
 {
     float fu = fwidth(fac.x), fv = fwidth(fac.y);
-    float3 wall = StoreyParam(slot, 0).rgb, trim = StoreyParam(slot, 1).rgb, glass = StoreyParam(slot, 2).rgb, roof = StoreyParam(slot, 3).rgb;
+    float4 c0 = StoreyParam(slot, 0); uint row = (uint)(c0.x + 0.5);
+    float3 wall = StoreyPaletteColor(row, 0, c0.y), trim = StoreyPaletteColor(row, 1, c0.z);
+    float3 glass = StoreyPaletteColor(row, 6, c0.w), roof = StoreyPaletteColor(row, 4, StoreyParam(slot, 1).x);   // ColorSlot Wall, Trim, Glass, Roof
     float kind = fac2.y;   // 1 facade, 2 roof, 3 trim, 4 plain wall
     if (kind > 1.5) return kind < 2.5 ? roof : (kind < 3.5 ? trim : wall);
     float4 sp = StoreyParam(slot, 4), run = StoreyParam(slot, 5);   // sp.x: gap for full-width styles (<0: fixed width), y: width, z: sill, w: head

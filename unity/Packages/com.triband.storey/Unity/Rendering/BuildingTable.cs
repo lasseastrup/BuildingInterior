@@ -8,7 +8,8 @@ namespace Triband.Storey.Unity
     /// <summary>
     /// The per-building GPU tables every Storey material reads (SPEC §6.4, Plan §6.1): one row per
     /// building for LOD state and the occluder slot, the occluder rows for buildings in the way, the
-    /// cutaway slide per wall id, and the LOD2 parameter rows. All are global structured buffers,
+    /// cutaway slide per wall id, the LOD2 parameter rows, and the colour rows that name each style's
+    /// palette entries (docs/COLOURS.md §3.3). All are global structured buffers,
     /// so thousands of buildings need no per-object material state and merged meshes can still
     /// switch individual buildings. Written on the CPU into arrays, uploaded when dirty, once per frame.
     /// </summary>
@@ -18,6 +19,7 @@ namespace Triband.Storey.Unity
         public const int OccSlots = 16, OccWidth = 64;
         public const int WallIds = 65536;
         public const int ParamRows = 512, ParamTexels = 6;
+        public const int MaxColorRows = 8192;
 
         /// <summary>Per building: displayed LOD, previous LOD, cross-fade 0..1, occluder slot + 1 (0 = none).</summary>
         public readonly Vector4[] State = new Vector4[MaxBuildings];
@@ -27,13 +29,18 @@ namespace Triband.Storey.Unity
         public readonly float[] Wall = new float[WallIds];
         /// <summary>LOD2 parameter rows: wall, trim, glass, roof colours, window spec, run data.</summary>
         public readonly Vector4[] Params = new Vector4[ParamRows * ParamTexels];
+        /// <summary>Colour rows: per style, the palette index of each slot and the remap row, 24 16-bit entries in 12 words.</summary>
+        public readonly uint[] Colors = new uint[MaxColorRows * Generate.ColorRows.Words];
+        /// <summary>Palette indices of facade-detail model colours (slots 24 and up). Empty until detail models exist.</summary>
+        public readonly uint[] DetailColors = new uint[1];
 
-        readonly GraphicsBuffer state, occ, wall, prms;
-        bool stateDirty = true, occDirty = true, wallDirty = true, paramsDirty = true;
+        readonly GraphicsBuffer state, occ, wall, prms, colors, details;
+        bool stateDirty = true, occDirty = true, wallDirty = true, paramsDirty = true, colorsDirty = true, detailsDirty = true;
 
         // free lists, as the prototype keeps them
         readonly Stack<int> freeIdx = new Stack<int>(); int nextIdx;
         readonly Stack<int> freeRow = new Stack<int>(); int nextRow;
+        readonly Stack<int> freeColorRow = new Stack<int>(); int nextColorRow;
         readonly Stack<int> freeSlot = new Stack<int>();
         readonly List<(int start, int n)> freeWalls = new List<(int, int)>();
 
@@ -46,6 +53,8 @@ namespace Triband.Storey.Unity
             occ = new GraphicsBuffer(GraphicsBuffer.Target.Structured, OccSlots * OccWidth, 16);
             wall = new GraphicsBuffer(GraphicsBuffer.Target.Structured, WallIds, 4);
             prms = new GraphicsBuffer(GraphicsBuffer.Target.Structured, ParamRows * ParamTexels, 16);
+            colors = new GraphicsBuffer(GraphicsBuffer.Target.Structured, MaxColorRows * Generate.ColorRows.Uint4s, 16);
+            details = new GraphicsBuffer(GraphicsBuffer.Target.Structured, DetailColors.Length, 4);
         }
 
         // ---- allocation --------------------------------------------------------------------
@@ -84,15 +93,26 @@ namespace Triband.Storey.Unity
         }
 
         /// <summary>A parameter row, written from a generator row; rows are freed with <see cref="ReleaseRow"/>.</summary>
-        public int WriteRow(Generate.ParamRow row, Generate.ColorResolver colors)
+        public int WriteRow(Generate.ParamRow row, int colorRow)
         {
             int x = freeRow.Count > 0 ? freeRow.Pop() : Math.Min(nextRow++, ParamRows - 1);
-            var t = row.Texels(colors); int o = x * ParamTexels;
+            var t = row.GpuTexels(colorRow); int o = x * ParamTexels;
             for (int i = 0; i < ParamTexels; i++) Params[o + i] = new Vector4((float)t[i * 4], (float)t[i * 4 + 1], (float)t[i * 4 + 2], (float)t[i * 4 + 3]);
             paramsDirty = true;
             return x;
         }
         public void ReleaseRow(int row) => freeRow.Push(row);
+
+        /// <summary>A colour row, filled with <see cref="WriteColorRow"/>; freed with <see cref="ReleaseColorRow"/>.</summary>
+        public int AllocColorRow() => freeColorRow.Count > 0 ? freeColorRow.Pop() : Math.Min(nextColorRow++, MaxColorRows - 1);
+        public void ReleaseColorRow(int row) => freeColorRow.Push(row);
+
+        /// <summary>A style's palette indices (in <see cref="Generate.ColorSlot"/> order) and its remap's atlas row (0 = none).</summary>
+        public void WriteColorRow(int row, int[] paletteIndices, int remapRow)
+        {
+            Generate.ColorRows.Pack(paletteIndices, remapRow, Colors, row * Generate.ColorRows.Words);
+            colorsDirty = true;
+        }
 
         // ---- writes ---------------------------------------------------------------------------
 
@@ -114,12 +134,16 @@ namespace Triband.Storey.Unity
             if (occDirty) { occ.SetData(Occ); occDirty = false; }
             if (wallDirty) { wall.SetData(Wall); wallDirty = false; }
             if (paramsDirty) { prms.SetData(Params); paramsDirty = false; }
+            if (colorsDirty) { colors.SetData(Colors); colorsDirty = false; }
+            if (detailsDirty) { details.SetData(DetailColors); detailsDirty = false; }
             Shader.SetGlobalBuffer(StoreyShaderIds.State, state);
             Shader.SetGlobalBuffer(StoreyShaderIds.Occ, occ);
             Shader.SetGlobalBuffer(StoreyShaderIds.Wall, wall);
             Shader.SetGlobalBuffer(StoreyShaderIds.Params, prms);
+            Shader.SetGlobalBuffer(StoreyShaderIds.Colors, colors);
+            Shader.SetGlobalBuffer(StoreyShaderIds.DetailColors, details);
         }
 
-        public void Dispose() { state.Dispose(); occ.Dispose(); wall.Dispose(); prms.Dispose(); }
+        public void Dispose() { state.Dispose(); occ.Dispose(); wall.Dispose(); prms.Dispose(); colors.Dispose(); details.Dispose(); }
     }
 }

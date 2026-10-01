@@ -19,6 +19,19 @@ namespace Triband.Storey.Generate
             Rgb w = colors.Resolve(wall), t = colors.Resolve(trim), g = colors.Resolve(glass), r = colors.Resolve(roof);
             return new[] { w.r, w.g, w.b, 1, t.r, t.g, t.b, 1, g.r, g.g, g.b, 1, r.r, r.g, r.b, 1, spec[0], spec[1], spec[2], spec[3], run[0], run[1], run[2], run[3] };
         }
+
+        /// <summary>
+        /// The 24 floats the GPU table stores (docs/COLOURS.md §3.5): texel 0 is (colour row, wall, trim and glass
+        /// shades), texel 1 (roof shade), texels 2 and 3 are unused, then spec and run as in <see cref="Texels"/>.
+        /// The facade shader reads wall, trim, glass and roof from <paramref name="colorRow"/>, the row of the swatches' style.
+        /// </summary>
+        public double[] GpuTexels(int colorRow)
+        {
+            if (wall.slot != ColorSlot.Wall || trim.slot != ColorSlot.Trim || glass.slot != ColorSlot.Glass || roof.slot != ColorSlot.Roof
+                || !trim.style.Equals(wall.style) || !glass.style.Equals(wall.style) || !roof.style.Equals(wall.style))
+                throw new InvalidOperationException("a parameter row's colours must be the wall, trim, glass and roof of one style");
+            return new[] { colorRow, wall.tone, trim.tone, glass.tone, roof.tone, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, spec[0], spec[1], spec[2], spec[3], run[0], run[1], run[2], run[3] };
+        }
     }
 
     /// <summary>The LOD2 massing mesh: quads with facade parameters instead of colours.</summary>

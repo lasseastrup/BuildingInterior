@@ -9,7 +9,8 @@ namespace Triband.Storey.Unity
 {
     /// <summary>
     /// Turns generator output into Unity meshes in the prototype's compact vertex formats (Plan §6.5):
-    /// float position, SNorm8 normal, UNorm8 colour, a float building tag, and for LOD0 the cutaway
+    /// float position, SNorm8 normal, UNorm8 × 4 colour reference (colour row, slot and shade; docs/COLOURS.md
+    /// §3.4), a float building tag, and for LOD0 the cutaway
     /// data (float4 wall, float kind, float wall id). Sixteen-bit indices where they fit. The CPU copy
     /// is released after upload; collision uses the generator's 2D segments, never the mesh.
     /// </summary>
@@ -21,6 +22,7 @@ namespace Triband.Storey.Unity
         {
             public Vector3 position;
             public sbyte nx, ny, nz, nw;
+            /// <summary>Colour reference: row low byte, row high byte, slot, shade × 128 (not RGB).</summary>
             public byte r, g, b, a;
             public float tag;
         }
@@ -44,15 +46,13 @@ namespace Triband.Storey.Unity
         }
 
         static sbyte S8(double v) => (sbyte)Math.Round(Math.Max(-1, Math.Min(1, v)) * 127);
-        static byte U8(double v) => (byte)Math.Round(Math.Max(0, Math.Min(1, v)) * 255);
 
         /// <summary>
         /// A detail LOD mesh. <paramref name="wallBase"/> is the first global wall id of the building's
-        /// block (LOD0 only; the mesh's 1-based local ids are offset onto it; -1 = no ids). The generator's
-        /// swatches are resolved to RGB through <paramref name="colors"/> until the shaders read colour rows
-        /// (docs/COLOURS.md §7, step 2).
+        /// block (LOD0 only; the mesh's 1-based local ids are offset onto it; -1 = no ids). <paramref name="rowOf"/>
+        /// gives the colour row of each style the swatches name (party walls name a neighbour's).
         /// </summary>
-        public static Mesh Upload(MeshBuilder gb, string name, ColorResolver colors, int wallBase = -1)
+        public static Mesh Upload(MeshBuilder gb, string name, Func<StyleRef, int> rowOf, int wallBase = -1)
         {
             int nv = gb.Verts;
             var mesh = new Mesh { name = name, indexFormat = nv > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
@@ -79,9 +79,10 @@ namespace Triband.Storey.Unity
             var bounds = new Bounds(); bool first = true;
             for (int i = 0; i < nv; i++)
             {
-                var p = gb.P[i]; var n = gb.N[i]; var c = colors.Resolve(gb.C[i]);
+                var p = gb.P[i]; var n = gb.N[i]; var s = gb.C[i];
+                var (cr, cg, cb, ca) = ColorRows.EncodeVertex(rowOf(s.style), s.slot, s.tone);
                 var pos = new Vector3((float)p.x, (float)p.y, (float)p.z);
-                verts[i] = new Vertex { position = pos, nx = S8(n.x), ny = S8(n.y), nz = S8(n.z), r = U8(c.r), g = U8(c.g), b = U8(c.b), a = 255, tag = gb.Tag };
+                verts[i] = new Vertex { position = pos, nx = S8(n.x), ny = S8(n.y), nz = S8(n.z), r = cr, g = cg, b = cb, a = ca, tag = gb.Tag };
                 if (first) { bounds = new Bounds(pos, Vector3.zero); first = false; } else bounds.Encapsulate(pos);
             }
             const MeshUpdateFlags flags = MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontNotifyMeshUsers;

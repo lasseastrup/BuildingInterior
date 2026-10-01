@@ -1,6 +1,6 @@
 // The shared vertex and fragment programs of the Storey materials (URP). Four variants share this file:
-//   Storey/Opaque   vertex-coloured, double-sided, section cap on back faces
-//   Storey/Glass    vertex-coloured, transparent, no depth write
+//   Storey/Opaque   palette colour from the vertex's colour reference, double-sided, section cap on back faces
+//   Storey/Glass    palette colour from the vertex's colour reference, transparent, no depth write
 //   Storey/Massing  LOD2: colour from StoreyFacadeColor()
 // each with a shadow-caster / depth pass that defines STOREY_DEPTH. Keywords: STOREY_MASSING, STOREY_CAP.
 #ifndef STOREY_LIT_INCLUDED
@@ -9,6 +9,7 @@
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "StoreyOcclusion.hlsl"
+#include "StoreyPalette.hlsl"
 #ifdef STOREY_MASSING
 #include "StoreyFacade.hlsl"
 #endif
@@ -33,7 +34,7 @@ struct Attributes
 {
     float3 positionOS : POSITION;
     float4 normalOS   : NORMAL;      // SNorm8 × 4
-    float4 color      : COLOR;       // UNorm8 × 4 (unused by massing)
+    float4 color      : COLOR;       // UNorm8 × 4 colour reference: row, slot, shade (unused by massing)
     float  tag        : TEXCOORD0;   // building index + 65536 × LOD
     float4 wall       : TEXCOORD1;   // LOD0: cutaway wall data; massing: fac
     float2 kind       : TEXCOORD2;   // LOD0: kind (x); massing: fac2
@@ -77,7 +78,9 @@ Varyings StoreyVert(Attributes IN)
     OUT.positionCS = TransformWorldToHClip(worldPos);
 #endif
     if (!shown) OUT.positionCS = float4(2.0, 2.0, 2.0, 1.0);   // LOD not shown: clip the whole triangle
-    OUT.color = IN.color;
+#if !defined(STOREY_MASSING) && !defined(STOREY_DEPTH)
+    OUT.color = float4(StoreyVertexColor(IN.color), 1.0);   // a face's vertices share one swatch: exact per vertex
+#endif
     OUT.wall = wall;
     OUT.misc = float4(kind, wid, v.bid, v.lod);
     OUT.occ = float4(v.fade, v.occ, origY, 0);

@@ -27,6 +27,10 @@ namespace Triband.Storey.Unity
 
         BuildingTable? table;
         readonly List<Built> built = new List<Built>();
+        // one colour row per style the meshes name (docs/COLOURS.md §3.3); written again when the palette invalidates
+        readonly Dictionary<StyleRef, int> colorRows = new Dictionary<StyleRef, int>();
+        ColorResolver? colors;
+        IStoreyPalette? palette;
         int shownLod = -1;
 
         sealed class Built
@@ -37,7 +41,7 @@ namespace Triband.Storey.Unity
 
         void Start() { Rebuild(); }
 
-        void OnDestroy() { Clear(); table?.Dispose(); table = null; }
+        void OnDestroy() { Clear(); if (palette != null) palette.Invalidated -= WriteColorRows; table?.Dispose(); table = null; }
 
         void LateUpdate()
         {
@@ -52,6 +56,7 @@ namespace Triband.Storey.Unity
             StoreyGlobals.SetCut(false, 1, 0, 0, 1e9f);
             StoreyGlobals.SetOcclusion(StoreyGlobals.OcclusionMode.Off, Vector2.zero, 1, 100);
             StoreyGlobals.SetCap(new Color(0.23f, 0.25f, 0.24f));
+            palette?.Bind();
             table.Upload();
         }
 
@@ -63,7 +68,8 @@ namespace Triband.Storey.Unity
             if (layout == null || opaque == null || glass == null || massing == null) return;
             var doc = layout.Document;
             var site = new Site(doc.buildings);
-            var colors = new ColorResolver(site);
+            colors = new ColorResolver(site);
+            if (palette == null) { palette = StoreyPalettes.Active; palette.Invalidated += WriteColorRows; }
             foreach (var b in doc.buildings)
             {
                 var bt = new Built { idx = table.AllocIndex() };
@@ -73,19 +79,38 @@ namespace Triband.Storey.Unity
 
                 var l0 = Lod0.Build(site, b);
                 bt.wallCount = l0.Op.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
-                Add(root, "LOD0", MeshUpload.Upload(Tagged(l0.Op, bt.idx), b.name + " LOD0", colors, bt.wallBase), opaque, true);
-                Add(root, "LOD0 glass", MeshUpload.Upload(Tagged(l0.Glass, bt.idx), b.name + " glass", colors, bt.wallBase), glass, false);
-                Add(root, "LOD1", MeshUpload.Upload(Tagged(Lod1.Build(site, b), bt.idx + Lod1.LOD_TAG), b.name + " LOD1", colors), opaque, true);
+                Add(root, "LOD0", MeshUpload.Upload(Tagged(l0.Op, bt.idx), b.name + " LOD0", RowOf, bt.wallBase), opaque, true);
+                Add(root, "LOD0 glass", MeshUpload.Upload(Tagged(l0.Glass, bt.idx), b.name + " glass", RowOf, bt.wallBase), glass, false);
+                Add(root, "LOD1", MeshUpload.Upload(Tagged(Lod1.Build(site, b), bt.idx + Lod1.LOD_TAG), b.name + " LOD1", RowOf), opaque, true);
 
                 var l2 = Lod2.Build(site, b);
                 var rowMap = new int[l2.Rows.Count];
-                for (int r = 0; r < l2.Rows.Count; r++) { rowMap[r] = table.WriteRow(l2.Rows[r], colors); bt.rows.Add(rowMap[r]); }
+                for (int r = 0; r < l2.Rows.Count; r++) { rowMap[r] = table.WriteRow(l2.Rows[r], RowOf(l2.Rows[r].wall.style)); bt.rows.Add(rowMap[r]); }
                 l2.Tag = bt.idx + 2 * Lod1.LOD_TAG;
                 Add(root, "LOD2", MeshUpload.Upload(l2, b.name + " LOD2", rowMap), massing, true);
 
                 built.Add(bt);
             }
             shownLod = -1;
+        }
+
+        /// <summary>The colour row of a style, allocated and written the first time a mesh names it.</summary>
+        int RowOf(StyleRef s)
+        {
+            if (colorRows.TryGetValue(s, out int row)) return row;
+            row = table!.AllocColorRow();
+            colorRows[s] = row;
+            WriteColorRow(s, row);
+            return row;
+        }
+
+        void WriteColorRow(StyleRef s, int row) => table!.WriteColorRow(row, ColorRows.Indices(colors!.StyleOf(s), palette!), 0);
+
+        /// <summary>The palette's indices may have moved: every row again, no mesh rebuilt.</summary>
+        void WriteColorRows()
+        {
+            if (table == null || colors == null) return;
+            foreach (var kv in colorRows) WriteColorRow(kv.Key, kv.Value);
         }
 
         /// <summary>The generator tags meshes with the site index; the table hands out its own, so retag before upload.</summary>
@@ -113,6 +138,8 @@ namespace Triband.Storey.Unity
                     if (b.root != null) Destroy(b.root);
                 }
             built.Clear();
+            if (table != null) foreach (var r in colorRows.Values) table.ReleaseColorRow(r);
+            colorRows.Clear();
         }
     }
 }

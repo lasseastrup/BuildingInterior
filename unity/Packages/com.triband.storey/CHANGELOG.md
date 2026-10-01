@@ -5,6 +5,8 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- Colours by reference (docs/COLOURS.md, steps 1 and 2): the generator emits `Swatch`es (a slot of a style at a shade) instead of RGB; `ColorResolver` gives the prototype's RGB for the census. Colour rows in `BuildingTable` (`_StoreyColors`) hold each style's palette indices; vertices carry (row, slot, shade) in the existing UNorm8 × 4 colour attribute; the shaders read the palette atlas through `StoreyPalette.hlsl` (Color Pipeline 2.1.11's `_GlobalColorPaletteTex` contract), with the built-in `HexPalette` when Color Pipeline is not installed. Shaders not yet compiled in an editor.
+- `FacadeStyle`: ten optional colours (door, rail, metal, ceiling, lift interior and button, four facade-detail colours) defaulting to the prototype's fixed colours; colour fields accept a CSS literal or a Color Pipeline palette id.
 - Rendering layer: `MeshUpload`, `BuildingTable`, `StoreyGlobals`, the `StoreyStreet` parity harness, and the Storey/Opaque, Storey/Glass and Storey/Massing URP shaders with the occlusion and facade includes (workstream 4; not yet compiled in an editor).
 - LOD1 (exterior shell) and LOD2 (massing quads with facade parameter rows) builders, sharing the storey builders with LOD0 (workstream 7, pulled forward).
 - Facade details: AC units, vents, dishes, fire escapes (climbing through flush setbacks, with drop ladders) and awnings, hand-placed or by the style's seeded rules; `DetailRules` on `FacadeStyle` (workstream 3).

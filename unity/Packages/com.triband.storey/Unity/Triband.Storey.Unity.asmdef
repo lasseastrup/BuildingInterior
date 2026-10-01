@@ -8,6 +8,9 @@
     "Unity.Mathematics",
     "Unity.RenderPipelines.Universal.Runtime"
   ],
+  "versionDefines": [
+    { "name": "com.triband.colorpipeline", "expression": "0.0.1", "define": "STOREY_HAS_COLORPIPELINE" }
+  ],
   "allowUnsafeCode": true,
   "autoReferenced": true,
   "noEngineReferences": false

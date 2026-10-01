@@ -118,6 +118,21 @@ namespace UnityEngine
         public static void SetGlobalBuffer(int nameID, GraphicsBuffer value) { }
         public static void SetGlobalVector(int nameID, Vector4 value) { }
         public static void SetGlobalFloat(int nameID, float value) { }
+        public static void SetGlobalInt(int nameID, int value) { }
+        public static void SetGlobalTexture(int nameID, Texture value) { }
+    }
+
+    public enum TextureFormat { RGBAHalf = 17 }
+
+    public class Texture : Object
+    {
+    }
+
+    public sealed class Texture2D : Texture
+    {
+        public Texture2D(int width, int height, TextureFormat textureFormat, bool mipChain) { }
+        public void SetPixels(Color[] colors) { }
+        public void Apply(bool updateMipmaps = true, bool makeNoLongerReadable = false) { }
     }
 
     public sealed class GraphicsBuffer : System.IDisposable

@@ -20,5 +20,10 @@ namespace Triband.Storey.Unity
         public static readonly int OccMode = Shader.PropertyToID("_StoreyOccMode");
         public static readonly int Player = Shader.PropertyToID("_StoreyPlayer");
         public static readonly int LodTint = Shader.PropertyToID("_StoreyLodTint");
+        public static readonly int Colors = Shader.PropertyToID("_StoreyColors");
+        public static readonly int DetailColors = Shader.PropertyToID("_StoreyDetailColors");
+        /// <summary>Color Pipeline 2.1.11's atlas globals (StoreyPalette.hlsl), bound by Storey only when Color Pipeline is absent.</summary>
+        public static readonly int PaletteTex = Shader.PropertyToID("_GlobalColorPaletteTex");
+        public static readonly int AtlasWidth = Shader.PropertyToID("_ColorAtlasWidth");
     }
 }

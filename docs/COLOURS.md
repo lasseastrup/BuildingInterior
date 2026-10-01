@@ -70,7 +70,7 @@ public readonly struct Swatch { public readonly StyleRef style; public readonly 
 
 - A swatch names its style as (building, tier start), so a party-wall face simply names its neighbour; the upload turns the distinct style references of a mesh into colour rows. `ColorResolver` turns swatches back into linear RGB through the site.
 - The census tests resolve a swatch to RGB with today's arithmetic (`Colors.Shade(hex of the slot, tone)`). **The fixtures stay as they are** and keep judging the port.
-- LOD2's `ParamRow` holds its four colours as swatches. Step 1 resolves them to RGB texels as today; step 2 replaces the four texels with a reference to the tier's colour row and the glass shade (0.42).
+- LOD2's `ParamRow` holds its four colours as swatches. `Texels` resolves them to RGB for the census; `GpuTexels` writes what the table uploads: texel 0 = (colour row, wall, trim and glass shades), texel 1 = (roof shade), then spec and run as before.
 
 ### 3.3 GPU data: colour rows
 
@@ -205,7 +205,7 @@ Detail models go through the Model Remapper like any prop. The detail validator'
 ## 7. Order of work
 
 1. **Runtime, headless (done):** `ColorSlot`, `StyleRef`, `Swatch`, the swatch `Palette`, `ColorResolver`, swatches in `ParamRow`, the ten optional style colours, and parsing colour references. Every existing census test passes with the fixtures untouched; `MeshUpload` still uploads RGB, through the resolver.
-2. **Unity layer:** colour rows (and the empty detail table) in `BuildingTable`, the encoding in `MeshUpload`, `StoreyPalette.hlsl`, the `StoreyLit` and `StoreyFacade` changes, and `HexPalette`. Done when the parity harness matches the prototype with Color Pipeline not installed.
+2. **Unity layer (done headless; editor check outstanding):** colour rows (and the empty detail table) in `BuildingTable`, the encoding in `MeshUpload`, `StoreyPalette.hlsl`, the `StoreyLit` and `StoreyFacade` changes, `HexPalette` and `StoreyPalettes`. `GpuColorTests` emulates the shader lookups for every vertex and LOD2 row of the fixture corpora against the census colours. Still to do in an editor: compile the shaders and confirm the parity harness matches the prototype with Color Pipeline not installed.
 3. **Bridge:** the assembly, `ColorPipelinePalette`, `StoreyColorSettings`, the layout-test rule and the stubs. Done when it stub-compiles headlessly and three things hold in the editor: a palette value edit recolours buildings without regenerating them, deleting a palette entry leaves every building correct, and a building remap shares its atlas row with a `ColorRemap` prop that has the same mapping.
 4. **Authoring:** the palette picker with the curated subsets, *Map colours to palette…*, presets as `FacadeStyle` assets, and the `palette` snapshot block with its prototype reader.
 5. **Later:** facade-detail models (§3.9) and 3.0 (§6).
