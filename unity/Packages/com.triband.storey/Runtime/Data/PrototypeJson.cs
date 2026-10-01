@@ -47,7 +47,19 @@ namespace Triband.Storey
             int i = 0;
             foreach (var item in c.Array(root, "buildings", ""))
                 d.buildings.Add(Building(c, c.Obj(item, $"buildings[{i}]"), $"buildings[{i++}]"));
-            c.Check(root, "", "v", "seq", "spawn", "buildings");
+            if (root.TryGetValue("palette", out var pal) && pal != null)
+            {
+                foreach (var kv in c.Obj(pal, "palette"))
+                {
+                    string at = "palette." + kv.Key;
+                    if (!ColorRef.IsPaletteId(kv.Key)) throw new FormatException($"{at}: a palette block is keyed by palette ids");
+                    var e = c.Obj(kv.Value, at);
+                    d.palette[kv.Key] = new PaletteEntry(c.Str(e, "name", "", at), c.Color(e, "hex", "", at));
+                    if (!ColorRef.IsHex(d.palette[kv.Key].hex)) throw new FormatException($"{at}.hex: a palette entry's colour is a #RRGGBB colour");
+                    c.Check(e, at, "name", "hex");
+                }
+            }
+            c.Check(root, "", "v", "seq", "spawn", "buildings", "palette");
             return r;
         }
 
@@ -199,6 +211,12 @@ namespace Triband.Storey
             foreach (var b in d.buildings) bs.Add(ToTree(b));
             o["buildings"] = bs;
             o["spawn"] = Pt(d.spawn);
+            if (d.palette.Count > 0)
+            {
+                var p = new Dictionary<string, object?>();
+                foreach (var kv in d.palette) p[kv.Key] = new Dictionary<string, object?> { ["name"] = kv.Value.name, ["hex"] = kv.Value.hex };
+                o["palette"] = p;
+            }
             return o;
         }
 

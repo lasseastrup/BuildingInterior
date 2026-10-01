@@ -23,6 +23,8 @@ namespace Triband.ColorPipeline.Runtime
 
     public class ColorDefinition
     {
+        public string Name => "";
+        public UnityEngine.Color Color => default;
     }
 
     public class ColorPaletteDefinition

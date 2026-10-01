@@ -128,6 +128,7 @@ namespace UnityEngine
     public static class ColorUtility
     {
         public static bool TryParseHtmlString(string htmlString, out Color color) { color = default; return false; }
+        public static string ToHtmlStringRGB(Color color) => "";
     }
 
     public static class Resources

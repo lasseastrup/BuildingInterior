@@ -24,6 +24,20 @@ namespace Triband.Storey
         public int seq;
         public List<BuildingData> buildings = new List<BuildingData>();
         public Vec2 spawn;
+        /// <summary>
+        /// The palette block (docs/COLOURS.md §3.1): for every palette id the styles use, its name and colour when
+        /// the file was saved, so the prototype and headless tools can show it. A snapshot, never the source of truth.
+        /// </summary>
+        public SortedDictionary<string, PaletteEntry> palette = new SortedDictionary<string, PaletteEntry>(System.StringComparer.Ordinal);
+    }
+
+    /// <summary>One entry of the palette block: a Color Pipeline colour's name and CSS colour.</summary>
+    public sealed class PaletteEntry
+    {
+        public string name = "";
+        public string hex = "";
+        public PaletteEntry() { }
+        public PaletteEntry(string name, string hex) { this.name = name; this.hex = hex; }
     }
 
     public sealed class BuildingData
@@ -172,6 +186,15 @@ namespace Triband.Storey
     {
         public static bool IsHex(string? s) => s != null && (s.Length == 7 || s.Length == 4) && s[0] == '#' && AllHex(s, 1);
         public static bool IsPaletteId(string? s) => s != null && s.Length == 32 && AllHex(s, 0);
+
+        /// <summary>A CSS literal as <c>#RRGGBB</c> in capitals: <c>#abc</c> and <c>#AABBCC</c> are one colour.</summary>
+        public static string Normalise(string hex)
+        {
+            if (!IsHex(hex)) throw new System.FormatException($"\"{hex}\" is not a CSS colour");
+            string h = hex.Substring(1).ToUpperInvariant();
+            if (h.Length == 3) h = new string(new[] { h[0], h[0], h[1], h[1], h[2], h[2] });
+            return "#" + h;
+        }
 
         static bool AllHex(string s, int from)
         {

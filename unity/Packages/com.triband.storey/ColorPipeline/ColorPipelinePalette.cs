@@ -89,6 +89,16 @@ namespace Triband.Storey.ColorPipeline
             return row;
         }
 
+        /// <summary>
+        /// A palette id's current name and colour, for <see cref="PaletteSnapshot.Refresh"/> before a layout is saved;
+        /// null when the palette no longer has it (the block then keeps its last entry).
+        /// </summary>
+        public PaletteEntry? Entry(string id)
+        {
+            if (!ColorRef.IsPaletteId(id) || !Palette.TryGetColor(new SerializableGUID(id), out var def)) return null;
+            return new PaletteEntry(def.Name, "#" + ColorUtility.ToHtmlStringRGB(def.Color));
+        }
+
         static SerializableGUID Id(string s) =>
             ColorRef.IsPaletteId(s) ? new SerializableGUID(s) : throw new FormatException($"a remap takes palette ids; \"{s}\" is not one");
 

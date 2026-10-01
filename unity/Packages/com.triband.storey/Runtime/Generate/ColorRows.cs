@@ -114,20 +114,11 @@ namespace Triband.Storey.Generate
         {
             if (ColorRef.IsPaletteId(colorRef))
                 throw new FormatException($"palette id {colorRef} needs Color Pipeline; the built-in palette knows CSS colours only");
-            string key = Normalise(colorRef);
+            string key = ColorRef.Normalise(colorRef);
             if (byHex.TryGetValue(key, out int i)) return i;
             if (Colors.Count == Capacity) throw new InvalidOperationException($"the built-in palette is full ({Capacity} colours)");
             i = Colors.Count; byHex[key] = i; Colors.Add(Generate.Colors.Col(key)); Version++;
             return i;
-        }
-
-        /// <summary><c>#abc</c> and <c>#AABBCC</c> are one colour.</summary>
-        static string Normalise(string hex)
-        {
-            if (!ColorRef.IsHex(hex)) throw new FormatException($"\"{hex}\" is not a CSS colour");
-            string h = hex.Substring(1).ToUpperInvariant();
-            if (h.Length == 3) h = new string(new[] { h[0], h[0], h[1], h[1], h[2], h[2] });
-            return "#" + h;
         }
     }
 }
