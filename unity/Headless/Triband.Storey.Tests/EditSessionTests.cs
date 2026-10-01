@@ -73,5 +73,17 @@ namespace Triband.Storey.Tests
             s.Document.buildings.RemoveAt(0);
             Assert.True(s.Commit().structural);
         }
+
+        /// <summary>Assets > Create > Storey > Layout writes an empty document: it must read back, and take a first building.</summary>
+        [Fact]
+        public void AnEmptyLayoutStartsAnEdit()
+        {
+            var s = new EditSession(PrototypeJson.Write(new StoreyDocument()));
+            Assert.Empty(s.Document.buildings);
+            var b = Buildings.Add(s.Document, "rect", new Vec2(0, 0));
+            Assert.True(s.Commit().structural);
+            Assert.Equal(3, PrototypeJson.Read(s.Text).Document.buildings[0].floors.Count);
+            Assert.Equal("Alder House", b.name);
+        }
     }
 }

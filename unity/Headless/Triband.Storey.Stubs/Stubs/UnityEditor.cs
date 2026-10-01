@@ -43,6 +43,11 @@ namespace UnityEditor
     public sealed class InitializeOnLoadMethodAttribute : System.Attribute { }
     public sealed class InitializeOnLoadAttribute : System.Attribute { }
 
+    public static class ProjectWindowUtil
+    {
+        public static void CreateAssetWithContent(string filename, string content) { }
+    }
+
     public sealed class CustomEditor : System.Attribute
     {
         public CustomEditor(System.Type inspectedType) { }

@@ -34,5 +34,10 @@ namespace Triband.Storey.Editor
             AssetDatabase.ImportAsset(target);
             Selection.activeObject = AssetDatabase.LoadMainAssetAtPath(target);
         }
+
+        /// <summary>Assets > Create > Storey > Layout: an empty layout to start from (add buildings with New in the Storey Site inspector).</summary>
+        [MenuItem("Assets/Create/Storey/Layout", priority = 80)]
+        static void CreateLayout() =>
+            ProjectWindowUtil.CreateAssetWithContent("New Layout." + StoreyImporter.Extension, PrototypeJson.Write(new StoreyDocument()));
     }
 }
