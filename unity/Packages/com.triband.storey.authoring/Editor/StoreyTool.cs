@@ -39,10 +39,15 @@ namespace Triband.Storey.Editor
             if (e.View.tab != Tab) { e.View.tab = Tab; Inspectors(); }
             var b = e.Selected;
             if (b != null) { ClampView(e, b); Keys(e, b); }
-            if (b != null) ToolGUI(e, b, sv);
-            else Hint("Click a building to select it.");
-            DefaultClick(e, e.Selected, sv);
-            site.View = ViewFor(e, e.Selected, sv);
+            // the layout lives in the site's local space: the meshes are the site's children, so the handles and rays are too
+            toLocal = site.transform.worldToLocalMatrix;
+            using (new Handles.DrawingScope(site.transform.localToWorldMatrix))
+            {
+                if (b != null) ToolGUI(e, b, sv);
+                else Hint("Click a building to select it.");
+                DefaultClick(e, e.Selected, sv);
+            }
+            site.View = ViewFor(e, e.Selected, sv, site.transform.position.y);
             if (Event.current.type == EventType.MouseMove) sv.Repaint();
         }
 
@@ -94,7 +99,7 @@ namespace Triband.Storey.Editor
             if (v.tier != 0 && !Derived.IsSetback(b, v.tier)) v.tier = 0;
         }
 
-        SiteView? ViewFor(StoreyEdit e, BuildingData? b, SceneView sv)
+        SiteView? ViewFor(StoreyEdit e, BuildingData? b, SceneView sv, float lift)
         {
             var v = SiteView.Neutral;
             if (b == null) return v;
@@ -102,7 +107,8 @@ namespace Triband.Storey.Editor
             if (Tab == StoreyTab.Interior && b.interior)
             {
                 var (clip, lo, hi) = Picking.StoreyView(b, e.View.floor);
-                v.activeId = b.id; v.clipY = (float)clip; v.cut = true; v.stubHeight = 1.0f; v.cutBase = (float)lo; v.cutTop = (float)hi;
+                // the shader compares world heights: a site raised or lowered moves its storeys (rotation and scale are not supported here)
+                v.activeId = b.id; v.clipY = (float)clip + lift; v.cut = true; v.stubHeight = 1.0f; v.cutBase = (float)lo + lift; v.cutTop = (float)hi + lift;
                 var cam = sv.camera.transform.position; var focus = sv.pivot;
                 v.camera = cam; v.focus = focus;
                 var dxz = new Vector2(cam.x - focus.x, cam.z - focus.z);
@@ -117,10 +123,20 @@ namespace Triband.Storey.Editor
         protected static Vec2 L(BuildingData b, Vector3 w) => new Vec2(w.x - b.pos.x, w.z - b.pos.z);
         protected static Vec3d D(Vector3 v) => new Vec3d(v.x, v.y, v.z);
 
+        static Matrix4x4 toLocal = Matrix4x4.identity;
+
+        /// <summary>The ray under the pointer, in the site's (the layout's) coordinates.</summary>
         protected static (Vec3d origin, Vec3d dir) MouseRay()
         {
             var r = HandleUtility.GUIPointToWorldRay(Event.current.mousePosition);
-            return (D(r.origin), D(r.direction));
+            return (D(toLocal.MultiplyPoint(r.origin)), D(toLocal.MultiplyVector(r.direction)));
+        }
+
+        /// <summary>A point along the pointer's ray, in the site's coordinates (for labels next to the pointer).</summary>
+        protected static Vector3 AlongRay(float distance)
+        {
+            var r = HandleUtility.GUIPointToWorldRay(Event.current.mousePosition);
+            return toLocal.MultiplyPoint(r.GetPoint(distance));
         }
 
         protected static float Size(Vector3 at, float k = 0.08f) => HandleUtility.GetHandleSize(at) * k;
@@ -146,7 +162,7 @@ namespace Triband.Storey.Editor
         {
             var u = new Vector3((float)g.u.x, 0, (float)g.u.z);
             var m = Handles.matrix;
-            Handles.matrix = Matrix4x4.TRS(new Vector3((float)g.cx, (float)g.cy, (float)g.cz), Quaternion.LookRotation(u, Vector3.up), Vector3.one);
+            Handles.matrix = m * Matrix4x4.TRS(new Vector3((float)g.cx, (float)g.cy, (float)g.cz), Quaternion.LookRotation(u, Vector3.up), Vector3.one);
             Handles.color = c;
             Handles.DrawWireCube(Vector3.zero, new Vector3((float)g.sz, (float)g.sy, (float)g.sx));
             Handles.matrix = m;

@@ -119,6 +119,8 @@ namespace UnityEngine
         public static Vector3 operator +(Vector3 a, Vector3 b) => a;
         public static Vector3 operator -(Vector3 a, Vector3 b) => a;
         public static Vector3 operator *(Vector3 a, float d) => a;
+        public static bool operator ==(Vector3 a, Vector3 b) => true;
+        public static bool operator !=(Vector3 a, Vector3 b) => false;
         public static implicit operator Vector4(Vector3 v) => new Vector4(v.x, v.y, v.z, 0);
     }
 
@@ -137,12 +139,19 @@ namespace UnityEngine
 
     public struct Quaternion
     {
+        public static Quaternion identity => default;
         public static Quaternion LookRotation(Vector3 forward, Vector3 upwards) => default;
+        public static bool operator ==(Quaternion a, Quaternion b) => true;
+        public static bool operator !=(Quaternion a, Quaternion b) => false;
     }
 
     public struct Matrix4x4
     {
+        public static Matrix4x4 identity => default;
         public static Matrix4x4 TRS(Vector3 pos, Quaternion q, Vector3 s) => default;
+        public static Matrix4x4 operator *(Matrix4x4 a, Matrix4x4 b) => a;
+        public Vector3 MultiplyPoint(Vector3 point) => point;
+        public Vector3 MultiplyVector(Vector3 vector) => vector;
     }
 
     public struct Ray
@@ -339,6 +348,10 @@ namespace UnityEngine
     public sealed class Transform : Component
     {
         public Vector3 position => default;
+        public Quaternion rotation => default;
+        public Vector3 lossyScale => default;
+        public Matrix4x4 localToWorldMatrix => default;
+        public Matrix4x4 worldToLocalMatrix => default;
         public void SetParent(Transform parent, bool worldPositionStays) { }
     }
 

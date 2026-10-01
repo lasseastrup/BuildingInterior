@@ -135,6 +135,12 @@ namespace UnityEditor
         public static void CircleHandleCap(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType) { }
         public static void BeginGUI() { }
         public static void EndGUI() { }
+
+        public struct DrawingScope : System.IDisposable
+        {
+            public DrawingScope(Matrix4x4 matrix) { }
+            public void Dispose() { }
+        }
     }
 
     public static class HandleUtility

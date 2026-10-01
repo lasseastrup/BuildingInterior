@@ -148,7 +148,7 @@ namespace Triband.Storey.Editor
                     var a = cur[i]; var c = cur[(i + 1) % cur.Count];
                     Label(W(e.Selected!, new Vec2((a.x + c.x) / 2, (a.z + c.z) / 2), y), $"{Tiers.EdgeLen(cur, i):0.00} m");
                 }
-                if (refusal != null) Label(HandleUtility.GUIPointToWorldRay(ev.mousePosition).GetPoint(10), refusal);
+                if (refusal != null) Label(AlongRay(10), refusal);
                 if (drag != Drag.Insert && ev.rawType == EventType.MouseUp && GUIUtility.hotControl == 0) Finish(e, k0);
             }
         }

@@ -47,6 +47,7 @@ struct Attributes
     float4 wall       : TEXCOORD1;   // LOD0: cutaway wall data; massing: fac
     float2 kind       : TEXCOORD2;   // LOD0: kind (x); massing: fac2
     float  wid        : TEXCOORD3;   // LOD0: wall id; massing: parameter row
+    UNITY_VERTEX_INPUT_INSTANCE_ID   // the GPU Resident Drawer draws through instancing: the object's matrix comes from its instance
 };
 
 struct Varyings
@@ -63,11 +64,16 @@ struct Varyings
     float4 fac2       : TEXCOORD7;   // fac2.xy, slot
 #endif
     float4 shadowCoord : TEXCOORD8;
+    UNITY_VERTEX_INPUT_INSTANCE_ID
+    UNITY_VERTEX_OUTPUT_STEREO
 };
 
 Varyings StoreyVert(Attributes IN)
 {
     Varyings OUT = (Varyings)0;
+    UNITY_SETUP_INSTANCE_ID(IN);   // before any object-space transform, or an instanced draw uses another object's matrix
+    UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
+    UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(OUT);
     float3 worldPos = TransformObjectToWorld(IN.positionOS);
     float3 worldPos0 = worldPos;
 #ifdef STOREY_MASSING
@@ -113,6 +119,7 @@ StoreyVarying StoreyUnpack(Varyings IN)
 
 float4 StoreyDepthFrag(Varyings IN) : SV_Target
 {
+    UNITY_SETUP_INSTANCE_ID(IN);
     StoreyOcclude(StoreyUnpack(IN), IN.positionCS.xy, IN.positionCS.z);   // only the cross-fade and isolate reach the depth passes
     return 0;
 }

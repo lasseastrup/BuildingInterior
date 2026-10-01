@@ -6,6 +6,7 @@
 
 float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) : SV_Target
 {
+    UNITY_SETUP_INSTANCE_ID(IN);
     bool isFront = IS_FRONT_VFACE(cullFace, true, false);
     float dark = StoreyOcclude(StoreyUnpack(IN), IN.positionCS.xy, IN.positionCS.z);
 

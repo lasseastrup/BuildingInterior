@@ -38,6 +38,9 @@ namespace Triband.Storey.Editor
                 return;
             }
 
+            var tr = site.transform;
+            if (tr.rotation != Quaternion.identity || tr.lossyScale != Vector3.one)
+                EditorGUILayout.HelpBox("Keep the Storey Site unrotated and unscaled: the layout is in metres, and the Interior tab's floor clip and cutaway assume it. Moving it is fine.", MessageType.Warning);
             BuildingBar(e);
             var b = e.Selected;
             if (b != null)
