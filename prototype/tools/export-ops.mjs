@@ -221,6 +221,85 @@ for (const corpus of ['demo', 'variants']) {
   }, [doc, corpus]);
   icases.push(...got);
 }
+
+// Facade: details by hand, entrances, blank walls, style presets and setback styles, terrace or roof (slice 6.7, 6.4),
+// and where new buildings go. A facade point is given as the tool's pick result would give it: edge i of tier k0,
+// t along it, height y, storey k.
+const fcases = [];
+for (const corpus of ['demo', 'variants']) {
+  const doc = fs.readFileSync(path.join(fixtures, corpus + '.json'), 'utf8');
+  const got = await page.evaluate(([doc, corpus]) => {
+    __sb.state.buildings.length = 0; __sb.state.buildings.push(...JSON.parse(doc).buildings); __sb.outline.refresh();
+    __sb.ops.reindex();
+    const O = __sb.ops, B = __sb.state.buildings, clone = o => JSON.parse(JSON.stringify(o)), r = [];
+    const pristine = B.map(clone);
+    const reset = i => { for (const key of Object.keys(B[i])) delete B[i][key]; Object.assign(B[i], clone(pristine[i])); };
+    const QUERIES = new Set(['detailAt', 'entranceAt', 'drivesRoof']);
+    const step = {
+      detailAt: (b, [ed, kind]) => { const x = O.detailPlace(b, ed, kind); return { add: x.d ?? null, remove: x.ei ?? -1, error: x.err ?? null, box: x.box ?? null }; },
+      toggleDetail: (b, [ed, kind]) => { const x = O.detailPlace(b, ed, kind); if (x.err) return x.err; if (x.ei >= 0) b.details.splice(x.ei, 1); else (b.details ??= []).push(x.d); return null; },
+      entranceAt: (b, [ed]) => { const x = O.facadeDoor(b, ed); if (x.err) return { error: x.err }; const { w, ...d } = x.d; return { door: d }; },
+      toggleEntrance: (b, [ed]) => { const x = O.facadeDoor(b, ed); if (x.err) return x.err; const d = x.d; if (d.ei >= 0) b.entrances.splice(d.ei, 1); else b.entrances.push(d.k ? { edge: d.edge, t: d.t, k: d.k } : { edge: d.edge, t: d.t }); return null; },
+      toggleBlank: (b, [k, i]) => { const bl = O.blankAt(b, k), j = bl.indexOf(i); if (j >= 0) bl.splice(j, 1); else bl.push(i); },
+      // the preset buttons (case 'style'); the style edited is the setback's own if it has one, else the building's
+      applyPreset: (b, [k0, key]) => { const sp = k0 && b.floors[k0].style ? 'floors.' + k0 + '.style' : 'style', cur = sp === 'style' ? b.style : b.floors[k0].style, keep = { roofType: cur.roofType, pitch: cur.pitch, eave: cur.eave };
+        const ns = { ...clone(O.STYLES[key]), preset: key, ...keep }; if (sp === 'style') b.style = ns; else b.floors[k0].style = ns; },
+      giveOwnStyle: (b, [k0]) => { b.floors[k0].style = clone(O.styleAt(b, k0 - 1)); },
+      matchBelow: (b, [k0]) => { delete b.floors[k0].style; },
+      setTerraceRoof: (b, [k0, roof]) => { if (!!b.floors[k0].terraceRoof === roof) return; if (roof) b.floors[k0].terraceRoof = { pitch: 30 }; else delete b.floors[k0].terraceRoof; },
+      // renderPanel's drivesRoof
+      drivesRoof: (b, [k0]) => { let j0 = O.tierStart(b, b.floors.length); while (j0 && !b.floors[j0].style) j0 = O.tierStart(b, j0 - 1); const own = k0 && b.floors[k0].style; return k0 === j0 || (!own && !!k0 && j0 === 0); },
+    };
+    const run = (i, name, steps) => {
+      reset(i); let ret = null;
+      for (const [op, args] of steps) { ret = step[op](B[i], args); if (ret === undefined) ret = null; }
+      const last = steps[steps.length - 1][0], same = JSON.stringify(B[i]) === JSON.stringify(pristine[i]);
+      r.push({ corpus, building: i, name, steps: steps.map(([op, args]) => ({ op, args })), ret: clone(ret), after: QUERIES.has(last) ? null : same ? 'unchanged' : clone(B[i]) });
+      reset(i);
+    };
+    const KINDS = ['ac', 'vent', 'dish', 'escape', 'awning'];
+    pristine.forEach((b0, i) => {
+      if (corpus === 'variants' && i % 3 !== 0) return;
+      for (const t of O.tiers(b0)) {
+        const fp = O.fpAt(b0, t.k0), ks = [...new Set([t.k0, t.k1 - 1])];
+        for (const k of ks) for (let e = 0; e < Math.min(fp.length, corpus === 'demo' ? 8 : 3); e++) {
+          const a = fp[e], c = fp[(e + 1) % fp.length], L = Math.hypot(c.x - a.x, c.z - a.z) || 1;
+          for (const tt of [0.18, 0.5, 0.83]) for (const yo of [0.45, 1.5]) {
+            const ed = { i: e, t: tt, L, y: O.floorBase(b0, k) + yo, k0: t.k0, k, d: 0 };
+            for (const kind of KINDS) run(i, 'detail-' + kind, [['detailAt', [ed, kind]]]);
+            if (yo === 0.45) {
+              run(i, 'entrance-at', [['entranceAt', [ed]]]);
+              run(i, 'toggle-entrance', [['toggleEntrance', [ed]]]);
+              run(i, 'toggle-detail', [['toggleDetail', [ed, KINDS[(e + Math.round(tt * 10)) % 5]]]]);
+              run(i, 'toggle-detail-twice', [['toggleDetail', [ed, 'ac']], ['toggleDetail', [ed, 'ac']]]);
+            }
+          }
+          run(i, 'toggle-blank', [['toggleBlank', [k, e]]]);
+        }
+        run(i, 'drives-roof', [['drivesRoof', [t.k0]]]);
+        for (const key of Object.keys(O.STYLES)) run(i, 'apply-preset', [['applyPreset', [t.k0, key]]]);
+        if (t.k0) {
+          run(i, 'give-own-style', [['giveOwnStyle', [t.k0]]]);
+          run(i, 'own-style-preset', [['giveOwnStyle', [t.k0]], ['applyPreset', [t.k0, 'glass']]]);
+          run(i, 'own-style-drives-roof', [['giveOwnStyle', [t.k0]], ['drivesRoof', [t.k0]]]);
+          run(i, 'match-below', [['matchBelow', [t.k0]]]);
+          run(i, 'terrace-roof', [['setTerraceRoof', [t.k0, true]]]);
+          run(i, 'terrace-again', [['setTerraceRoof', [t.k0, false]]]);
+        }
+      }
+    });
+    // where new buildings go: free spots around a few points, and the building a preset makes there
+    const spots = [];
+    for (const [x, z] of [[0, 0], [20, -5], [-30, 4], [200, 200]]) for (const [w, d] of [[12, 9], [18, 14], [6, 8]]) spots.push({ near: [x, z], w, d, at: [O.freeSpot.length, 0] });
+    const freeSpots = spots.map(s => { O.camEdit.target.set(s.near[0], 0, s.near[1]); const p = O.freeSpot(s.w, s.d); return { near: s.near, w: s.w, d: s.d, spot: [p.x, p.z] }; });
+    const seq0 = __sb.state.seq, made = [];
+    for (const shape of Object.keys(O.FOOTPRINTS)) for (const st of Object.keys(O.STYLES)) made.push({ shape, style: st, seq: __sb.state.seq, building: clone(O.makeBuilding(shape, { x: 3, z: 4 }, st)) });
+    __sb.state.seq = seq0;
+    return { cases: r, freeSpots, made, names: O.nextName() };
+  }, [doc, corpus]);
+  fcases.push(...got.cases.map(c => c));
+  if (corpus === 'demo') { fcases.freeSpots = got.freeSpots; fcases.made = got.made; fcases.nextName = got.names; }
+}
 await browser.close();
 
 const counts = {}; for (const c of cases) counts[c.op] = (counts[c.op] || 0) + 1;
@@ -243,3 +322,17 @@ fs.writeFileSync(iout, JSON.stringify({
   cases: icases,
 }) + '\n');
 console.log('wrote', iout, icases.length, 'cases', icounts);
+
+const fout = path.join(path.dirname(out), 'ops-facade.json');
+const fcounts = {}; for (const c of fcases) fcounts[c.name] = (fcounts[c.name] || 0) + 1;
+fs.writeFileSync(fout, JSON.stringify({
+  schema: 1,
+  source: 'prototype/index.html: detailPlace, facadeDoor, blankAt, styleAt, freeSpot, makeBuilding (window.__sb.ops), and the Facade tab handlers replayed in export-ops.mjs',
+  note: 'Cases as in ops-interior.json. freeSpots and made are from the demo street: where freeSpot puts a w x d footprint near a point, and what makeBuilding builds (seq is the document counter before).',
+  counts: fcounts,
+  freeSpots: fcases.freeSpots,
+  made: fcases.made,
+  nextName: fcases.nextName,
+  cases: fcases,
+}) + '\n');
+console.log('wrote', fout, fcases.length, 'cases', fcounts);

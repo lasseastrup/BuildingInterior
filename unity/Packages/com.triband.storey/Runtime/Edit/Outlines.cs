@@ -18,7 +18,7 @@ namespace Triband.Storey.Edit
     {
         public static string Why(OutlineIssue i) => i switch
         {
-            OutlineIssue.Shape => "Edges can't cross or get shorter than 0.3 m",
+            OutlineIssue.Shape => "Edges can’t cross or get shorter than 0.3 m",
             OutlineIssue.Out => "At least a quarter of a setback has to rest on the floor below",
             OutlineIssue.Up => "The setback above would lose its footing",
             OutlineIssue.Thin => "Line the edge up with the floor below, or leave at least 0.8 m of terrace",
@@ -238,7 +238,7 @@ namespace Triband.Storey.Edit
         }
 
         /// <summary>
-        /// Where a moved building lands: an edge that comes within 0.5 m of a neighbour's edge running the other way
+        /// Where a moved building lands: an edge that comes within 0.5 m of a neighbour’s edge running the other way
         /// snaps onto it, making a party wall.
         /// </summary>
         public static Vec2 SnapMove(BuildingData b, double x, double z, IEnumerable<BuildingData> neighbours)

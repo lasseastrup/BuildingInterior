@@ -68,5 +68,8 @@ namespace Triband.Storey.Edit
         {
             for (int j = k + 1; j < b.floors.Count; j++) b.floors[j].walls = Tiers.Copy(b.floors[k].walls);
         }
+
+        /// <summary>Storey k's own height, or null to use the building's default (ground or upper).</summary>
+        public static void SetHeight(BuildingData b, int k, double? h) => b.floors[k].h = h;
     }
 }
