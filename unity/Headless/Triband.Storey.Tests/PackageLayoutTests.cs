@@ -121,7 +121,6 @@ namespace Triband.Storey.Tests
         private static readonly Dictionary<string, string> OptionalTribandAssemblies = new(StringComparer.Ordinal)
         {
             ["Triband.ColorPipeline.Runtime"] = "com.triband.colorpipeline",
-            ["Triband.ColorPipeline.Editor"] = "com.triband.colorpipeline",
             ["Triband.Core.Runtime"] = "com.triband.colorpipeline",
         };
 

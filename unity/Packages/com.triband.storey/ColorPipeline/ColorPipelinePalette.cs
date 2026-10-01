@@ -103,10 +103,10 @@ namespace Triband.Storey.ColorPipeline
             ColorRef.IsPaletteId(s) ? Guid(s) : throw new FormatException($"a remap takes palette ids; \"{s}\" is not one");
 
         /// <summary>A palette id to Color Pipeline's id, through its two halves, never Hash128's string form.</summary>
-        public static SerializableGUID Guid(string id) { var (a, b) = ColorRef.Parts(id); return new SerializableGUID(a, b); }
+        internal static SerializableGUID Guid(string id) { var (a, b) = ColorRef.Parts(id); return new SerializableGUID(a, b); }
 
         /// <summary>Color Pipeline's id to a palette id.</summary>
-        public static string IdOf(SerializableGUID g) { var (a, b) = g.ToParts(); return ColorRef.PaletteId(a, b); }
+        internal static string IdOf(SerializableGUID g) { var (a, b) = g.ToParts(); return ColorRef.PaletteId(a, b); }
 
         void Warn(string key, string message) { if (warned.Add(key)) Debug.LogWarning(message); }
     }

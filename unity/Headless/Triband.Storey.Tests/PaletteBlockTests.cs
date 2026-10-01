@@ -95,20 +95,6 @@ namespace Triband.Storey.Tests
             }
         }
 
-        /// <summary>The nearest entry wins, the first of equals as in the Model Remapper, and an equal colour is exact whatever the measure says.</summary>
-        [Fact]
-        public void ProposalsTakeTheNearestFirstEntry()
-        {
-            var lit = new SortedDictionary<string, int>(StringComparer.Ordinal) { ["#102030"] = 3, ["#808080"] = 1 };
-            var pal = new List<(string, string, string)> { (A, "Grey1", "#7f7f7f"), (B, "Grey2", "#818181"), ("c".PadLeft(32, '0'), "Navy", "#102030") };
-            // a measure that sees greys as equals and never reports 1, so exactness must come from the literal
-            double Sim(string a, string b) => a == "#808080" ? 0.9 : 0.1;
-            var p = ColorMapping.Propose(lit, pal, Sim);
-            Assert.Equal(("#102030", 3, "c".PadLeft(32, '0'), true, 1.0), (p[0].hex, p[0].uses, p[0].id, p[0].exact, p[0].similarity));
-            Assert.Equal((A, "Grey1", "#7F7F7F", false, 0.9), (p[1].id, p[1].name, p[1].paletteHex, p[1].exact, p[1].similarity));
-            Assert.Null(ColorMapping.Propose(lit, new List<(string, string, string)>(), Sim)[0].id);
-        }
-
         [Fact]
         public void AnIdMissingFromTheBlockIsMagenta()
         {

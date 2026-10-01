@@ -108,32 +108,6 @@ namespace Triband.Storey
         }
 
         /// <summary>
-        /// The palette entry nearest each literal by <paramref name="similarity"/> (0..1, 1 = the same colour; the
-        /// editor passes Color Pipeline's <c>GetColorSimilarity</c>, the Model Remapper's measure). The first entry
-        /// of the highest similarity wins, as in the Model Remapper. Exact when the colours are equal as literals.
-        /// </summary>
-        public static List<ColorProposal> Propose(IReadOnlyDictionary<string, int> literals, IReadOnlyList<(string id, string name, string hex)> palette,
-            Func<string, string, double> similarity)
-        {
-            var r = new List<ColorProposal>();
-            foreach (var kv in literals)
-            {
-                string h = ColorRef.Normalise(kv.Key);
-                int best = -1; double bestSim = double.NegativeInfinity; bool exact = false;
-                for (int i = 0; i < palette.Count; i++)
-                {
-                    string ph = ColorRef.Normalise(palette[i].hex);
-                    if (ph == h) { best = i; bestSim = 1; exact = true; break; }
-                    double sim = similarity(h, ph);
-                    if (sim > bestSim) { best = i; bestSim = sim; }
-                }
-                r.Add(best < 0 ? new ColorProposal(h, kv.Value, null, null, null, 0, false)
-                               : new ColorProposal(h, kv.Value, palette[best].id, palette[best].name, ColorRef.Normalise(palette[best].hex), bestSim, exact));
-            }
-            return r;
-        }
-
-        /// <summary>
         /// Rewrite every field holding a mapped literal as its palette id and refresh the palette block. Returns how
         /// many fields changed. Ids in <paramref name="idByHex"/> must be palette ids; keys are CSS literals.
         /// </summary>
@@ -154,25 +128,6 @@ namespace Triband.Storey
                 }
             PaletteSnapshot.Refresh(d, lookup);
             return n;
-        }
-    }
-}
-
-namespace Triband.Storey
-{
-    /// <summary>A literal of a layout, how many fields use it, and the palette entry <see cref="ColorMapping.Propose"/> found for it (none when the palette is empty).</summary>
-    public sealed class ColorProposal
-    {
-        public readonly string hex;
-        public readonly int uses;
-        public readonly string? id, name, paletteHex;
-        public readonly double similarity;
-        public readonly bool exact;
-
-        public ColorProposal(string hex, int uses, string? id, string? name, string? paletteHex, double similarity, bool exact)
-        {
-            this.hex = hex; this.uses = uses; this.id = id; this.name = name; this.paletteHex = paletteHex;
-            this.similarity = similarity; this.exact = exact;
         }
     }
 }
