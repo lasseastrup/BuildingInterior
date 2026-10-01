@@ -180,12 +180,25 @@ namespace Triband.Storey
 
     /// <summary>
     /// What a style colour field holds (docs/COLOURS.md §3.1): a CSS literal <c>#RRGGBB</c> (or <c>#RGB</c>),
-    /// as the prototype writes it, or a palette id: a Color Pipeline <c>SerializableGUID</c> as its 32 hex digits.
+    /// as the prototype writes it, or a palette id: a Color Pipeline <c>SerializableGUID</c>'s two halves
+    /// (<c>m_Value0</c>, <c>m_Value1</c>, as the .palette file stores them) as 16 hex digits each. Storey's own
+    /// format, so it never depends on how <c>Hash128</c> prints itself.
     /// </summary>
     public static class ColorRef
     {
         public static bool IsHex(string? s) => s != null && (s.Length == 7 || s.Length == 4) && s[0] == '#' && AllHex(s, 1);
         public static bool IsPaletteId(string? s) => s != null && s.Length == 32 && AllHex(s, 0);
+
+        /// <summary>The palette id of a <c>SerializableGUID</c> given as its two halves.</summary>
+        public static string PaletteId(ulong value0, ulong value1) => value0.ToString("x16") + value1.ToString("x16");
+
+        /// <summary>A palette id's two halves, for <c>new SerializableGUID(ulong, ulong)</c>.</summary>
+        public static (ulong value0, ulong value1) Parts(string id)
+        {
+            if (!IsPaletteId(id)) throw new System.FormatException($"\"{id}\" is not a palette id");
+            return (ulong.Parse(id.Substring(0, 16), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture),
+                    ulong.Parse(id.Substring(16), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture));
+        }
 
         /// <summary>A CSS literal as <c>#RRGGBB</c> in capitals: <c>#abc</c> and <c>#AABBCC</c> are one colour.</summary>
         public static string Normalise(string hex)

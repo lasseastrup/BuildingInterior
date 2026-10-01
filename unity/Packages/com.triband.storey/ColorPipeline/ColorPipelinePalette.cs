@@ -59,7 +59,7 @@ namespace Triband.Storey.ColorPipeline
             var palette = Palette;
             if (ColorRef.IsPaletteId(colorRef))
             {
-                var id = new SerializableGUID(colorRef);
+                var id = Guid(colorRef);
                 // GetIndexOfColor alone answers 0 for an unknown id, so a deleted entry would turn silently into entry 0
                 if (palette.TryGetColor(id, out _)) return palette.GetIndexOfColor(id);
                 Warn(colorRef, $"Storey: palette colour {colorRef} is not in the Color Pipeline palette (deleted?); showing palette colour 0.");
@@ -95,12 +95,18 @@ namespace Triband.Storey.ColorPipeline
         /// </summary>
         public PaletteEntry? Entry(string id)
         {
-            if (!ColorRef.IsPaletteId(id) || !Palette.TryGetColor(new SerializableGUID(id), out var def)) return null;
+            if (!ColorRef.IsPaletteId(id) || !Palette.TryGetColor(Guid(id), out var def)) return null;
             return new PaletteEntry(def.Name, "#" + ColorUtility.ToHtmlStringRGB(def.Color));
         }
 
         static SerializableGUID Id(string s) =>
-            ColorRef.IsPaletteId(s) ? new SerializableGUID(s) : throw new FormatException($"a remap takes palette ids; \"{s}\" is not one");
+            ColorRef.IsPaletteId(s) ? Guid(s) : throw new FormatException($"a remap takes palette ids; \"{s}\" is not one");
+
+        /// <summary>A palette id to Color Pipeline's id, through its two halves, never Hash128's string form.</summary>
+        internal static SerializableGUID Guid(string id) { var (a, b) = ColorRef.Parts(id); return new SerializableGUID(a, b); }
+
+        /// <summary>Color Pipeline's id to a palette id.</summary>
+        internal static string IdOf(SerializableGUID g) { var (a, b) = g.ToParts(); return ColorRef.PaletteId(a, b); }
 
         void Warn(string key, string message) { if (warned.Add(key)) Debug.LogWarning(message); }
     }

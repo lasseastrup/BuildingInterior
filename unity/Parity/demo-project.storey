@@ -1,0 +1,2021 @@
+{
+ "v": 2,
+ "seq": 16,
+ "buildings": [
+  {
+   "id": "b1",
+   "name": "Linden Court",
+   "pos": {
+    "x": -8,
+    "z": -6
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 0
+    },
+    {
+     "x": 16,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 8
+    },
+    {
+     "x": 8,
+     "z": 16
+    },
+    {
+     "x": 0,
+     "z": 16
+    }
+   ],
+   "floors": [
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 10.5,
+        "z": 0
+       },
+       "b": {
+        "x": 10.5,
+        "z": 8
+       },
+       "doors": [
+        {
+         "t": 0.7
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 0,
+        "z": 13.8
+       },
+       "b": {
+        "x": 8,
+        "z": 13.8
+       },
+       "doors": [
+        {
+         "t": 0.8
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 8,
+        "z": 8
+       },
+       "b": {
+        "x": 8,
+        "z": 5.5
+       },
+       "doors": []
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 3.5
+       },
+       "b": {
+        "x": 16,
+        "z": 3.5
+       },
+       "doors": [
+        {
+         "t": 0.1875
+        },
+        {
+         "t": 0.5
+        },
+        {
+         "t": 0.8125
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 5.5,
+        "z": 0
+       },
+       "b": {
+        "x": 5.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 10.5,
+        "z": 0
+       },
+       "b": {
+        "x": 10.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 8,
+        "z": 5.5
+       },
+       "b": {
+        "x": 16,
+        "z": 5.5
+       },
+       "doors": [
+        {
+         "t": 0.25
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 12,
+        "z": 5.5
+       },
+       "b": {
+        "x": 12,
+        "z": 8
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 8,
+        "z": 5.5
+       },
+       "b": {
+        "x": 8,
+        "z": 8
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 0,
+        "z": 13.8
+       },
+       "b": {
+        "x": 8,
+        "z": 13.8
+       },
+       "doors": [
+        {
+         "t": 0.8
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 3.5
+       },
+       "b": {
+        "x": 16,
+        "z": 3.5
+       },
+       "doors": [
+        {
+         "t": 0.1875
+        },
+        {
+         "t": 0.5
+        },
+        {
+         "t": 0.8125
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 5.5,
+        "z": 0
+       },
+       "b": {
+        "x": 5.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 10.5,
+        "z": 0
+       },
+       "b": {
+        "x": 10.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 8,
+        "z": 5.5
+       },
+       "b": {
+        "x": 16,
+        "z": 5.5
+       },
+       "doors": [
+        {
+         "t": 0.25
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 12,
+        "z": 5.5
+       },
+       "b": {
+        "x": 12,
+        "z": 8
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 8,
+        "z": 5.5
+       },
+       "b": {
+        "x": 8,
+        "z": 8
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 0,
+        "z": 13.8
+       },
+       "b": {
+        "x": 8,
+        "z": 13.8
+       },
+       "doors": [
+        {
+         "t": 0.8
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 3.5
+       },
+       "b": {
+        "x": 16,
+        "z": 3.5
+       },
+       "doors": [
+        {
+         "t": 0.1875
+        },
+        {
+         "t": 0.5
+        },
+        {
+         "t": 0.8125
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 5.5,
+        "z": 0
+       },
+       "b": {
+        "x": 5.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 10.5,
+        "z": 0
+       },
+       "b": {
+        "x": 10.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 8,
+        "z": 5.5
+       },
+       "b": {
+        "x": 16,
+        "z": 5.5
+       },
+       "doors": [
+        {
+         "t": 0.25
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 12,
+        "z": 5.5
+       },
+       "b": {
+        "x": 12,
+        "z": 8
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 8,
+        "z": 5.5
+       },
+       "b": {
+        "x": 8,
+        "z": 8
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 0,
+        "z": 13.8
+       },
+       "b": {
+        "x": 8,
+        "z": 13.8
+       },
+       "doors": [
+        {
+         "t": 0.8
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 3.5
+       },
+       "b": {
+        "x": 16,
+        "z": 3.5
+       },
+       "doors": [
+        {
+         "t": 0.1875
+        },
+        {
+         "t": 0.5
+        },
+        {
+         "t": 0.8125
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 5.5,
+        "z": 0
+       },
+       "b": {
+        "x": 5.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 10.5,
+        "z": 0
+       },
+       "b": {
+        "x": 10.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 8,
+        "z": 5.5
+       },
+       "b": {
+        "x": 16,
+        "z": 5.5
+       },
+       "doors": [
+        {
+         "t": 0.25
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 12,
+        "z": 5.5
+       },
+       "b": {
+        "x": 12,
+        "z": 8
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 8,
+        "z": 5.5
+       },
+       "b": {
+        "x": 8,
+        "z": 8
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 0,
+        "z": 13.8
+       },
+       "b": {
+        "x": 8,
+        "z": 13.8
+       },
+       "doors": [
+        {
+         "t": 0.8
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 3.5
+       },
+       "b": {
+        "x": 16,
+        "z": 3.5
+       },
+       "doors": [
+        {
+         "t": 0.1875
+        },
+        {
+         "t": 0.5
+        },
+        {
+         "t": 0.8125
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 5.5,
+        "z": 0
+       },
+       "b": {
+        "x": 5.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 10.5,
+        "z": 0
+       },
+       "b": {
+        "x": 10.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 8,
+        "z": 5.5
+       },
+       "b": {
+        "x": 16,
+        "z": 5.5
+       },
+       "doors": [
+        {
+         "t": 0.25
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 12,
+        "z": 5.5
+       },
+       "b": {
+        "x": 12,
+        "z": 8
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 8,
+        "z": 5.5
+       },
+       "b": {
+        "x": 8,
+        "z": 8
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 0,
+        "z": 13.8
+       },
+       "b": {
+        "x": 8,
+        "z": 13.8
+       },
+       "doors": [
+        {
+         "t": 0.8
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 3.5
+       },
+       "b": {
+        "x": 8,
+        "z": 3.5
+       },
+       "doors": [
+        {
+         "t": 0.3
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 5.5,
+        "z": 0
+       },
+       "b": {
+        "x": 5.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 0,
+        "z": 13.8
+       },
+       "b": {
+        "x": 8,
+        "z": 13.8
+       },
+       "doors": [
+        {
+         "t": 0.8
+        }
+       ]
+      }
+     ],
+     "shape": [
+      {
+       "x": 0,
+       "z": 0
+      },
+      {
+       "x": 8,
+       "z": 0
+      },
+      {
+       "x": 8,
+       "z": 16
+      },
+      {
+       "x": 0,
+       "z": 16
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 3.5
+       },
+       "b": {
+        "x": 8,
+        "z": 3.5
+       },
+       "doors": [
+        {
+         "t": 0.3
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 5.5,
+        "z": 0
+       },
+       "b": {
+        "x": 5.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 0,
+        "z": 13.8
+       },
+       "b": {
+        "x": 8,
+        "z": 13.8
+       },
+       "doors": [
+        {
+         "t": 0.8
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 3.5
+       },
+       "b": {
+        "x": 8,
+        "z": 3.5
+       },
+       "doors": [
+        {
+         "t": 0.3
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 5.5,
+        "z": 0
+       },
+       "b": {
+        "x": 5.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 0,
+        "z": 13.8
+       },
+       "b": {
+        "x": 8,
+        "z": 13.8
+       },
+       "doors": [
+        {
+         "t": 0.8
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 3.5
+       },
+       "b": {
+        "x": 8,
+        "z": 3.5
+       },
+       "doors": [
+        {
+         "t": 0.3
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      },
+      {
+       "a": {
+        "x": 5.5,
+        "z": 0
+       },
+       "b": {
+        "x": 5.5,
+        "z": 3.5
+       },
+       "doors": []
+      },
+      {
+       "a": {
+        "x": 0,
+        "z": 13.8
+       },
+       "b": {
+        "x": 8,
+        "z": 13.8
+       },
+       "doors": [
+        {
+         "t": 0.8
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "groundHeight": 4,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "s2",
+     "type": "stairs",
+     "x": 3.6,
+     "z": 10.6,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": true
+    },
+    {
+     "id": "s3",
+     "type": "lift",
+     "x": 6.8,
+     "z": 9.45,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": false
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.25
+    },
+    {
+     "edge": 0,
+     "t": 0.8
+    },
+    {
+     "edge": 1,
+     "t": 0.35,
+     "k": 6
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Brick walk-up",
+    "wall": "e341af71a12497dbde0e79242759f7c5",
+    "trim": "d4713d60c8a70639f7c1bd874da5e709",
+    "interior": "d4713d60c8a70639f7c1bd874da5e709",
+    "floor": "43fb218605b6b180676e5bd5297e010c",
+    "roof": "0ff18e0242af9fc3eb2083e6ce164dba",
+    "core": "23c6612f482686731846d424c17c6279",
+    "glass": "cda8056c3d15eef7247a8333f7b0b7d2",
+    "windows": "punched",
+    "winW": 1.2,
+    "bay": 2.6,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "brick",
+    "door": "91dc59efeb21a3f6b29c467d2b5f6932",
+    "rail": "d71037d1b83e90ecb5d32b1666194cb1",
+    "metal": "9a164106cf6a659e259f4329e6f4590b",
+    "ceiling": "7c65c1e582e2e662eb1167b367a9c378",
+    "liftInterior": "abe121ef53714e173c6830a59b3279ca",
+    "liftButton": "d432f8db6a174c1c14aa451ca69cfb85",
+    "detailMetal": "23c6612f482686731846d424c17c6279",
+    "grille": "fb3675b89cdeb3e642930b33a81ad477",
+    "detailDark": "215663abc1f254b82648ee38e07405eb",
+    "dish": "5ba91faf7a024204e443df789558867f"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "escape",
+     "k": 1,
+     "edge": 1,
+     "t": 0.5
+    }
+   ]
+  },
+  {
+   "id": "b4",
+   "name": "Corner Shop",
+   "pos": {
+    "x": 12,
+    "z": -6
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 10,
+     "z": 0
+    },
+    {
+     "x": 10,
+     "z": 8
+    },
+    {
+     "x": 0,
+     "z": 8
+    }
+   ],
+   "floors": [
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 6.2,
+        "z": 0
+       },
+       "b": {
+        "x": 6.2,
+        "z": 8
+       },
+       "doors": [
+        {
+         "t": 0.22
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 3.6,
+        "z": 4.4
+       },
+       "b": {
+        "x": 10,
+        "z": 4.4
+       },
+       "doors": [
+        {
+         "t": 0.5
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 3.6,
+        "z": 4.4
+       },
+       "b": {
+        "x": 10,
+        "z": 4.4
+       },
+       "doors": [
+        {
+         "t": 0.5
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "groundHeight": 3.6,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "s5",
+     "type": "stairs",
+     "x": 2,
+     "z": 4.2,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": true
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Pastel stucco",
+    "wall": "3c49d76fcfc6e62537176e84d977e993",
+    "trim": "c9e4dab20edc6d2b28805c5dad1b8f60",
+    "interior": "7c65c1e582e2e662eb1167b367a9c378",
+    "floor": "43fb218605b6b180676e5bd5297e010c",
+    "roof": "dcf17d88eb14d358a429331aa5908933",
+    "core": "4715a85bf9a954629985b36d3e829bc0",
+    "glass": "cda8056c3d15eef7247a8333f7b0b7d2",
+    "windows": "tall",
+    "winW": 1,
+    "bay": 2.4,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": "stucco",
+    "door": "91dc59efeb21a3f6b29c467d2b5f6932",
+    "rail": "d71037d1b83e90ecb5d32b1666194cb1",
+    "metal": "9a164106cf6a659e259f4329e6f4590b",
+    "ceiling": "7c65c1e582e2e662eb1167b367a9c378",
+    "liftInterior": "abe121ef53714e173c6830a59b3279ca",
+    "liftButton": "d432f8db6a174c1c14aa451ca69cfb85",
+    "detailMetal": "23c6612f482686731846d424c17c6279",
+    "grille": "fb3675b89cdeb3e642930b33a81ad477",
+    "detailDark": "215663abc1f254b82648ee38e07405eb",
+    "dish": "5ba91faf7a024204e443df789558867f"
+   },
+   "interior": true,
+   "details": [
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.62
+    },
+    {
+     "kind": "awning",
+     "k": 0,
+     "edge": 0,
+     "t": 0.88
+    },
+    {
+     "kind": "dish",
+     "k": 2,
+     "edge": 3,
+     "t": 0.34,
+     "y": 1.9
+    }
+   ]
+  },
+  {
+   "id": "b6",
+   "name": "Harbor Office",
+   "pos": {
+    "x": 12,
+    "z": 8
+   },
+   "footprint": [
+    {
+     "x": 3.5,
+     "z": 0
+    },
+    {
+     "x": 8.5,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 3.5
+    },
+    {
+     "x": 12,
+     "z": 8.5
+    },
+    {
+     "x": 8.5,
+     "z": 12
+    },
+    {
+     "x": 3.5,
+     "z": 12
+    },
+    {
+     "x": 0,
+     "z": 8.5
+    },
+    {
+     "x": 0,
+     "z": 3.5
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0.5,
+        "z": 9.2
+       },
+       "b": {
+        "x": 5.9,
+        "z": 9.2
+       },
+       "doors": [
+        {
+         "t": 0.5
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0.5,
+        "z": 9.2
+       },
+       "b": {
+        "x": 5.9,
+        "z": 9.2
+       },
+       "doors": [
+        {
+         "t": 0.5
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0.5,
+        "z": 9.2
+       },
+       "b": {
+        "x": 5.9,
+        "z": 9.2
+       },
+       "doors": [
+        {
+         "t": 0.5
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0.5,
+        "z": 9.2
+       },
+       "b": {
+        "x": 5.9,
+        "z": 9.2
+       },
+       "doors": [
+        {
+         "t": 0.5
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0.5,
+        "z": 9.2
+       },
+       "b": {
+        "x": 5.9,
+        "z": 9.2
+       },
+       "doors": [
+        {
+         "t": 0.5
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0.5,
+        "z": 9.2
+       },
+       "b": {
+        "x": 5.9,
+        "z": 9.2
+       },
+       "doors": [
+        {
+         "t": 0.5
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "groundHeight": 3.6,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "s7",
+     "type": "stairs",
+     "x": 7.8,
+     "z": 6.4,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": true
+    },
+    {
+     "id": "s8",
+     "type": "lift",
+     "x": 4.4,
+     "z": 6.9,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": false
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.5
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Glass office",
+    "wall": "37ebdcd9e87a161323a7711a81332876",
+    "trim": "09e469e6ec62b2c8148b2758d7ab7928",
+    "interior": "7c65c1e582e2e662eb1167b367a9c378",
+    "floor": "ab347b2d419f3866156a60953a61b9cf",
+    "roof": "abe121ef53714e173c6830a59b3279ca",
+    "core": "cca5a5a19e4d6e3cfcbd04c340212ef7",
+    "glass": "7e56ac3d10cc87114312ece2dc2151e1",
+    "windows": "curtain",
+    "winW": 1.4,
+    "bay": 1.8,
+    "ground": "match",
+    "bands": true,
+    "parapet": true,
+    "preset": "glass",
+    "door": "91dc59efeb21a3f6b29c467d2b5f6932",
+    "rail": "d71037d1b83e90ecb5d32b1666194cb1",
+    "metal": "9a164106cf6a659e259f4329e6f4590b",
+    "ceiling": "7c65c1e582e2e662eb1167b367a9c378",
+    "liftInterior": "abe121ef53714e173c6830a59b3279ca",
+    "liftButton": "d432f8db6a174c1c14aa451ca69cfb85",
+    "detailMetal": "23c6612f482686731846d424c17c6279",
+    "grille": "fb3675b89cdeb3e642930b33a81ad477",
+    "detailDark": "215663abc1f254b82648ee38e07405eb",
+    "dish": "5ba91faf7a024204e443df789558867f"
+   },
+   "interior": true
+  },
+  {
+   "id": "b9",
+   "name": "Overlook",
+   "pos": {
+    "x": -22,
+    "z": -8
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 0
+    },
+    {
+     "x": 12,
+     "z": 10
+    },
+    {
+     "x": 0,
+     "z": 10
+    }
+   ],
+   "floors": [
+    {
+     "walls": [],
+     "h": 5
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 2.4
+       },
+       "b": {
+        "x": 12,
+        "z": 2.4
+       },
+       "doors": [
+        {
+         "t": 0.3
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 2.4
+       },
+       "b": {
+        "x": 12,
+        "z": 2.4
+       },
+       "doors": [
+        {
+         "t": 0.3
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 2.4
+       },
+       "b": {
+        "x": 12,
+        "z": 2.4
+       },
+       "doors": [
+        {
+         "t": 0.3
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      }
+     ],
+     "shape": [
+      {
+       "x": -3,
+       "z": -1
+      },
+      {
+       "x": 12,
+       "z": -1
+      },
+      {
+       "x": 12,
+       "z": 10
+      },
+      {
+       "x": -3,
+       "z": 10
+      }
+     ],
+     "blank": [],
+     "style": {
+      "label": "Glass office",
+      "wall": "37ebdcd9e87a161323a7711a81332876",
+      "trim": "09e469e6ec62b2c8148b2758d7ab7928",
+      "interior": "7c65c1e582e2e662eb1167b367a9c378",
+      "floor": "ab347b2d419f3866156a60953a61b9cf",
+      "roof": "abe121ef53714e173c6830a59b3279ca",
+      "core": "cca5a5a19e4d6e3cfcbd04c340212ef7",
+      "glass": "7e56ac3d10cc87114312ece2dc2151e1",
+      "windows": "curtain",
+      "winW": 1.4,
+      "bay": 1.8,
+      "ground": "match",
+      "bands": true,
+      "parapet": true,
+      "preset": "glass",
+      "door": "91dc59efeb21a3f6b29c467d2b5f6932",
+      "rail": "d71037d1b83e90ecb5d32b1666194cb1",
+      "metal": "9a164106cf6a659e259f4329e6f4590b",
+      "ceiling": "7c65c1e582e2e662eb1167b367a9c378",
+      "liftInterior": "abe121ef53714e173c6830a59b3279ca",
+      "liftButton": "d432f8db6a174c1c14aa451ca69cfb85",
+      "detailMetal": "23c6612f482686731846d424c17c6279",
+      "grille": "fb3675b89cdeb3e642930b33a81ad477",
+      "detailDark": "215663abc1f254b82648ee38e07405eb",
+      "dish": "5ba91faf7a024204e443df789558867f"
+     }
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 2.4
+       },
+       "b": {
+        "x": 12,
+        "z": 2.4
+       },
+       "doors": [
+        {
+         "t": 0.3
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 2.4
+       },
+       "b": {
+        "x": 12,
+        "z": 2.4
+       },
+       "doors": [
+        {
+         "t": 0.3
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 2.4
+       },
+       "b": {
+        "x": 12,
+        "z": 2.4
+       },
+       "doors": [
+        {
+         "t": 0.3
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      }
+     ],
+     "shape": [
+      {
+       "x": -3,
+       "z": -1
+      },
+      {
+       "x": 7,
+       "z": -1
+      },
+      {
+       "x": 7,
+       "z": 10
+      },
+      {
+       "x": -3,
+       "z": 10
+      }
+     ],
+     "blank": []
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 2.4
+       },
+       "b": {
+        "x": 12,
+        "z": 2.4
+       },
+       "doors": [
+        {
+         "t": 0.3
+        },
+        {
+         "t": 0.75
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "groundHeight": 3.6,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "s10",
+     "type": "stairs",
+     "x": 4.5,
+     "z": 5.6,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": true
+    },
+    {
+     "id": "s11",
+     "type": "lift",
+     "x": 1.8,
+     "z": 5.6,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": false
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.5
+    },
+    {
+     "edge": 1,
+     "t": 0.4,
+     "k": 6
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Concrete slab",
+    "wall": "8b0163c1cd9d2b7d1759edc372ae2244",
+    "trim": "d24bace4307bf3260870e15c2fcd81b5",
+    "interior": "d4713d60c8a70639f7c1bd874da5e709",
+    "floor": "c00a32a25549d274a973eebac8fead08",
+    "roof": "50f244556f25e2a2a3f2c9bf9c6316b9",
+    "core": "cca5a5a19e4d6e3cfcbd04c340212ef7",
+    "glass": "4d2b9deb1beb37114a84eb038d1fd9b7",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 3,
+    "ground": "match",
+    "bands": false,
+    "parapet": true,
+    "preset": "concrete",
+    "door": "91dc59efeb21a3f6b29c467d2b5f6932",
+    "rail": "d71037d1b83e90ecb5d32b1666194cb1",
+    "metal": "9a164106cf6a659e259f4329e6f4590b",
+    "ceiling": "7c65c1e582e2e662eb1167b367a9c378",
+    "liftInterior": "abe121ef53714e173c6830a59b3279ca",
+    "liftButton": "d432f8db6a174c1c14aa451ca69cfb85",
+    "detailMetal": "23c6612f482686731846d424c17c6279",
+    "grille": "fb3675b89cdeb3e642930b33a81ad477",
+    "detailDark": "215663abc1f254b82648ee38e07405eb",
+    "dish": "5ba91faf7a024204e443df789558867f"
+   },
+   "interior": true
+  },
+  {
+   "id": "b12",
+   "name": "Row House",
+   "pos": {
+    "x": 22,
+    "z": -6
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 6,
+     "z": 0
+    },
+    {
+     "x": 6,
+     "z": 8
+    },
+    {
+     "x": 0,
+     "z": 8
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 2.2
+       },
+       "b": {
+        "x": 6,
+        "z": 2.2
+       },
+       "doors": [
+        {
+         "t": 0.25
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 2.2
+       },
+       "b": {
+        "x": 6,
+        "z": 2.2
+       },
+       "doors": [
+        {
+         "t": 0.25
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "walls": [
+      {
+       "a": {
+        "x": 0,
+        "z": 2.2
+       },
+       "b": {
+        "x": 6,
+        "z": 2.2
+       },
+       "doors": [
+        {
+         "t": 0.25
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "groundHeight": 3.6,
+   "floorHeight": 3,
+   "shafts": [
+    {
+     "id": "s13",
+     "type": "stairs",
+     "x": 3,
+     "z": 4.9,
+     "rot": 0,
+     "bottom": 0,
+     "top": -1,
+     "roof": false
+    }
+   ],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.5
+    },
+    {
+     "edge": 3,
+     "t": 0.5,
+     "k": 3
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Pastel stucco",
+    "wall": "f340a96bdf6975decb5d85341aa8c784",
+    "trim": "c9e4dab20edc6d2b28805c5dad1b8f60",
+    "interior": "7c65c1e582e2e662eb1167b367a9c378",
+    "floor": "43fb218605b6b180676e5bd5297e010c",
+    "roof": "dcf17d88eb14d358a429331aa5908933",
+    "core": "4715a85bf9a954629985b36d3e829bc0",
+    "glass": "cda8056c3d15eef7247a8333f7b0b7d2",
+    "windows": "tall",
+    "winW": 1,
+    "bay": 2.4,
+    "ground": "storefront",
+    "bands": true,
+    "parapet": true,
+    "preset": null,
+    "roofType": "gable",
+    "pitch": 38,
+    "door": "91dc59efeb21a3f6b29c467d2b5f6932",
+    "rail": "d71037d1b83e90ecb5d32b1666194cb1",
+    "metal": "9a164106cf6a659e259f4329e6f4590b",
+    "ceiling": "7c65c1e582e2e662eb1167b367a9c378",
+    "liftInterior": "abe121ef53714e173c6830a59b3279ca",
+    "liftButton": "d432f8db6a174c1c14aa451ca69cfb85",
+    "detailMetal": "23c6612f482686731846d424c17c6279",
+    "grille": "fb3675b89cdeb3e642930b33a81ad477",
+    "detailDark": "215663abc1f254b82648ee38e07405eb",
+    "dish": "5ba91faf7a024204e443df789558867f"
+   },
+   "interior": true
+  },
+  {
+   "id": "b14",
+   "name": "Westgate Tower",
+   "pos": {
+    "x": -40,
+    "z": 2
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 0
+    },
+    {
+     "x": 14,
+     "z": 11
+    },
+    {
+     "x": 0,
+     "z": 11
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 3.6,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.5
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Concrete slab",
+    "wall": "8b0163c1cd9d2b7d1759edc372ae2244",
+    "trim": "d24bace4307bf3260870e15c2fcd81b5",
+    "interior": "d4713d60c8a70639f7c1bd874da5e709",
+    "floor": "c00a32a25549d274a973eebac8fead08",
+    "roof": "50f244556f25e2a2a3f2c9bf9c6316b9",
+    "core": "cca5a5a19e4d6e3cfcbd04c340212ef7",
+    "glass": "4d2b9deb1beb37114a84eb038d1fd9b7",
+    "windows": "ribbon",
+    "winW": 1.2,
+    "bay": 3,
+    "ground": "match",
+    "bands": false,
+    "parapet": true,
+    "preset": "concrete",
+    "roofType": "hip",
+    "pitch": 24,
+    "door": "91dc59efeb21a3f6b29c467d2b5f6932",
+    "rail": "d71037d1b83e90ecb5d32b1666194cb1",
+    "metal": "9a164106cf6a659e259f4329e6f4590b",
+    "ceiling": "7c65c1e582e2e662eb1167b367a9c378",
+    "liftInterior": "abe121ef53714e173c6830a59b3279ca",
+    "liftButton": "d432f8db6a174c1c14aa451ca69cfb85",
+    "detailMetal": "23c6612f482686731846d424c17c6279",
+    "grille": "fb3675b89cdeb3e642930b33a81ad477",
+    "detailDark": "215663abc1f254b82648ee38e07405eb",
+    "dish": "5ba91faf7a024204e443df789558867f"
+   },
+   "interior": false
+  },
+  {
+   "id": "b15",
+   "name": "Dockside Store",
+   "pos": {
+    "x": 28,
+    "z": -6
+   },
+   "footprint": [
+    {
+     "x": 0,
+     "z": 0
+    },
+    {
+     "x": 13,
+     "z": 0
+    },
+    {
+     "x": 13,
+     "z": 10
+    },
+    {
+     "x": 0,
+     "z": 10
+    }
+   ],
+   "floors": [
+    {
+     "walls": []
+    },
+    {
+     "walls": []
+    }
+   ],
+   "groundHeight": 3.6,
+   "floorHeight": 3,
+   "shafts": [],
+   "entrances": [
+    {
+     "edge": 0,
+     "t": 0.5
+    }
+   ],
+   "blank": [],
+   "style": {
+    "label": "Warehouse",
+    "wall": "215663abc1f254b82648ee38e07405eb",
+    "trim": "5ba91faf7a024204e443df789558867f",
+    "interior": "5ba91faf7a024204e443df789558867f",
+    "floor": "49a3e80e966e12771775336d71eacd05",
+    "roof": "ea7e9d498c778ea617e0aa3c03983ca8",
+    "core": "8b0163c1cd9d2b7d1759edc372ae2244",
+    "glass": "cda8056c3d15eef7247a8333f7b0b7d2",
+    "windows": "tall",
+    "winW": 1.6,
+    "bay": 4.2,
+    "ground": "solid",
+    "bands": false,
+    "parapet": false,
+    "preset": "warehouse",
+    "roofType": "shed",
+    "pitch": 12,
+    "door": "91dc59efeb21a3f6b29c467d2b5f6932",
+    "rail": "d71037d1b83e90ecb5d32b1666194cb1",
+    "metal": "9a164106cf6a659e259f4329e6f4590b",
+    "ceiling": "7c65c1e582e2e662eb1167b367a9c378",
+    "liftInterior": "abe121ef53714e173c6830a59b3279ca",
+    "liftButton": "d432f8db6a174c1c14aa451ca69cfb85",
+    "detailMetal": "23c6612f482686731846d424c17c6279",
+    "grille": "fb3675b89cdeb3e642930b33a81ad477",
+    "detailDark": "215663abc1f254b82648ee38e07405eb",
+    "dish": "5ba91faf7a024204e443df789558867f"
+   },
+   "interior": false
+  }
+ ],
+ "spawn": {
+  "x": -1,
+  "z": -8.6
+ },
+ "palette": {
+  "09e469e6ec62b2c8148b2758d7ab7928": {
+   "name": "363D3D",
+   "hex": "#363D3D"
+  },
+  "0ff18e0242af9fc3eb2083e6ce164dba": {
+   "name": "6D6D6D",
+   "hex": "#6D6D6D"
+  },
+  "215663abc1f254b82648ee38e07405eb": {
+   "name": "556160",
+   "hex": "#556160"
+  },
+  "23c6612f482686731846d424c17c6279": {
+   "name": "CBCBCA",
+   "hex": "#CBCBCA"
+  },
+  "37ebdcd9e87a161323a7711a81332876": {
+   "name": "CECECE",
+   "hex": "#CECECE"
+  },
+  "3c49d76fcfc6e62537176e84d977e993": {
+   "name": "F0B09A",
+   "hex": "#F0B09A"
+  },
+  "43fb218605b6b180676e5bd5297e010c": {
+   "name": "c39871",
+   "hex": "#CB966C"
+  },
+  "4715a85bf9a954629985b36d3e829bc0": {
+   "name": "D1BEAD",
+   "hex": "#D1BEAD"
+  },
+  "49a3e80e966e12771775336d71eacd05": {
+   "name": "89867D",
+   "hex": "#89867D"
+  },
+  "4d2b9deb1beb37114a84eb038d1fd9b7": {
+   "name": "95ABB7",
+   "hex": "#95ABB7"
+  },
+  "50f244556f25e2a2a3f2c9bf9c6316b9": {
+   "name": "90908F",
+   "hex": "#90908F"
+  },
+  "5ba91faf7a024204e443df789558867f": {
+   "name": "E0E0E0",
+   "hex": "#E0E0E0"
+  },
+  "7c65c1e582e2e662eb1167b367a9c378": {
+   "name": "F1F1F1",
+   "hex": "#F1F1F1"
+  },
+  "7e56ac3d10cc87114312ece2dc2151e1": {
+   "name": "67B1CB",
+   "hex": "#67B1CB"
+  },
+  "8b0163c1cd9d2b7d1759edc372ae2244": {
+   "name": "B7AEA6",
+   "hex": "#B7AEA6"
+  },
+  "91dc59efeb21a3f6b29c467d2b5f6932": {
+   "name": "473329",
+   "hex": "#473329"
+  },
+  "9a164106cf6a659e259f4329e6f4590b": {
+   "name": "ADADAD",
+   "hex": "#ADADAD"
+  },
+  "ab347b2d419f3866156a60953a61b9cf": {
+   "name": "a2a2a3",
+   "hex": "#A2A2A3"
+  },
+  "abe121ef53714e173c6830a59b3279ca": {
+   "name": "859192",
+   "hex": "#859192"
+  },
+  "c00a32a25549d274a973eebac8fead08": {
+   "name": "a8a096",
+   "hex": "#A8A096"
+  },
+  "c9e4dab20edc6d2b28805c5dad1b8f60": {
+   "name": "FFFFFC",
+   "hex": "#FFFFFC"
+  },
+  "cca5a5a19e4d6e3cfcbd04c340212ef7": {
+   "name": "C1C1C1",
+   "hex": "#C1C1C1"
+  },
+  "cda8056c3d15eef7247a8333f7b0b7d2": {
+   "name": "9EB4C0",
+   "hex": "#9EB4C0"
+  },
+  "d24bace4307bf3260870e15c2fcd81b5": {
+   "name": "7E7971",
+   "hex": "#7E7971"
+  },
+  "d432f8db6a174c1c14aa451ca69cfb85": {
+   "name": "ECA64C",
+   "hex": "#ECA64C"
+  },
+  "d4713d60c8a70639f7c1bd874da5e709": {
+   "name": "EAEAEA",
+   "hex": "#EAEAEA"
+  },
+  "d71037d1b83e90ecb5d32b1666194cb1": {
+   "name": "444445",
+   "hex": "#444445"
+  },
+  "dcf17d88eb14d358a429331aa5908933": {
+   "name": "815c49",
+   "hex": "#885A47"
+  },
+  "e341af71a12497dbde0e79242759f7c5": {
+   "name": "8D392C",
+   "hex": "#8D392C"
+  },
+  "ea7e9d498c778ea617e0aa3c03983ca8": {
+   "name": "4F4F4F",
+   "hex": "#4F4F4F"
+  },
+  "f340a96bdf6975decb5d85341aa8c784": {
+   "name": "F7E7C6",
+   "hex": "#F7E7C6"
+  },
+  "fb3675b89cdeb3e642930b33a81ad477": {
+   "name": "6B7877",
+   "hex": "#6B7877"
+  }
+ }
+}

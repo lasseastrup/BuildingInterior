@@ -33,7 +33,12 @@ const pair = await page.evaluate(([demo, mapped]) => {
   return [run(demo), run(mapped)];
 }, [fs.readFileSync(path.join(T, '../unity/Fixtures/demo.json'), 'utf8'), fs.readFileSync(path.join(T, '../unity/Parity/demo-palette.storey'), 'utf8')]);
 const same = pair[0].length === pair[1].length && pair[0].every((c, i) => c.length === pair[1][i].length && c.every((v, j) => v === pair[1][i][j]));
+// the project mapping (unity/Parity/demo-project.storey, from map_to_palette.py) renders with no missing palette colour
+const projectColours = await page.evaluate(j => { const s = __sb.state, o = JSON.parse(j); s.buildings.length = 0; s.buildings.push(...o.buildings); s.palette = o.palette; __sb.outline.refresh();
+  const out = []; for (let i = 0; i < s.buildings.length; i++) for (const l of [0, 1]) out.push(...__sb.geo(i, l)[0].c); return out; },
+  fs.readFileSync(path.join(T, '../unity/Parity/demo-project.storey'), 'utf8'));
 const checks = {
+  'the project mapping renders with no missing palette colour': projectColours.length > 0 && !has(projectColours, '#FF00FF'),
   'the parity layout renders exactly as the demo': same,
   'palette id renders its snapshot colour': has(r.c1, '#204060'),
   'per-style door colour is used (LOD1 door panes)': has(r.c1, '#112233'),

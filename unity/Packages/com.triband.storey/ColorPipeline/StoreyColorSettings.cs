@@ -41,7 +41,7 @@ namespace Triband.Storey.ColorPipeline
         public StyleDefaults ToDefaults()
         {
             var d = new StyleDefaults();
-            string Or(SerializableGUID id, string fallback) => id.valid ? id.ToString() : fallback;
+            string Or(SerializableGUID id, string fallback) => id.valid ? ColorPipelinePalette.IdOf(id) : fallback;
             d.door = Or(door, d.door); d.rail = Or(rail, d.rail); d.metal = Or(metal, d.metal); d.ceiling = Or(ceiling, d.ceiling);
             d.liftInterior = Or(liftInterior, d.liftInterior); d.liftButton = Or(liftButton, d.liftButton);
             d.detailMetal = Or(detailMetal, d.detailMetal); d.grille = Or(grille, d.grille); d.detailDark = Or(detailDark, d.detailDark); d.dish = Or(dish, d.dish);

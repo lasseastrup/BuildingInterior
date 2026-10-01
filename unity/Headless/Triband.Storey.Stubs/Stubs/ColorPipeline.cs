@@ -6,9 +6,9 @@ namespace Triband.Core.Utils
 {
     public struct SerializableGUID
     {
-        public SerializableGUID(string hashString) { }
         public SerializableGUID(ulong a, ulong b) { }
         public bool valid => false;
+        public (ulong, ulong) ToParts() => (0, 0);
         public override string ToString() => "";
     }
 }

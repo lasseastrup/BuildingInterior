@@ -29,6 +29,40 @@ namespace Triband.Storey.Tests
             Assert.Equal(PaletteSnapshot.UsedIds(r.Document), new SortedSet<string>(r.Document.palette.Keys, StringComparer.Ordinal));
         }
 
+        /// <summary>
+        /// demo-project.storey: the demo mapped to the project's own palette by unity/tools/map_to_palette.py. Same
+        /// geometry as the demo, nothing but palette ids, each one in the block; its colours are the palette's.
+        /// </summary>
+        [Fact]
+        public void TheProjectMappingHoldsOnlyKnownIdsAndTheDemosGeometry()
+        {
+            var r = PrototypeJson.Read(File.ReadAllText(Path.Combine(Dir, "demo-project.storey")));
+            Assert.Empty(r.Unknown);
+            var d = r.Document;
+            Assert.Empty(ColorMapping.Literals(d));
+            Assert.All(StyleColorFields.Styles(d), st => Assert.All(StyleColorFields.All, f => Assert.True(ColorRef.IsPaletteId(f.get(st)), f.name)));
+            Assert.Equal(PaletteSnapshot.UsedIds(d), new SortedSet<string>(d.palette.Keys, StringComparer.Ordinal));
+
+            var demo = PrototypeJson.Read(Fixtures.Text("demo.json")).Document;
+            var s0 = new Site(demo.buildings); var s1 = new Site(d.buildings); var colors = new ColorResolver(s1, PaletteSnapshot.Resolver(d));
+            for (int i = 0; i < demo.buildings.Count; i++)
+            {
+                var g0 = Lod0.Build(s0, demo.buildings[i]).Op; var g1 = Lod0.Build(s1, d.buildings[i]).Op;
+                Assert.Equal(g0.P, g1.P);
+                foreach (var sw in g1.C) Assert.NotEqual(Colors.Col("#FF00FF"), colors.Resolve(sw));
+            }
+        }
+
+        /// <summary>The tool and the bridge agree on a palette id: a real id from the project's palette.</summary>
+        [Fact]
+        public void PaletteIdsAreTheTwoHalvesInHex()
+        {
+            Assert.Equal("629f6fbed82c07cde3e70682c2094cac", ColorRef.PaletteId(7106521602475165645, 16422101724900707500));
+            Assert.Equal((7106521602475165645UL, 16422101724900707500UL), ColorRef.Parts("629f6fbed82c07cde3e70682c2094cac"));
+            Assert.Equal((7106521602475165645UL, 16422101724900707500UL), ColorRef.Parts("629F6FBED82C07CDE3E70682C2094CAC"));
+            Assert.Throws<FormatException>(() => ColorRef.Parts("#FFFFFF"));
+        }
+
         [Fact]
         public void TheEntriesMatchTheBlock()
         {
