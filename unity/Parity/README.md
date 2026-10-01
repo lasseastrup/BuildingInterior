@@ -13,6 +13,8 @@ Palette ids in a `.storey` are Storey's format: a `SerializableGUID`'s `m_Value0
 python3 unity/tools/map_to_palette.py path/to/ColorPalette.palette unity/Fixtures/demo.json unity/Parity/demo-project.storey
 ```
 
+In the editor, *Assets ▸ Storey ▸ Map Colours to Palette…* on a `.storey` asset does the same, using Color Pipeline's own similarity, and also lets you pick another entry, add a colour to the palette, or keep it. Nearest matches can differ from the tool's when two entries are within rounding of each other.
+
 ## Without Color Pipeline first
 
 Open this repository's `unity/` project in Unity 6.3 and follow "The first editor session" in `unity/README.md`. That checks the shaders and the harness on Storey's built-in hex palette, so a shader problem and a Color Pipeline problem don't show up at the same time.

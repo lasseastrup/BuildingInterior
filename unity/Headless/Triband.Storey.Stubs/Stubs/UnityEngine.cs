@@ -109,6 +109,41 @@ namespace UnityEngine
     {
         public float r, g, b, a;
         public Color(float r, float g, float b, float a = 1) { this.r = r; this.g = g; this.b = b; this.a = a; }
+        public static Color magenta => default;
+        public static Color clear => default;
+    }
+
+    public struct Rect
+    {
+        public Rect(Vector2 position, Vector2 size) { }
+    }
+
+    public sealed class GUIContent
+    {
+        public GUIContent(string text) { }
+        public static GUIContent none => new GUIContent("");
+    }
+
+    public class GUIStyle { }
+
+    public sealed class GUILayoutOption { }
+
+    public static class GUILayout
+    {
+        public static bool Button(string text, params GUILayoutOption[] options) => false;
+        public static GUILayoutOption Width(float width) => new GUILayoutOption();
+        public static void FlexibleSpace() { }
+    }
+
+    public static class GUIUtility
+    {
+        public static Vector2 GUIToScreenPoint(Vector2 guiPoint) => guiPoint;
+    }
+
+    public sealed class Event
+    {
+        public static Event current => new Event();
+        public Vector2 mousePosition => default;
     }
 
     public struct Bounds
