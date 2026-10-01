@@ -25,6 +25,14 @@ namespace Triband.Storey.Unity
         [Tooltip("Tint by LOD, as the prototype's stats card does.")]
         public bool lodTint;
 
+        [Header("Remap test (needs Color Pipeline; docs/COLOURS.md §3.6)")]
+        [Tooltip("The building to remap: its index in the layout.")]
+        public int remapBuilding;
+        [Tooltip("Palette ids to replace, comma-separated (32 hex digits each).")]
+        public string remapFrom = "";
+        [Tooltip("Palette ids to show instead, pairwise with the ones above.")]
+        public string remapTo = "";
+
         BuildingTable? table;
         readonly List<Built> built = new List<Built>();
         // one colour row per style the meshes name (docs/COLOURS.md §3.3), rewritten when the palette invalidates
@@ -97,6 +105,12 @@ namespace Triband.Storey.Unity
         }
 
         int RowOf(StyleRef s) => book!.RowOf(s);
+
+        static string[] Ids(string s) => s.Split(new[] { ',', ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+
+        /// <summary>Play mode: apply the inspector's remap test. Empty fields clear it. No mesh is rebuilt.</summary>
+        [ContextMenu("Apply remap")]
+        void ApplyRemapFromInspector() => SetRemap(remapBuilding, Ids(remapFrom), Ids(remapTo));
 
         /// <summary>
         /// Remap building <paramref name="building"/>'s colours (its index in the layout; palette ids, pairwise), as a

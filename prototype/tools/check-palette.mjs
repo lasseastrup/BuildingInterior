@@ -26,7 +26,15 @@ const r = await page.evaluate(([ID, MISSING]) => {
   const saved = JSON.parse(JSON.stringify(s));
   return { c0, c1, cm, keptPalette: !!saved.palette && saved.palette[ID].hex === '#204060', interior: b.interior };
 }, [ID, MISSING]);
+// the parity layout (unity/Parity/demo-palette.storey) renders exactly as the demo it was mapped from
+const pair = await page.evaluate(([demo, mapped]) => {
+  const run = j => { const s = __sb.state, o = JSON.parse(j); s.buildings.length = 0; s.buildings.push(...o.buildings); s.palette = o.palette; __sb.outline.refresh();
+    const out = []; for (let i = 0; i < s.buildings.length; i++) for (const l of [0, 1]) out.push(Array.from(__sb.geo(i, l)[0].c)); return out; };
+  return [run(demo), run(mapped)];
+}, [fs.readFileSync(path.join(T, '../unity/Fixtures/demo.json'), 'utf8'), fs.readFileSync(path.join(T, '../unity/Parity/demo-palette.storey'), 'utf8')]);
+const same = pair[0].length === pair[1].length && pair[0].every((c, i) => c.length === pair[1][i].length && c.every((v, j) => v === pair[1][i][j]));
 const checks = {
+  'the parity layout renders exactly as the demo': same,
   'palette id renders its snapshot colour': has(r.c1, '#204060'),
   'per-style door colour is used (LOD1 door panes)': has(r.c1, '#112233'),
   'default door colour is gone from that building': !has(r.c1, '#3B3129'),

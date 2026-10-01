@@ -43,6 +43,11 @@ namespace UnityEngine
         public HeaderAttribute(string header) { }
     }
 
+    public sealed class ContextMenu : System.Attribute
+    {
+        public ContextMenu(string itemName) { }
+    }
+
     public sealed class TooltipAttribute : PropertyAttribute
     {
         public TooltipAttribute(string tooltip) { }
