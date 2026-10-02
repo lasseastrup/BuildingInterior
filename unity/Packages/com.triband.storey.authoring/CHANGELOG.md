@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### Added
+- Editor feedback (`StoreyJuice`):
+  - a faint outline on the building under the pointer, and a short glow on what is selected;
+  - ring pulses where a corner or wall point snaps, and a flash along a wall a moved building now shares;
+  - new buildings grow up from the ground and added floors rise into place, and placed stairs and lifts pulse;
+  - Isolate eases in and out;
+  - *Camera follows* moves the Scene view up and down with the active floor.
 - Switching floors in the Interior tab animates: the floor clip eases to the new ceiling, and the active storey's walls slide down to the stub and back up rather than snapping.
 - **Rooms / Filled** per floor in the Interior tab, marked ▪ in the Storey Floors overlay.
 - **Play from this floor** in the Interior tab: Play mode starts on that storey, in front of its stairs or lift, after saving unsaved edits.

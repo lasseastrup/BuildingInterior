@@ -15,6 +15,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- `SiteView.isolateAmount`: an isolate that fades, rather than switching at once.
 - `MeshBuilder.WallBase`: the floor height of the storey each wall was made on. `SiteRenderer` uses it to slide only the active storey's walls in the editor, eased, and reports `Animating` (also on `StoreySite`) while they move.
 - Filled storeys (`FloorData.filled`, `"filled": true` in a layout; walk-in buildings). The storey is built as a shell-only building's storeys are, with opaque windows, closed doors, and no rooms, stairs or slabs between filled storeys. `Cores.Stops` gives a core's storeys without the filled ones: lifts pass through those without stopping, stairs stop at them (`HasFlight`, `StairHoleAt`), and the storeys on either side rail the dead end. Layouts without filled storeys build as before.
 - `StoreyOcclusion` and `StoreyOcclusionSettings` (docs/PLAY.md, slice 5.3; stub-compiled, not yet run in an editor). In Play mode the component clips the floors above the player and slides the walls in the way down. It sinks, slices, cuts out or fades buildings in the way, and shows Sink's footprints (`SinkFootprint`). It takes the player and camera from any controller. `PlayFrom` holds the editor's *Play from this floor* request.

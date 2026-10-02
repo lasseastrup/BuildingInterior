@@ -26,6 +26,8 @@ namespace Triband.Storey.Editor
         /// <summary>What the Stairs tool places: switchback stairs or straight flights (both over the same floors).</summary>
         [SerializeField] internal CoreType stairKind = CoreType.Stairs;
         [SerializeField] internal bool isolate;
+        /// <summary>The Scene view camera follows the active floor up and down (the Interior tab).</summary>
+        [SerializeField] internal bool followFloor = true;
         [SerializeField] internal string selectedCore = "";
         [SerializeField] internal int selectedWall = -1;
         [SerializeField] internal bool showMore;

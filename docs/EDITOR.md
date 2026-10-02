@@ -96,6 +96,15 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Storey height, and the Storey Floors overlay: count, copy up, duplicate, delete.
    - **Play from this floor** starts Play mode on the active storey (docs/PLAY.md §4).
    - **Switching floors animates.** Going up, the storeys grow up to the new ceiling; going down, they sink. The new floor's walls in front of the camera then slide down to the stub, and the old floor's slide back up (0.22 s, as in play). Selecting another building, or opening the Interior tab, shows its floor at once.
+   - **Camera follows** (next to the floor list, on by default): the Scene view's camera eases up or down with the floor.
+6. **Feedback while editing:**
+   - The building under the pointer is outlined faintly.
+   - What you select (a building, a core, a wall) glows for a moment.
+   - A corner or wall point that snaps pulses a ring where it landed.
+   - A building snapped against a neighbour flashes the wall they now share.
+   - A new or duplicated building grows up from the ground, and added floors rise into place.
+   - Placed stairs and lifts pulse and glow.
+   - **Isolate** fades the other buildings out and back.
    - **Rooms / Filled** on a floor:
      - A filled storey has nothing inside: opaque windows and closed doors, no rooms and no stairs. The Storey Floors overlay marks it ▪.
      - A lift passes through it without stopping, so its panel lists only open floors.

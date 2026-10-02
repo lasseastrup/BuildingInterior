@@ -132,10 +132,14 @@ namespace Triband.Storey.Editor
                 var np = Handles.Slider2D(id, centre, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(centre, 0.15f), Handles.CircleHandleCap, Vector2.zero, false);
                 if (EditorGUI.EndChangeCheck())
                 {
-                    if (drag != Drag.Move) { BeginDragOf(e, Drag.Move, 0, id, "Move building"); moveOffset = new Vec2(b.pos.x - np.x, b.pos.z - np.z); }
-                    double nx = Tiers.Cm(np.x + moveOffset.x), nz = Tiers.Cm(np.z + moveOffset.z);
+                    if (drag != Drag.Move) { BeginDragOf(e, Drag.Move, 0, id, "Move building"); moveOffset = new Vec2(b.pos.x - np.x, b.pos.z - np.z); moveSnapped = false; }
+                    double nx = Tiers.Cm(np.x + moveOffset.x), nz = Tiers.Cm(np.z + moveOffset.z), rx = nx, rz = nz;
                     if (!alt) { var s = Outlines.SnapMove(b, nx, nz, e.Document.buildings); nx = s.x; nz = s.z; }
                     if (nx != b.pos.x || nz != b.pos.z) e.ApplyTo("Move building", bb => { bb.pos = new Vec2(nx, nz); return true; });
+                    // snapped against a neighbour: the wall they now share flashes
+                    bool snapped = nx != rx || nz != rz;
+                    if (snapped && !moveSnapped) FlashShared(e, b.id);
+                    moveSnapped = snapped;
                 }
             }
 
@@ -176,10 +180,37 @@ namespace Triband.Storey.Editor
         {
             var fp = Tiers.Outline(b, k0);
             var q = new Vec2(Tiers.Cm(np.x - b.pos.x), Tiers.Cm(np.z - b.pos.z));
+            var raw = q;
             if (!alt) q = Outlines.Snap(b, k0, fp, i, q.x, q.z, e.Document.buildings);
+            // snapped onto a neighbour's corner or edge: a pulse there (once per place it snaps to)
+            bool snapped = q.x != raw.x || q.z != raw.z;
+            if (snapped && (!cornerSnapped || Tiers.Hypot(q.x - cornerAt.x, q.z - cornerAt.z) > 0.02))
+                StoreyJuice.Ring(W(b, q, Derived.FloorBase(b, k0) + 0.03), Size(W(b, q, Derived.FloorBase(b, k0)), 0.12f), Accent);
+            cornerSnapped = snapped; cornerAt = q;
             if (fp[i].x == q.x && fp[i].z == q.z) return;
             var nf = Tiers.Copy(fp); nf[i] = q;
             Set(e, k0, nf);
+        }
+
+        bool moveSnapped, cornerSnapped; Vec2 cornerAt;
+
+        /// <summary>Flash every stretch of wall the building now shares with a neighbour, at the ground and at the shared height.</summary>
+        static void FlashShared(StoreyEdit e, string id)
+        {
+            var site = new Generate.Site(e.Document.buildings);
+            var b = site.ById(id); if (b == null) return;
+            var fp = Derived.OutlineAt(b, 0);
+            for (int i = 0; i < fp.Count; i++)
+            {
+                var a = fp[i]; var c = fp[(i + 1) % fp.Count]; double L = Tiers.Hypot(c.x - a.x, c.z - a.z); if (L == 0) continue;
+                double ux = (c.x - a.x) / L, uz = (c.z - a.z) / L;
+                foreach (var r in Generate.Party.Ranges(site, b, 0, i))
+                {
+                    var p0 = new Vec2(a.x + ux * r.s, a.z + uz * r.s); var p1 = new Vec2(a.x + ux * r.e, a.z + uz * r.e);
+                    StoreyJuice.Flash(W(b, p0, 0.05), W(b, p1, 0.05), Ok, 0.6);
+                    if (r.Hp > 0.1) StoreyJuice.Flash(W(b, p0, r.Hp), W(b, p1, r.Hp), Ok, 0.6);
+                }
+            }
         }
 
         void Set(StoreyEdit e, int k0, List<Vec2> nf)

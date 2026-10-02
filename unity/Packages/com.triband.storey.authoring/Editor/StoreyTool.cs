@@ -42,13 +42,18 @@ namespace Triband.Storey.Editor
             toLocal = site.transform.worldToLocalMatrix;
             using (new Handles.DrawingScope(site.transform.localToWorldMatrix))
             {
+                Hover(e, sv);
                 if (b != null) ToolGUI(e, b, sv);
                 else Hint("Click a building to select it.");
                 DefaultClick(e, e.Selected, sv);
+                SelectionGlow(e);
+                StoreyJuice.Draw();
             }
             site.View = ViewFor(e, e.Selected, sv, site.transform.position);
-            // keep drawing while the floor clip eases or walls slide: edit mode only updates when asked
-            if (easing || site.Animating) { EditorApplication.QueuePlayerLoopUpdate(); sv.Repaint(); }
+            FollowFloor(e, e.Selected, sv);
+            // keep drawing while anything eases (floor clip, walls, a building growing in, the camera, isolate, the effects):
+            // edit mode only updates when asked
+            if (easing || site.Animating || revealing || pivotTo != null || isoEasing || StoreyJuice.Active) { EditorApplication.QueuePlayerLoopUpdate(); sv.Repaint(); }
             else if (Event.current.type == EventType.MouseMove) sv.Repaint();
         }
 
@@ -100,11 +105,140 @@ namespace Triband.Storey.Editor
             return easing ? shownClip : target;
         }
 
+        // ---- the juice (docs/EDITOR.md §5) ----
+
+        // the building under the pointer, outlined faintly before it is clicked
+        static string hoverId = "";
+
+        void Hover(StoreyEdit e, SceneView sv)
+        {
+            var ev = Event.current;
+            if (ev.type == EventType.MouseMove)
+            {
+                var (o, d) = MouseRay(); var hit = Picking.Building(e.Document, o, d);
+                string id = hit.index >= 0 ? e.Document.buildings[hit.index].id : "";
+                if (id != hoverId) { hoverId = id; sv.Repaint(); }
+            }
+            else if (ev.type == EventType.MouseLeaveWindow) hoverId = "";
+            if (ev.type != EventType.Repaint || hoverId.Length == 0 || hoverId == e.View.selectedId || GUIUtility.hotControl != 0) return;
+            var hb = e.Document.buildings.Find(x => x.id == hoverId); if (hb == null) return;
+            var c = Color.white; c.a = 0.45f; Handles.color = c;
+            foreach (var l in BuildingOutline(hb)) Handles.DrawAAPolyLine(2f, l);
+        }
+
+        /// <summary>A building's footprint at the ground and its top outline at the roof.</summary>
+        protected static Vector3[][] BuildingOutline(BuildingData b)
+        {
+            var bot = Derived.OutlineAt(b, 0); var top = Derived.OutlineAt(b, b.floors.Count); double yt = Derived.RoofY(b);
+            Vector3[] Ring(List<Vec2> fp, double y) { var pts = new Vector3[fp.Count + 1]; for (int i = 0; i <= fp.Count; i++) pts[i] = W(b, fp[i % fp.Count], y); return pts; }
+            return new[] { Ring(bot, 0.03), Ring(top, yt + 0.03) };
+        }
+
+        // what was just selected glows a moment, so it is clear what the inspector now shows
+        static string glowBuilding = "", glowCore = ""; static int glowWall = -1;
+
+        void SelectionGlow(StoreyEdit e)
+        {
+            var v = e.View; var b = e.Selected;
+            if (v.selectedId != glowBuilding)
+            {
+                glowBuilding = v.selectedId;
+                if (b != null) StoreyJuice.Glow(BuildingOutline(b), Accent, 0.55);
+            }
+            if (b == null) { glowCore = ""; glowWall = -1; return; }
+            double y = Derived.FloorBase(b, System.Math.Min(v.floor, b.floors.Count)) + 0.04;
+            if (v.selectedCore != glowCore)
+            {
+                glowCore = v.selectedCore;
+                var s = b.shafts.Find(x => x.id == v.selectedCore);
+                if (s != null) StoreyJuice.Glow(new[] { CoreOutline(b, s, y) }, Ok, 0.45);
+            }
+            if (v.selectedWall != glowWall)
+            {
+                glowWall = v.selectedWall;
+                if (v.floor < b.floors.Count && v.selectedWall >= 0 && v.selectedWall < b.floors[v.floor].walls.Count)
+                {
+                    var w = b.floors[v.floor].walls[v.selectedWall];
+                    StoreyJuice.Glow(new[] { new[] { W(b, w.a, y), W(b, w.b, y) } }, Ok, 0.45);
+                }
+            }
+        }
+
+        // a building that is new, or has grown floors, grows into place: the floor clip rises from where it was to above the roof
+        static readonly HashSet<string> knownIds = new HashSet<string>();
+        static StoreyEdit? watchFor;
+        static string revealId = "", roofFor = ""; static double revealFrom, revealTo, revealT0, lastRoof; static bool revealing;
+        const double RevealTime = 0.5;
+
+        void WatchGrowth(StoreyEdit e, BuildingData b)
+        {
+            double now = EditorApplication.timeSinceStartup, roof = Derived.RoofY(b);
+            if (watchFor != e) { watchFor = e; knownIds.Clear(); roofFor = ""; }   // another layout: nothing in it is new
+            bool isNew = knownIds.Count > 0 && !knownIds.Contains(b.id);
+            if (isNew) { revealId = b.id; revealFrom = 0; revealTo = roof + 8; revealT0 = now; }
+            else if (roofFor == b.id && roof > lastRoof + 0.01) { revealId = b.id; revealFrom = lastRoof; revealTo = roof + 8; revealT0 = now; }
+            roofFor = b.id; lastRoof = roof;
+            knownIds.Clear(); foreach (var x in e.Document.buildings) knownIds.Add(x.id);
+        }
+
+        static double? RevealClip()
+        {
+            if (revealId.Length == 0) { revealing = false; return null; }
+            double t = (EditorApplication.timeSinceStartup - revealT0) / RevealTime;
+            if (t >= 1) { revealId = ""; revealing = false; return null; }
+            revealing = true;
+            double ease = 1 - (1 - t) * (1 - t) * (1 - t);   // ease out: fast, then settling
+            return revealFrom + (revealTo - revealFrom) * ease;
+        }
+
+        // Isolate fades the other buildings in and out instead of switching at once
+        static string isoId = ""; static double isoAmount, isoTime; static bool isoEasing;
+
+        void EaseIsolate(StoreyEdit e, BuildingData b, ref SiteView v)
+        {
+            double now = EditorApplication.timeSinceStartup, dt = System.Math.Min(0.05, System.Math.Max(0, now - isoTime)); isoTime = now;
+            double want = e.View.isolate ? 1 : 0;
+            if (e.View.isolate) isoId = b.id;
+            isoAmount += (want - isoAmount) * System.Math.Min(1, dt * 10);
+            if (System.Math.Abs(want - isoAmount) < 0.01) isoAmount = want;
+            isoEasing = isoAmount != want;
+            if (isoAmount > 0 && isoId.Length > 0) { v.isolateId = isoId; v.isolateAmount = (float)isoAmount; }
+        }
+
+        // the camera follows the active floor: the Scene view's pivot eases up or down by the storey change (a toggle in the Interior tab)
+        static string floorFor = ""; static int lastFloor = -1; static float? pivotTo; static double pivotTime;
+
+        void FollowFloor(StoreyEdit e, BuildingData? b, SceneView sv)
+        {
+            double now = EditorApplication.timeSinceStartup, dt = System.Math.Min(0.05, System.Math.Max(0, now - pivotTime)); pivotTime = now;
+            if (b == null || Tab != StoreyTab.Interior) { floorFor = ""; lastFloor = -1; pivotTo = null; return; }
+            int k = e.View.floor;
+            if (floorFor == b.id && lastFloor >= 0 && k != lastFloor && e.View.followFloor)
+            {
+                float dy = (float)(Derived.FloorBase(b, k) - Derived.FloorBase(b, lastFloor));
+                pivotTo = (pivotTo ?? sv.pivot.y) + dy;
+            }
+            floorFor = b.id; lastFloor = k;
+            if (pivotTo == null || Event.current.type != EventType.Repaint) return;
+            var p = sv.pivot; float to = pivotTo.Value;
+            float y = p.y + (to - p.y) * (float)(1 - System.Math.Exp(-dt * 10));
+            if (System.Math.Abs(to - y) < 0.01f) { y = to; pivotTo = null; }
+            sv.pivot = new Vector3(p.x, y, p.z);
+        }
+
         SiteView? ViewFor(StoreyEdit e, BuildingData? b, SceneView sv, Vector3 origin)
         {
             var v = SiteView.Neutral;
             if (b == null) { clipFor = ""; easing = false; return v; }
-            if (e.View.isolate) v.isolateId = b.id;
+            WatchGrowth(e, b);
+            EaseIsolate(e, b, ref v);
+            var grow = RevealClip();
+            if (grow != null && !(Tab == StoreyTab.Interior && b.interior))
+            {
+                // growing in: only the clip, no cutaway
+                var rb = e.Document.buildings.Find(x => x.id == revealId);
+                if (rb != null) { v.activeId = rb.id; v.clipY = (float)grow.Value + origin.y; }
+            }
             if (Tab == StoreyTab.Interior && b.interior)
             {
                 var (clip, lo, hi) = Picking.StoreyView(b, e.View.floor);
@@ -173,14 +307,21 @@ namespace Triband.Storey.Editor
             Handles.matrix = m;
         }
 
+        /// <summary>A core's rectangle on a storey floor, as a closed polyline.</summary>
+        protected static Vector3[] CoreOutline(BuildingData b, CoreData it, double y)
+        {
+            var R = Generate.Cores.RectOf(it);
+            var pts = new Vector3[5]; int j = 0;
+            foreach (var (a, w) in new[] { (-1, -1), (1, -1), (1, 1), (-1, 1), (-1, -1) })
+                pts[j++] = W(b, new Vec2(R.c.x + R.u.x * a * R.hx + R.w.x * w * R.hz, R.c.z + R.u.z * a * R.hx + R.w.z * w * R.hz), y);
+            return pts;
+        }
+
         /// <summary>A core's rectangle on a storey floor.</summary>
         protected static void CoreRect(BuildingData b, CoreData it, double y, Color c)
         {
             var R = Generate.Cores.RectOf(it);
-            var pts = new Vector3[5];
-            int j = 0;
-            foreach (var (a, w) in new[] { (-1, -1), (1, -1), (1, 1), (-1, 1), (-1, -1) })
-                pts[j++] = W(b, new Vec2(R.c.x + R.u.x * a * R.hx + R.w.x * w * R.hz, R.c.z + R.u.z * a * R.hx + R.w.z * w * R.hz), y);
+            var pts = CoreOutline(b, it, y);
             Handles.color = c;
             Handles.DrawAAPolyLine(3f, pts);
             if (it.type == CoreType.Flight)

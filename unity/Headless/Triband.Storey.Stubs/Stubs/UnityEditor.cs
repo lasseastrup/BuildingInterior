@@ -100,7 +100,7 @@ namespace UnityEditor
         public static void RepaintAll() { }
         public static SceneView lastActiveSceneView => null;
         public Camera camera => null;
-        public Vector3 pivot => default;
+        public Vector3 pivot { get => default; set { } }
     }
 
     public class EditorWindow : ScriptableObject
@@ -140,6 +140,7 @@ namespace UnityEditor
         public static void DrawDottedLines(Vector3[] lineSegments, float screenSpaceSize) { }
         public static void DrawDottedLine(Vector3 p1, Vector3 p2, float screenSpaceSize) { }
         public static void DrawWireDisc(Vector3 center, Vector3 normal, float radius) { }
+        public static void DrawWireDisc(Vector3 center, Vector3 normal, float radius, float thickness) { }
         public static void DrawWireCube(Vector3 center, Vector3 size) { }
         public static void Label(Vector3 position, string text, GUIStyle style) { }
         public static Vector3 Slider2D(int id, Vector3 handlePos, Vector3 offset, Vector3 handleDir, Vector3 slideDir1, Vector3 slideDir2, float handleSize, CapFunction capFunction, Vector2 snap, bool drawHelper) => handlePos;

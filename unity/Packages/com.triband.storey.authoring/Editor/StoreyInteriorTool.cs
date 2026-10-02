@@ -249,6 +249,17 @@ namespace Triband.Storey.Editor
                         return Shafts.Place(bb, k, p, type, v.placeRot, Shafts.NewId(d)) != null;
                     });
                     if (!placed) Notify(sv, "Needs room inside the footprint, clear of other cores");
+                    else
+                    {
+                        // it settles in: a ring at its centre and its outline glowing
+                        var nb = e.Document.buildings.FirstOrDefault(x => x.id == b.id); var s = nb?.shafts.LastOrDefault();
+                        if (nb != null && s != null)
+                        {
+                            double yy = Derived.FloorBase(nb, k) + 0.04; var c = W(nb, new Vec2(s.x, s.z), yy);
+                            StoreyJuice.Ring(c, (float)Generate.Cores.Size(s).D * 0.5f, Accent, 0.45);
+                            StoreyJuice.Glow(new[] { CoreOutline(nb, s, yy) }, Accent, 0.6);
+                        }
+                    }
                     return true;
                 }
             }
@@ -270,9 +281,15 @@ namespace Triband.Storey.Editor
         // ---- drawing ----
 
         /// <summary>The snap marker: a ring on a point, a diamond on a wall, and dotted alignment guides.</summary>
+        static string markerKey = "";
+
         static void Marker(BuildingData b, WallSnap q, double y)
         {
             var at = W(b, q.Point, y); float r = Size(at, 0.06f);
+            // a pulse each time the snap lands on a new point or wall
+            string key = q.kind == SnapKind.Free ? "" : $"{q.kind}:{Walls.Key(q.Point)}";
+            if (key.Length > 0 && key != markerKey) StoreyJuice.Ring(at, r * 2.2f, Accent, 0.3);
+            markerKey = key;
             Handles.color = Accent;
             if (q.kind == SnapKind.Node) Handles.DrawWireDisc(at, Vector3.up, r);
             else if (q.kind == SnapKind.Edge) Handles.DrawAAPolyLine(2f, at + new Vector3(r, 0, 0), at + new Vector3(0, 0, r), at - new Vector3(r, 0, 0), at - new Vector3(0, 0, r), at + new Vector3(r, 0, 0));

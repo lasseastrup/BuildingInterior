@@ -124,7 +124,7 @@ namespace Triband.Storey.Unity
             else StoreyGlobals.SetCut(false, 1, 0, 0, active >= 0 ? v.clipY : 1e9f);
             EditCutaway(active >= 0 && v.cut ? v.activeId : null, v);
             int iso = v.isolateId != null ? TableIndexOf(v.isolateId) : -1;
-            StoreyGlobals.SetIsolate(iso >= 0 ? 1 : 0, iso);
+            StoreyGlobals.SetIsolate(iso >= 0 ? v.isolateAmount : 0, iso);
             StoreyGlobals.SetOcclusion(StoreyGlobals.OcclusionMode.Off, Vector3.zero, 2.4f);
             StoreyGlobals.SetCap(new Color(0.23f, 0.25f, 0.24f));
             palette.Bind();
@@ -290,6 +290,8 @@ namespace Triband.Storey.Unity
         public Vector2 cameraDir;
         /// <summary>Every other building hidden. Null for none.</summary>
         public string? isolateId;
+        /// <summary>How far the others have faded (0..1), for an eased isolate.</summary>
+        public float isolateAmount;
 
         public static SiteView Neutral => new SiteView { clipY = 1e9f, stubHeight = 1 };
     }
