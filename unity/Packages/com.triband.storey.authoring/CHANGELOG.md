@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Walls** in the Interior tab: *Down* (the new default: every wall of the storey low, steady as the camera orbits), *Cutaway* (the old camera-following drop) or *Up*. `SiteView.walls`, `CutWalls`.
 - The site inspector, laid out for reading at a glance (docs/EDITOR.md §6.10):
   - large Shape, Facade and Interior buttons with icons;
   - a building card;

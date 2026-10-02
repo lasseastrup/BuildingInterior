@@ -171,7 +171,8 @@ namespace Triband.Storey.Unity
         /// <summary>
         /// The editor's cutaway (the Interior tab): every wall has an id, so the shader drops a wall by its slide value,
         /// which only the occlusion system animates in Play mode. Here each wall of the edited building, and each party wall
-        /// a neighbour shares with it, is down or up at once by the same test.
+        /// a neighbour shares with it, is down or up at once by the same test: every one on the active storey (Down, the
+        /// default: nothing moves as the camera orbits), those between the camera and the focus (Cutaway), or none (Up).
         /// </summary>
         void EditCutaway(string? activeId, SiteView v)
         {
@@ -192,7 +193,8 @@ namespace Triband.Storey.Unity
                         // only the active storey's own walls: the next floor's start up and slide down when it becomes active (a
                         // neighbour's party walls may sit at other heights, and the shader's cut range keeps them right)
                         if (own && i < bases.Count && Math.Abs(bases[i] + parent.position.y - v.cutBase) > 0.05) continue;
-                        if (global::Triband.Storey.Occlusion.OcclusionCore.WallBlocks(walls[i].W, v.camera.x, v.camera.z, v.focus.x, v.focus.z)) down.Add(bt.Value.wallBase + i);
+                        if (v.walls == CutWalls.Up) continue;
+                        if (v.walls == CutWalls.Down || global::Triband.Storey.Occlusion.OcclusionCore.WallBlocks(walls[i].W, v.camera.x, v.camera.z, v.focus.x, v.focus.z)) down.Add(bt.Value.wallBase + i);
                     }
                 }
             }
@@ -393,13 +395,18 @@ namespace Triband.Storey.Unity
     /// How the editor wants a site drawn this frame (docs/EDITOR.md slices 6.4, 6.6): the building being edited with its
     /// storey clipped and cut away as in play (SPEC principle 4), and an isolated building.
     /// </summary>
+    /// <summary>The editor's walls on the active storey, after The Sims' wall modes: all down, cut away towards the camera, or up.</summary>
+    public enum CutWalls { Down, Cutaway, Up }
+
     public struct SiteView
     {
         /// <summary>The building whose storey is shown: everything above clipY is clipped. Null for none.</summary>
         public string? activeId;
         public float clipY;
-        /// <summary>The cutaway: walls between the camera and the focus drop to a stub on the active storey.</summary>
+        /// <summary>The cutaway: the active storey's walls drop to a stub, as <see cref="walls"/> says.</summary>
         public bool cut;
+        /// <summary>Which walls drop: all of the active storey's (steady as the camera moves), or only those between the camera and the focus.</summary>
+        public CutWalls walls;
         public float stubHeight, cutBase, cutTop;
         public Vector3 camera, focus;
         public Vector2 cameraDir;

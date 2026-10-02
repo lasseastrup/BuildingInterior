@@ -674,6 +674,13 @@ namespace Triband.Storey.Editor
                 if (pickF != N - k) { v.floor = N - pickF; k = v.floor; v.selectedCore = ""; v.selectedWall = -1; SceneView.RepaintAll(); }
                 v.followFloor = GUILayout.Toggle(v.followFloor, new GUIContent("Camera follows", "The Scene view's camera moves up and down with the active floor"), EditorStyles.miniButton, GUILayout.Width(100));
             }
+            int wm = EditorGUILayout.Popup(new GUIContent("Walls", "This storey's walls in the Scene view"), (int)v.walls, new[]
+            {
+                new GUIContent("Down", "Every wall low, so the rooms show from any side; nothing moves as the camera goes round"),
+                new GUIContent("Cutaway", "Only the walls between the camera and the building drop, and they follow the camera"),
+                new GUIContent("Up", "Every wall at full height"),
+            });
+            if (wm != (int)v.walls) { v.walls = (CutWalls)wm; SceneView.RepaintAll(); }
             int pick = N - k;
             if (pick != N - k) { v.floor = N - pick; k = v.floor; v.selectedCore = ""; v.selectedWall = -1; SceneView.RepaintAll(); }
             if (k == N)

@@ -1,5 +1,6 @@
 #nullable enable
 using UnityEngine;
+using Triband.Storey.Unity;
 
 namespace Triband.Storey.Editor
 {
@@ -28,6 +29,8 @@ namespace Triband.Storey.Editor
         [SerializeField] internal bool isolate;
         /// <summary>The Scene view camera follows the active floor up and down (the Interior tab).</summary>
         [SerializeField] internal bool followFloor = true;
+        /// <summary>The active storey's walls in the Interior tab: down (steady), cut away towards the camera, or up.</summary>
+        [SerializeField] internal CutWalls walls = CutWalls.Down;
         [SerializeField] internal string selectedCore = "";
         [SerializeField] internal int selectedWall = -1;
         [SerializeField] internal bool showMore;

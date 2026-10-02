@@ -246,7 +246,7 @@ namespace Triband.Storey.Editor
                 clip = EasedClip(b, clip);
                 // the shader compares world heights: a site raised or lowered moves its storeys (rotation and scale are not supported here)
                 float lift = origin.y;
-                v.activeId = b.id; v.clipY = (float)clip + lift; v.cut = true; v.stubHeight = 1.0f; v.cutBase = (float)lo + lift; v.cutTop = (float)hi + lift;
+                v.activeId = b.id; v.clipY = (float)clip + lift; v.cut = true; v.walls = e.View.walls; v.stubHeight = 1.0f; v.cutBase = (float)lo + lift; v.cutTop = (float)hi + lift;
                 // the cutaway compares with the walls' data, which is in the site's x and z: a moved site moves them
                 var cam = sv.camera.transform.position - new Vector3(origin.x, 0, origin.z); var focus = sv.pivot - new Vector3(origin.x, 0, origin.z);
                 v.camera = cam; v.focus = focus;
