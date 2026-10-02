@@ -239,3 +239,21 @@ Engine-free: `Validate.Problems` (`ProblemTests`). On the demo street it finds t
 1. Open the demo street: Problems lists Row House floors 1 to 3 and Linden Court's rooms. Click one: the Scene view goes there.
 2. Remove a building's stairs: its upper floors are listed. Undo: the list clears.
 3. Draw a wall across a room with no door: "Part of … can't be reached".
+
+### 6.6 Building templates
+
+**Save as template…** in the building bar keeps the selected building as an asset (`StoreyBuildingTemplate`): its outlines and setbacks, floors, rooms, stairs and lifts, courtyards, doors, details and style. Its place in the layout and its bridges aren't kept. Save over an existing template to update it.
+
+**New ▸ From template** places one in any layout:
+- It goes at a free spot near the Scene view's centre.
+- It gets fresh ids, and its name with a number if the layout already has one by that name.
+- Edit it as any other building: it isn't linked to the template.
+
+A template's inspector says what it holds (storeys, size, height, cores). *Assets ▸ Create ▸ Storey ▸ Building Template* makes an empty one to save into. The asset is Storey's JSON for one building, as the prototype copies one to the clipboard.
+
+Engine-free: `Buildings.AsTemplate`, `Buildings.FromTemplate` (`TemplateTests`).
+
+**Checks:**
+1. Select a building, then *Save as template…*: the asset appears and is pinged. Its inspector summarises it.
+2. In another scene's site: New ▸ From template ▸ it. The building appears near the view, named, and editable.
+3. Place it twice: "Name 2", "Name 3".

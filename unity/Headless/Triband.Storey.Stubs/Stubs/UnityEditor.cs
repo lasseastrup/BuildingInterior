@@ -115,6 +115,7 @@ namespace UnityEditor
     public static class EditorGUIUtility
     {
         public static float labelWidth => 0;
+        public static void PingObject(Object obj) { }
     }
 
     public static class EditorStyles
@@ -133,6 +134,8 @@ namespace UnityEditor
     {
         public delegate void MenuFunction();
         public void AddItem(GUIContent content, bool on, MenuFunction func) { }
+        public void AddDisabledItem(GUIContent content) { }
+        public void AddSeparator(string path) { }
         public void ShowAsContext() { }
     }
 

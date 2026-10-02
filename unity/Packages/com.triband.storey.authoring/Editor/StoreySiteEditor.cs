@@ -95,6 +95,21 @@ namespace Triband.Storey.Editor
                             e.View.Select(id); SetTab(e.View, StoreyTab.Shape);
                         });
                     }
+                    // the project's building templates
+                    var templates = StoreyBuildingTemplate.All();
+                    if (templates.Length > 0) menu.AddSeparator("");
+                    foreach (var t in templates)
+                    {
+                        var tb = t.Building!; string tname = t.name;
+                        menu.AddItem(new GUIContent("From template/" + tname), false, () =>
+                        {
+                            string id = "";
+                            var near = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.pivot : Vector3.zero;
+                            e.Apply("Placed " + tname, d => { id = Buildings.FromTemplate(d, tb, new Vec2(near.x, near.z)).id; return true; });
+                            e.View.Select(id); SetTab(e.View, StoreyTab.Shape);
+                        });
+                    }
+                    if (templates.Length == 0) menu.AddDisabledItem(new GUIContent("From template (save a building as one first)"));
                     menu.ShowAsContext();
                 }
                 var b = e.Selected;
@@ -121,7 +136,24 @@ namespace Triband.Storey.Editor
                 if (name != sb.name && name.Trim().Length > 0) e.ApplyTo("Renamed to " + name, bb => { bb.name = name.Trim(); return true; });
                 bool iso = GUILayout.Toggle(v.isolate, new GUIContent("Isolate", "Hide every other building"), EditorStyles.miniButton, GUILayout.Width(56));
                 if (iso != v.isolate) { v.isolate = iso; SceneView.RepaintAll(); }
+                if (GUILayout.Button(new GUIContent("Save as template…", "Keep this building as an asset to place again, in this layout or another"), EditorStyles.miniButton, GUILayout.Width(110))) SaveTemplate(sb);
             }
+        }
+
+        /// <summary>Save a building as a template asset: a new one, or over one picked in the save panel.</summary>
+        static void SaveTemplate(BuildingData b)
+        {
+            string path = EditorUtility.SaveFilePanelInProject("Save building template", b.name, "asset", "Where to keep the template");
+            if (string.IsNullOrEmpty(path)) return;
+            var t = AssetDatabase.LoadAssetAtPath<StoreyBuildingTemplate>(path);
+            if (t == null)
+            {
+                t = CreateInstance<StoreyBuildingTemplate>(); t.Set(b);
+                AssetDatabase.CreateAsset(t, path);
+            }
+            else { Undo.RecordObject(t, "Save building template"); t.Set(b); EditorUtility.SetDirty(t); }
+            AssetDatabase.SaveAssets();
+            EditorGUIUtility.PingObject(t);
         }
 
         // ---- problems ----

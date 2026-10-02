@@ -79,6 +79,37 @@ namespace Triband.Storey.Edit
             return nb;
         }
 
+        /// <summary>
+        /// A building kept as a template (docs/EDITOR.md §6.6): a copy with no id, no position (its outlines as they were,
+        /// relative to its origin), and no bridges, which only mean something between two buildings of one layout.
+        /// </summary>
+        public static BuildingData AsTemplate(BuildingData b)
+        {
+            var t = PrototypeJson.ReadBuilding(PrototypeJson.Write(b));
+            t.id = ""; t.pos = new Vec2(0, 0); t.gen = false; t.bridges.Clear();
+            foreach (var s in t.shafts) s.id = "";
+            return t;
+        }
+
+        /// <summary>
+        /// A new building from a template, at a free spot near a point: fresh ids for it and its cores, and its name (with
+        /// a number when the layout has one by that name already).
+        /// </summary>
+        public static BuildingData FromTemplate(StoreyDocument d, BuildingData template, Vec2 near)
+        {
+            var nb = PrototypeJson.ReadBuilding(PrototypeJson.Write(template));
+            nb.id = NewId(d); nb.gen = false; nb.bridges.Clear();
+            foreach (var s in nb.shafts) s.id = Shafts.NewId(d);
+            string name = nb.name.Trim().Length > 0 ? nb.name.Trim() : NextName(d);
+            if (d.buildings.Any(b => b.name == name)) { int n = 2; while (d.buildings.Any(b => b.name == $"{name} {n}")) n++; name = $"{name} {n}"; }
+            nb.name = name;
+            var bb = Tiers.Bbox(nb.footprint);
+            var sp = FreeSpot(d, bb.x1 - bb.x0, bb.z1 - bb.z0, near);
+            nb.pos = new Vec2(sp.x - bb.x0, sp.z - bb.z0);
+            d.buildings.Add(nb);
+            return nb;
+        }
+
         public static bool Delete(StoreyDocument d, string id)
         {
             if (d.buildings.RemoveAll(b => b.id == id) == 0) return false;
