@@ -159,7 +159,7 @@ namespace Triband.Storey.Generate
                     op.OBox(F, o.u0 - 0.08, o.u0, y, y + o.y1 + 0.08, T, T + 0.06, trim, trim, Skip.In | Skip.Bot);
                     op.OBox(F, o.u1, o.u1 + 0.08, y, y + o.y1 + 0.08, T, T + 0.06, trim, trim, Skip.In | Skip.Bot);
                     if (!o.bare && !glazed) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
-                    else if (arch && !o.bare) Hood(op, F, o.u0 - 0.08, o.u1 + 0.08, y + o.y1 + 0.08, trim);
+                    else if (arch && !o.bare) Hood(op, F, o.u0 - 0.08 - HoodOver, o.u1 + 0.08 + HoodOver, y + o.y1 + 0.08, trim);
                     if (glazed && !o.bare) GlazedDoor(op, gl, F, o, y, C, shell);
                     else if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, T * 0.45, C.door, false);
                 }
@@ -169,7 +169,7 @@ namespace Triband.Storey.Generate
                     else Facade.Pane(gl, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, C.glass, true);
                     double ex = o.full ? 0 : 0.06, eh = o.full ? 0 : 0.04;
                     op.OBox(F, o.u0 - ex, o.u1 + ex, y + o.y0 - 0.07, y + o.y0, T, T + 0.07, trim, trim, Skip.In);
-                    if (arch && !o.full) Hood(op, F, o.u0 - 0.08, o.u1 + 0.08, y + o.y1, trim);
+                    if (arch && !o.full) Hood(op, F, o.u0 - HoodOver, o.u1 + HoodOver, y + o.y1, trim);
                     else op.OBox(F, o.u0 - eh, o.u1 + eh, y + o.y1, y + o.y1 + 0.06, T, T + 0.04, trim, trim, Skip.In);
                     double fw = frames ? FrameW : 0;
                     if (frames) WindowFrame(op, F, o.u0, o.u1, y + o.y0, y + o.y1, fw, C.frame);
@@ -237,31 +237,40 @@ namespace Triband.Storey.Generate
         public const double FrameW = 0.06, BarW = 0.035;
 
         /// <summary>
-        /// An arched hood over an opening from <paramref name="ua"/> to <paramref name="ub"/>, springing at
-        /// <paramref name="ys"/>: a curved band 12 cm deep, standing 6 cm out from the wall, rising a sixth of its span.
+        /// An arched hood over an opening from <paramref name="ua"/> to <paramref name="ub"/>, sitting at
+        /// <paramref name="ys"/>, as the artist draws it: a solid cap standing 14 cm out from the wall, its top arched
+        /// (7 cm thick at the ends, rising by about a twelfth of its span in the middle), its underside dipping 4 cm at the
+        /// ends so the cap seems to hang over the window.
         /// </summary>
         public static void Hood(MeshBuilder op, Frame F, double ua, double ub, double ys, Swatch c)
         {
-            double T = Dim.T_EXT, w0 = T, w1 = T + 0.06, th = 0.12;
-            double half = (ub - ua) / 2, rise = Math.Max(0.06, Math.Min(0.35, (ub - ua) / 6)), um = (ua + ub) / 2;
-            double R = (half * half + rise * rise) / (2 * rise), cy = ys + rise - R;
-            double a0 = Math.Atan2(ys - cy, ua - um), a1 = Math.Atan2(ys - cy, ub - um);   // left end (near π) to the right (near 0)
-            const int n = 8;
-            P3 At(double a, double r, double w) => F.At(um + Math.Cos(a) * r, cy + Math.Sin(a) * r, w);
-            P3 Dir(double a) => new P3(F.u.x * Math.Cos(a), Math.Sin(a), F.u.z * Math.Cos(a));
+            double T = Dim.T_EXT, w0 = T, w1 = T + HoodOut, half = (ub - ua) / 2, um = (ua + ub) / 2;
+            double rise = Math.Max(0.05, Math.Min(0.2, (ub - ua) / 12)), endH = 0.07, droop = 0.04;
+            const int n = 10;
+            double Bot(double x) { double q = x / half; return ys - droop * q * q; }
+            double Top(double x) { double q = x / half; return ys + endH + rise * (1 - q * q); }
+            double dBot(double x) => -2 * droop * x / (half * half);
+            double dTop(double x) => -2 * rise * x / (half * half);
+            P3 At(double x, double y, double w) => F.At(um + x, y, w);
+            P3 Up(double ux, double uy) { double l = Math.Sqrt(ux * ux + uy * uy); return new P3(F.u.x * ux / l, uy / l, F.u.z * ux / l); }
             var outN = new P3(F.w.x, 0, F.w.z);
+            var front = new List<P3>();
+            for (int i = 0; i <= n; i++) { double x = -half + 2 * half * i / n; front.Add(At(x, Bot(x), w1)); }
+            for (int i = n; i >= 0; i--) { double x = -half + 2 * half * i / n; front.Add(At(x, Top(x), w1)); }
+            op.PolyTris(front, Triangulate.Planar(front, null, outN), outN, c);
             for (int i = 0; i < n; i++)
             {
-                double p = a0 + (a1 - a0) * i / n, q = a0 + (a1 - a0) * (i + 1) / n, m = (p + q) / 2;
-                op.Poly(new[] { At(p, R, w1), At(q, R, w1), At(q, R + th, w1), At(p, R + th, w1) }, outN, c);
-                op.Poly(new[] { At(p, R + th, w0), At(q, R + th, w0), At(q, R + th, w1), At(p, R + th, w1) }, Dir(m), c);
-                op.Poly(new[] { At(p, R, w0), At(p, R, w1), At(q, R, w1), At(q, R, w0) }, Dir(m) * -1, c);
+                double x0 = -half + 2 * half * i / n, x1 = -half + 2 * half * (i + 1) / n, xm = (x0 + x1) / 2;
+                op.Poly(new[] { At(x0, Top(x0), w0), At(x1, Top(x1), w0), At(x1, Top(x1), w1), At(x0, Top(x0), w1) }, Up(-dTop(xm), 1), c);
+                op.Poly(new[] { At(x0, Bot(x0), w0), At(x0, Bot(x0), w1), At(x1, Bot(x1), w1), At(x1, Bot(x1), w0) }, Up(dBot(xm), -1), c);
             }
-            // the ends: the band's cut faces, square to the arc
-            P3 Tan(double a) => new P3(-F.u.x * Math.Sin(a), Math.Cos(a), -F.u.z * Math.Sin(a));
-            op.Poly(new[] { At(a0, R, w0), At(a0, R + th, w0), At(a0, R + th, w1), At(a0, R, w1) }, Tan(a0), c);
-            op.Poly(new[] { At(a1, R, w0), At(a1, R, w1), At(a1, R + th, w1), At(a1, R + th, w0) }, Tan(a1) * -1, c);
+            var side = new P3(F.u.x, 0, F.u.z);
+            op.Poly(new[] { At(-half, Bot(-half), w0), At(-half, Top(-half), w0), At(-half, Top(-half), w1), At(-half, Bot(-half), w1) }, side * -1, c);
+            op.Poly(new[] { At(half, Bot(half), w0), At(half, Bot(half), w1), At(half, Top(half), w1), At(half, Top(half), w0) }, side, c);
         }
+
+        /// <summary>How far a hood stands out from the wall, and how far past the opening it reaches each side.</summary>
+        public const double HoodOut = 0.14, HoodOver = 0.1;
 
         /// <summary>A frame all round an opening, in its reveal, around the pane.</summary>
         public static void WindowFrame(MeshBuilder op, Frame F, double u0, double u1, double ya, double yb, double fw, Swatch c)

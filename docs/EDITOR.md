@@ -262,7 +262,7 @@ Engine-free: `Buildings.AsTemplate`, `Buildings.FromTemplate` (`TemplateTests`).
 
 **Details** in the Facade tab, from the artist's brick building. Each option is per style, so a setback can differ. A style with none of them builds exactly as before.
 
-- **Window heads:** *Flat* (the thin head strip) or *Arch*, an arched hood over each window and door. The hood is 12 cm deep, stands 6 cm out from the wall, and rises a sixth of its span.
+- **Window heads:** *Flat* (the thin head strip) or *Arch*, the artist's cap over each window and door. It's a solid hood standing 14 cm out from the wall and reaching 10 cm past the opening each side. Its top is arched (7 cm thick at the ends, rising about a twelfth of its span in the middle), and its underside dips 4 cm at the ends, so it hangs over the window.
 - **Glazing bars:** *Panes across* × *Panes up* (2 × 3 like the artist's) divides every window into panes.
 - **Frames:** a frame all round each window and door, in the new *Frames* colour. Sills and heads take that colour too.
 - **Band:** its height (*Band height*), how far it stands out (*Band stands out*, at least 1 cm), and *Band in a wall shade* instead of the trim colour. Windows and their arched heads stay under a band you've set.
