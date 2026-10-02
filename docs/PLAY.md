@@ -14,7 +14,7 @@ The prototype's play mode is plain functions over the layout and the LOD0 data: 
 
 The prototype exposes these through `__sb.play`, and its frame loop can be held so the harness steps play itself. The Unity side is then thin: a component reads the player and the camera, runs the engine-free step, and writes the results into the building table and the shader globals.
 
-Collision is the prototype's model, not physics: walkable surfaces by height, and 2D wall segments with a radius per storey (UNITY-PACKAGE-PLAN §4.4: meshes never need to be readable, no mesh colliders). A project with its own physics character can ask the same queries.
+The walk model's collision is the prototype's model, not physics: walkable surfaces by height, and 2D wall segments with a radius per storey. A project with its own character can ask the same queries, or use the mesh colliders (§5).
 
 ## 2. Order of work
 
@@ -81,3 +81,29 @@ The play kit depends on the Input System package. With the project's *Active Inp
 - The lift car is not drawn.
 - Occluders are not forced to LOD0 when Displayed LOD is higher (the LOD manager, workstream 7, does that).
 - The silhouette shader must be referenced by a material (the character's *Silhouette* slot) to be in a player build.
+
+## 5. Mesh colliders
+
+For a project's own physics character, raycasts or props, every building gets one `MeshCollider` on its root GameObject, on the site's layer. **Generate colliders** on the Storey Site switches it (on by default). Storey's play kit does not use them: it walks the walk model.
+
+**The mesh.** `Play/CollisionMesh` builds it from the walk model's own data, so the collider and the walk model agree:
+- **Walls:** a thin box round every collision segment (LOD0's segments, at their radius), storey by storey, merged into one box where a segment repeats on the storeys above.
+- **Floors and terraces:** the outlines at each slab, grown by the walk model's margin, with the stair holes cut. Interior slabs that only separate two storeys of a shell building are left out.
+- **Stairs:** a ramp per flight, at the walk model's heights, for both kinds of stairs.
+- **Pitched roofs.**
+
+Each triangle is tagged Floor, Stair, Wall or Roof (`CollisionMesh.Kind`). The demo street's buildings have 64 to 871 triangles each: 1 to 15% of their LOD0.
+
+**Tested** headlessly against the walk model (`CollisionMeshTests`). These tests run on both corpora:
+- A ray dropped at each of `play.json`'s surface points lands where `PlayWorld.SurfaceAt` does. There are more than 3,000 points.
+- Every collision segment stops a horizontal ray.
+- The floors and stairs face up.
+
+**Performance.**
+- **Run time:** a collider is built only when a building is. All the buildings built in one frame are cooked together: their meshes are made on the main thread (the whole demo street takes about 4 ms), then cooked in parallel with `Physics.BakeMesh` in an `IJobParallelFor`. Each mesh is then given to its collider with the same cooking options, so assigning it cooks nothing. The options are `UseFastMidphase` only: the mesh is already welded and has no degenerate triangles, so cleaning and welding are skipped. The mesh is positions and indices only, with 16-bit indices.
+- **Edit time:** no colliders by default, so dragging a wall cooks nothing. **Colliders in edit mode** turns them on for editor raycasts. Each edit then rebuilds the colliders of only the buildings it touched.
+
+**Limits.**
+- Walls on the roof storey are 1.2 m high, a parapet's height, whatever the parapet.
+- Lift shafts are solid floor: the walk model does not let the player fall down them either.
+- Gable ends above the top storey are not walls in the collision mesh. The pitched roof itself is.

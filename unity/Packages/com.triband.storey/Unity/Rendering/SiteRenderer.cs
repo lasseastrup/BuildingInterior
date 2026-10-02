@@ -3,6 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Triband.Storey.Generate;
+using Triband.Storey.Play;
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 
 namespace Triband.Storey.Unity
@@ -32,6 +35,7 @@ namespace Triband.Storey.Unity
             public readonly List<int> rows = new List<int>();
             public readonly List<Mesh> meshes = new List<Mesh>();
             public GameObject? root;
+            public Mesh? collision;
         }
 
         /// <param name="flags">Edit mode passes <c>DontSave</c>: the meshes are a preview of the layout, never part of the scene file.</param>
@@ -70,6 +74,31 @@ namespace Triband.Storey.Unity
         /// </summary>
         internal Mesh UploadExtra(MeshBuilder gb, string name, int tag) { gb.RetagForUpload(tag); var m = MeshUpload.Upload(gb, name, RowOf); m.hideFlags = flags; return m; }
 
+        bool colliders;
+        readonly HashSet<string> colliderPending = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Give every building a <see cref="MeshCollider"/> on its root, from <see cref="CollisionMesh"/> (floors, stairs,
+        /// walls and pitched roofs; a few hundred triangles a building, not the drawn mesh). Turning it off removes them.
+        /// </summary>
+        public bool Colliders
+        {
+            get => colliders;
+            set
+            {
+                if (colliders == value) return;
+                colliders = value;
+                if (value) foreach (var id in built.Keys) colliderPending.Add(id);
+                else { colliderPending.Clear(); foreach (var b in built.Values) RemoveCollider(b); }
+            }
+        }
+
+        /// <summary>
+        /// Baked once with these and given to the collider with the same, so assigning it cooks nothing: no cleaning or
+        /// welding (the mesh is welded and has no degenerate triangles already), the fast midphase where the platform has it.
+        /// </summary>
+        public const MeshColliderCookingOptions Cooking = MeshColliderCookingOptions.UseFastMidphase;
+
         /// <summary>Build everything again.</summary>
         public void Show(StoreyDocument doc)
         {
@@ -102,6 +131,7 @@ namespace Triband.Storey.Unity
         /// <summary>Per frame: the view globals (neutral unless the editor set a view), the palette, the LODs, the table upload.</summary>
         public void Frame(bool lodTint, SiteView? view = null)
         {
+            if (colliderPending.Count > 0) BuildColliders();
             if (shownLod != lod)
             {
                 foreach (var b in built.Values) table.SetLod(b.idx, lod, lod, 1);
@@ -220,6 +250,7 @@ namespace Triband.Storey.Unity
 
             table.SetLod(bt.idx, lod, lod, 1);
             built[b.id] = bt;
+            if (colliders) colliderPending.Add(b.id);
         }
 
         int RowOf(StyleRef s) => book!.RowOf(s);
@@ -246,7 +277,91 @@ namespace Triband.Storey.Unity
             if (b.wallBase >= 0) table.ReleaseWalls(b.wallBase, b.wallCount);
             foreach (var r in b.rows) table.ReleaseRow(r);
             if (b.root != null) Kill(b.root);
+            if (b.collision != null) Kill(b.collision);
             foreach (var m in b.meshes) Kill(m);   // edit mode rebuilds often: meshes are not left behind
+        }
+
+        /// <summary>
+        /// The colliders of every building built since the last frame, at once: their meshes made on the main thread
+        /// (a millisecond or so a building), then cooked together across the worker threads, then assigned already cooked.
+        /// </summary>
+        void BuildColliders()
+        {
+            var todo = new List<(Built bt, Mesh mesh)>();
+            foreach (var id in colliderPending)
+            {
+                if (!built.TryGetValue(id, out var bt) || bt.l0 == null || bt.root == null || site == null) continue;
+                var b = site.ById(id); if (b == null) continue;
+                RemoveCollider(bt);
+                var cm = CollisionMesh.Build(site, b, bt.l0);
+                if (cm.Tris == 0) continue;
+                todo.Add((bt, ToMesh(cm, b.name + " collision")));
+            }
+            colliderPending.Clear();
+            if (todo.Count == 0) return;
+            var ids = new int[todo.Count];
+            for (int i = 0; i < ids.Length; i++) ids[i] = todo[i].mesh.GetInstanceID();
+            if (ids.Length == 1) Physics.BakeMesh(ids[0], false, Cooking);
+            else
+            {
+                var na = new NativeArray<int>(ids, Allocator.TempJob);
+                new BakeJob { meshes = na }.Schedule(ids.Length, 1).Complete();
+                na.Dispose();
+            }
+            foreach (var (bt, mesh) in todo)
+            {
+                bt.collision = mesh;
+                bt.root!.layer = parent.gameObject.layer;
+                var mc = bt.root.AddComponent<MeshCollider>();
+                mc.cookingOptions = Cooking;   // before the mesh: the same options as the bake, so nothing is cooked again
+                mc.sharedMesh = mesh;
+            }
+        }
+
+        struct BakeJob : IJobParallelFor
+        {
+            [ReadOnly] public NativeArray<int> meshes;
+            public void Execute(int i) => Physics.BakeMesh(meshes[i], false, Cooking);
+        }
+
+        void RemoveCollider(Built b)
+        {
+            if (b.root != null) { var mc = b.root.GetComponent<MeshCollider>(); if (mc != null) Kill(mc); }
+            if (b.collision != null) { Kill(b.collision); b.collision = null; }
+        }
+
+        /// <summary>Positions and indices only, 16-bit when they fit; kept readable, as physics needs.</summary>
+        Mesh ToMesh(CollisionMesh cm, string name)
+        {
+            int n = cm.P.Count;
+            var v = new Vector3[n];
+            double x0 = double.MaxValue, y0 = x0, z0 = x0, x1 = double.MinValue, y1 = x1, z1 = x1;
+            for (int i = 0; i < n; i++)
+            {
+                var p = cm.P[i]; v[i] = new Vector3((float)p.x, (float)p.y, (float)p.z);
+                x0 = Math.Min(x0, p.x); y0 = Math.Min(y0, p.y); z0 = Math.Min(z0, p.z);
+                x1 = Math.Max(x1, p.x); y1 = Math.Max(y1, p.y); z1 = Math.Max(z1, p.z);
+            }
+            var m = new Mesh { name = name, hideFlags = flags };
+            const UnityEngine.Rendering.MeshUpdateFlags quiet = UnityEngine.Rendering.MeshUpdateFlags.DontValidateIndices | UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds;
+            m.SetVertexBufferParams(n, new UnityEngine.Rendering.VertexAttributeDescriptor(UnityEngine.Rendering.VertexAttribute.Position, UnityEngine.Rendering.VertexAttributeFormat.Float32, 3));
+            m.SetVertexBufferData(v, 0, 0, n, 0, quiet);
+            int ni = cm.I.Count;
+            if (n <= 65535)
+            {
+                var ix = new ushort[ni]; for (int i = 0; i < ni; i++) ix[i] = (ushort)cm.I[i];
+                m.SetIndexBufferParams(ni, UnityEngine.Rendering.IndexFormat.UInt16);
+                m.SetIndexBufferData(ix, 0, 0, ni, quiet);
+            }
+            else
+            {
+                m.SetIndexBufferParams(ni, UnityEngine.Rendering.IndexFormat.UInt32);
+                m.SetIndexBufferData(cm.I.ToArray(), 0, 0, ni, quiet);
+            }
+            m.subMeshCount = 1;
+            m.SetSubMesh(0, new UnityEngine.Rendering.SubMeshDescriptor(0, ni), quiet);
+            m.bounds = new Bounds(new Vector3((float)(x0 + x1) / 2, (float)(y0 + y1) / 2, (float)(z0 + z1) / 2), new Vector3((float)(x1 - x0), (float)(y1 - y0), (float)(z1 - z0)));
+            return m;
         }
 
         static void Kill(UnityEngine.Object o)

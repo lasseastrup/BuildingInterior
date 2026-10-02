@@ -25,6 +25,10 @@ namespace Triband.Storey.Unity
         [Range(0, 2)] public int displayedLod = 0;
         [Tooltip("Tint by LOD, as the prototype's stats card does.")]
         public bool lodTint;
+        [Tooltip("Give every building a MeshCollider from a collision mesh of its floors, stairs, walls and roofs, for physics characters and raycasts. Storey's own play kit walks without them.")]
+        public bool generateColliders = true;
+        [Tooltip("Colliders in edit mode too, rebuilt with every edit (raycasts and physics previews in the editor). Off, edits cook nothing.")]
+        public bool collidersInEditMode;
 
         SiteRenderer? site;
         Material?[] builtWith = new Material?[3];
@@ -78,6 +82,7 @@ namespace Triband.Storey.Unity
                 builtWith = new Material?[] { opaque, glass, massing };
                 shownJson = null; pendingAll = true;
             }
+            site.Colliders = generateColliders && (Application.isPlaying || collidersInEditMode);
             if (preview == null)
             {
                 if (shownJson != layout.Json) { site.Show(layout.Document); shownJson = layout.Json; }

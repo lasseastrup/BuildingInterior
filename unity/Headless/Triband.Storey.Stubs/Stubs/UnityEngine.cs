@@ -22,6 +22,7 @@ namespace UnityEngine
         public HideFlags hideFlags { get; set; }
         public static void Destroy(Object obj) { }
         public static void DestroyImmediate(Object obj) { }
+        public int GetInstanceID() => 0;
         public static T Instantiate<T>(T original, Transform parent) where T : Object => original;
         public static T FindAnyObjectByType<T>() where T : Object => null;
         public static T[] FindObjectsByType<T>(FindObjectsSortMode sortMode) where T : Object => new T[0];
@@ -404,6 +405,21 @@ namespace UnityEngine
 
     public class Collider : Component { }
 
+    [System.Flags]
+    public enum MeshColliderCookingOptions { None = 0, CookForFasterSimulation = 2, EnableMeshCleaning = 4, WeldColocatedVertices = 8, UseFastMidphase = 16 }
+
+    public sealed class MeshCollider : Collider
+    {
+        public Mesh sharedMesh { get; set; } = new Mesh();
+        public bool convex { get; set; }
+        public MeshColliderCookingOptions cookingOptions { get; set; }
+    }
+
+    public static class Physics
+    {
+        public static void BakeMesh(int meshID, bool convex, MeshColliderCookingOptions cookingOptions) { }
+    }
+
     public enum PrimitiveType { Sphere = 0, Capsule = 1, Cylinder = 2, Cube = 3, Plane = 4, Quad = 5 }
 
     public class Behaviour : Component { public bool isActiveAndEnabled => false; public bool enabled { get; set; } }
@@ -429,6 +445,7 @@ namespace UnityEngine
     {
         public void SetActive(bool value) { }
         public GameObject(string name) { }
+        public int layer { get; set; }
         public static GameObject CreatePrimitive(PrimitiveType type) => new GameObject("");
         public string tag { get; set; } = "";
         public Transform transform { get; } = new Transform();
@@ -477,4 +494,30 @@ namespace UnityEngine.Scripting
 namespace UnityEngine.SceneManagement
 {
     public struct Scene { }
+}
+
+namespace Unity.Collections
+{
+    public enum Allocator { Invalid = 0, None = 1, Temp = 2, TempJob = 3, Persistent = 4 }
+    public sealed class ReadOnlyAttribute : System.Attribute { }
+
+    public struct NativeArray<T> : System.IDisposable where T : struct
+    {
+        public NativeArray(T[] array, Allocator allocator) { }
+        public T this[int index] { get => default; set { } }
+        public int Length => 0;
+        public void Dispose() { }
+    }
+}
+
+namespace Unity.Jobs
+{
+    public interface IJobParallelFor { void Execute(int index); }
+
+    public struct JobHandle { public void Complete() { } }
+
+    public static class IJobParallelForExtensions
+    {
+        public static JobHandle Schedule<T>(this T jobData, int arrayLength, int innerloopBatchCount, JobHandle dependsOn = default) where T : struct, IJobParallelFor => default;
+    }
 }

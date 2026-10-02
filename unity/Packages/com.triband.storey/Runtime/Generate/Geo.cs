@@ -170,6 +170,25 @@ namespace Triband.Storey.Generate
             return out_;
         }
 
+        /// <summary>
+        /// A walkable level as polygons with holes (outer ring first): the union of <paramref name="outlines"/>, grown by
+        /// <paramref name="grow"/> with round corners (every point within that distance of one of them), minus
+        /// <paramref name="holes"/>.
+        /// </summary>
+        public static List<List<List<Vec2>>> GrownUnion(List<List<Vec2>> outlines, double grow, List<List<Vec2>> holes)
+        {
+            var subj = new PathsD(); foreach (var o in outlines) if (o.Count >= 3) subj.Add(Path(o));
+            var union = Clipper.Union(subj, new PathsD(), FillRule.NonZero, 6);
+            var grown = grow > 0 ? Clipper.InflatePaths(union, grow, JoinType.Round, EndType.Polygon, 2.0, 6, 0.005) : union;
+            var clip = new PathsD(); foreach (var h in holes) if (h.Count >= 3) clip.Add(Path(h));
+            var tree = new PolyTreeD();
+            Clipper.BooleanOp(ClipType.Difference, grown, clip, tree, FillRule.NonZero, 6);
+            var out_ = new List<List<List<Vec2>>>();
+            Collect(tree, out_);
+            out_.RemoveAll(poly => poly[0].Count < 3 || Math.Abs(Area2(poly[0])) <= 0.0001);
+            return out_;
+        }
+
         static void Collect(PolyPathD node, List<List<List<Vec2>>> out_)
         {
             for (int i = 0; i < node.Count; i++)
