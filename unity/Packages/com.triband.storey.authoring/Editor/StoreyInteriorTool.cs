@@ -116,6 +116,9 @@ namespace Triband.Storey.Editor
             {
                 int id = GUIUtility.GetControlID(CoreHint, FocusType.Passive);
                 var at = W(b, new Vec2(s.x, s.z), yy);
+                // a click on the handle selects, drag or not (the handle reports a change only once it moves)
+                if (ev.type == EventType.MouseDown && ev.button == 0 && HandleUtility.nearestControl == id && v.selectedCore != s.id)
+                { v.selectedCore = s.id; v.selectedWall = -1; Inspectors(); }
                 Handles.color = s.id == v.selectedCore ? Ok : Color.white;
                 EditorGUI.BeginChangeCheck();
                 var np = Handles.Slider2D(id, at, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(at, 0.2f), Handles.RectangleHandleCap, Vector2.zero, false);
@@ -128,7 +131,7 @@ namespace Triband.Storey.Editor
                         var g = L(b, np); grabOffset = new Vec2(s.x - g.x, s.z - g.z);
                     }
                     var to = L(b, np); string sid = s.id;
-                    e.ApplyTo("Move core", bb => { var it = bb.shafts.First(x => x.id == sid); return Shafts.Drag(bb, it, new Vec2(it.x - grabOffset.x, it.z - grabOffset.z), to); });
+                    e.ApplyTo("Move core", bb => { var it = bb.shafts.First(x => x.id == sid); return Shafts.Slide(bb, it, new Vec2(it.x - grabOffset.x, it.z - grabOffset.z), to); });
                 }
             }
 
@@ -212,9 +215,11 @@ namespace Triband.Storey.Editor
             {
                 case InteriorTool.Select:
                 {
-                    var w = Walls.NearestWall(b, k, p, 0.4);
-                    v.selectedCore = ""; v.selectedWall = w?.i ?? -1; Inspectors();
-                    return w != null || Shafts.At(b, k, p) != null || Generate.Geo.Pip(Derived.OutlineAt(b, k), p.x, p.z);
+                    // stairs and lifts first: a click anywhere on one selects it
+                    var core = Shafts.At(b, k, p);
+                    var w = core == null ? Walls.NearestWall(b, k, p, 0.4) : null;
+                    v.selectedCore = core?.id ?? ""; v.selectedWall = w?.i ?? -1; Inspectors();
+                    return core != null || w != null || Generate.Geo.Pip(Derived.OutlineAt(b, k), p.x, p.z);
                 }
                 case InteriorTool.Wall:
                 {

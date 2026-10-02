@@ -17,4 +17,5 @@
 - No keyboard shortcuts: the tool modes, Isolate, floor stepping, turning and removing are buttons (**Turn 90°** for placing stairs and lifts, **Finish wall** for a wall chain).
 
 ### Fixed
+- Stairs and lifts are selected by a click, without dragging, and anywhere on them. Dragged past a wall or into another core, they keep sliding along it instead of stopping dead.
 - Dragging a wall point or a "+" now moves the walls while dragging. Before, it showed only a dotted preview, and the move could fail to apply on release.

@@ -5,6 +5,7 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- `Shafts.Slide`, the editor's core drag: where `Drag` refuses (the pointer is past a wall or on another core), the core goes as far as it fits along each of its own axes, so it slides along what stops it.
 - Straight flights (`CoreType.Flight`, `"flight"` in a layout): stairs over the same floor range as switchback stairs, with one straight flight per storey stacked above the last, a walkway beside it back to the next flight, and no walls. Each flight has risers of about 18 cm, and the slab is open over the flight lane's run only. Rails run along the opening, and a bulkhead (LOD0 and LOD1) covers it on a flat roof. `Shafts.SetKind` switches stairs between the two kinds where the other fits. Storey's own: the prototype cannot read a layout that has one. Layouts without them read and write as before.
 - `StoreyColorSettings.FillUnsetDefaults`: gives every unset default colour a palette entry.
 - `PaletteMatch` and `PaletteConform` (docs/COLOURS.md §3.8): the nearest palette entry by Color Pipeline's Model Remapper rule, and a layout's off-palette colours replaced by it. With Color Pipeline, an unmatched hex colour now renders as that entry rather than `GetIDOfClosestColor`'s, which measures in sRGB.

@@ -92,6 +92,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
      - On a straight flight, rails run along both sides of the opening on each storey above, and across its front on the top storey. A building wall stands in for the rail on a side against it. On a flat roof, a bulkhead with its door at the back closes the stair in.
      - The arrow shows which way the flights go up, and the dotted line marks the walkway. **Reverse** turns them round (the walkway changes side too). Only the sides can share a building wall, because both ends are landings.
    - Drag a core, a wall point and a "+": the walls and the building follow the pointer, and the drag is one undo step. Double-click a point to join or remove walls.
+   - Click stairs or a lift without dragging: it is selected (anywhere on it, not only its handle). Drag one past an outside wall or into another core: it stops there but keeps sliding along it with the pointer.
    - No key does anything Storey-specific.
    - Storey height, and the Storey Floors overlay: count, copy up, duplicate, delete.
 5. **The exit test (Plan §8):** a styled 3-floor building in under 2 minutes. Then 10 floors with roof access in under 5: type 10 in the overlay, place stairs on the ground floor, check *reaches the roof* on the roof.

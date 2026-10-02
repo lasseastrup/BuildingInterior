@@ -128,6 +128,52 @@ namespace Triband.Storey.Edit
             return false;
         }
 
+        /// <summary>
+        /// The editor's core drag: <see cref="Drag"/>, and where that is refused (the pointer has gone past a wall or onto
+        /// another core), as far as the core can go towards the pointer along its own two axes, one after the other, so
+        /// it still slides along a wall it is pressed against. True when it moved.
+        /// </summary>
+        public static bool Slide(BuildingData b, CoreData it, Vec2 grab, Vec2 p)
+        {
+            if (Drag(b, it, grab, p)) return true;
+            int top = Derived.ShaftTop(b, it);
+            bool Free(Vec2 q) => FitsLevels(b, it, it.bottom, top, q.x, q.z) && !b.shafts.Any(s => !ReferenceEquals(s, it) && Overlap(s, it, 0.3, q.x, q.z));
+            var cur = new Vec2(it.x, it.z);
+            if (!Free(cur)) return false;   // already somewhere it does not fit (a wall moved under it): leave it to the user
+            var to = new Vec2(p.x + it.x - grab.x, p.z + it.z - grab.z);
+            var R = Cores.RectOf(it);
+            Vec2 Cm2(Vec2 q) => new Vec2(Tiers.Cm(q.x), Tiers.Cm(q.z));
+
+            // the farthest free point from a towards a + d (the free stretch from a is taken to be one piece)
+            Vec2 Far(Vec2 a, Vec2 d)
+            {
+                var whole = Cm2(new Vec2(a.x + d.x, a.z + d.z));
+                if (Free(whole)) return whole;
+                double lo = 0, hi = 1; var best = a;
+                for (int i = 0; i < 14; i++)
+                {
+                    double t = (lo + hi) / 2; var q = Cm2(new Vec2(a.x + d.x * t, a.z + d.z * t));
+                    if (Free(q)) { lo = t; best = q; } else hi = t;
+                }
+                return best;
+            }
+            Vec2 Along(Vec2 a, Vec2 axis) { double k = (to.x - a.x) * axis.x + (to.z - a.z) * axis.z; return new Vec2(axis.x * k, axis.z * k); }
+
+            Vec2? pick = null; double bd = double.MaxValue;
+            foreach (var (first, second) in new[] { (R.u, R.w), (R.w, R.u) })
+            {
+                var q1 = Far(cur, Along(cur, first)); var q = Far(q1, Along(q1, second));
+                // pulled flush onto a wall when that is close and free, as a drag is
+                var sn = Snap(Derived.OutlineAt(b, it.bottom), it, q.x, q.z, it.rot);
+                if (Free(sn)) q = sn;
+                double d = Tiers.Hypot(q.x - to.x, q.z - to.z);
+                if (d < bd - 1e-9) { bd = d; pick = q; }
+            }
+            if (pick == null || (pick.Value.x == it.x && pick.Value.z == it.z)) return false;
+            it.x = pick.Value.x; it.z = pick.Value.z;
+            return true;
+        }
+
         /// <summary>Turn a core to an angle (degrees, kept to 0.1° in 0–360); false, unchanged, when there is no room.</summary>
         public static bool SetAngle(BuildingData b, CoreData sh, double deg)
         {
