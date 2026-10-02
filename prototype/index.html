@@ -3390,13 +3390,14 @@ $('#bPerf').onclick=()=>openPerf(!perfOpen);
    Main loop
    ========================================================================= */
 function resize(){ const w=canvas.clientWidth, h=canvas.clientHeight; if(canvas.width!==Math.floor(w*renderer.getPixelRatio())||canvas.height!==Math.floor(h*renderer.getPixelRatio())){ renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); } }
-let last=performance.now();
+let last=performance.now(), tickHold=false;   // tickHold: test hook, the harness steps play itself (__sb.play.step)
 function tick(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   resize();
   const tf=performance.now();
   if(dirty.size){ for(const id of dirty){ const b=bById(id); if(b){ const r=recOf(b), bb=bboxAll(b); r.bbw={x0:bb.x0+b.pos.x, z0:bb.z0+b.pos.z, x1:bb.x1+b.pos.x, z1:bb.z1+b.pos.z}; gridSet(r,b); partyMemo.delete(id); } }
     for(const id of dirty){ const b=bById(id); if(b) refreshBuilding(b); } dirty.clear(); }
+  if(tickHold){ requestAnimationFrame(tick); return; }
   if(ui.mode==='play'){ updatePlayer(dt); updateHUD(); updateLiftUI(); applyCam(camPlay); updateOccluders(dt); G.uIso.value=0; }
   else {
     if(occActive.size) updateOccluders(dt);
@@ -3442,4 +3443,25 @@ window.__sb = { roofParts:(i,k)=>{ const b=state.buildings[i]; const R = k==null
   ops:{reindex, addFloorTop, insertAbove, deleteFloor, setFloorCount, insertVertex, removeVertex, mergeVertex, simplifyTier, outlineIssue, pushEdge, insetPoly, addSetback, removeSetback, moveSetback, applyShape, outlineSnap, snapMove, tierFp, tiers, FOOTPRINTS,
     snapCore, coreFits, itemsOverlap, wallAngle, placementAt, fitsLevels, shaftFits, shaftLevels, snapPoint, splitWall, connectAt, cleanWalls, addWall, removeJoint, wallNodes, ptKey, doorAt, hoverTarget, eraseTarget, nearestWall, nearestEdge, shaftAt, fpAt, shaftTopOf:shaftTop,
     detailPlace, facadeDoor, blankAt, styleAt, tierEnd, tierStart, floorBase, floorH, freeSpot, makeBuilding, nextName, STYLES, camEdit} };   // the edit operations, for the Unity port's tests (prototype/tools/export-ops.mjs)
+// play mode, for the Unity port's tests (prototype/tools/export-play.mjs): the walk model and the occlusion state, stepped
+// by the harness with a fixed time step while the frame loop is held
+window.__sb.play = {
+  ready:()=>{ syncRecs(); return dirty.size===0 && state.buildings.every(b=>recs.has(b.id)); },
+  hold:(on)=>{ tickHold=!!on; },
+  segs:(i)=>{ const b=state.buildings[i]; return buildLOD0(b, recOf(b).idx).segs; },
+  surfaceAt:(x,z,y)=>surfaceAt(x,z,y), collide:(x,z,y)=>collide(x,z,y),
+  loc:(x,y,z)=>{ player.x=x; player.y=y; player.z=z; const l=playerLoc(); return l.b ? {id:l.b.id, floor:l.floor} : null; },
+  segHits:(i,p,q)=>segHitsBuilding(state.buildings[i], p, q),
+  enter:(x,y,z,yaw,pitch,dist,occ)=>{ Object.assign(ui.occ, occ||{}); spawnAt(x,y,z); ui.mode='play'; camPlay.yaw=yaw; camPlay.pitch=pitch; camPlay.dist=dist; camPlay.assist=0; hiddenFor=0; applyCam(camPlay); },
+  exit:()=>{ exitPlay(); for(const r of [...occActive]){ r.occA=0; r.occT=0; occActive.delete(r); if(r.slot!=null){ occSlots[r.slot]=null; r.slot=null; } dropLid(r); } for(const id of [...wallAnim.keys()]){ wallArr[id]=0; wallAnim.delete(id); } },
+  // one frame of play, in tick's order, with the input held as given
+  step:(dt,input)=>{ for(const c of ['KeyW','KeyA','KeyS','KeyD','ShiftLeft']) keys[c]=!!(input&&input[c]);
+    if(input && input.yaw!=null) camPlay.yaw=input.yaw;
+    updatePlayer(dt); applyCam(camPlay); updateOccluders(dt); const activeId=applyView(); updateCutaway(dt);
+    const occ=[]; for(const r of occActive){ const b=bById(r.id); if(r.slot==null) continue; occ.push({id:r.id, slot:r.slot, a:r.occA, t:r.occT, k:r.occK, row:[...occArr.subarray(r.slot*OCC_W*4, r.slot*OCC_W*4+4*(2+(b?b.floors.length:0)))]}); }
+    const walls=[]; for(const [id,a] of wallAnim){ let at=null; for(const r of recs.values()){ const L=r.l0; if(L && L.wbase>0 && id>=L.wbase && id<L.wbase+L.walls.length){ at={id:r.id, i:id-L.wbase}; break; } } if(at) walls.push({...at, a}); }
+    const act = G.uActive.value>=0 ? [...recs.values()].find(r=>r.idx===G.uActive.value)?.id ?? null : null;
+    return { player:{x:player.x,y:player.y,z:player.z}, cam:camera.position.toArray(), active:act, activeId, clipY:G.uClipY.value, cut:[G.uCutOn.value,G.uCutH.value,G.uCutBase.value,G.uCutTop.value],
+      focus:G.uFocus.value.toArray(), ucam:G.uCam.value.toArray(), camDir:G.uCamDir.value.toArray(), assist:camPlay.assist||0, occ, walls }; },
+};
 </script>
