@@ -9,6 +9,9 @@ namespace Triband.Storey.Edit
     /// <summary>Why an outline is refused (<see cref="Outlines.Issue"/>), with the prototype's wording.</summary>
     public enum OutlineIssue { None, Shape, Out, Up, Thin, Core }
 
+    /// <summary>How <see cref="Outlines.Corner"/> cuts a corner: a straight chamfer, or a rounded arc.</summary>
+    public enum CornerShape { Chamfer, Round }
+
     /// <summary>
     /// Outline editing: corners inserted, removed and merged with the doors, details and blank walls on the tier's
     /// edges kept in place; edges pushed; outlines checked; corners and buildings snapped. k0 is the tier being
@@ -58,6 +61,89 @@ namespace Triband.Storey.Edit
             RemapEdgeItems(b, k0, (edge, t) => edge > i ? (edge + 1, t) : edge == i ? (t < 0.5 ? (i, t * 2) : (i + 1, (t - 0.5) * 2)) : (edge, t));
             Tiers.SetBlank(b, k0, Tiers.Blank(b, k0).SelectMany(j => j > i ? new[] { j + 1 } : j == i ? new[] { i, i + 1 } : new[] { j }).ToList());
             return i + 1;
+        }
+
+        /// <summary>
+        /// The points that replace corner i for a chamfer of <paramref name="size"/> metres along each edge, or a rounded
+        /// corner of that radius (an arc in steps of at most 15°, none shorter than 0.35 m). Null when the corner is
+        /// straight, or the edges are too short for it (0.3 m of each must be left).
+        /// </summary>
+        public static List<Vec2>? CornerPoints(List<Vec2> fp, int i, CornerShape shape, double size)
+        {
+            int n = fp.Count; var A = fp[(i - 1 + n) % n]; var V = fp[i]; var C = fp[(i + 1) % n];
+            double L1 = Tiers.Hypot(A.x - V.x, A.z - V.z), L2 = Tiers.Hypot(C.x - V.x, C.z - V.z);
+            if (L1 < 1e-6 || L2 < 1e-6 || size <= 0) return null;
+            double ax = (A.x - V.x) / L1, az = (A.z - V.z) / L1, cx = (C.x - V.x) / L2, cz = (C.z - V.z) / L2;
+            double cos = Tiers.Clamp(ax * cx + az * cz, -1, 1), inner = Math.Acos(cos);   // the angle between the two edges at V
+            if (inner > Math.PI - 0.05) return null;                                       // straight: nothing to cut
+            double d = shape == CornerShape.Round ? size / Math.Tan(inner / 2) : size;     // how far back along each edge the cut starts
+            if (d > L1 - 0.3 || d > L2 - 0.3) return null;
+            var P = new Vec2(V.x + ax * d, V.z + az * d); var Q = new Vec2(V.x + cx * d, V.z + cz * d);
+            if (shape == CornerShape.Chamfer) return new List<Vec2> { Cm(P), Cm(Q) };
+            // the arc's centre is on the bisector, size from both edges; it turns through π − inner
+            double bx = ax + cx, bz = az + cz, bl = Tiers.Hypot(bx, bz); bx /= bl; bz /= bl;
+            double h = size / Math.Sin(inner / 2), ox = V.x + bx * h, oz = V.z + bz * h;
+            double a0 = Math.Atan2(P.z - oz, P.x - ox), a1 = Math.Atan2(Q.z - oz, Q.x - ox), sweep = a1 - a0;
+            while (sweep > Math.PI) sweep -= 2 * Math.PI;
+            while (sweep < -Math.PI) sweep += 2 * Math.PI;
+            int steps = Math.Max(2, (int)Math.Ceiling(Math.Abs(sweep) / (Math.PI / 12)));
+            steps = Math.Max(1, Math.Min(steps, (int)Math.Floor(size * Math.Abs(sweep) / 0.35)));
+            var o = new List<Vec2>();
+            for (int j = 0; j <= steps; j++) { double a = a0 + sweep * j / steps; o.Add(Cm(new Vec2(ox + size * Math.Cos(a), oz + size * Math.Sin(a)))); }
+            return o;
+        }
+
+        static Vec2 Cm(Vec2 p) => new Vec2(Tiers.Cm(p.x), Tiers.Cm(p.z));
+
+        /// <summary>
+        /// Chamfer or round corner i of tier k0 (<see cref="CornerPoints"/>). The doors, details and blank walls on its two
+        /// edges keep their places; those in the part cut away go. Refused (with why) where the result would not pass
+        /// <see cref="Issue"/>; <paramref name="first"/> is the index of the first new edge (the chamfer, or the arc's first step).
+        /// </summary>
+        public static OutlineIssue Corner(BuildingData b, int k0, int i, CornerShape shape, double size, out int first, out int count)
+        {
+            first = -1; count = 0;
+            var fp = Tiers.Outline(b, k0); int n = fp.Count, prev = (i - 1 + n) % n;
+            var pts = CornerPoints(fp, i, shape, size);
+            if (pts == null) return OutlineIssue.Shape;
+            int m = pts.Count - 1;   // new edges between the cut's points
+            var nf = Tiers.Copy(fp); nf.RemoveAt(i); nf.InsertRange(i, pts);
+            var why = Issue(b, k0, nf);
+            if (why != OutlineIssue.None) return why;
+            double L1 = Tiers.EdgeLen(fp, prev), L2 = Tiers.EdgeLen(fp, i);
+            var P = pts[0]; var Q = pts[m];
+            double d1 = Tiers.Hypot(P.x - fp[i].x, P.z - fp[i].z), d2 = Tiers.Hypot(Q.x - fp[i].x, Q.z - fp[i].z);
+            int Ni(int j) => j >= i ? j + m : j;   // old edge j's new index (edges from i on move up past the new ones)
+            RemapEdgeItems(b, k0, (edge, t) =>
+            {
+                if (edge == prev) { double s = t * L1; return s <= L1 - d1 ? ((int, double)?)(Ni(prev), s / (L1 - d1)) : null; }
+                if (edge == i) { double s = t * L2; return s >= d2 ? ((int, double)?)(Ni(i), (s - d2) / (L2 - d2)) : null; }
+                return (Ni(edge), t);
+            });
+            var bl = Tiers.Blank(b, k0);
+            var nb = bl.Select(Ni).ToList();
+            if (bl.Contains(prev) && bl.Contains(i)) for (int j = 0; j < m; j++) nb.Add((i + j) % nf.Count);   // a blank corner stays blank
+            Tiers.SetBlank(b, k0, nb.Distinct().ToList());
+            fp.Clear(); fp.AddRange(nf);
+            first = i % nf.Count; count = m;
+            return OutlineIssue.None;
+        }
+
+        /// <summary>
+        /// Every corner of tier k0 that can take it, chamfered or rounded: the corners are cut one at a time, so each sees the
+        /// edges the cuts before it left. Corners where it does not fit are skipped; the number cut is returned.
+        /// </summary>
+        public static int AllCorners(BuildingData b, int k0, CornerShape shape, double size)
+        {
+            int done = 0;
+            var orig = Tiers.Copy(Tiers.Outline(b, k0));
+            foreach (var v in orig)
+            {
+                var fp = Tiers.Outline(b, k0);
+                int i = fp.FindIndex(p => p.x == v.x && p.z == v.z); if (i < 0) continue;
+                if (Corner(b, k0, i, shape, size, out _, out _) == OutlineIssue.None) done++;
+            }
+            return done;
         }
 
         /// <summary>Remove corner i (an outline keeps at least 3). Doors and details on its two edges go.</summary>

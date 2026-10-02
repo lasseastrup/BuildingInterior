@@ -42,6 +42,13 @@ namespace Triband.Storey.Editor
 
             if (k0 > 0) Dotted(b, Derived.OutlineAt(b, k0 - 1), y, Faint);
             Outline(b, fp, y, Accent);
+            if (e.View.selectedCorner >= fp.Count) e.View.selectedCorner = -1;
+            // the selected corner's cut, as the Shape tab would make it
+            if (e.View.selectedCorner >= 0 && drag == Drag.None && ev.type == EventType.Repaint)
+            {
+                var cut = Outlines.CornerPoints(fp, e.View.selectedCorner, e.View.cornerShape, e.View.cornerSize);
+                if (cut != null) { var pts = cut.Select(p => W(b, p, y)).ToArray(); Handles.color = Ok; Handles.DrawAAPolyLine(3f, pts); }
+            }
 
             // a corner being added follows the pointer on the outline's plane until release
             if (drag == Drag.Insert && GUIUtility.hotControl == dragControl)
@@ -65,9 +72,19 @@ namespace Triband.Storey.Editor
                 {
                     int ii = i;
                     if (!e.ApplyTo("Corner removed", bb => Outlines.RemoveVertex(bb, ii, k0))) Notify(sv, "An outline needs at least three corners");
+                    e.View.selectedCorner = -1;
                     ev.Use(); return;
                 }
-                Handles.color = Color.white;
+                // a click selects the corner (for the Shape tab's chamfer and round); the handle still takes the drag
+                if (ev.type == EventType.MouseDown && ev.button == 0 && ev.clickCount == 1 && HandleUtility.nearestControl == id && e.View.selectedCorner != i)
+                {
+                    e.View.selectedCorner = i;
+                    StoreyJuice.Ring(at, Size(at, 0.12f), Accent);
+                    Inspectors();
+                }
+                bool sel = e.View.selectedCorner == i;
+                if (sel && ev.type == EventType.Repaint) { Handles.color = Accent; Handles.DrawWireDisc(at, Vector3.up, Size(at, 0.11f), 2f); }
+                Handles.color = sel ? Accent : Color.white;
                 EditorGUI.BeginChangeCheck();
                 var np = Handles.Slider2D(id, at, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(at), Handles.DotHandleCap, Vector2.zero, false);
                 if (EditorGUI.EndChangeCheck())
@@ -92,7 +109,7 @@ namespace Triband.Storey.Editor
                     BeginDragOf(e, Drag.Insert, i, id, "Add corner");
                     int ii = i; int ni = -1;
                     e.ApplyTo("Add corner", bb => { ni = Outlines.InsertVertex(bb, ii, k0); return true; });
-                    dragIndex = ni;
+                    dragIndex = ni; e.View.selectedCorner = ni;
                     GUIUtility.hotControl = id;   // the tool drives the rest of the drag (above)
                     MoveCorner(e, e.Selected!, k0, dragIndex, np, alt);
                     return;

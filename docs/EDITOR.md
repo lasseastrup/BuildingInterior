@@ -111,3 +111,25 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
      - Example: an 11-storey block with floors 1 to 9 filled, and a lift from the ground straight to floor 10.
 5. **The exit test (Plan §8):** a styled 3-floor building in under 2 minutes. Then 10 floors with roof access in under 5: type 10 in the overlay, place stairs on the ground floor, check *reaches the roof* on the roof.
 
+
+## 6. Building features beyond the prototype
+
+These are Storey's own: the prototype does not have them, so they have their own tests rather than fixtures.
+
+### 6.1 Corners
+
+**Corners** in the Shape tab chamfers or rounds the selected corner of the outline being edited (click a corner to select it), or **Every corner** at once.
+
+- **Chamfer:** a straight cut, *Size* metres back along each edge.
+- **Round:** an arc of that *Radius*, in steps of at most 15°.
+- The cut shows green on the selected corner before you make it.
+- Doors, details and blank walls on the two edges keep their places; those in the part cut away go. A cut too big for its edges, or one the outline rules refuse (cores, setbacks), says why.
+- **Corner entrance** (the base outline, Chamfer): a street door in the middle of the chamfer. It needs about 2.7 m.
+- The cut is ordinary corners. Drag them, or undo, as any other.
+
+Engine-free: `Outlines.Corner`, `Outlines.AllCorners`, `Outlines.CornerPoints` (`CornerTests`).
+
+**Checks:**
+1. Click a corner of a building, choose Round with a 3 m radius: the arc shows green. *Cut this corner*: the building is rounded there, with walls, bands and windows following.
+2. Chamfer 3 m with *Corner entrance*: a street door opens on the chamfer.
+3. *Every corner* on a setback.

@@ -31,11 +31,16 @@ namespace Triband.Storey.Editor
         [SerializeField] internal string selectedCore = "";
         [SerializeField] internal int selectedWall = -1;
         [SerializeField] internal bool showMore;
+        /// <summary>The Shape tab's selected corner of the tier's outline (a click on it), or -1.</summary>
+        [SerializeField] internal int selectedCorner = -1;
+        [SerializeField] internal Edit.CornerShape cornerShape = Edit.CornerShape.Chamfer;
+        [SerializeField] internal float cornerSize = 2f;
+        [SerializeField] internal bool cornerDoor;
 
         internal void Select(string id)
         {
             if (selectedId == id) return;
-            selectedId = id; tier = 0; floor = 0; selectedCore = ""; selectedWall = -1;
+            selectedId = id; tier = 0; floor = 0; selectedCore = ""; selectedWall = -1; selectedCorner = -1;
         }
     }
 }

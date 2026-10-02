@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Corners** in the Shape tab: chamfer or round the selected corner, or every corner, with a corner entrance on a chamfer (docs/EDITOR.md §6.1).
 - Editor feedback (`StoreyJuice`):
   - a faint outline on the building under the pointer, and a short glow on what is selected;
   - ring pulses where a corner or wall point snaps, and a flash along a wall a moved building now shares;

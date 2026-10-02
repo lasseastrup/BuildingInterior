@@ -197,10 +197,61 @@ namespace Triband.Storey.Editor
                         }
                 }
             }
+            CornerSection(e, b, k0);
             EditorGUILayout.LabelField("Storey height", EditorStyles.boldLabel);
             Slider(e, "Ground", b.groundHeight, 3, 6, 0.1, (bb, x) => bb.groundHeight = x);
             Slider(e, "Upper", b.floorHeight, 2.7, 4.5, 0.1, (bb, x) => bb.floorHeight = x);
             EditorGUILayout.LabelField($"{Math.Abs(Geo.Area2(Tiers.Outline(b, k0))) / 2:0} m² per floor · {Derived.RoofY(b):0.0} m tall", EditorStyles.miniLabel);
+        }
+
+        /// <summary>
+        /// Chamfer or round the selected corner of this outline, or every corner (Outlines.Corner). On the base outline a
+        /// chamfer wide enough can take a corner entrance.
+        /// </summary>
+        void CornerSection(StoreyEdit e, BuildingData b, int k0)
+        {
+            var v = e.View; var fp = Tiers.Outline(b, k0);
+            EditorGUILayout.LabelField("Corners", EditorStyles.boldLabel);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                int sh = GUILayout.Toolbar((int)v.cornerShape, new[] { new GUIContent("Chamfer", "Cut the corner off straight"), new GUIContent("Round", "Round the corner off in an arc") });
+                if (sh != (int)v.cornerShape) { v.cornerShape = (CornerShape)sh; SceneView.RepaintAll(); }
+            }
+            EditorGUI.BeginChangeCheck();
+            v.cornerSize = EditorGUILayout.Slider(v.cornerShape == CornerShape.Round ? "Radius" : "Size", v.cornerSize, 0.5f, 8f);
+            if (EditorGUI.EndChangeCheck()) SceneView.RepaintAll();
+            bool door = false;
+            if (k0 == 0 && v.cornerShape == CornerShape.Chamfer)
+            {
+                v.cornerDoor = EditorGUILayout.Toggle(new GUIContent("Corner entrance", "A street door in the middle of the chamfer (it needs about 2.7 m)"), v.cornerDoor);
+                door = v.cornerDoor;
+            }
+            int ci = v.selectedCorner < fp.Count ? v.selectedCorner : -1;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(ci < 0))
+                    if (GUILayout.Button(new GUIContent(ci < 0 ? "Click a corner first" : "Cut this corner", "The selected corner, shown green in the Scene view")))
+                    {
+                        var why = OutlineIssue.None; int first = -1, count = 0; var shape = v.cornerShape; double size = v.cornerSize;
+                        bool ok = e.ApplyTo(shape == CornerShape.Round ? "Corner rounded" : "Corner chamfered", bb =>
+                        {
+                            why = Outlines.Corner(bb, k0, ci, shape, size, out first, out count);
+                            if (why != OutlineIssue.None) return false;
+                            if (door) bb.entrances.Add(new EntranceData { edge = first, t = 0.5, k = 0 });
+                            return true;
+                        });
+                        message = ok ? (door && Tiers.EdgeLen(Tiers.Outline(e.Selected!, 0), first) < 2.7 ? "The chamfer is too narrow to open a door in: make it bigger." : null)
+                            : why == OutlineIssue.Shape ? "That corner is straight, or its edges are too short for a cut that size." : Outlines.Why(why);
+                        v.selectedCorner = -1;
+                    }
+                if (GUILayout.Button(new GUIContent("Every corner", "Cut every corner that can take it")))
+                {
+                    int done = 0; var shape = v.cornerShape; double size = v.cornerSize;
+                    e.ApplyTo(shape == CornerShape.Round ? "Corners rounded" : "Corners chamfered", bb => (done = Outlines.AllCorners(bb, k0, shape, size)) > 0);
+                    message = done == 0 ? "No corner can take a cut that size." : null;
+                    v.selectedCorner = -1;
+                }
+            }
         }
 
         // ---- Facade ----

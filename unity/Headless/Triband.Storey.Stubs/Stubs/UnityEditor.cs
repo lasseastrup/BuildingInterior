@@ -199,6 +199,7 @@ namespace UnityEditor
         public static double DelayedDoubleField(string label, double value, params GUILayoutOption[] options) => value;
         public static float Slider(string label, float value, float leftValue, float rightValue, params GUILayoutOption[] options) => value;
         public static bool Toggle(string label, bool value, params GUILayoutOption[] options) => value;
+        public static bool Toggle(GUIContent label, bool value, params GUILayoutOption[] options) => value;
         public static System.Enum EnumPopup(string label, System.Enum selected, params GUILayoutOption[] options) => selected;
         public static bool Foldout(bool foldout, string content, bool toggleOnLabelClick) => foldout;
         public static void LabelField(string label, params GUILayoutOption[] options) { }

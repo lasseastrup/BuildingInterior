@@ -15,6 +15,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- `Outlines.Corner`, `Outlines.AllCorners` and `Outlines.CornerPoints`: chamfered and rounded corners, keeping the doors, details and blank walls on the edges either side (docs/EDITOR.md §6.1).
 - Mesh colliders (docs/PLAY.md §5). `CollisionMesh` is a building's floors, stairs, walls and pitched roofs, built from the walk model's data and tested against it. `SiteRenderer.Colliders` gives each building a `MeshCollider`, cooked in parallel with `Physics.BakeMesh` and assigned already cooked. The switches are `StoreySite.generateColliders` (on) and `collidersInEditMode` (off). The package now depends on `com.unity.modules.physics`.
 - `Geo.GrownUnion`: outlines unioned, grown, and with holes cut.
 - `SiteView.isolateAmount`: an isolate that fades, rather than switching at once.
