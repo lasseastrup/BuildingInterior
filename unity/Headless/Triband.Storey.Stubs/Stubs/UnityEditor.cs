@@ -79,6 +79,7 @@ namespace UnityEditor
         public static double timeSinceStartup => 0;
         public delegate void CallbackFunction();
         public static CallbackFunction delayCall;
+        public static CallbackFunction update;
     }
 
     public enum Tool { View = 0, Move = 1, Rotate = 2, Scale = 3, Rect = 4, Transform = 5, Custom = 6, None = -1 }
@@ -101,6 +102,8 @@ namespace UnityEditor
         public static SceneView lastActiveSceneView => null;
         public Camera camera => null;
         public Vector3 pivot { get => default; set { } }
+        public Quaternion rotation { get => default; set { } }
+        public void LookAt(Vector3 point, Quaternion direction, float newSize) { }
     }
 
     public class EditorWindow : ScriptableObject
@@ -120,6 +123,8 @@ namespace UnityEditor
         public static GUIStyle miniButton => new GUIStyle();
         public static GUIStyle miniLabel => new GUIStyle();
         public static GUIStyle whiteBoldLabel => new GUIStyle();
+        public static GUIStyle whiteMiniLabel => new GUIStyle();
+        public static GUIStyle miniButtonLeft => new GUIStyle();
         public static GUIStyle helpBox => new GUIStyle();
         public static GUIStyle wordWrappedMiniLabel => new GUIStyle();
     }
@@ -140,6 +145,7 @@ namespace UnityEditor
         public static void DrawDottedLines(Vector3[] lineSegments, float screenSpaceSize) { }
         public static void DrawDottedLine(Vector3 p1, Vector3 p2, float screenSpaceSize) { }
         public static void DrawWireDisc(Vector3 center, Vector3 normal, float radius) { }
+        public static void DrawSolidDisc(Vector3 center, Vector3 normal, float radius) { }
         public static void DrawWireDisc(Vector3 center, Vector3 normal, float radius, float thickness) { }
         public static void DrawWireCube(Vector3 center, Vector3 size) { }
         public static void Label(Vector3 position, string text, GUIStyle style) { }

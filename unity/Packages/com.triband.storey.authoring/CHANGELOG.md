@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Problems** under the building bar, and markers in the Scene view (`StoreyProblems`; docs/EDITOR.md §6.5).
 - The **Bridge** tool and the **Bridges** list in the Facade tab (docs/EDITOR.md §6.4).
 - **Courtyards and atria** in the Shape tab, with their corners, edges and position edited in the Scene view (docs/EDITOR.md §6.3).
 - Roof fields for mansards (*Top pitch*, *Steep part*) and dormers (*Dormers*, *Dormers every*) in the Facade tab (docs/EDITOR.md §6.2).

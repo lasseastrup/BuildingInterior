@@ -29,6 +29,10 @@ namespace Triband.Storey.Editor
         static readonly List<StoreyEdit> open = new List<StoreyEdit>();
 
         public StoreySite? Site => site;
+        /// <summary>The layout's text as it stands (the unsaved edit included).</summary>
+        public string Text => text;
+        /// <summary>A drag is under way: it is one undo step when it ends.</summary>
+        public bool Dragging => dragText != null;
         public bool Dirty => file == null || text != file.text;
         public StoreyDocument Document => Core.Document;
         public string Path => path;

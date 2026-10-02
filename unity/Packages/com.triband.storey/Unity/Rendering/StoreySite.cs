@@ -49,6 +49,9 @@ namespace Triband.Storey.Unity
         /// <summary>The layout as shown: the unsaved edit while there is one, otherwise the asset's.</summary>
         public StoreyDocument? Shown => preview ?? (layout != null ? layout.Document : null);
 
+        /// <summary>A building's LOD0 as shown, or null when it is waiting to be built again (it would not match the layout).</summary>
+        public Generate.Lod0Result? BuiltLod0(string id) => site == null || pendingAll || pending.Contains(id) ? null : site.Lod0Of(id);
+
         /// <summary>The building table's index of a building (for isolate and the active-floor globals); -1 when not shown.</summary>
         public int TableIndexOf(string id) => site?.TableIndexOf(id) ?? -1;
 

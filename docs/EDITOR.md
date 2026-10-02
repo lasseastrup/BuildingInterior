@@ -212,3 +212,30 @@ Engine-free: `Bridges`, `BridgeEdits`, `BridgeData` (`BridgeTests`).
 3. Switch it to Open, and change the width.
 4. Move the second building along the street: the bridge follows. Move it round the corner: the bridge warns that it no longer meets.
 5. Click its door to remove it.
+
+### 6.5 Problems
+
+**Problems** sits under the building bar, for the whole layout. It lists what's broken or can't be used, one line each. Click a line to select that building, open the storey (Interior tab) and frame the Scene view on the spot. The Scene view marks every problem: red for serious ones, amber for the rest. The selected building's markers say what is wrong.
+
+What it finds:
+- **Floors nobody can reach.** Each storey of a walk-in building is walked on a 25 cm grid, as the player would, with the walk model's own walls. It starts from the street doors and bridges, and goes up and down the stairs and lifts. Possible findings:
+  - a whole floor with no way there;
+  - a floor the stairs or lift arrive at but a wall closes in;
+  - part of a floor nobody can reach ("a room with no door?").
+- **No way in:** a walk-in building with no street door or bridge.
+- **Doors** on upper floors with nothing to open onto (they aren't built), and doors into filled storeys.
+- **Stairs and lifts** that no longer fit every floor they serve, that overlap, or a lift with one stop.
+- **Courtyards and atria** that no longer fit.
+- **Bridges** that no longer meet, or that lead into or out of a storey with nothing inside.
+- **Buildings that overlap.**
+
+It runs once an edit has settled (never during a drag), using the meshes the site already shows. The demo street takes about 30 ms, the 78-building variants corpus about 250 ms.
+
+Engine-free: `Validate.Problems` (`ProblemTests`). On the demo street it finds two real problems:
+- Row House: a wall 10 cm in front of the stairs shuts them in above the ground floor.
+- Linden Court: the room behind the lift is reached only past a 40 cm gap.
+
+**Checks:**
+1. Open the demo street: Problems lists Row House floors 1 to 3 and Linden Court's rooms. Click one: the Scene view goes there.
+2. Remove a building's stairs: its upper floors are listed. Undo: the list clears.
+3. Draw a wall across a room with no door: "Part of … can't be reached".

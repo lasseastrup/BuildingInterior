@@ -42,6 +42,7 @@ namespace Triband.Storey.Editor
             if (tr.rotation != Quaternion.identity || tr.lossyScale != Vector3.one)
                 EditorGUILayout.HelpBox("Keep the Storey Site unrotated and unscaled: the layout is in metres, and the Interior tab's floor clip and cutaway assume it. Moving it is fine.", MessageType.Warning);
             BuildingBar(e);
+            ProblemsPanel(e);
             var b = e.Selected;
             if (b != null)
             {
@@ -121,6 +122,47 @@ namespace Triband.Storey.Editor
                 bool iso = GUILayout.Toggle(v.isolate, new GUIContent("Isolate", "Hide every other building"), EditorStyles.miniButton, GUILayout.Width(56));
                 if (iso != v.isolate) { v.isolate = iso; SceneView.RepaintAll(); }
             }
+        }
+
+        // ---- problems ----
+
+        /// <summary>
+        /// The layout's problems (Validate.Problems): a foldout with a count, one line each, and a click that selects the
+        /// building, opens the storey and frames the Scene view on it.
+        /// </summary>
+        void ProblemsPanel(StoreyEdit e)
+        {
+            var v = e.View; var ps = StoreyProblems.For(e);
+            int errors = ps.Count(p => p.severity == Validate.Severity.Error);
+            string title = ps.Count == 0 ? "Problems: none" : $"Problems ({ps.Count}{(errors > 0 ? $", {errors} serious" : "")})";
+            if (StoreyProblems.Stale(e)) title += " …";
+            bool show = EditorGUILayout.Foldout(v.showProblems, title, true);
+            if (show != v.showProblems) { v.showProblems = show; SceneView.RepaintAll(); }
+            if (!show || ps.Count == 0) return;
+            const int Most = 25;
+            foreach (var p in ps.Take(Most))
+            {
+                var keep = GUI.color; GUI.color = Color.Lerp(Color.white, StoreyProblems.ColorOf(p), 0.55f);
+                string where = p.k >= 0 ? $"{p.building} · {Floor(e.Document.buildings.FirstOrDefault(x => x.id == p.buildingId) ?? new BuildingData(), p.k)}" : p.building;
+                bool go = GUILayout.Button(new GUIContent($"{(p.severity == Validate.Severity.Error ? "●" : "○")} {where}: {p.message}", "Show it"), EditorStyles.miniButtonLeft);
+                GUI.color = keep;
+                if (go) GoTo(e, p);
+            }
+            if (ps.Count > Most) EditorGUILayout.LabelField($"and {ps.Count - Most} more", EditorStyles.miniLabel);
+        }
+
+        static void GoTo(StoreyEdit e, Validate.Problem p)
+        {
+            var v = e.View; v.Select(p.buildingId);
+            var b = e.Selected;
+            if (b != null && p.k >= 0 && p.k < b.floors.Count && p.code.StartsWith("unreached")) { v.floor = p.k; SetTab(v, StoreyTab.Interior); }
+            var sv = SceneView.lastActiveSceneView;
+            if (sv != null && e.Site != null)
+            {
+                var at = e.Site.transform.TransformPoint(new Vector3((float)p.x, (float)p.y, (float)p.z));
+                sv.LookAt(at, sv.rotation, 14f);
+            }
+            SceneView.RepaintAll();
         }
 
         // ---- Shape ----

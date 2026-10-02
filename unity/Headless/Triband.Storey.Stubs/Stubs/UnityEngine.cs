@@ -156,6 +156,7 @@ namespace UnityEngine
         public static float Dot(Vector3 a, Vector3 b) => 0;
         public static Vector3 operator +(Vector3 a, Vector3 b) => a;
         public static Vector3 operator -(Vector3 a, Vector3 b) => a;
+        public static Vector3 operator -(Vector3 a) => a;
         public static Vector3 operator *(Vector3 a, float d) => a;
         public static bool operator ==(Vector3 a, Vector3 b) => true;
         public static bool operator !=(Vector3 a, Vector3 b) => false;
@@ -173,6 +174,7 @@ namespace UnityEngine
         public float r, g, b, a;
         public Color(float r, float g, float b, float a = 1) { this.r = r; this.g = g; this.b = b; this.a = a; }
         public static Color white => default;
+        public static Color Lerp(Color a, Color b, float t) => a;
     }
 
     public struct Quaternion
@@ -207,7 +209,7 @@ namespace UnityEngine
         public float x, yMax, width;
     }
 
-    public class Camera : Behaviour { public static Camera main => null; }
+    public class Camera : Behaviour { public static Camera main => null; public static Camera current => null; }
 
     public sealed class GUIContent
     {
@@ -259,6 +261,7 @@ namespace UnityEngine
 
     public static class GUI
     {
+        public static Color color { get => default; set { } }
         public static void Label(Rect position, string text, GUIStyle style) { }
         public static bool Button(Rect position, GUIContent content, GUIStyle style) => false;
         public static bool Button(Rect position, string text) => false;
@@ -442,6 +445,7 @@ namespace UnityEngine
         public Matrix4x4 localToWorldMatrix => default;
         public Matrix4x4 worldToLocalMatrix => default;
         public void SetParent(Transform parent, bool worldPositionStays) { }
+        public Vector3 TransformPoint(Vector3 position) => position;
     }
 
     public sealed class GameObject : Object
