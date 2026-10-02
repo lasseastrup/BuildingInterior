@@ -90,6 +90,12 @@ namespace Triband.Storey.Generate
                 var land = k > 0 && !TerraceAt(b, k, i, e.t) ? LandingAt(site, b, k, i, e.t) : null;
                 ops.Add(new Opening { u0 = c - Dim.DOOR_EXT / 2, u1 = c + Dim.DOOR_EXT / 2, y0 = 0, y1 = Math.Min(2.6, h - 0.4), door = true, thr = land != null && land.y < Derived.FloorBase(b, k) - 0.02 });
             }
+            foreach (var (bk, bi, bt) in Bridges.Doors(site, b))
+            {
+                if (bk != k || bi != i || spn <= Dim.DOOR_EXT + 0.6) continue;
+                double c = Math.Max(uS + Dim.DOOR_EXT / 2 + 0.3, Math.Min(uE - Dim.DOOR_EXT / 2 - 0.3, bt * L));
+                ops.Add(new Opening { u0 = c - Dim.DOOR_EXT / 2, u1 = c + Dim.DOOR_EXT / 2, y0 = 0, y1 = Math.Min(2.5, h - 0.4), door = true, bare = true });
+            }
             var shaftHere = new List<Cores.Flush>();
             foreach (var s in b.shafts)
             {
@@ -133,7 +139,7 @@ namespace Triband.Storey.Generate
                 {
                     op.OBox(F, o.u0 - 0.08, o.u0, y, y + o.y1 + 0.08, T, T + 0.06, C.trim, C.trim, Skip.In | Skip.Bot);
                     op.OBox(F, o.u1, o.u1 + 0.08, y, y + o.y1 + 0.08, T, T + 0.06, C.trim, C.trim, Skip.In | Skip.Bot);
-                    op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
+                    if (!o.bare) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
                     if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, T * 0.45, C.door, false);
                 }
                 else

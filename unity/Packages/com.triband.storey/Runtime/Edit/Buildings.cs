@@ -71,6 +71,7 @@ namespace Triband.Storey.Edit
             var nb = PrototypeJson.ReadBuilding(PrototypeJson.Write(b));
             nb.id = NewId(d); nb.name = b.name + " copy";
             foreach (var s in nb.shafts) s.id = Shafts.NewId(d);
+            nb.bridges.Clear();   // a copy stands somewhere else: its bridges would reach nothing
             var bb = Tiers.Bbox(b.footprint);
             var sp = FreeSpot(d, bb.x1 - bb.x0, bb.z1 - bb.z0, near);
             nb.pos = new Vec2(sp.x - bb.x0, sp.z - bb.z0);
@@ -78,6 +79,11 @@ namespace Triband.Storey.Edit
             return nb;
         }
 
-        public static bool Delete(StoreyDocument d, string id) => d.buildings.RemoveAll(b => b.id == id) > 0;
+        public static bool Delete(StoreyDocument d, string id)
+        {
+            if (d.buildings.RemoveAll(b => b.id == id) == 0) return false;
+            BridgeEdits.Forget(d, id);   // and the bridges to it
+            return true;
+        }
     }
 }

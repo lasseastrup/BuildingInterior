@@ -247,6 +247,7 @@ namespace UnityEngine
         public static void Space(float pixels) { }
         public static void FlexibleSpace() { }
         public static GUILayoutOption Width(float width) => new GUILayoutOption();
+        public static GUILayoutOption MinWidth(float minWidth) => new GUILayoutOption();
         public static GUILayoutOption Height(float height) => new GUILayoutOption();
 
         public sealed class HorizontalScope : System.IDisposable

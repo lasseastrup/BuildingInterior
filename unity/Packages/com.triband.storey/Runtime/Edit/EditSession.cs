@@ -25,7 +25,7 @@ namespace Triband.Storey.Edit
     {
         public StoreyDocument Document { get; private set; }
         public string Text { get; private set; }
-        List<(string id, string json, (double x0, double z0, double x1, double z1) bounds)> shown;
+        List<(string id, string json, (double x0, double z0, double x1, double z1) bounds, HashSet<string> linked)> shown;
 
         public EditSession(string text)
         {
@@ -34,8 +34,16 @@ namespace Triband.Storey.Edit
             shown = Snapshot(Document);
         }
 
-        static List<(string, string, (double, double, double, double))> Snapshot(StoreyDocument d) =>
-            d.buildings.Select(b => (b.id, PrototypeJson.Write(b), Site.BoundsOf(b))).ToList();
+        static List<(string, string, (double, double, double, double), HashSet<string>)> Snapshot(StoreyDocument d) =>
+            d.buildings.Select(b => (b.id, PrototypeJson.Write(b), Site.BoundsOf(b), Linked(d, b))).ToList();
+
+        /// <summary>The buildings a bridge joins to b, either way: each builds a door for it, and b's builds it.</summary>
+        static HashSet<string> Linked(StoreyDocument d, BuildingData b)
+        {
+            var o = new HashSet<string>(b.bridges.Select(x => x.to), StringComparer.Ordinal);
+            foreach (var a in d.buildings) if (a.bridges.Any(x => x.to == b.id)) o.Add(a.id);
+            return o;
+        }
 
         /// <summary>After editing <see cref="Document"/> in place: the new text and what changed.</summary>
         public SessionChange Commit() => Diff(Document);
@@ -62,6 +70,7 @@ namespace Triband.Storey.Edit
                 foreach (int i in changed)
                 {
                     c.rebuild.Add(now[i].Item1);
+                    foreach (var id in now[i].Item4.Concat(shown[i].linked)) c.rebuild.Add(id);
                     for (int j = 0; j < now.Count; j++)
                         if (j != i && (Touch(now[j].Item3, now[i].Item3) || Touch(now[j].Item3, shown[i].bounds) || Touch(shown[j].bounds, shown[i].bounds)))
                             c.rebuild.Add(now[j].Item1);

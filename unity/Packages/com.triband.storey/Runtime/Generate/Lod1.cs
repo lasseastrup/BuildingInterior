@@ -42,12 +42,13 @@ namespace Triband.Storey.Generate
                         foreach (var o in ops)
                         {
                             Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, o.door ? C.door : C.glassDark, false);
-                            if (o.door) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
+                            if (o.door && !o.bare) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
                         }
                         if (!party) L0.PieceStrips(op, k, F, m, pc, ops, y, h, C);
                     }
                 }
                 Details.Build(op, site, b, k, C, 1);
+                foreach (var br in b.bridges) if (br.k == k && Bridges.Span(site, b, br) is BridgeSpan bs) Bridges.Build(op, null, null, bs, C);
                 foreach (var v in b.voids)
                 {
                     if (Courtyards.WallsAt(b, v, k)) Courtyards.Walls(op, null, null, b, v, k, C);

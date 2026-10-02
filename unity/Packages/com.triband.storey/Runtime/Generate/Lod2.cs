@@ -233,6 +233,20 @@ namespace Triband.Storey.Generate
                     Flat(new List<List<Vec2>> { ring }, y0, 2, false);
                 }
             }
+            // bridges this building builds: a plain box from the deck's underside to the roof (or the rails' top)
+            foreach (var br in b.bridges)
+            {
+                if (!(Bridges.Span(site, b, br) is BridgeSpan s)) continue;
+                if (courtSlot < 0) courtSlot = Row(L0.At(N).C);
+                slot = courtSlot;
+                double hw = s.W / 2, y0 = -Bridges.Deck, y1 = br.open ? 1.02 : Bridges.Inside + Bridges.Roof; var F = s.F;
+                P3 At(double a, double o, double dy) => F.At(a, s.Y(a) + dy, o);
+                var up = new P3(-s.Slope * s.u.x, 1, -s.Slope * s.u.z).Normalized; var lft = new P3(s.w.x, 0, s.w.z);
+                Quad(new[] { At(0, -hw, y1), At(s.sLeft, -hw, y1), At(s.sRight, hw, y1), At(0, hw, y1) }, up, ZZ, 0, 2);
+                Quad(new[] { At(0, -hw, y0), At(0, hw, y0), At(s.sRight, hw, y0), At(s.sLeft, -hw, y0) }, up * -1, ZZ, 0, 4);
+                Quad(new[] { At(0, hw, y0), At(0, hw, y1), At(s.sRight, hw, y1), At(s.sRight, hw, y0) }, lft, ZZ, 0, 4);
+                Quad(new[] { At(0, -hw, y0), At(s.sLeft, -hw, y0), At(s.sLeft, -hw, y1), At(0, -hw, y1) }, lft * -1, ZZ, 0, 4);
+            }
             return M;
         }
     }

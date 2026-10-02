@@ -16,6 +16,8 @@ namespace Triband.Storey.Generate
         readonly Dictionary<string, BuildingData> byId = new Dictionary<string, BuildingData>(StringComparer.Ordinal);
         readonly Dictionary<(int, int), List<BuildingData>> grid = new Dictionary<(int, int), List<BuildingData>>();
         internal readonly Dictionary<string, Dictionary<string, List<Party.Range>>> partyMemo = new Dictionary<string, Dictionary<string, List<Party.Range>>>(StringComparer.Ordinal);
+        internal readonly Dictionary<string, BridgeSpan?> bridgeMemo = new Dictionary<string, BridgeSpan?>(StringComparer.Ordinal);
+        readonly HashSet<string> bridged = new HashSet<string>(StringComparer.Ordinal);
         const double BGRID = 32;
 
         public Site(List<BuildingData> buildings)
@@ -25,6 +27,7 @@ namespace Triband.Storey.Generate
             {
                 var b = buildings[i];
                 index[b.id] = i; byId[b.id] = b;
+                foreach (var br in b.bridges) bridged.Add(br.to);
                 var bb = BoundsOf(b);
                 for (int gx = (int)Math.Floor(bb.x0 / BGRID); gx <= (int)Math.Floor(bb.x1 / BGRID); gx++)
                     for (int gz = (int)Math.Floor(bb.z0 / BGRID); gz <= (int)Math.Floor(bb.z1 / BGRID); gz++)
@@ -36,6 +39,9 @@ namespace Triband.Storey.Generate
         }
 
         public int IndexOf(BuildingData b) => index[b.id];
+
+        /// <summary>Some building has a bridge to this one.</summary>
+        public bool Bridged(string id) => bridged.Contains(id);
         public BuildingData? ById(string id) => byId.TryGetValue(id, out var b) ? b : null;
 
         /// <summary>World bounding box of every outline of a building.</summary>

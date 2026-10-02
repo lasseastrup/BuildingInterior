@@ -11,6 +11,8 @@ namespace Triband.Storey.Generate
         public MeshBuilder Glass = null!;
         /// <summary>Collision segments per storey (index = floor; the last entry is the roof).</summary>
         public List<List<Seg>> Segs = new List<List<Seg>>();
+        /// <summary>Collision segments outside the storeys (a bridge's sides), each with the heights it stands between.</summary>
+        public List<(Seg s, double y0, double y1)> Extra = new List<(Seg, double, double)>();
     }
 
     /// <summary>
@@ -73,6 +75,7 @@ namespace Triband.Storey.Generate
                 if (k < N)
                 {
                     FacadeStorey(op, gl, sg, k, g); Details.Build(op, site, b, k, g.C, 0);
+                    foreach (var br in b.bridges) if (br.k == k && Bridges.Span(site, b, br) is BridgeSpan bs) Bridges.Build(op, gl, r.Extra, bs, g.C);
                     foreach (var v in b.voids) if (Courtyards.WallsAt(b, v, k)) Courtyards.Walls(op, gl, sg, b, v, k, g.C);
                     if (!sh) { Interior(op, sg, k, g.C); foreach (var v in b.voids) if (Courtyards.RailsAt(b, v, k)) Courtyards.Rails(op, sg, b, v, k, g.C); }
                 }

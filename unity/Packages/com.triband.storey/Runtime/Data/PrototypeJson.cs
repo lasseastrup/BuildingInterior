@@ -124,7 +124,14 @@ namespace Triband.Storey
                 b.voids.Add(new VoidData { id = c.Str(vo, "id", "", vp), kind = c.Enum<VoidKind>(vo, "kind", VoidKind.Courtyard, vp), shape = c.Points(vo, "shape", vp), bottom = c.Int(vo, "bottom", 0, vp) });
                 c.Check(vo, vp, "id", "kind", "shape", "bottom");
             }
-            c.Check(o, path, "id", "name", "pos", "footprint", "floors", "shafts", "entrances", "details", "blank", "groundHeight", "floorHeight", "interior", "style", "gen", "voids");
+            i = 0;
+            foreach (var bb in c.Array(o, "bridges", path))
+            {
+                var bo = c.Obj(bb, $"{path}.bridges[{i}]"); var bp = $"{path}.bridges[{i++}]";
+                b.bridges.Add(new BridgeData { id = c.Str(bo, "id", "", bp), to = c.Str(bo, "to", "", bp), k = c.Int(bo, "k", 1, bp), at = c.Point(bo, "at", bp), toK = c.Int(bo, "toK", 1, bp), width = c.Num(bo, "width", 2.4, bp), open = c.Bool(bo, "open", false, bp) });
+                c.Check(bo, bp, "id", "to", "k", "at", "toK", "width", "open");
+            }
+            c.Check(o, path, "id", "name", "pos", "footprint", "floors", "shafts", "entrances", "details", "blank", "groundHeight", "floorHeight", "interior", "style", "gen", "voids", "bridges");
             return b;
         }
 
@@ -283,6 +290,12 @@ namespace Triband.Storey
                 var vs = new List<object?>();
                 foreach (var v in b.voids) vs.Add(new Dictionary<string, object?> { ["id"] = v.id, ["kind"] = Lower(v.kind), ["shape"] = Pts(v.shape), ["bottom"] = v.bottom });
                 o["voids"] = vs;
+            }
+            if (b.bridges.Count > 0)
+            {
+                var bs = new List<object?>();
+                foreach (var br in b.bridges) bs.Add(new Dictionary<string, object?> { ["id"] = br.id, ["to"] = br.to, ["k"] = br.k, ["at"] = Pt(br.at), ["toK"] = br.toK, ["width"] = br.width, ["open"] = br.open });
+                o["bridges"] = bs;
             }
             return o;
         }

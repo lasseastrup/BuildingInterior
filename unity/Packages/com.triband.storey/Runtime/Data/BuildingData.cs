@@ -65,6 +65,28 @@ namespace Triband.Storey
         public bool gen;
         /// <summary>Courtyards and atria: openings through the storeys from <see cref="VoidData.bottom"/> up. Storey's own.</summary>
         public List<VoidData> voids = new List<VoidData>();
+        /// <summary>Bridges from this building's walls to other buildings'. Storey's own.</summary>
+        public List<BridgeData> bridges = new List<BridgeData>();
+    }
+
+    /// <summary>
+    /// A bridge: from a point on this building's wall on storey <see cref="k"/>, straight out to building <see cref="to"/>'s
+    /// wall facing it, on that building's storey <see cref="toK"/>, with a door at each end. Storey's own.
+    /// </summary>
+    public sealed class BridgeData
+    {
+        public string id = "";
+        /// <summary>The building it goes to (its id).</summary>
+        public string to = "";
+        /// <summary>The storey it leaves from, and where on that storey's outline (building-local; the nearest wall within 1 m).</summary>
+        public int k;
+        public Vec2 at;
+        /// <summary>The storey of the building it goes to that it arrives on.</summary>
+        public int toK;
+        /// <summary>Width in metres, rail to rail.</summary>
+        public double width = 2.4;
+        /// <summary>Open: a deck with rails. Otherwise enclosed: glass sides and a roof.</summary>
+        public bool open;
     }
 
     /// <summary>

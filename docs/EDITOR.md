@@ -185,3 +185,30 @@ Engine-free: `Courtyards`, `Voids`, `VoidData` (`CourtyardTests`).
 3. Switch it to an atrium: rails on the floors above, and a skylight on the roof.
 4. Set the roof to Hip: the courtyard is a light well through it.
 5. Try to place stairs in it, or push an outside wall into it: both are refused.
+
+### 6.4 Bridges between buildings
+
+The **Bridge** tool in the Facade tab adds a bridge:
+- Click an upper floor's wall. The bridge goes straight out from it to the first building whose wall faces back within 15°, and arrives on that building's floor nearest this one's.
+- A ghost shows it before you click. A click that can't make one says why: no wall faces this one, too long (at most 40 m), too steep (at most 1 in 5), another building in the way, or a bridge already there.
+- A door opens at each end. If the two floors are at different heights, the bridge ramps between them.
+- Click a bridge's door, on either building, to remove it.
+
+**Bridges** in the Facade tab lists every bridge from or to the building. For each you can set **Enclosed** (glass sides with mullions, and a roof) or **Open** (a deck with rails), and its width (1.5 to 4 m).
+- The building the bridge leaves from builds it, in every LOD: LOD2 shows it as a plain box.
+- Moving either building rebuilds both. The bridge follows as long as the walls still face each other.
+- A bridge that no longer meets the other building shows a warning there, with *Remove*.
+- Deleting a building removes the bridges to it. A duplicated building has no bridges.
+
+**In play:** walk from one building's floor across to the other's. The sides hold you, and the colliders have its deck and roof.
+
+Layouts with bridges are Storey's own (`"bridges"`).
+
+Engine-free: `Bridges`, `BridgeEdits`, `BridgeData` (`BridgeTests`).
+
+**Checks:**
+1. Two buildings facing each other across a street. Pick Bridge and hover floor 2's wall: the ghost spans the street. Click: a glass bridge, with a door at each end.
+2. Set the second building's upper storeys taller: the bridge ramps.
+3. Switch it to Open, and change the width.
+4. Move the second building along the street: the bridge follows. Move it round the corner: the bridge warns that it no longer meets.
+5. Click its door to remove it.

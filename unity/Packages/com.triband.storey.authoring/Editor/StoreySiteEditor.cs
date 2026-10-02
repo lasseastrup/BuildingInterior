@@ -21,7 +21,7 @@ namespace Triband.Storey.Editor
     {
         static readonly string[] TabNames = { "Shape", "Facade", "Interior" };
         static readonly string[] ShapeKeys = { "rect", "L", "U", "T", "oct" }, ShapeLabels = { "Rect", "L", "U", "T", "Octa" };
-        static readonly (string tool, string label)[] FacadeTools = { ("entrance", "Entrance"), ("blank", "Blank wall"), ("ac", "AC unit"), ("vent", "Vent"), ("dish", "Dish"), ("escape", "Fire escape"), ("awning", "Awning") };
+        static readonly (string tool, string label)[] FacadeTools = { ("entrance", "Entrance"), ("blank", "Blank wall"), ("ac", "AC unit"), ("vent", "Vent"), ("dish", "Dish"), ("escape", "Fire escape"), ("awning", "Awning"), ("bridge", "Bridge") };
         static readonly string[] InteriorTools = { "Select", "Wall", "Door", "Erase", "Stairs", "Lift" };
         string? message;
 
@@ -379,6 +379,39 @@ namespace Triband.Storey.Editor
                     if (on != (v.facadeTool == tool)) { v.facadeTool = on ? tool : ""; if (on) StoreyToolContext.Show(StoreyTab.Facade); SceneView.RepaintAll(); }
                 }
             }
+            if (v.facadeTool == "bridge") EditorGUILayout.HelpBox("Click an upper floor's wall: a bridge goes straight out to the building facing it, to its floor nearest this one. Click a bridge's door to remove it.", MessageType.None);
+            BridgeList(e, b);
+        }
+
+        /// <summary>The bridges from and to this building: enclosed or open, their width, and removing them.</summary>
+        void BridgeList(StoreyEdit e, BuildingData b)
+        {
+            var site = new Site(e.Document.buildings);
+            var spans = Bridges.Touching(site, b);
+            var dangling = b.bridges.Where(x => Bridges.Span(site, b, x) == null).ToList();
+            if (spans.Count == 0 && dangling.Count == 0) return;
+            EditorGUILayout.LabelField("Bridges", EditorStyles.boldLabel);
+            foreach (var s in spans)
+            {
+                bool own = ReferenceEquals(s.A, b); var other = own ? s.B : s.A; string owner = s.A.id, id = s.br.id;
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField($"{Floor(b, own ? s.br.k : s.br.toK)} ↔ {other.name}, {Floor(other, own ? s.br.toK : s.br.k)} · {s.L:0.0} m", GUILayout.MinWidth(120));
+                    int kind = GUILayout.Toolbar(s.br.open ? 1 : 0, new[] { "Enclosed", "Open" }, GUILayout.Width(130));
+                    if (kind != (s.br.open ? 1 : 0)) e.Apply(kind == 1 ? "Bridge opened" : "Bridge enclosed", d => { var br = d.buildings.First(x => x.id == owner).bridges.First(x => x.id == id); br.open = kind == 1; return true; });
+                    if (GUILayout.Button(new GUIContent("×", "Remove the bridge"), EditorStyles.miniButton, GUILayout.Width(22))) { e.Apply("Bridge removed", d => BridgeEdits.Remove(d.buildings.First(x => x.id == owner), id)); return; }
+                }
+                EditorGUI.BeginChangeCheck();
+                float w = EditorGUILayout.Slider("   Width", (float)s.br.width, 1.5f, 4f);
+                if (EditorGUI.EndChangeCheck()) e.Apply("Bridge width", d => { d.buildings.First(x => x.id == owner).bridges.First(x => x.id == id).width = Math.Round(w * 10) / 10; return true; });
+            }
+            foreach (var br in dangling)
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    string id = br.id, bid = b.id;
+                    EditorGUILayout.HelpBox($"A bridge from {Floor(b, br.k)} no longer meets {site.ById(br.to)?.name ?? "the building it went to"}.", MessageType.Warning);
+                    if (GUILayout.Button("Remove", GUILayout.Width(64))) { e.Apply("Bridge removed", d => BridgeEdits.Remove(d.buildings.First(x => x.id == bid), id)); return; }
+                }
         }
 
         void Presets(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)

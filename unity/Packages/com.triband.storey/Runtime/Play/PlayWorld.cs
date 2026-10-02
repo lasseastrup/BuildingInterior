@@ -30,9 +30,14 @@ namespace Triband.Storey.Play
         {
             Site = site;
             // the prototype's grid: every building in the cells its outlines' box touches, grown by a metre, in layout order
+            // (and its bridges' decks: the building that builds a bridge holds its collision)
             foreach (var b in site.Buildings)
             {
-                var bb = BboxAll(b); bboxAll[b.id] = bb;
+                var bb = BboxAll(b);
+                foreach (var br in b.bridges)
+                    if (Bridges.Span(site, b, br) is BridgeSpan s)
+                        foreach (var c in Bridges.Corners(s)) bb = (Math.Min(bb.x0, c.x - b.pos.x), Math.Min(bb.z0, c.z - b.pos.z), Math.Max(bb.x1, c.x - b.pos.x), Math.Max(bb.z1, c.z - b.pos.z));
+                bboxAll[b.id] = bb;
                 for (int gx = (int)Math.Floor((bb.x0 + b.pos.x - 1) / BGRID); gx <= (int)Math.Floor((bb.x1 + b.pos.x + 1) / BGRID); gx++)
                     for (int gz = (int)Math.Floor((bb.z0 + b.pos.z - 1) / BGRID); gz <= (int)Math.Floor((bb.z1 + b.pos.z + 1) / BGRID); gz++)
                     {
@@ -129,6 +134,8 @@ namespace Triband.Storey.Play
             double best = y + StepUp >= 0 ? 0 : -1e9;
             foreach (var b in Near(x, z, Dim.T_EXT + 0.05))
             {
+                foreach (var br in b.bridges)
+                    if (Bridges.Span(Site, b, br) is BridgeSpan bs && Bridges.DeckAt(bs, x, z) is double dy && dy <= y + StepUp && dy > best) best = dy;
                 double lx = x - b.pos.x, lz = z - b.pos.z;
                 bool On(List<Vec2> fp) => Geo.Pip(fp, lx, lz) || DistToEdges(fp, lx, lz) <= Dim.T_EXT + 0.02;
                 if (!Party.Tiers(b).Any(t => On(Derived.OutlineAt(b, t.k0)))) continue;
@@ -188,8 +195,9 @@ namespace Triband.Storey.Play
                 var bb = bboxAll[b.id];
                 if (px < bb.x0 + b.pos.x - 3 || px > bb.x1 + b.pos.x + 3 || pz < bb.z0 + b.pos.z - 3 || pz > bb.z1 + b.pos.z + 3) continue;
                 if (y > Derived.RoofY(b) + 2) continue;
-                var st = Lod0Of(b).Segs; int k = FloorAtY(b, y);
+                var l0 = Lod0Of(b); var st = l0.Segs; int k = FloorAtY(b, y);
                 if (k < st.Count) segs.AddRange(st[k]);
+                foreach (var (s, y0, y1) in l0.Extra) if (y >= y0 && y <= y1) segs.Add(s);   // a bridge's sides
             }
             for (int it = 0; it < 4; it++)
                 foreach (var s in segs)

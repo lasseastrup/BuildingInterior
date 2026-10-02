@@ -42,6 +42,7 @@ namespace Triband.Storey.Play
             m.Floors(b);
             m.Stairs(b);
             m.PitchedRoof(site, b);
+            m.Bridged(site, b, l0);
             return m;
         }
 
@@ -191,6 +192,25 @@ namespace Triband.Storey.Play
         }
 
         // ---- pitched roofs ----
+
+        /// <summary>The bridges this building builds: the deck to walk on, an enclosed one's roof, and their sides.</summary>
+        void Bridged(Site site, BuildingData b, Lod0Result l0)
+        {
+            foreach (var br in b.bridges)
+            {
+                if (!(Bridges.Span(site, b, br) is BridgeSpan s)) continue;
+                double hw = s.W / 2; var F = s.F; var up = new P3(-s.Slope * s.u.x, 1, -s.Slope * s.u.z).Normalized;
+                int Q(double a, double o, double dy) { var p = F.At(a, s.Y(a) + dy, o); return V(p.x, p.y, p.z); }
+                void Top(double dy, CollisionKind kind)
+                {
+                    int a = Q(0, -hw, dy), c = Q(s.sLeft, -hw, dy), d = Q(s.sRight, hw, dy), e = Q(0, hw, dy);
+                    Tri(a, c, d, up, kind); Tri(a, d, e, up, kind);
+                }
+                Top(0, CollisionKind.Floor);
+                if (!br.open) Top(Bridges.Inside + Bridges.Roof, CollisionKind.Roof);
+            }
+            foreach (var (seg, y0, y1) in l0.Extra) Box(seg, y0, y1);
+        }
 
         void PitchedRoof(Site site, BuildingData b)
         {
