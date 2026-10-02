@@ -31,9 +31,9 @@ namespace Triband.ColorPipeline.Runtime
     public class ColorPaletteDefinition
     {
         public static ColorPaletteDefinition Instance => null;
+        public System.Collections.Generic.List<ColorDefinition> Colors => null;
         public bool TryGetColor(SerializableGUID guid, out ColorDefinition colorDefinition) { colorDefinition = null; return false; }
         public int GetIndexOfColor(SerializableGUID id) => 0;
-        public SerializableGUID GetIDOfClosestColor(UnityEngine.Color originalColor) => default;
     }
 
     public struct ColorRemapDescriptor

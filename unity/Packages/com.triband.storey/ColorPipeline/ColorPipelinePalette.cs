@@ -65,9 +65,23 @@ namespace Triband.Storey.ColorPipeline
                 Warn(colorRef, $"Storey: palette colour {colorRef} is not in the Color Pipeline palette (deleted?); showing palette colour 0.");
                 return 0;
             }
-            if (!ColorUtility.TryParseHtmlString(colorRef, out var c)) throw new FormatException($"\"{colorRef}\" is not a colour reference");
-            Warn(colorRef, $"Storey: {colorRef} is not mapped to the palette yet; showing the nearest palette colour until it is.");
-            return palette.GetIndexOfColor(palette.GetIDOfClosestColor(c));
+            if (!ColorUtility.TryParseHtmlString(colorRef, out _)) throw new FormatException($"\"{colorRef}\" is not a colour reference");
+            // the editor conforms layouts as they are edited; a layout never opened since shows what conforming would pick
+            var near = PaletteMatch.Nearest(colorRef, Entries(palette));
+            if (near == null) return 0;
+            Warn(colorRef, $"Storey: {colorRef} is not a palette colour; showing the nearest, {near.Value.entry.name}. Open the layout for editing to match it for good.");
+            return palette.GetIndexOfColor(Guid(near.Value.entry.id));
+        }
+
+        /// <summary>
+        /// The palette for <see cref="PaletteMatch"/>, in the palette's order (the first of equally near entries wins, as
+        /// in Color Pipeline's Model Remapper).
+        /// </summary>
+        public static List<PaletteColor> Entries(ColorPaletteDefinition palette)
+        {
+            var list = new List<PaletteColor>(palette.Colors.Count);
+            foreach (var def in palette.Colors) list.Add(new PaletteColor(IdOf(def.ID), def.Name, def.Color.r, def.Color.g, def.Color.b));
+            return list;
         }
 
         public int RegisterRemap(IReadOnlyList<string> original, IReadOnlyList<string> overwrite)

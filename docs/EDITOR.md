@@ -54,7 +54,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
 - The **Storey Floors** overlay.
 - The site inspector with the building bar and the three tabs.
 - `FacadeStylePreset` assets.
-- The colour field hook, `StoreyColorField.Picker`. With Color Pipeline installed, `Triband.Storey.Editor.ColorPipeline` replaces it with Color Pipeline's picker and the suggestions from `StoreyColorSettings`.
+- The colour field hook, `StoreyColorField.Picker`. With Color Pipeline installed, `Triband.Storey.Editor.ColorPipeline` replaces it with Color Pipeline's picker and the suggestions from `StoreyColorSettings`. It also installs `StoreyColorField.Conform`, so every edit ends with palette colours only (docs/COLOURS.md §3.8).
 
 **Where this differs from the plan, for now:**
 - The inspector is IMGUI, not UI Toolkit. It is rebuilt from the layout on every draw, which keeps it simple while the fields settle; moving it to UI Toolkit later changes no data.
@@ -77,6 +77,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Each drag is one undo step.
 3. **Facade:**
    - Presets (they keep the roof), windows, the three colours (Color Pipeline's picker if installed), the roof fields on the top style only.
+   - With Color Pipeline: a preset or a new building shows palette names, never "not a palette colour", and the Console lists each colour that was matched. Opening the demo street for editing matches its colours as one undo step.
    - Give a setback its own style.
    - Entrance and Blank wall, then each detail: ghosts in orange (add) or green (remove), and refusals as a notification.
    - Save as preset…, then apply the asset to another building.

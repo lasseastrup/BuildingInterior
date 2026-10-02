@@ -27,6 +27,13 @@ namespace Triband.Storey.Editor
         /// <summary>The installed picker; Color Pipeline's replaces the default when its package is present.</summary>
         public static IStoreyColorPicker Picker { get; set; } = new HexPicker();
 
+        /// <summary>
+        /// Keeps a layout inside the palette: replaces every colour the palette lacks with its nearest entry and says what
+        /// it changed. Run after every edit and when an edit opens (<c>StoreyEdit</c>). Null without a palette to keep to;
+        /// Color Pipeline's integration installs <see cref="PaletteConform.Apply"/> over its palette.
+        /// </summary>
+        public static Func<StoreyDocument, List<ConformedColor>>? Conform { get; set; }
+
         sealed class HexPicker : IStoreyColorPicker
         {
             public string? Draw(string key, string label, string value, string field, Func<string, PaletteEntry?> lookup)

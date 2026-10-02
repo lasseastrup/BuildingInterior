@@ -52,7 +52,8 @@ def main(palette_path, layout_path, out_path):
         L = lab(*(int(h[i:i + 2], 16) for i in (1, 3, 5)))
         best, bd = None, 1e9
         for e in entries:
-            d = sum((a - b) ** 2 for a, b in zip(L, e['lab'])) ** 0.5
+            # the Model Remapper's rule (PaletteMatch.Nearest): ΔE rounded half to even, the first of equals wins
+            d = round(sum((a - b) ** 2 for a, b in zip(L, e['lab'])) ** 0.5)
             if d < bd: best, bd = e, d
         return best, bd
 
@@ -74,8 +75,8 @@ def main(palette_path, layout_path, out_path):
     print(f'{len(chosen)} colours mapped to {len(used)} entries of {len(entries)}; written to {out_path}')
     print(f"{'layout':8}  {'entry':14} {'hex':8} {'dE':>5} {'similar':>7}  used for")
     for h, (e, d) in sorted(chosen.items(), key=lambda kv: -kv[1][1]):
-        sim = max(0.0, 1 - round(d) / 255) * 100                     # GetColorSimilarity, as the Remapper shows it
-        print(f"{h:8}  {e['name'][:14]:14} {e['hex']:8} {d:5.1f} {sim:6.1f}%  {', '.join(sorted(uses[h]))}")
+        sim = max(0.0, 1 - d / 255) * 100                     # GetColorSimilarity, as the Remapper shows it
+        print(f"{h:8}  {e['name'][:14]:14} {e['hex']:8} {d:5d} {sim:6.1f}%  {', '.join(sorted(uses[h]))}")
 
 
 if __name__ == '__main__':

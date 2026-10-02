@@ -19,7 +19,17 @@ namespace Triband.Storey.Editor.ColorPipeline
     [InitializeOnLoad]
     internal sealed class ColorPipelinePicker : IStoreyColorPicker
     {
-        static ColorPipelinePicker() => StoreyColorField.Picker = new ColorPipelinePicker();
+        static ColorPipelinePicker()
+        {
+            StoreyColorField.Picker = new ColorPipelinePicker();
+            StoreyColorField.Conform = d =>
+            {
+                ColorPaletteDefinition palette;
+                try { palette = ColorPaletteDefinition.Instance; }
+                catch (Exception) { return new List<ConformedColor>(); }   // no palette yet: nothing to keep to
+                return palette == null ? new List<ConformedColor>() : PaletteConform.Apply(d, ColorPipelinePalette.Entries(palette));
+            };
+        }
 
         // Color Pipeline's picker answers later, from its own window: the choice waits here for the field's next draw
         readonly Dictionary<string, string> picked = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -36,7 +46,7 @@ namespace Triband.Storey.Editor.ColorPipeline
             bool isId = ColorRef.IsPaletteId(value);
             if (isId && palette.TryGetColor(ColorPipelinePalette.Guid(value), out var d)) { def = d; c = d.Color; name = d.Name; }
             else if (isId) { var e = lookup(value); ColorUtility.TryParseHtmlString(e?.hex ?? "#FF00FF", out c); name = (e?.name ?? value) + " (not in the palette)"; }
-            else { ColorUtility.TryParseHtmlString(value, out c); name = value + " (not a palette colour yet)"; }
+            else { ColorUtility.TryParseHtmlString(value, out c); name = value + " (matched to the palette on the next edit)"; }
 
             using (new EditorGUILayout.HorizontalScope())
             {
