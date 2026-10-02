@@ -243,7 +243,6 @@ namespace UnityEditor.EditorTools
 
     public abstract class EditorToolContext : ScriptableObject
     {
-        public virtual bool overridesDefaultSelection => false;
         public virtual void OnActivated() { }
         protected virtual System.Type GetEditorToolType(Tool tool) => null;
     }
