@@ -122,12 +122,43 @@ namespace Triband.Storey.Unity
             StoreyGlobals.SetActive(active, active >= 0 ? v.clipY : 1e9f);
             if (active >= 0 && v.cut) { StoreyGlobals.SetCamera(v.camera, v.focus, v.cameraDir); StoreyGlobals.SetCut(true, v.stubHeight, v.cutBase, v.cutTop, v.clipY); }
             else StoreyGlobals.SetCut(false, 1, 0, 0, active >= 0 ? v.clipY : 1e9f);
+            EditCutaway(active >= 0 && v.cut ? v.activeId : null, v);
             int iso = v.isolateId != null ? TableIndexOf(v.isolateId) : -1;
             StoreyGlobals.SetIsolate(iso >= 0 ? 1 : 0, iso);
             StoreyGlobals.SetOcclusion(StoreyGlobals.OcclusionMode.Off, Vector3.zero, 2.4f);
             StoreyGlobals.SetCap(new Color(0.23f, 0.25f, 0.24f));
             palette.Bind();
             table.Upload();
+        }
+
+        readonly List<int> editCut = new List<int>();
+
+        /// <summary>
+        /// The editor's cutaway (the Interior tab): every wall has an id, so the shader drops a wall by its slide value,
+        /// which only the occlusion system animates in Play mode. Here each wall of the edited building, and each party wall
+        /// a neighbour shares with it, is down or up at once by the same test.
+        /// </summary>
+        void EditCutaway(string? activeId, SiteView v)
+        {
+            foreach (int id in editCut) table.Wall[id] = 0;
+            bool changed = editCut.Count > 0; editCut.Clear();
+            var act = activeId != null && site != null ? site.ById(activeId) : null;
+            if (act != null)
+            {
+                int ai = site!.IndexOf(act);
+                foreach (var bt in built)
+                {
+                    if (bt.Value.l0 == null || bt.Value.wallBase < 0) continue;
+                    var walls = bt.Value.l0.Op.Walls; bool own = bt.Key == act.id;
+                    for (int i = 0; i < walls.Count; i++)
+                    {
+                        if (!own && (walls[i].K < 8 || (walls[i].K >> 3) - 1 != ai)) continue;
+                        if (!global::Triband.Storey.Occlusion.OcclusionCore.WallBlocks(walls[i].W, v.camera.x, v.camera.z, v.focus.x, v.focus.z)) continue;
+                        int id = bt.Value.wallBase + i; table.Wall[id] = 1; editCut.Add(id); changed = true;
+                    }
+                }
+            }
+            if (changed) table.MarkWallDirty();
         }
 
         /// <summary>
@@ -151,9 +182,15 @@ namespace Triband.Storey.Unity
 
             var l0 = Lod0.Build(site!, b); bt.l0 = l0;
             bt.wallCount = l0.Op.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
-            Add(bt, "LOD0", MeshUpload.Upload(Tagged(l0.Op, bt.idx), b.name + " LOD0", RowOf, bt.wallBase), opaque, true);
-            Add(bt, "LOD0 glass", MeshUpload.Upload(Tagged(l0.Glass, bt.idx), b.name + " glass", RowOf, bt.wallBase), glass, false);
-            Add(bt, "LOD1", MeshUpload.Upload(Tagged(Lod1.Build(site!, b), bt.idx + Lod1.LOD_TAG), b.name + " LOD1", RowOf), opaque, true);
+            if (bt.wallBase >= 0)
+            {
+                for (int i = 0; i < bt.wallCount; i++) table.WallData[bt.wallBase + i] = MeshUpload.WallData(l0.Op.Walls[i].W);
+                table.MarkWallDataDirty();
+            }
+            bool opt = Application.isPlaying;   // edit mode rebuilds on every drag: skip the cache reorder there
+            Add(bt, "LOD0", MeshUpload.Upload(Tagged(l0.Op, bt.idx), b.name + " LOD0", RowOf, bt.wallBase, opt), opaque, true);
+            Add(bt, "LOD0 glass", MeshUpload.Upload(Tagged(l0.Glass, bt.idx), b.name + " glass", RowOf, bt.wallBase, opt), glass, false);
+            Add(bt, "LOD1", MeshUpload.Upload(Tagged(Lod1.Build(site!, b), bt.idx + Lod1.LOD_TAG), b.name + " LOD1", RowOf, -1, opt), opaque, true);
 
             var l2 = Lod2.Build(site!, b);
             var rowMap = new int[l2.Rows.Count];

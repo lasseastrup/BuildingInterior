@@ -58,6 +58,47 @@ namespace Triband.Storey.Generate
         public int Tris => I.Count / 3;
         public int Verts => P.Count;
 
+        /// <summary>
+        /// Merge vertices that are the same in every attribute (position, normal, colour, and the cutaway's wall, kind and
+        /// id), keeping the first of each, and rewrite the indices. Faces are flat-shaded, so only vertices of coplanar
+        /// faces of one colour ever meet; the generator already shares those within a polygon, this catches the rest.
+        /// Returns how many went. The triangles are unchanged.
+        /// </summary>
+        public int Weld()
+        {
+            int n = P.Count;
+            var map = new int[n]; var keep = new List<int>(n);
+            var seen = new Dictionary<VertexKey, int>(n);
+            for (int i = 0; i < n; i++)
+            {
+                var key = new VertexKey(P[i], N[i], C[i], Lean ? -1 : K[i], Lean ? -1 : WI[i]);
+                if (seen.TryGetValue(key, out int j)) { map[i] = j; continue; }
+                seen[key] = map[i] = keep.Count; keep.Add(i);
+            }
+            int gone = n - keep.Count;
+            if (gone == 0) return 0;
+            var p = keep.ConvertAll(i => P[i]); var nn = keep.ConvertAll(i => N[i]); var c = keep.ConvertAll(i => C[i]);
+            P.Clear(); P.AddRange(p); N.Clear(); N.AddRange(nn); C.Clear(); C.AddRange(c);
+            if (!Lean)
+            {
+                var w = new List<double>(keep.Count * 4); foreach (int i in keep) { w.Add(W[i * 4]); w.Add(W[i * 4 + 1]); w.Add(W[i * 4 + 2]); w.Add(W[i * 4 + 3]); }
+                var k = keep.ConvertAll(i => K[i]); var wi = keep.ConvertAll(i => WI[i]);
+                W.Clear(); W.AddRange(w); K.Clear(); K.AddRange(k); WI.Clear(); WI.AddRange(wi);
+            }
+            for (int t = 0; t < I.Count; t++) I[t] = map[I[t]];
+            return gone;
+        }
+
+        /// <summary>A vertex's identity for <see cref="Weld"/>. The wall id stands for the wall data: one id, one wall.</summary>
+        readonly struct VertexKey : IEquatable<VertexKey>
+        {
+            readonly double px, py, pz, nx, ny, nz; readonly Swatch c; readonly int k, wi;
+            public VertexKey(P3 p, P3 n, Swatch c, int k, int wi) { px = p.x; py = p.y; pz = p.z; nx = n.x; ny = n.y; nz = n.z; this.c = c; this.k = k; this.wi = wi; }
+            public bool Equals(VertexKey o) => px == o.px && py == o.py && pz == o.pz && nx == o.nx && ny == o.ny && nz == o.nz && k == o.k && wi == o.wi && c.Equals(o.c);
+            public override bool Equals(object? o) => o is VertexKey v && Equals(v);
+            public override int GetHashCode() => HashCode.Combine(px, py, pz, nx, ny, nz, c, HashCode.Combine(k, wi));
+        }
+
         /// <summary>Set the cutaway context for what follows. A wall (kind 1) gets an id so it can slide.</summary>
         public MeshBuilder Ctx(double[]? w, int k)
         {

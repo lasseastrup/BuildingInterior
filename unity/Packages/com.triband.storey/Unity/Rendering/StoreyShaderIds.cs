@@ -9,6 +9,7 @@ namespace Triband.Storey.Unity
         public static readonly int State = Shader.PropertyToID("_StoreyState");
         public static readonly int Occ = Shader.PropertyToID("_StoreyOcc");
         public static readonly int Wall = Shader.PropertyToID("_StoreyWall");
+        public static readonly int WallData = Shader.PropertyToID("_StoreyWallData");
         public static readonly int Params = Shader.PropertyToID("_StoreyParams");
         public static readonly int Cam = Shader.PropertyToID("_StoreyCam");
         public static readonly int Focus = Shader.PropertyToID("_StoreyFocus");

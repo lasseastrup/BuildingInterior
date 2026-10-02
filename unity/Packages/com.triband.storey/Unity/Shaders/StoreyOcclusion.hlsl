@@ -14,6 +14,8 @@ StructuredBuffer<float4> _StoreyState;
 StructuredBuffer<float4> _StoreyOcc;
 // how far each wall has slid down, by global wall id
 StructuredBuffer<float> _StoreyWall;
+// each wall's cutaway data, by global wall id: its start (xy) and its normal scaled by 1 + its length (zw)
+StructuredBuffer<float4> _StoreyWallData;
 
 #define STOREY_OCC_W 64
 #define STOREY_SLAB 0.25
@@ -140,7 +142,7 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
         {
             // no wall id: the instant test. Only if the sightline from the camera to the player crosses the wall
             // itself (plus room for the character's body), not just the wall's line
-            float nl = length(v.wall.zw); float2 n = v.wall.zw / nl;
+            float nl = max(length(v.wall.zw), 1e-6); float2 n = v.wall.zw / nl;   // no data: no test (sc and sp are both 0)
             float sc = dot(_StoreyCam.xz - v.wall.xy, n);
             float sp = dot(_StoreyFocus.xz - v.wall.xy, n);
             if (sc * sp < 0.0)

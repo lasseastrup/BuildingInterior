@@ -27,10 +27,10 @@ namespace Triband.Storey.Unity
             public float tag;
         }
 
+        /// <summary>LOD0's second stream: the cutaway kind and the global wall id. The wall's own data (start, normal scaled by 1 + length) is in the building table, by id.</summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct Cutaway
         {
-            public Vector4 wall;
             public float kind, wid;
         }
 
@@ -53,8 +53,10 @@ namespace Triband.Storey.Unity
         /// block (LOD0 only; the mesh's 1-based local ids are offset onto it; -1 = no ids). <paramref name="rowOf"/>
         /// gives the colour row of each style the swatches name (party walls name a neighbour's).
         /// </summary>
-        public static Mesh Upload(MeshBuilder gb, string name, Func<StyleRef, int> rowOf, int wallBase = -1)
+        /// <param name="optimize">Reorder for the GPU's vertex cache (<c>Mesh.Optimize</c>): worth it for meshes that stay; the editor's previews, rebuilt on every drag, skip it.</param>
+        public static Mesh Upload(MeshBuilder gb, string name, Func<StyleRef, int> rowOf, int wallBase = -1, bool optimize = false)
         {
+            gb.Weld();
             int nv = gb.Verts;
             var mesh = new Mesh { name = name, indexFormat = nv > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
             var layout = gb.Lean
@@ -71,9 +73,7 @@ namespace Triband.Storey.Unity
                     new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
                     new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4),
                     new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 1),
-                    new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 4, 1),
-                    new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, 1, 1),
-                    new VertexAttributeDescriptor(VertexAttribute.TexCoord3, VertexAttributeFormat.Float32, 1, 1),
+                    new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, 2, 1),   // kind, wall id: 28 bytes a vertex, not 44
                 };
             mesh.SetVertexBufferParams(nv, layout);
             var verts = new Vertex[nv];
@@ -94,15 +94,19 @@ namespace Triband.Storey.Unity
                 for (int i = 0; i < nv; i++)
                 {
                     int wi = gb.WI[i];
-                    cut[i] = new Cutaway { wall = new Vector4((float)gb.W[i * 4], (float)gb.W[i * 4 + 1], (float)gb.W[i * 4 + 2], (float)gb.W[i * 4 + 3]), kind = gb.K[i], wid = wi > 0 && wallBase >= 0 ? wallBase + wi - 1 : 0 };
+                    cut[i] = new Cutaway { kind = gb.K[i], wid = wi > 0 && wallBase >= 0 ? wallBase + wi - 1 : 0 };
                 }
                 mesh.SetVertexBufferData(cut, 0, 0, nv, 1, flags);
             }
             SetIndices(mesh, gb.I, nv, flags);
             mesh.bounds = bounds;
+            if (optimize) mesh.Optimize();
             mesh.UploadMeshData(true);
             return mesh;
         }
+
+        /// <summary>A wall's cutaway data as the shader reads it from the table: its start (x, z) and its normal scaled by 1 + its length.</summary>
+        public static Vector4 WallData(double[] w) => new Vector4((float)w[0], (float)w[1], (float)w[2], (float)w[3]);
 
         /// <summary>The LOD2 massing mesh. <paramref name="rowBase"/> maps the mesh's local parameter rows onto table rows.</summary>
         public static Mesh Upload(Lod2Mesh m, string name, int[] rowMap)

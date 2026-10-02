@@ -5,10 +5,13 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Changed
+- LOD0 vertices are 28 bytes instead of 44. They carry only the cutaway kind and wall id; each wall's start and normal sit once in the building table (`_StoreyWallData`), and the shader reads them by id. On the demo street LOD0 goes from 4.6 to 3.1 MB.
+- `MeshUpload.Upload` welds exact duplicate vertices (`MeshBuilder.Weld`, about 1% of LOD0's; every triangle is unchanged), and calls `Mesh.Optimize` when asked. `SiteRenderer` asks in Play mode, not for the editor's previews.
 - `StoreyGlobals.SetOcclusion` takes the player's chest (world space) and the hole radius in metres. The shader projects the player itself, so Cutout and Fade hold on reversed-depth platforms and flipped render targets.
 - A building's row in the building table is its index in the layout, so party walls find their neighbour in the shader.
 
 ### Fixed
+- The editor's cutaway in the Interior tab. Every wall has an id, so the shader drops walls by their slide values, which only the occlusion system set (in Play mode). The site's renderer now drops the walls between the Scene view camera and the focus itself.
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added

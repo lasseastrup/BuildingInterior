@@ -44,9 +44,9 @@ struct Attributes
     float4 normalOS   : NORMAL;      // SNorm8 × 4
     float4 color      : COLOR;       // UNorm8 × 4 colour reference: row, slot, shade (unused by massing)
     float  tag        : TEXCOORD0;   // building index + 65536 × LOD
-    float4 wall       : TEXCOORD1;   // LOD0: cutaway wall data; massing: fac
-    float2 kind       : TEXCOORD2;   // LOD0: kind (x); massing: fac2
-    float  wid        : TEXCOORD3;   // LOD0: wall id; massing: parameter row
+    float4 wall       : TEXCOORD1;   // massing: fac (LOD0 has no such stream: its walls are in _StoreyWallData)
+    float2 kind       : TEXCOORD2;   // LOD0: kind, wall id; massing: fac2
+    float  wid        : TEXCOORD3;   // massing: parameter row
     UNITY_VERTEX_INPUT_INSTANCE_ID   // the GPU Resident Drawer draws through instancing: the object's matrix comes from its instance
 };
 
@@ -79,7 +79,9 @@ Varyings StoreyVert(Attributes IN)
 #ifdef STOREY_MASSING
     float kind = 0.0; float4 wall = 0; float wid = 0;
 #else
-    float kind = IN.kind.x; float4 wall = IN.wall; float wid = IN.wid;
+    // the wall's data by its id: one entry per wall, not 16 bytes on every vertex
+    float kind = IN.kind.x, wid = IN.kind.y;
+    float4 wall = wid > 0.5 ? _StoreyWallData[(int)(wid + 0.5)] : float4(0, 0, 0, 0);
 #endif
     float origY;
     worldPos = StoreySink(worldPos, IN.tag, kind, origY);

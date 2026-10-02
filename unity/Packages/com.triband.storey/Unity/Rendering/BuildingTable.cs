@@ -27,6 +27,8 @@ namespace Triband.Storey.Unity
         public readonly Vector4[] Occ = new Vector4[OccSlots * OccWidth];
         /// <summary>How far each wall has slid down, 0 up .. 1 down, by global wall id.</summary>
         public readonly float[] Wall = new float[WallIds];
+        /// <summary>Per wall id: the wall's start (x, z) and its normal scaled by 1 + its length, for the cutaway (written once, at upload).</summary>
+        public readonly Vector4[] WallData = new Vector4[WallIds];
         /// <summary>LOD2 parameter rows: wall, trim, glass, roof colours, window spec, run data.</summary>
         public readonly Vector4[] Params = new Vector4[ParamRows * ParamTexels];
         /// <summary>Colour rows: per style, the palette index of each slot and the remap row, 24 16-bit entries in 12 words.</summary>
@@ -34,8 +36,8 @@ namespace Triband.Storey.Unity
         /// <summary>Palette indices of facade-detail model colours (slots 24 and up). Empty until detail models exist.</summary>
         public readonly uint[] DetailColors = new uint[1];
 
-        readonly GraphicsBuffer state, occ, wall, prms, colors, details;
-        bool stateDirty = true, occDirty = true, wallDirty = true, paramsDirty = true, colorsDirty = true, detailsDirty = true;
+        readonly GraphicsBuffer state, occ, wall, wallData, prms, colors, details;
+        bool stateDirty = true, occDirty = true, wallDirty = true, wallDataDirty = true, paramsDirty = true, colorsDirty = true, detailsDirty = true;
 
         // free lists, as the prototype keeps them
         readonly Stack<int> freeIdx = new Stack<int>(); int nextIdx;
@@ -52,6 +54,7 @@ namespace Triband.Storey.Unity
             state = new GraphicsBuffer(GraphicsBuffer.Target.Structured, MaxBuildings, 16);
             occ = new GraphicsBuffer(GraphicsBuffer.Target.Structured, OccSlots * OccWidth, 16);
             wall = new GraphicsBuffer(GraphicsBuffer.Target.Structured, WallIds, 4);
+            wallData = new GraphicsBuffer(GraphicsBuffer.Target.Structured, WallIds, 16);
             prms = new GraphicsBuffer(GraphicsBuffer.Target.Structured, ParamRows * ParamTexels, 16);
             colors = new GraphicsBuffer(GraphicsBuffer.Target.Structured, MaxColorRows * Generate.ColorRows.Uint4s, 16);
             details = new GraphicsBuffer(GraphicsBuffer.Target.Structured, DetailColors.Length, 4);
@@ -127,6 +130,7 @@ namespace Triband.Storey.Unity
         public void MarkOccDirty() => occDirty = true;
         public void MarkStateDirty() => stateDirty = true;
         public void MarkWallDirty() => wallDirty = true;
+        public void MarkWallDataDirty() => wallDataDirty = true;
 
         /// <summary>Upload what changed and bind the buffers globally. Call once per frame before rendering.</summary>
         public void Upload()
@@ -134,17 +138,19 @@ namespace Triband.Storey.Unity
             if (stateDirty) { state.SetData(State); stateDirty = false; }
             if (occDirty) { occ.SetData(Occ); occDirty = false; }
             if (wallDirty) { wall.SetData(Wall); wallDirty = false; }
+            if (wallDataDirty) { wallData.SetData(WallData); wallDataDirty = false; }
             if (paramsDirty) { prms.SetData(Params); paramsDirty = false; }
             if (colorsDirty) { colors.SetData(Colors); colorsDirty = false; }
             if (detailsDirty) { details.SetData(DetailColors); detailsDirty = false; }
             Shader.SetGlobalBuffer(StoreyShaderIds.State, state);
             Shader.SetGlobalBuffer(StoreyShaderIds.Occ, occ);
             Shader.SetGlobalBuffer(StoreyShaderIds.Wall, wall);
+            Shader.SetGlobalBuffer(StoreyShaderIds.WallData, wallData);
             Shader.SetGlobalBuffer(StoreyShaderIds.Params, prms);
             Shader.SetGlobalBuffer(StoreyShaderIds.Colors, colors);
             Shader.SetGlobalBuffer(StoreyShaderIds.DetailColors, details);
         }
 
-        public void Dispose() { state.Dispose(); occ.Dispose(); wall.Dispose(); prms.Dispose(); colors.Dispose(); details.Dispose(); }
+        public void Dispose() { state.Dispose(); occ.Dispose(); wall.Dispose(); wallData.Dispose(); prms.Dispose(); colors.Dispose(); details.Dispose(); }
     }
 }

@@ -351,6 +351,7 @@ namespace UnityEngine
     public sealed class Mesh : Object
     {
         public UnityEngine.Rendering.IndexFormat indexFormat { get; set; }
+        public void Optimize() { }
         public Bounds bounds { get; set; }
         public int subMeshCount { get; set; }
         public void SetVertexBufferParams(int vertexCount, params UnityEngine.Rendering.VertexAttributeDescriptor[] attributes) { }
