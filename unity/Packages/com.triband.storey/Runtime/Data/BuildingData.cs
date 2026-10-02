@@ -152,7 +152,8 @@ namespace Triband.Storey
 
     public enum WindowType { Punched, Tall, Ribbon, Curtain, None }
     public enum GroundType { Storefront, Match, Solid }
-    public enum RoofType { Flat, Hip, Gable, Shed }
+    /// <summary>The top tier's roof. Mansard is Storey's own: a steep lower slope up to a break, then a shallow hip.</summary>
+    public enum RoofType { Flat, Hip, Gable, Shed, Mansard }
 
     /// <summary>
     /// Exterior style. Colours are colour references (<see cref="ColorRef"/>): CSS hex as the prototype
@@ -182,6 +183,10 @@ namespace Triband.Storey
         public double? pitch;
         /// <summary>Eave overhang in metres; null = not stored (the generator then uses 0.35 m). Zero is a real value: no overhang.</summary>
         public double? eave;
+        /// <summary>A mansard's break: how high its steep lower slope rises, in metres; null = 2.4 m. Storey's own.</summary>
+        public double? mansard;
+        /// <summary>Dormers along every eave of a pitched roof, this far apart (metres, centre to centre); null = none. Storey's own.</summary>
+        public double? dormers;
 
         /// <summary>Densities for details placed by rule, as the prototype stores them (percentages); null = the defaults.</summary>
         public DetailRules? details;

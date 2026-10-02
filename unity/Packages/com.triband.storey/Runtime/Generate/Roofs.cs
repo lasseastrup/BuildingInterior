@@ -12,9 +12,11 @@ namespace Triband.Storey.Generate
         public List<List<P3>> Holes = new List<List<P3>>();
         public P3 N;
         public RoofKind Kind;
+        /// <summary>Part of a dormer: LOD2's massing leaves these out.</summary>
+        public bool Dormer;
     }
 
-    public enum RoofKind { Roof, Trim, Soffit, Wall }
+    public enum RoofKind { Roof, Trim, Soffit, Wall, Window }
 
     public sealed class RoofParts { public List<RoofPart> Parts = new List<RoofPart>(); public double Rise; }
 
@@ -39,7 +41,7 @@ namespace Triband.Storey.Generate
         {
             var st = Derived.StyleAt(b, b.floors.Count); if (st.roofType == RoofType.Flat) return null;
             int N = b.floors.Count, k0 = Derived.TierStart(b, N); var raw = Derived.OutlineAt(b, N);
-            return Make(b, st.roofType, st.pitch, st.eave, raw, PartyKinds(site, b, k0, raw), Derived.RoofY(b), null);
+            return Make(b, st.roofType, st.pitch, st.eave, raw, PartyKinds(site, b, k0, raw), Derived.RoofY(b), null, st.mansard, st.dormers);
         }
 
         static string[] PartyKinds(Site site, BuildingData b, int k0, List<Vec2> raw)
@@ -60,10 +62,14 @@ namespace Triband.Storey.Generate
         /// Roof parts of <paramref name="raw"/> (building-local) sitting on wall tops at <paramref name="top"/>;
         /// <paramref name="cut"/> is a world-space multipolygon the roof is cut away from (rings as x,z pairs).
         /// </summary>
-        public static RoofParts Make(BuildingData b, RoofType type, double? pitch, double? eave, List<Vec2> raw, string[] party, double top, PathsD? cut)
+        public static RoofParts Make(BuildingData b, RoofType type, double? pitch, double? eave, List<Vec2> raw, string[] party, double top, PathsD? cut, double? mansard = null, double? dormers = null)
         {
-            int n = raw.Count; double T = Dim.T_EXT;
-            double slope = Math.Tan(Clamp(pitch ?? (type == RoofType.Shed ? 15 : 30), 5, 60) * Math.PI / 180), e = Clamp(eave ?? 0.35, 0, 1.2), hb = top - e * slope, ox = b.pos.x, oz = b.pos.z;
+            int n = raw.Count; double T = Dim.T_EXT; bool mans = type == RoofType.Mansard;
+            // a mansard's pitch is its shallow upper roof's; its eaves have the steep lower slope, with a short eave
+            double slope = Math.Tan(Clamp(pitch ?? (type == RoofType.Shed ? 15 : mans ? 20 : 30), 5, 60) * Math.PI / 180), e = Clamp(eave ?? 0.35, 0, 1.2), ox = b.pos.x, oz = b.pos.z;
+            double eaveSlope = mans ? Math.Tan(MansardPitch * Math.PI / 180) : slope;
+            if (mans) e = Math.Min(e, 0.2);
+            double hb = top - e * eaveSlope;
             bool ccw = Geo.Area2(raw) > 0;
             var fp = new List<Vec2>(n); var em = new int[n];
             for (int j = 0; j < n; j++) { var p = ccw ? raw[j] : raw[n - 1 - j]; fp.Add(new Vec2(p.x + ox, p.z + oz)); em[j] = ccw ? j : (2 * n - 2 - j) % n; }
@@ -99,7 +105,7 @@ namespace Triband.Storey.Generate
             }
             var offFull = new double[n]; for (int j = 0; j < n; j++) offFull[j] = T + e;
             var full = OffsetPoly(offFull);
-            double HOf(int j, double x, double z) => hb + slope * ((x - full[j].x) * E[j].nin[0] + (z - full[j].z) * E[j].nin[1]);
+            double HOf(int j, double x, double z) => hb + eaveSlope * ((x - full[j].x) * E[j].nin[0] + (z - full[j].z) * E[j].nin[1]);
 
             var faces = new List<(int j, List<double[]> pts)>();
             if (type == RoofType.Shed) { var pts = new List<double[]>(); foreach (var p in full) pts.Add(new[] { p.x, p.z }); faces.Add((low, pts)); }
@@ -132,13 +138,26 @@ namespace Triband.Storey.Generate
             var parts = new List<RoofPart>(); double rise = 0;
             var clipped = new List<(int j, List<P3> pts)>();
             var Qpath = new PathD(); foreach (var p in Q) Qpath.Add(new PointD(p.x, p.z));
+            var region = new PathsD { Qpath };
+            PathsD? brk = null; double hBreak = 0;
+            if (mans)
+            {
+                // the steep slope rises to the break; above it, a shallow hip over the outline the slope has reached there
+                hBreak = top + Clamp(mansard ?? 2.4, 0.5, 6);
+                var fullPath = new PathD(); foreach (var p in full) fullPath.Add(new PointD(p.x, p.z));
+                brk = Clipper.InflatePaths(new PathsD { fullPath }, -(e + (hBreak - top) / eaveSlope), JoinType.Miter, EndType.Polygon, 1000, 6);
+                if (brk.Count > 0) region = Clipper.BooleanOp(ClipType.Difference, region, brk, FillRule.NonZero, 6);
+            }
+            var bands = new Dictionary<int, List<List<Vec2>>>();   // each eave's sloped face in plan, for the dormers
             foreach (var f in faces)
             {
                 var subj = new PathD(); foreach (var q in f.pts) subj.Add(new PointD(q[0], q[1]));
                 var tree = new PolyTreeD();
-                Clipper.BooleanOp(ClipType.Intersection, new PathsD { subj }, new PathsD { Qpath }, tree, FillRule.NonZero, 6);
+                Clipper.BooleanOp(ClipType.Intersection, new PathsD { subj }, region, tree, FillRule.NonZero, 6);
                 var polys = new List<List<List<Vec2>>>(); Collect(tree, polys);
-                var g = E[f.j].nin; var v = new P3(-slope * g[0], 1, -slope * g[1]); var nrm = v.Normalized;
+                var g = E[f.j].nin; var v = new P3(-eaveSlope * g[0], 1, -eaveSlope * g[1]); var nrm = v.Normalized;
+                if (!bands.TryGetValue(f.j, out var bl)) bands[f.j] = bl = new List<List<Vec2>>();
+                foreach (var pl in polys) if (pl[0].Count >= 3) bl.Add(pl[0]);
                 foreach (var pl in polys)
                 {
                     if (pl[0].Count < 3) continue;
@@ -148,6 +167,27 @@ namespace Triband.Storey.Generate
                     parts.Add(part); clipped.Add((f.j, part.Pts));
                 }
             }
+            if (brk != null)
+                foreach (var ring in brk)
+                {
+                    var R = new List<Vec2>(ring.Count); foreach (var q in ring) R.Add(new Vec2(q.x, q.y));
+                    if (R.Count < 3) continue;
+                    if (Geo.Area2(R) < 0) R.Reverse();
+                    int m = R.Count;
+                    var ud = new double[m][]; for (int j = 0; j < m; j++) { var p = R[j]; var q = R[(j + 1) % m]; double L = Geo.Hypot(q.x - p.x, q.z - p.z); if (L == 0) L = 1; ud[j] = new[] { -(q.z - p.z) / L, (q.x - p.x) / L }; }
+                    double HU(int j, double x, double z) => hBreak + slope * ((x - R[j].x) * ud[j][0] + (z - R[j].z) * ud[j][1]);
+                    foreach (var f in Skeleton.Compute(R).Faces)
+                    {
+                        if (f.Pts.Count < 3) continue;
+                        var part = new RoofPart { N = new P3(-slope * ud[f.Edge][0], 1, -slope * ud[f.Edge][1]).Normalized, Kind = RoofKind.Roof };
+                        foreach (var q in f.Pts) { var pt = new P3(q[0], HU(f.Edge, q[0], q[1]), q[1]); rise = Math.Max(rise, pt.y - top); part.Pts.Add(pt); }
+                        parts.Add(part);
+                    }
+                }
+            if (dormers is double every && every > 0)
+                for (int j = 0; j < n; j++)
+                    if (kinds[j] == EdgeKind.Eave && bands.TryGetValue(j, out var band) && band.Count > 0)
+                        Dormers(parts, full[j], E[j].d, E[j].nin, E[j].L, eaveSlope, hb, e, mans ? hBreak : double.PositiveInfinity, Math.Max(every, 2.2), band);
             double EaveH(int j) => type == RoofType.Shed ? HOf(low, Q[j].x, Q[j].z) : hb;
             int CapAt(int j, int end)
             {
@@ -215,6 +255,66 @@ namespace Triband.Storey.Generate
                 }
             }
             return new RoofParts { Parts = cut != null ? CutParts(parts, cut) : parts, Rise = Math.Max(rise, 0) };
+        }
+
+        /// <summary>A mansard's lower slope, in degrees.</summary>
+        public const double MansardPitch = 70;
+
+        /// <summary>A dormer's outer width, its front wall's height at most, and its own roof's pitch (degrees).</summary>
+        public const double DormerW = 1.5, DormerH = 1.5, DormerPitch = 45;
+
+        /// <summary>
+        /// Dormers along one eave, <paramref name="every"/> metres apart: a front wall with a window just behind the wall
+        /// below, two cheeks back to the roof, and a gabled roof running back into it. Only those that fit inside the eave's
+        /// sloped face (in plan, with a margin) are built, so they keep clear of hips, valleys, ridges and a mansard's break.
+        /// The eave line starts at <paramref name="o"/>, runs along <paramref name="d"/> for <paramref name="L"/>, and the roof
+        /// rises inward along <paramref name="nin"/> at <paramref name="slope"/> from <paramref name="hb"/>.
+        /// </summary>
+        static void Dormers(List<RoofPart> parts, Vec2 o, double[] d, double[] nin, double L, double slope, double hb, double e, double maxY, double every, List<List<Vec2>> band)
+        {
+            double hw = DormerW / 2, rr = hw * Math.Tan(DormerPitch * Math.PI / 180);
+            double n0 = e + Math.Max(0.05, 0.25 / slope);   // just behind the wall below: about 25 cm up the roof from its face
+            double ys = hb + slope * n0, hf = Math.Min(DormerH, maxY - 0.2 - rr - ys);
+            if (hf < 0.9) return;
+            double yt = ys + hf, yr = yt + rr, nt = (yt - hb) / slope, nr = (yr - hb) / slope;
+            P3 At(double a, double nn, double y) => new P3(o.x + d[0] * a + nin[0] * nn, y, o.z + d[1] * a + nin[1] * nn);
+            Vec2 Pl(double a, double nn) => new Vec2(o.x + d[0] * a + nin[0] * nn, o.z + d[1] * a + nin[1] * nn);
+            bool Fits(double c)
+            {
+                // 15 cm clear of the face's edges; the ridge's end only has to be on the face (it can run up to a mansard's break)
+                foreach (var (q, m) in new[] { (Pl(c - hw, n0), 0.15), (Pl(c + hw, n0), 0.15), (Pl(c - hw, nt), 0.15), (Pl(c + hw, nt), 0.15), (Pl(c, nr), 0.05) })
+                {
+                    bool inside = false;
+                    foreach (var poly in band) if (Geo.Pip(poly, q.x, q.z) && Geo.DistToEdges(poly, q) > m) { inside = true; break; }
+                    if (!inside) return false;
+                }
+                return true;
+            }
+            int cnt = Math.Max(1, (int)Math.Floor(L / every));
+            var outN = new P3(-nin[0], 0, -nin[1]); var du = new P3(d[0], 0, d[1]);
+            double rs = rr / hw;
+            for (int i = 0; i < cnt; i++)
+            {
+                double c = L / 2 + (i - (cnt - 1) / 2.0) * every;
+                if (!Fits(c)) continue;
+                var front = new RoofPart { Kind = RoofKind.Wall, N = outN, Dormer = true, Pts = { At(c - hw, n0, ys), At(c + hw, n0, ys), At(c + hw, n0, yt), At(c, n0, yr), At(c - hw, n0, yt) } };
+                double wx = hw - 0.22, w0 = ys + 0.3, w1 = yt - 0.12, rv = 0.08;
+                var hole = new List<P3> { At(c - wx, n0, w0), At(c - wx, n0, w1), At(c + wx, n0, w1), At(c + wx, n0, w0) };
+                front.Holes.Add(hole);
+                parts.Add(front);
+                parts.Add(new RoofPart { Kind = RoofKind.Window, N = outN, Dormer = true, Pts = { At(c - wx, n0 + rv, w0), At(c + wx, n0 + rv, w0), At(c + wx, n0 + rv, w1), At(c - wx, n0 + rv, w1) } });
+                // the window's reveals, from the front wall back to the pane
+                parts.Add(new RoofPart { Kind = RoofKind.Trim, N = new P3(0, 1, 0), Dormer = true, Pts = { At(c - wx, n0, w0), At(c + wx, n0, w0), At(c + wx, n0 + rv, w0), At(c - wx, n0 + rv, w0) } });
+                parts.Add(new RoofPart { Kind = RoofKind.Trim, N = new P3(0, -1, 0), Dormer = true, Pts = { At(c - wx, n0, w1), At(c + wx, n0, w1), At(c + wx, n0 + rv, w1), At(c - wx, n0 + rv, w1) } });
+                parts.Add(new RoofPart { Kind = RoofKind.Trim, N = du, Dormer = true, Pts = { At(c - wx, n0, w0), At(c - wx, n0 + rv, w0), At(c - wx, n0 + rv, w1), At(c - wx, n0, w1) } });
+                parts.Add(new RoofPart { Kind = RoofKind.Trim, N = du * -1, Dormer = true, Pts = { At(c + wx, n0, w0), At(c + wx, n0 + rv, w0), At(c + wx, n0 + rv, w1), At(c + wx, n0, w1) } });
+                // the cheeks: from the front back to where the front's top meets the roof
+                parts.Add(new RoofPart { Kind = RoofKind.Wall, N = du * -1, Dormer = true, Pts = { At(c - hw, n0, ys), At(c - hw, n0, yt), At(c - hw, nt, yt) } });
+                parts.Add(new RoofPart { Kind = RoofKind.Wall, N = du, Dormer = true, Pts = { At(c + hw, n0, ys), At(c + hw, nt, yt), At(c + hw, n0, yt) } });
+                // the dormer's roof: two planes from the cheek tops up to the ridge, back into the main roof
+                parts.Add(new RoofPart { Kind = RoofKind.Roof, N = new P3(-rs * d[0], 1, -rs * d[1]).Normalized, Dormer = true, Pts = { At(c - hw, n0, yt), At(c - hw, nt, yt), At(c, nr, yr), At(c, n0, yr) } });
+                parts.Add(new RoofPart { Kind = RoofKind.Roof, N = new P3(rs * d[0], 1, rs * d[1]).Normalized, Dormer = true, Pts = { At(c + hw, n0, yt), At(c, n0, yr), At(c, nr, yr), At(c + hw, nt, yt) } });
+            }
         }
 
         static double PolyArea3(List<P3> pts)
@@ -385,7 +485,7 @@ namespace Triband.Storey.Generate
             op.Ctx(null, 0);
             foreach (var p in R.Parts)
             {
-                var col = p.Kind == RoofKind.Roof ? C.roof : p.Kind == RoofKind.Trim ? C.trim : p.Kind == RoofKind.Soffit ? C.trimShade : C.wall;
+                var col = p.Kind == RoofKind.Roof ? C.roof : p.Kind == RoofKind.Trim ? C.trim : p.Kind == RoofKind.Soffit ? C.trimShade : p.Kind == RoofKind.Window ? C.glassDark : C.wall;
                 var pts = new List<P3>(p.Pts); foreach (var h in p.Holes) pts.AddRange(h);
                 op.PolyTris(pts, Triangulate.Planar(p.Pts, p.Holes, p.N), p.N, col);
             }

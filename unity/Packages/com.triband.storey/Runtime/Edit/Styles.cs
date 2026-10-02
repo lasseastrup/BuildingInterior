@@ -62,7 +62,7 @@ namespace Triband.Storey.Edit
         public static void Apply(BuildingData b, int k0, FacadeStyle style)
         {
             var cur = Edited(b, k0);
-            var ns = style.Clone(); ns.roofType = cur.roofType; ns.pitch = cur.pitch; ns.eave = cur.eave;
+            var ns = style.Clone(); ns.roofType = cur.roofType; ns.pitch = cur.pitch; ns.eave = cur.eave; ns.mansard = cur.mansard; ns.dormers = cur.dormers;
             if (k0 > 0 && b.floors[k0].style != null) b.floors[k0].style = ns; else b.style = ns;
         }
 

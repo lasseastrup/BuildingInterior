@@ -104,6 +104,7 @@ namespace Triband.Storey.Generate
             {
                 foreach (var p in parts)
                 {
+                    if (p.Dormer) continue;   // massing: the roof's shape only
                     double K = p.Kind == RoofKind.Roof ? 2 : p.Kind == RoofKind.Wall ? 4 : 3;
                     var all = new List<P3>(p.Pts); foreach (var h in p.Holes) all.AddRange(h);
                     int bse = M.P.Count; foreach (var q in all) Vtx(q, p.N, Z, 0, K);

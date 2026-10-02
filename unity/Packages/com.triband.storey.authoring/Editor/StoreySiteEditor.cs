@@ -288,8 +288,17 @@ namespace Triband.Storey.Editor
                     StyleEnum(e, k0, "Type", st.roofType, (s, x) => s.roofType = x);
                     if (st.roofType != RoofType.Flat)
                     {
-                        StyleSlider(e, k0, "Pitch", st.pitch ?? (st.roofType == RoofType.Shed ? 15 : 30), 5, 60, 1, (s, x) => s.pitch = x);
+                        bool mans = st.roofType == RoofType.Mansard;
+                        StyleSlider(e, k0, mans ? "Top pitch" : "Pitch", st.pitch ?? (st.roofType == RoofType.Shed ? 15 : mans ? 20 : 30), 5, 60, 1, (s, x) => s.pitch = x);
                         StyleSlider(e, k0, "Eaves", st.eave ?? 0.35, 0, 1.2, 0.05, (s, x) => s.eave = x);
+                        if (mans) StyleSlider(e, k0, "Steep part", st.mansard ?? 2.4, 0.5, 6, 0.1, (s, x) => s.mansard = x);
+                        using (new EditorGUILayout.HorizontalScope())
+                        {
+                            bool dm = EditorGUILayout.Toggle(new GUIContent("Dormers", "Dormer windows along every eave, wherever they fit on the slope"), st.dormers.HasValue);
+                            if (dm != st.dormers.HasValue) e.ApplyTo(dm ? "Dormers added" : "Dormers removed", bb => { Styles.Edited(bb, k0).dormers = dm ? 3.5 : (double?)null; return true; });
+                        }
+                        if (st.dormers is double every) StyleSlider(e, k0, "Dormers every", every, 2.2, 10, 0.1, (s, x) => s.dormers = x);
+                        if (mans) EditorGUILayout.HelpBox("A mansard: a steep 70° slope rises from the eaves to the break, then a shallow hip at the top pitch.", MessageType.None);
                     }
                 }
                 EditorGUILayout.LabelField("Details by rule", EditorStyles.boldLabel);

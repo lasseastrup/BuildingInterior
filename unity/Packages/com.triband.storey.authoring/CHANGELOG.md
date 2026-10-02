@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Roof fields for mansards (*Top pitch*, *Steep part*) and dormers (*Dormers*, *Dormers every*) in the Facade tab (docs/EDITOR.md §6.2).
 - **Corners** in the Shape tab: chamfer or round the selected corner, or every corner, with a corner entrance on a chamfer (docs/EDITOR.md §6.1).
 - Editor feedback (`StoreyJuice`):
   - a faint outline on the building under the pointer, and a short glow on what is selected;

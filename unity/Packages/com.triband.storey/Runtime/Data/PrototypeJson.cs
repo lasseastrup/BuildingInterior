@@ -196,6 +196,7 @@ namespace Triband.Storey
                 bands = c.Bool(o, "bands", true, path), parapet = c.Bool(o, "parapet", true, path),
                 roofType = c.Enum<RoofType>(o, "roofType", RoofType.Flat, path),
                 pitch = c.Opt(o, "pitch", path), eave = c.Opt(o, "eave", path),
+                mansard = c.Opt(o, "mansard", path), dormers = c.Opt(o, "dormers", path),
             };
             if (o.TryGetValue("details", out var dr) && dr != null)
             {
@@ -203,7 +204,7 @@ namespace Triband.Storey
                 s.details = new DetailRules { ac = c.Opt(dob, "ac", path + ".details"), vents = c.Opt(dob, "vents", path + ".details") };
                 c.Check(dob, path + ".details", "ac", "vents");
             }
-            c.Check(o, path, "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "details",
+            c.Check(o, path, "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "details",
                 "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish");
             return s;
         }
@@ -303,6 +304,8 @@ namespace Triband.Storey
             if (s.roofType != RoofType.Flat) o["roofType"] = Lower(s.roofType);
             if (s.pitch.HasValue) o["pitch"] = s.pitch.Value;
             if (s.eave.HasValue) o["eave"] = s.eave.Value;
+            if (s.mansard.HasValue) o["mansard"] = s.mansard.Value;
+            if (s.dormers.HasValue) o["dormers"] = s.dormers.Value;
             if (s.door != null) o["door"] = s.door;
             if (s.rail != null) o["rail"] = s.rail;
             if (s.metal != null) o["metal"] = s.metal;

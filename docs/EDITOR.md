@@ -133,3 +133,22 @@ Engine-free: `Outlines.Corner`, `Outlines.AllCorners`, `Outlines.CornerPoints` (
 1. Click a corner of a building, choose Round with a 3 m radius: the arc shows green. *Cut this corner*: the building is rounded there, with walls, bands and windows following.
 2. Chamfer 3 m with *Corner entrance*: a street door opens on the chamfer.
 3. *Every corner* on a setback.
+
+### 6.2 Mansard roofs and dormers
+
+**Mansard** is a roof type in the Facade tab's Roof fields: a steep 70° slope rises from the eaves to the break (*Steep part*, 2.4 m by default), then a shallow hip at *Top pitch* (20°) covers the rest. Its eaves are short (at most 0.2 m), so the steep slope starts at the wall top.
+
+**Dormers** works on every pitched roof: hip, gable, shed and mansard. *Dormers every* sets the spacing along each eave (3.5 m by default). Each dormer has:
+- a front wall with a window just behind the wall below;
+- two cheeks back to the roof;
+- its own 45° gabled roof running back into the slope.
+
+Only dormers that fit on their eave's slope are built, clear of hips, valleys and ridges, and on a mansard under the break. A small roof gets none. LOD2's massing leaves them out.
+
+Layouts with a mansard or dormers are Storey's own: the prototype doesn't read them (`"roofType": "mansard"`, `"mansard"`, `"dormers"`).
+
+Engine-free: `Roofs.Make`, `RoofType.Mansard`, `FacadeStyle.mansard` and `FacadeStyle.dormers` (`RoofFeatureTests`).
+
+**Checks:**
+1. Set a building's roof to Mansard: steep sides, a shallow top. Change *Steep part*.
+2. Turn on Dormers on a hip, a gable and the mansard, then change *Dormers every*.
