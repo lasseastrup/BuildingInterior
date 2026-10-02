@@ -76,6 +76,7 @@ namespace UnityEditor
         public static event System.Func<bool> wantsToQuit;
         public static void QueuePlayerLoopUpdate() { }
         public static void EnterPlaymode() { }
+        public static double timeSinceStartup => 0;
         public delegate void CallbackFunction();
         public static CallbackFunction delayCall;
     }

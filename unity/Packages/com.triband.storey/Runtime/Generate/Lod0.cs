@@ -27,6 +27,7 @@ namespace Triband.Storey.Generate
             int idx = site.IndexOf(b);
             var r = new Lod0Result { Op = new MeshBuilder(idx), Glass = new MeshBuilder(idx) };
             r.Glass.Walls = r.Op.Walls;   // glass shares the wall ids of the walls it sits in
+            r.Glass.WallBase = r.Op.WallBase;
             if (solids) r.Op.Solids = new List<Solid>();
             site.partyMemo.Remove(b.id);
             foreach (var _ in self.Steps(r)) { }
@@ -63,6 +64,7 @@ namespace Triband.Storey.Generate
             for (int k = 0; k <= N; k++)
             {
                 var sg = new List<Seg>(); var g = At(k); bool sb = Derived.IsSetback(b, k); var Cb = At(Math.Max(0, k - 1)).C;
+                op.StoreyBase = gl.StoreyBase = Derived.FloorBase(b, k);
                 // a filled storey is built as a shell-only building's storeys are; a slab between two of them is not needed
                 bool sh = Derived.ShellAt(b, k), shBelow = Derived.ShellAt(b, k - 1);
                 if (!(sh && shBelow) || k == N || sb) Slab(op, k, Cb, sh, false);

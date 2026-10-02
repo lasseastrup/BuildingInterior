@@ -57,7 +57,7 @@ namespace UnityEngine
     public sealed class ExecuteAlways : System.Attribute { }
 
 
-    public static class Time { public static float deltaTime => 0; }
+    public static class Time { public static float deltaTime => 0; public static float realtimeSinceStartup => 0; }
 
     public static class Application
     {

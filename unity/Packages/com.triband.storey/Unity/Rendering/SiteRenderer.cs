@@ -131,7 +131,12 @@ namespace Triband.Storey.Unity
             table.Upload();
         }
 
-        readonly List<int> editCut = new List<int>();
+        // the editor's wall slides, by wall id: eased over the prototype's 0.22 s, down when a wall is in the way, back up after
+        readonly Dictionary<int, float> editSlide = new Dictionary<int, float>();
+        float lastEdit = -1;
+
+        /// <summary>Walls are sliding in the editor's cutaway: the editor keeps redrawing until they settle.</summary>
+        public bool Animating { get; private set; }
 
         /// <summary>
         /// The editor's cutaway (the Interior tab): every wall has an id, so the shader drops a wall by its slide value,
@@ -140,8 +145,9 @@ namespace Triband.Storey.Unity
         /// </summary>
         void EditCutaway(string? activeId, SiteView v)
         {
-            foreach (int id in editCut) table.Wall[id] = 0;
-            bool changed = editCut.Count > 0; editCut.Clear();
+            float now = Time.realtimeSinceStartup, dt = lastEdit < 0 ? 0 : Mathf.Min(0.05f, now - lastEdit); lastEdit = now;
+            float step = dt / (float)global::Triband.Storey.Occlusion.OcclusionCore.CutSlide;
+            var down = new HashSet<int>();
             var act = activeId != null && site != null ? site.ById(activeId) : null;
             if (act != null)
             {
@@ -149,15 +155,29 @@ namespace Triband.Storey.Unity
                 foreach (var bt in built)
                 {
                     if (bt.Value.l0 == null || bt.Value.wallBase < 0) continue;
-                    var walls = bt.Value.l0.Op.Walls; bool own = bt.Key == act.id;
+                    var walls = bt.Value.l0.Op.Walls; var bases = bt.Value.l0.Op.WallBase; bool own = bt.Key == act.id;
                     for (int i = 0; i < walls.Count; i++)
                     {
                         if (!own && (walls[i].K < 8 || (walls[i].K >> 3) - 1 != ai)) continue;
-                        if (!global::Triband.Storey.Occlusion.OcclusionCore.WallBlocks(walls[i].W, v.camera.x, v.camera.z, v.focus.x, v.focus.z)) continue;
-                        int id = bt.Value.wallBase + i; table.Wall[id] = 1; editCut.Add(id); changed = true;
+                        // only the active storey's own walls: the next floor's start up and slide down when it becomes active (a
+                        // neighbour's party walls may sit at other heights, and the shader's cut range keeps them right)
+                        if (own && i < bases.Count && Math.Abs(bases[i] + parent.position.y - v.cutBase) > 0.05) continue;
+                        if (global::Triband.Storey.Occlusion.OcclusionCore.WallBlocks(walls[i].W, v.camera.x, v.camera.z, v.focus.x, v.focus.z)) down.Add(bt.Value.wallBase + i);
                     }
                 }
             }
+            bool changed = false, moving = false;
+            foreach (int id in down) if (!editSlide.ContainsKey(id)) editSlide[id] = 0;
+            foreach (var id in new List<int>(editSlide.Keys))
+            {
+                float a = editSlide[id], to = down.Contains(id) ? 1 : 0;
+                float n = to > a ? Mathf.Min(to, a + step) : Mathf.Max(to, a - step);
+                if (n != a) changed = true;
+                if (n != to) moving = true;
+                table.Wall[id] = n;
+                if (n <= 0 && to == 0) editSlide.Remove(id); else editSlide[id] = n;
+            }
+            Animating = moving;
             if (changed) table.MarkWallDirty();
         }
 

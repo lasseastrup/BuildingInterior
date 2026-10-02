@@ -46,6 +46,17 @@ namespace Triband.Storey.Tests
                     if (m.K[v] % 8 == 1) Assert.True(m.WI[v] > 0 && m.WI[v] <= m.Walls.Count, $"{doc.buildings[i].name}: a wall vertex with no wall id");
         }
 
+        [Theory, MemberData(nameof(Core))]
+        public void EveryWallKnowsItsStorey(string file, int i)
+        {
+            var (doc, site) = Load(file);
+            var b = doc.buildings[i];
+            var r = Lod0.Build(site, b);
+            Assert.Equal(r.Op.Walls.Count, r.Op.WallBase.Count);
+            var bases = Enumerable.Range(0, b.floors.Count + 1).Select(k => Derived.FloorBase(b, k)).ToHashSet();
+            Assert.All(r.Op.WallBase, y => Assert.Contains(y, bases));
+        }
+
         [Fact]
         public void TheDemoStreetIsLeaner()
         {

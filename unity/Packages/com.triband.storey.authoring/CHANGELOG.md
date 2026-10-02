@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Switching floors in the Interior tab animates: the floor clip eases to the new ceiling, and the active storey's walls slide down to the stub and back up rather than snapping.
 - **Rooms / Filled** per floor in the Interior tab, marked ▪ in the Storey Floors overlay.
 - **Play from this floor** in the Interior tab: Play mode starts on that storey, in front of its stairs or lift, after saving unsaved edits.
 - Stairs come as **Switchback** or **Straight flights**, chosen under the Stairs tool or on selected stairs. Straight flights show an arrow up the flight lane and the walkway beside it, and can be reversed.

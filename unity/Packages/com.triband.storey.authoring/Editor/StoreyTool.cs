@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
 using Triband.Storey.Edit;
 using Triband.Storey.Unity;
@@ -46,7 +47,9 @@ namespace Triband.Storey.Editor
                 DefaultClick(e, e.Selected, sv);
             }
             site.View = ViewFor(e, e.Selected, sv, site.transform.position);
-            if (Event.current.type == EventType.MouseMove) sv.Repaint();
+            // keep drawing while the floor clip eases or walls slide: edit mode only updates when asked
+            if (easing || site.Animating) { EditorApplication.QueuePlayerLoopUpdate(); sv.Repaint(); }
+            else if (Event.current.type == EventType.MouseMove) sv.Repaint();
         }
 
         public override void OnWillBeDeactivated()
@@ -82,14 +85,30 @@ namespace Triband.Storey.Editor
             if (v.tier != 0 && !Derived.IsSetback(b, v.tier)) v.tier = 0;
         }
 
+        // the floor clip as shown: it eases to the active storey's ceiling, so a change of floor grows the storeys up or
+        // sinks them down instead of cutting at once
+        static string clipFor = ""; static double shownClip, lastTime; static bool easing;
+
+        static double EasedClip(BuildingData b, double target)
+        {
+            double now = EditorApplication.timeSinceStartup, dt = Math.Min(0.05, Math.Max(0, now - lastTime)); lastTime = now;
+            double finite = target > 1e8 ? Derived.RoofY(b) + 8 : target;   // the roof: everything shows, so ease to above it
+            if (clipFor != b.id) { clipFor = b.id; shownClip = finite; }      // another building: no animation
+            shownClip += (finite - shownClip) * (1 - Math.Exp(-dt * 12));
+            easing = Math.Abs(finite - shownClip) > 0.004;
+            if (!easing) shownClip = finite;
+            return easing ? shownClip : target;
+        }
+
         SiteView? ViewFor(StoreyEdit e, BuildingData? b, SceneView sv, Vector3 origin)
         {
             var v = SiteView.Neutral;
-            if (b == null) return v;
+            if (b == null) { clipFor = ""; easing = false; return v; }
             if (e.View.isolate) v.isolateId = b.id;
             if (Tab == StoreyTab.Interior && b.interior)
             {
                 var (clip, lo, hi) = Picking.StoreyView(b, e.View.floor);
+                clip = EasedClip(b, clip);
                 // the shader compares world heights: a site raised or lowered moves its storeys (rotation and scale are not supported here)
                 float lift = origin.y;
                 v.activeId = b.id; v.clipY = (float)clip + lift; v.cut = true; v.stubHeight = 1.0f; v.cutBase = (float)lo + lift; v.cutTop = (float)hi + lift;
@@ -99,6 +118,7 @@ namespace Triband.Storey.Editor
                 var dxz = new Vector2(cam.x - focus.x, cam.z - focus.z);
                 v.cameraDir = dxz.sqrMagnitude > 1e-8f ? dxz.normalized : new Vector2(0, 1);
             }
+            else { clipFor = ""; easing = false; }   // back in the Interior tab, the clip starts where the floor is
             return v;
         }
 

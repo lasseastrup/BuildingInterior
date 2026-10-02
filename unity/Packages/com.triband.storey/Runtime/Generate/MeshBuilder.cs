@@ -41,6 +41,10 @@ namespace Triband.Storey.Generate
         public readonly List<int> I = new List<int>();
         /// <summary>The walls given ids, in id order.</summary>
         public List<(double[] W, int K)> Walls = new List<(double[], int)>();
+        /// <summary>The floor height of the storey each wall in <see cref="Walls"/> was made on (the editor slides only the active storey's).</summary>
+        public List<double> WallBase = new List<double>();
+        /// <summary>The floor height of the storey being generated, recorded with each wall.</summary>
+        public double StoreyBase;
         public List<Solid>? Solids;
         /// <summary>Building index + 65536 × LOD, written into every vertex at upload.</summary>
         public int Tag { get; private set; }
@@ -103,7 +107,7 @@ namespace Triband.Storey.Generate
         public MeshBuilder Ctx(double[]? w, int k)
         {
             curW = w ?? Zero4; curK = k;
-            if (!Lean && curK % 8 == 1) { Walls.Add(((double[])curW.Clone(), curK)); curI = Walls.Count; }
+            if (!Lean && curK % 8 == 1) { Walls.Add(((double[])curW.Clone(), curK)); WallBase.Add(StoreyBase); curI = Walls.Count; }
             else curI = 0;
             return this;
         }

@@ -36,6 +36,9 @@ namespace Triband.Storey.Unity
         /// <summary>Set by the editor's Storey tools each frame they are active: the storey being edited, isolate. Null draws the plain layout.</summary>
         public SiteView? View { get; set; }
 
+        /// <summary>Something is still easing in the editor's view (the cutaway's walls): keep redrawing.</summary>
+        public bool Animating => site != null && site.Animating;
+
         /// <summary>The occlusion system driving this site in Play mode (it registers itself), or null.</summary>
         public StoreyOcclusion? Occlusion { get; internal set; }
 
