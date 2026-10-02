@@ -123,16 +123,25 @@ These are Storey's own: the prototype does not have them, so they have their own
 - **Chamfer:** a straight cut, *Size* metres back along each edge.
 - **Round:** an arc of that *Radius*, in steps of at most 15°.
 - The cut shows green on the selected corner before you make it.
-- Doors, details and blank walls on the two edges keep their places; those in the part cut away go. A cut too big for its edges, or one the outline rules refuse (cores, setbacks), says why.
+- **A cut corner stays one corner.** The Scene view shows it as one point, at the sharp corner (dotted), and you drag it like any other.
+  - Select it and the Corners controls show its cut. Changing *Chamfer*/*Round*, the size or *Corner entrance* changes the cut at once, so you can try styles quickly.
+  - **Make sharp** takes the cut away. **Clear all** makes every corner of the outline sharp again.
+- The cut follows its edges: drag a neighbouring corner or push a wall, and the arc or chamfer is made again to meet them. If its edges get too short for it, the corner is sharp until they're long enough again (in the same drag).
+- Doors, details and blank walls on the two edges keep their places, and those on the cut itself stay on it. A cut too big for its edges, or one the outline rules refuse (cores, setbacks), says why.
 - **Corner entrance** (the base outline, Chamfer): a street door in the middle of the chamfer. It needs about 2.7 m.
-- The cut is ordinary corners. Drag them, or undo, as any other.
+- A setback made from an outline with cuts keeps them.
+- Corners cut before this change are plain corners. Clear them as before: double-click each extra point.
 
-Engine-free: `Outlines.Corner`, `Outlines.AllCorners`, `Outlines.CornerPoints` (`CornerTests`).
+In the file, the outline still holds the cut's points, so everything that builds from it is unchanged. The building's (or setback's) `corners` list records each cut: its sharp corner, shape, size, door and points. A cut whose points are no longer in the outline is forgotten.
+
+Engine-free: `CornerCuts` (`Sharp`, `Around`, `Cut`, `Clear`, `CutAll`, `ClearAll`), `Outlines.CornerPoints` (`CornerTests`, `CornerCutsTests`).
 
 **Checks:**
-1. Click a corner of a building, choose Round with a 3 m radius: the arc shows green. *Cut this corner*: the building is rounded there, with walls, bands and windows following.
-2. Chamfer 3 m with *Corner entrance*: a street door opens on the chamfer.
-3. *Every corner* on a setback.
+1. Click a building's corner, choose Round with a 3 m radius: the arc shows green. *Cut this corner*: the building is rounded there, with walls, bands and windows following. The corner is still one point.
+2. With it selected, switch to Chamfer and drag the size: the cut changes as you drag. *Make sharp*: the corner is square again.
+3. Drag the rounded corner, then its neighbour: the arc moves with them.
+4. Chamfer 3 m with *Corner entrance*: a street door opens on the chamfer.
+5. *Every corner* on a setback, then *Clear all*.
 
 ### 6.2 Mansard roofs and dormers
 

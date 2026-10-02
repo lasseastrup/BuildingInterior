@@ -29,6 +29,7 @@ namespace Triband.Storey.Edit
             if (k >= b.floors.Count) throw new InvalidOperationException($"floor {k0} has no floor above it to start a setback");
             var f = b.floors[k];
             f.shape = Tiers.Copy(Tiers.Outline(b, t.k0)); f.blank = new List<int>(Tiers.Blank(b, t.k0));
+            f.corners = Tiers.Corners(b, t.k0).Select(c => new CornerData { at = c.at, shape = c.shape, size = c.size, pts = Tiers.Copy(c.pts) }).ToList();   // no door: that is the street's
             return k;
         }
 
@@ -37,7 +38,7 @@ namespace Triband.Storey.Edit
         {
             b.details.RemoveAll(d => Derived.TierStart(b, d.k) == k0);
             b.entrances.RemoveAll(e => Tiers.DoorOn(b, e, k0));
-            var f = b.floors[k0]; f.shape = new List<Vec2>(); f.blank = new List<int>(); f.terraceRoof = null;
+            var f = b.floors[k0]; f.shape = new List<Vec2>(); f.blank = new List<int>(); f.corners = new List<CornerData>(); f.terraceRoof = null;
         }
 
         /// <summary>
@@ -49,7 +50,7 @@ namespace Triband.Storey.Edit
             var tb = b.details.Select(d => Derived.TierStart(b, d.k)).ToList();
             var te = b.entrances.Select(e => e.k == k0 ? -1 : Derived.TierStart(b, e.k)).ToList();
             var f = b.floors[k0]; var g = b.floors[k];
-            g.shape = f.shape; g.blank = f.blank; f.shape = new List<Vec2>(); f.blank = new List<int>();
+            g.shape = f.shape; g.blank = f.blank; g.corners = f.corners; f.shape = new List<Vec2>(); f.blank = new List<int>(); f.corners = new List<CornerData>();
             if (f.terraceRoof != null) { g.terraceRoof = f.terraceRoof; f.terraceRoof = null; }
             foreach (var e in b.entrances) if (e.k == k0) e.k = k;
             b.details = b.details.Where((d, j) => Derived.TierStart(b, d.k) == tb[j]).ToList();
@@ -61,7 +62,7 @@ namespace Triband.Storey.Edit
         public static void ApplyPreset(BuildingData b, string key)
         {
             b.details.RemoveAll(d => Derived.TierStart(b, d.k) == 0);
-            b.footprint = Preset(key);
+            b.footprint = Preset(key); b.corners = new List<CornerData>();
             var kept = b.entrances.Where(e => e.k != 0 && Derived.TierStart(b, e.k) != 0).ToList();
             b.entrances = new List<EntranceData> { new EntranceData { edge = 0, t = 0.5 } };
             b.entrances.AddRange(kept);

@@ -9,9 +9,6 @@ namespace Triband.Storey.Edit
     /// <summary>Why an outline is refused (<see cref="Outlines.Issue"/>), with the prototype's wording.</summary>
     public enum OutlineIssue { None, Shape, Out, Up, Thin, Core, Void }
 
-    /// <summary>How <see cref="Outlines.Corner"/> cuts a corner: a straight chamfer, or a rounded arc.</summary>
-    public enum CornerShape { Chamfer, Round }
-
     /// <summary>
     /// Outline editing: corners inserted, removed and merged with the doors, details and blank walls on the tier's
     /// edges kept in place; edges pushed; outlines checked; corners and buildings snapped. k0 is the tier being

@@ -38,6 +38,8 @@ namespace Triband.Storey.Edit
 
         /// <summary>Tier k0's blank walls (edge indices).</summary>
         public static List<int> Blank(BuildingData b, int k0) => k0 > 0 ? b.floors[k0].blank : b.blank;
+        /// <summary>Tier k0's cut corners (<see cref="CornerData"/>).</summary>
+        public static List<CornerData> Corners(BuildingData b, int k0) => k0 > 0 ? b.floors[k0].corners : b.corners;
 
         public static void SetBlank(BuildingData b, int k0, List<int> v) { if (k0 > 0) b.floors[k0].blank = v; else b.blank = v; }
 

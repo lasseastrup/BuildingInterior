@@ -48,6 +48,8 @@ namespace Triband.Storey
         public Vec2 pos;
         /// <summary>Base outline: any simple polygon, either winding.</summary>
         public List<Vec2> footprint = new List<Vec2>();
+        /// <summary>The cut corners of <see cref="footprint"/> (<see cref="CornerData"/>). Storey's own.</summary>
+        public List<CornerData> corners = new List<CornerData>();
         /// <summary>Index 0 = ground; the roof level is <c>floors.Count</c>.</summary>
         public List<FloorData> floors = new List<FloorData>();
         public List<CoreData> shafts = new List<CoreData>();
@@ -108,6 +110,28 @@ namespace Triband.Storey
         public int bottom;
     }
 
+    /// <summary>How a corner is cut: a straight chamfer, or a rounded arc.</summary>
+    public enum CornerShape { Chamfer, Round }
+
+    /// <summary>
+    /// A cut corner of an outline (docs/EDITOR.md §6.1). The outline holds the cut's points (<see cref="pts"/>, in order,
+    /// as they stand in it); this keeps the sharp corner they replace and how it was cut, so the editor shows the corner
+    /// as one point and can change or clear the cut in one step. A cut whose points are no longer in the outline, in
+    /// order, is dropped. Storey's own.
+    /// </summary>
+    public sealed class CornerData
+    {
+        /// <summary>The sharp corner the cut replaces.</summary>
+        public Vec2 at;
+        public CornerShape shape;
+        /// <summary>The chamfer's size along each edge, or the round's radius, in metres.</summary>
+        public double size = 2;
+        /// <summary>A street door in the middle of the chamfer (the base outline only).</summary>
+        public bool door;
+        /// <summary>The points in the outline the cut puts there, in the outline's order.</summary>
+        public List<Vec2> pts = new List<Vec2>();
+    }
+
     public sealed class FloorData
     {
         public List<WallData> walls = new List<WallData>();
@@ -117,6 +141,8 @@ namespace Triband.Storey
         public List<Vec2> shape = new List<Vec2>();
         /// <summary>Blank edges of <see cref="shape"/>. Only meaningful with a shape.</summary>
         public List<int> blank = new List<int>();
+        /// <summary>The cut corners of <see cref="shape"/>. Storey's own.</summary>
+        public List<CornerData> corners = new List<CornerData>();
         /// <summary>The setback's own exterior style; null = inherit the tier below.</summary>
         public FacadeStyle? style;
         /// <summary>Roof over the uncovered part of the tier below instead of a terrace; null = terrace.</summary>

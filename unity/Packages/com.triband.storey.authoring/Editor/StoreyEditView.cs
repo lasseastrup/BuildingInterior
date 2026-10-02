@@ -33,7 +33,7 @@ namespace Triband.Storey.Editor
         [SerializeField] internal bool showMore;
         /// <summary>The Shape tab's selected corner of the tier's outline (a click on it), or -1.</summary>
         [SerializeField] internal int selectedCorner = -1;
-        [SerializeField] internal Edit.CornerShape cornerShape = Edit.CornerShape.Chamfer;
+        [SerializeField] internal CornerShape cornerShape = CornerShape.Chamfer;
         [SerializeField] internal float cornerSize = 2f;
         [SerializeField] internal bool cornerDoor;
         /// <summary>The courtyard or atrium the Shape tool's handles edit, by id; "" for none.</summary>

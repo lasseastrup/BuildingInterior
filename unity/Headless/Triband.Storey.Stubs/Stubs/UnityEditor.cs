@@ -217,6 +217,8 @@ namespace UnityEditor
         public static void LabelField(string label, params GUILayoutOption[] options) { }
         public static void LabelField(string label, GUIStyle style, params GUILayoutOption[] options) { }
         public static void LabelField(string label, string label2, params GUILayoutOption[] options) { }
+        public static void LabelField(GUIContent label, params GUILayoutOption[] options) { }
+        public static void LabelField(GUIContent label, GUIStyle style, params GUILayoutOption[] options) { }
         public static void PrefixLabel(string label) { }
         public static Color ColorField(GUIContent label, Color value, bool showEyedropper, bool showAlpha, bool hdr, params GUILayoutOption[] options) => value;
     }

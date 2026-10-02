@@ -37,16 +37,27 @@ namespace Triband.Storey.Editor
         protected override void ToolGUI(StoreyEdit e, BuildingData b, SceneView sv)
         {
             int k0 = e.View.tier;
-            var fp = Tiers.Outline(b, k0);
+            // the handles are the sharp outline's: a cut corner is one point (CornerCuts), and every change goes through
+            // CornerCuts.Around, which cuts the corners again after it
+            var (fp, cuts) = CornerCuts.Sharp(b, k0);
             double y = Derived.FloorBase(b, k0) + 0.02;
             var ev = Event.current;
             bool alt = ev.alt;
 
             if (k0 > 0) Dotted(b, Derived.OutlineAt(b, k0 - 1), y, Faint);
-            Outline(b, fp, y, Accent);
+            Outline(b, Tiers.Outline(b, k0), y, Accent);
+            // each cut corner's sharp point, faint, where its two edges would meet
+            if (ev.type == EventType.Repaint)
+                foreach (var c in cuts)
+                {
+                    var A = fp[(c.i - 1 + fp.Count) % fp.Count]; var C = fp[(c.i + 1) % fp.Count];
+                    Handles.color = Faint;
+                    Handles.DrawDottedLine(W(b, Lerp(c.at, A, 0.25), y), W(b, c.at, y), 3f);
+                    Handles.DrawDottedLine(W(b, c.at, y), W(b, Lerp(c.at, C, 0.25), y), 3f);
+                }
             if (e.View.selectedCorner >= fp.Count) e.View.selectedCorner = -1;
-            // the selected corner's cut, as the Shape tab would make it
-            if (e.View.selectedCorner >= 0 && drag == Drag.None && ev.type == EventType.Repaint)
+            // the selected corner's cut, as the Shape tab would make it (a corner cut already shows its own)
+            if (e.View.selectedCorner >= 0 && drag == Drag.None && ev.type == EventType.Repaint && !cuts.Any(c => c.i == e.View.selectedCorner))
             {
                 var cut = Outlines.CornerPoints(fp, e.View.selectedCorner, e.View.cornerShape, e.View.cornerSize);
                 if (cut != null) { var pts = cut.Select(p => W(b, p, y)).ToArray(); Handles.color = Ok; Handles.DrawAAPolyLine(3f, pts); }
@@ -73,7 +84,7 @@ namespace Triband.Storey.Editor
                 if (ev.type == EventType.MouseDown && ev.button == 0 && ev.clickCount == 2 && HandleUtility.nearestControl == id)
                 {
                     int ii = i;
-                    if (!e.ApplyTo("Corner removed", bb => Outlines.RemoveVertex(bb, ii, k0))) Notify(sv, "An outline needs at least three corners");
+                    if (!e.ApplyTo("Corner removed", bb => CornerCuts.Around(bb, k0, (x, _) => Outlines.RemoveVertex(x, ii, k0)))) Notify(sv, "An outline needs at least three corners");
                     e.View.selectedCorner = -1;
                     ev.Use(); return;
                 }
@@ -110,7 +121,7 @@ namespace Triband.Storey.Editor
                 {
                     BeginDragOf(e, Drag.Insert, i, id, "Add corner");
                     int ii = i; int ni = -1;
-                    e.ApplyTo("Add corner", bb => { ni = Outlines.InsertVertex(bb, ii, k0); return true; });
+                    e.ApplyTo("Add corner", bb => CornerCuts.Around(bb, k0, (x, _) => { ni = Outlines.InsertVertex(x, ii, k0); return true; }));
                     dragIndex = ni; e.View.selectedCorner = ni;
                     GUIUtility.hotControl = id;   // the tool drives the rest of the drag (above)
                     MoveCorner(e, e.Selected!, k0, dragIndex, np, alt);
@@ -278,15 +289,18 @@ namespace Triband.Storey.Editor
         void Finish(StoreyEdit e, int k0)
         {
             if (drag == Drag.Corner || drag == Drag.Insert || drag == Drag.Push)
-                e.ApplyTo("Tidy outline", bb => Outlines.Simplify(bb, k0));
+                e.ApplyTo("Tidy outline", bb => { bool ch = false; CornerCuts.Around(bb, k0, (x, _) => ch = Outlines.Simplify(x, k0)); return ch; });
             e.EndDrag();
             drag = Drag.None; dragBase = null; refusal = null;
             Inspectors();
         }
 
+        static Vec2 Lerp(Vec2 a, Vec2 c, double t) => new Vec2(a.x + (c.x - a.x) * t, a.z + (c.z - a.z) * t);
+
         void MoveCorner(StoreyEdit e, BuildingData b, int k0, int i, Vector3 np, bool alt)
         {
-            var fp = Tiers.Outline(b, k0);
+            var fp = CornerCuts.Sharp(b, k0).sharp;
+            if (i < 0 || i >= fp.Count) return;
             var q = new Vec2(Tiers.Cm(np.x - b.pos.x), Tiers.Cm(np.z - b.pos.z));
             var raw = q;
             if (!alt) q = Outlines.Snap(b, k0, fp, i, q.x, q.z, e.Document.buildings);
@@ -324,8 +338,12 @@ namespace Triband.Storey.Editor
         void Set(StoreyEdit e, int k0, List<Vec2> nf)
         {
             var why = OutlineIssue.None;
-            e.ApplyTo("Change outline", bb => (why = Outlines.Set(bb, k0, nf)) == OutlineIssue.None);
-            refusal = why == OutlineIssue.None ? null : Outlines.Why(why);
+            int lost = 0;
+            bool Op(BuildingData bb) => CornerCuts.Around(bb, k0, (x, _) => (why = Outlines.Set(x, k0, nf)) == OutlineIssue.None, out lost);
+            // a corner or wall drag is redone from where it began, so a cut that stops fitting on the way comes back
+            if (drag == Drag.Corner || drag == Drag.Push) e.ApplyFromDragStart("Change outline", Op);
+            else e.ApplyTo("Change outline", Op);
+            refusal = why != OutlineIssue.None ? Outlines.Why(why) : lost > 0 ? "A cut corner's edges are too short for its cut: it's sharp until they're longer" : null;
         }
     }
 }

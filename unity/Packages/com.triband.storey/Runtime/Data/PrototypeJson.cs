@@ -131,8 +131,33 @@ namespace Triband.Storey
                 b.bridges.Add(new BridgeData { id = c.Str(bo, "id", "", bp), to = c.Str(bo, "to", "", bp), k = c.Int(bo, "k", 1, bp), at = c.Point(bo, "at", bp), toK = c.Int(bo, "toK", 1, bp), width = c.Num(bo, "width", 2.4, bp), open = c.Bool(bo, "open", false, bp) });
                 c.Check(bo, bp, "id", "to", "k", "at", "toK", "width", "open");
             }
-            c.Check(o, path, "id", "name", "pos", "footprint", "floors", "shafts", "entrances", "details", "blank", "groundHeight", "floorHeight", "interior", "style", "gen", "voids", "bridges");
+            b.corners = Corners(c, o, path);
+            c.Check(o, path, "id", "name", "pos", "footprint", "floors", "shafts", "entrances", "details", "blank", "groundHeight", "floorHeight", "interior", "style", "gen", "voids", "bridges", "corners");
             return b;
+        }
+
+        static List<CornerData> Corners(Ctx c, Dictionary<string, object?> o, string path)
+        {
+            var l = new List<CornerData>(); int i = 0;
+            foreach (var cc in c.Array(o, "corners", path))
+            {
+                var co = c.Obj(cc, $"{path}.corners[{i}]"); var cp = $"{path}.corners[{i++}]";
+                l.Add(new CornerData { at = c.Point(co, "at", cp), shape = c.Enum<CornerShape>(co, "shape", CornerShape.Chamfer, cp), size = c.Num(co, "size", 2, cp), door = c.Bool(co, "door", false, cp), pts = c.Points(co, "pts", cp) });
+                c.Check(co, cp, "at", "shape", "size", "door", "pts");
+            }
+            return l;
+        }
+
+        static object? Corners(List<CornerData> l)
+        {
+            var o = new List<object?>();
+            foreach (var c in l)
+            {
+                var co = new Dictionary<string, object?> { ["at"] = Pt(c.at), ["shape"] = Lower(c.shape), ["size"] = c.size, ["pts"] = Pts(c.pts) };
+                if (c.door) co["door"] = true;
+                o.Add(co);
+            }
+            return o;
         }
 
         static FloorData Floor(Ctx c, Dictionary<string, object?> o, string path)
@@ -167,7 +192,8 @@ namespace Triband.Storey
                 c.Check(to, path + ".terraceRoof", "pitch");
             }
             // "props" is a leftover key some test layouts carry; the prototype never reads it.
-            c.Check(o, path, "walls", "h", "shape", "blank", "style", "terraceRoof", "props", "filled");
+            f.corners = Corners(c, o, path);
+            c.Check(o, path, "walls", "h", "shape", "blank", "style", "terraceRoof", "props", "filled", "corners");
             return f;
         }
 
@@ -305,6 +331,7 @@ namespace Triband.Storey
                 foreach (var v in b.voids) vs.Add(new Dictionary<string, object?> { ["id"] = v.id, ["kind"] = Lower(v.kind), ["shape"] = Pts(v.shape), ["bottom"] = v.bottom });
                 o["voids"] = vs;
             }
+            if (b.corners.Count > 0) o["corners"] = Corners(b.corners);
             if (b.bridges.Count > 0)
             {
                 var bs = new List<object?>();
@@ -327,7 +354,7 @@ namespace Triband.Storey
             o["walls"] = walls;
             if (f.h.HasValue) o["h"] = f.h.Value;
             if (f.filled) o["filled"] = true;
-            if (f.HasShape) { o["shape"] = Pts(f.shape); o["blank"] = Ints(f.blank); }
+            if (f.HasShape) { o["shape"] = Pts(f.shape); o["blank"] = Ints(f.blank); if (f.corners.Count > 0) o["corners"] = Corners(f.corners); }
             if (f.style != null) o["style"] = Style(f.style);
             if (f.terraceRoof != null) o["terraceRoof"] = new Dictionary<string, object?> { ["pitch"] = f.terraceRoof.pitch };
             return o;

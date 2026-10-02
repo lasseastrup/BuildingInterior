@@ -5,6 +5,7 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Changed
+- Cut corners are kept as one corner: `CornerData` (the building's and a setback's `corners`), and `CornerCuts` (`Sharp`, `Around`, `Cut`, `Clear`, `CutAll`, `ClearAll`). The outline still holds the cut's points. `CornerShape` moved to the `Triband.Storey` namespace.
 - LOD0 vertices are 28 bytes instead of 44. They carry only the cutaway kind and wall id; each wall's start and normal sit once in the building table (`_StoreyWallData`), and the shader reads them by id. On the demo street LOD0 goes from 4.6 to 3.1 MB.
 - `MeshUpload.Upload` welds exact duplicate vertices (`MeshBuilder.Weld`, about 1% of LOD0's; every triangle is unchanged), and calls `Mesh.Optimize` when asked. `SiteRenderer` asks in Play mode, not for the editor's previews.
 - `StoreyGlobals.SetOcclusion` takes the player's chest (world space) and the hole radius in metres. The shader projects the player itself, so Cutout and Fade hold on reversed-depth platforms and flipped render targets.
