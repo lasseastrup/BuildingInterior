@@ -322,7 +322,7 @@ namespace Triband.Storey.Generate
             var out_ = new List<(double, double)>();
             foreach (var s in b.shafts)
             {
-                if (!Cores.ShaftRoof(b, s)) continue;
+                if (!Cores.ShaftRoof(b, s) || s.type == CoreType.Flight) continue;   // straight flights have no bulkhead: the parapet runs on
                 foreach (var f in Cores.CoreFlush(Derived.OutlineAt(b, N), s)) if (f != null && f.i == i) out_.Add((f.s0, f.s1));
             }
             return out_;
@@ -412,26 +412,10 @@ namespace Triband.Storey.Generate
                     // straight flights stacked one above the other, with no walls: up the flight lane (the −x half) from the
                     // front (−z), off at the back, then back along the walkway (the +x half) to the next flight. Rails where
                     // the floor is open: both sides of the flight lane on every storey a flight comes up through (the
-                    // building's wall stands in on a side against it), and across the front where no flight carries on.
-                    // On the roof a bulkhead closes it in, with its door at the back.
-                    double hw = Dim.FLIGHT_W / 2, hd = Dim.FLIGHT_D / 2, CT = Dim.CORE_T, xm = -hw + Dim.FLIGHT_LANE;
+                    // building's wall stands in on a side against it), and across the front where no flight carries on,
+                    // the roof included: no bulkhead, the opening is railed like any other storey's.
+                    double hw = Dim.FLIGHT_W / 2, hd = Dim.FLIGHT_D / 2, xm = -hw + Dim.FLIGHT_LANE;
                     double z0 = -hd + Dim.FLIGHT_LANDING, z1 = hd - Dim.FLIGHT_LANDING;
-                    if (atRoof)
-                    {
-                        double h = 2.7, xL = fL ? -hw : -hw - CT, xR = fR ? hw : hw + CT;
-                        Skip across = TB | (fL ? Skip.UStart : Skip.None) | (fR ? Skip.UEnd : Skip.None);
-                        op.Ctx(Wl(-hw, -hd, -hw, hd, -1, 0), 1); if (!fL) Bx(-hw - CT, -hw, y, y + h, -hd, hd, C.core, C.coreIn, TB | Skip.Out | Skip.In); else Bx(-hw - TE, -hw, y, y + h, -hd - CT, hd + CT, C.wall, C.wall, TB);
-                        op.Ctx(Wl(hw, -hd, hw, hd, 1, 0), 1); if (!fR) Bx(hw, hw + CT, y, y + h, -hd, hd, C.core, C.coreIn, TB | Skip.Out | Skip.In); else Bx(hw, hw + TE, y, y + h, -hd - CT, hd + CT, C.wall, C.wall, TB);
-                        if (!fL) S(-hw - CT / 2, -hd, -hw - CT / 2, hd, CT / 2); else S(-hw - TE / 2, -hd - CT, -hw - TE / 2, hd + CT, TE / 2);
-                        if (!fR) S(hw + CT / 2, -hd, hw + CT / 2, hd, CT / 2); else S(hw + TE / 2, -hd - CT, hw + TE / 2, hd + CT, TE / 2);
-                        op.Ctx(Wl(-hw - CT, -hd, hw + CT, -hd, 0, -1), 1); Bx(xL, xR, y, y + h, -hd - CT, -hd, C.core, C.coreIn, across);
-                        S(xL, -hd - CT / 2, xR, -hd - CT / 2, CT / 2);
-                        op.Ctx(Wl(-hw - CT, hd, hw + CT, hd, 0, 1), 1);
-                        var ops = new List<Opening> { new Opening { u0 = -0.6, u1 = 0.6, y0 = 0, y1 = 2.2, door = true } };
-                        Facade.WallOps(op, f, xL, xR, y, h, hd, hd + CT, ops, C.core, C.coreIn, across);
-                        foreach (var (a, e) in Facade.SolidRanges(xL, xR, ops)) S(a, hd + CT / 2, e, hd + CT / 2, CT / 2);
-                        op.Ctx(null, 0); Bx(fL ? -hw - TE - 0.1 : -hw - CT - 0.1, fR ? hw + TE + 0.1 : hw + CT + 0.1, y + h, y + h + 0.2, -hd - CT - 0.1, hd + CT + 0.1, C.roof);
-                    }
                     op.Ctx(null, 0);
                     if (Cores.StairHoleAt(b, s, k))
                     {
@@ -444,7 +428,7 @@ namespace Triband.Storey.Generate
                             S(x, z0, x, z1, 0.04);
                         }
                         RailZ(xm + 0.04);
-                        if (!fL && !atRoof) RailZ(-hw - 0.04);   // on the roof the bulkhead wall is there
+                        if (!fL) RailZ(-hw - 0.04);
                         if (!Cores.HasFlight(b, s, k))
                         {
                             // the top: nothing carries on up, so the front of the opening is railed too

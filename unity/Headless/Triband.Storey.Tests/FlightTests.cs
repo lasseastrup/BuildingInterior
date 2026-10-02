@@ -147,16 +147,36 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
-        public void BelowTheRoofThereAreNoWalls()
+        public void ThereAreNoWallsNorABulkhead()
         {
-            // nothing of the flight's taller than a rail on the storeys inside the building
+            // nothing of the flights' taller than a rail, on any storey or on the roof, at LOD0 or LOD1
             var (d, b) = Block();
             var s = Place(d, b, 0);
-            var op = Lod0.Build(new Site(d.buildings), b, solids: true).Op;
+            Assert.True(Cores.ShaftRoof(b, s));
+            var site = new Site(d.buildings);
             var f = Cores.FrameOf(b, s);
-            double roof = Derived.RoofY(b);
-            var tall = op.Solids!.Where(x => !x.Mitred && x.F.O.x == f.O.x && x.F.O.z == f.O.z && x.y0 < roof - 1e-9 && x.y1 - x.y0 > 1.1).ToList();
-            Assert.Empty(tall);
+            foreach (var op in new[] { Lod0.Build(site, b, solids: true).Op, Lod1.Build(site, b, solids: true) })
+                Assert.Empty(op.Solids!.Where(x => !x.Mitred && x.F.O.x == f.O.x && x.F.O.z == f.O.z && x.y1 - x.y0 > 1.1));
+        }
+
+        [Fact]
+        public void TheParapetRunsOnPastAFlightAgainstTheWall()
+        {
+            // a switchback's bulkhead stands in for the parapet where it shares the wall; a flight has none, so above the
+            // roof everything but the flight's own rails is what the roof has without roof access
+            List<string> AboveRoof(bool roof)
+            {
+                var (d, b) = Block();
+                var s = Place(d, b, 0, Dim.FLIGHT_W / 2, 4.5, 0); s.roof = roof;
+                Assert.NotNull(Cores.CoreFlush(b.footprint, s)[0]);
+                var f = Cores.FrameOf(b, s); double y = Derived.RoofY(b);
+                return Lod0.Build(new Site(d.buildings), b, solids: true).Op.Solids!
+                    .Where(x => x.y0 >= y - 1e-6 && !(x.F.O.x == f.O.x && x.F.O.z == f.O.z))
+                    .Select(x => $"{x.F.O.x:F3},{x.F.O.z:F3},{x.u0:F3},{x.u1:F3},{x.w0:F3},{x.w1:F3},{x.y0:F3},{x.y1:F3},{x.Mitred}").OrderBy(t => t).ToList();
+            }
+            var with = AboveRoof(true);
+            Assert.NotEmpty(with);   // the parapet
+            Assert.Equal(AboveRoof(false), with);
         }
     }
 }

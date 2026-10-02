@@ -55,10 +55,9 @@ namespace Triband.Storey.Generate
                 var C = L0.At(N).C; double y = Derived.RoofY(b);
                 foreach (var s in b.shafts)
                 {
-                    if (!Cores.ShaftRoof(b, s)) continue;
-                    var f = Cores.FrameOf(b, s); bool st = s.type == CoreType.Stairs, fl = s.type == CoreType.Flight;
+                    if (!Cores.ShaftRoof(b, s) || s.type == CoreType.Flight) continue;   // straight flights come up through a railed opening
+                    var f = Cores.FrameOf(b, s); bool st = s.type == CoreType.Stairs;
                     double hx = st ? 1.45 : 1.35, hz = st ? 2.75 : 1.35, hh = st ? 2.7 : 2.9, cx = st ? 1.55 : 1.45, cz = st ? 2.85 : 1.45;
-                    if (fl) { hx = Dim.FLIGHT_W / 2 + Dim.CORE_T; hz = Dim.FLIGHT_D / 2 + Dim.CORE_T; hh = 2.7; cx = hx + 0.1; cz = hz + 0.1; }
                     op.OBox(f, -hx, hx, y, y + hh, -hz, hz, C.core, C.core, Skip.Top | Skip.Bot);
                     op.OBox(f, -cx, cx, y + hh, y + hh + 0.2, -cz, cz, C.roof);
                 }
