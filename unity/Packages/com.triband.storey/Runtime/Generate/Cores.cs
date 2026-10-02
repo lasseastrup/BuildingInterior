@@ -7,7 +7,15 @@ namespace Triband.Storey.Generate
     /// <summary>Stair and lift cores: placement queries shared by the generator and the editor.</summary>
     public static class Cores
     {
-        public static (double W, double D) Size(CoreData it) => it.type == CoreType.Stairs ? (Dim.STAIR_W, Dim.STAIR_D) : (Dim.LIFT_W, Dim.LIFT_D);
+        public static (double W, double D) Size(CoreData it) => it.type switch
+        {
+            CoreType.Stairs => (Dim.STAIR_W, Dim.STAIR_D),
+            CoreType.Flight => (Dim.FLIGHT_W, Dim.FLIGHT_D),
+            _ => (Dim.LIFT_W, Dim.LIFT_D),
+        };
+
+        /// <summary>Either kind of stairs.</summary>
+        public static bool IsStairs(CoreData s) => s.type != CoreType.Lift;
 
         static double Rad(CoreData it) => it.rot * Math.PI / 180;
 
@@ -34,7 +42,8 @@ namespace Triband.Storey.Generate
             return Math.Abs(qx) <= s.W / 2 + m && Math.Abs(qz) <= s.D / 2 + m;
         }
 
-        public static bool ShaftRoof(BuildingData b, CoreData s) => s.roof && Derived.ShaftTop(b, s) == b.floors.Count - 1 && !Roofs.IsPitched(b);
+        public static bool ShaftRoof(BuildingData b, CoreData s) =>
+            (s.type == CoreType.Flight ? s.bottom == b.floors.Count - 1 : s.roof && Derived.ShaftTop(b, s) == b.floors.Count - 1) && !Roofs.IsPitched(b);
 
         public static List<int> Levels(BuildingData b, CoreData s)
         {
@@ -45,10 +54,12 @@ namespace Triband.Storey.Generate
         }
 
         public static bool StairHoleAt(BuildingData b, CoreData s, int k) =>
-            s.type == CoreType.Stairs && k > s.bottom && (k <= Derived.ShaftTop(b, s) || (k == b.floors.Count && ShaftRoof(b, s)));
+            s.type == CoreType.Flight ? k == s.bottom + 1 && Levels(b, s).Contains(k)
+            : s.type == CoreType.Stairs && k > s.bottom && (k <= Derived.ShaftTop(b, s) || (k == b.floors.Count && ShaftRoof(b, s)));
 
         public static bool HasFlight(BuildingData b, CoreData s, int k)
         {
+            if (s.type == CoreType.Flight) return k == s.bottom && Levels(b, s).Count == 2;   // nothing to climb to under a pitched roof
             int T = Derived.ShaftTop(b, s);
             return s.type == CoreType.Stairs && k >= s.bottom && (k < T || (k == T && ShaftRoof(b, s)));
         }
@@ -57,7 +68,7 @@ namespace Triband.Storey.Generate
         public sealed class Flush { public int i; public double s0, s1; }
 
         /// <summary>
-        /// Which of the core's sides ([−x, +x, front (never), back]) sit on an outline edge with
+        /// Which of the core's sides ([−x, +x, front (never), back (never for a flight)]) sit on an outline edge with
         /// their inner face on the line, so the building's wall serves as the core's.
         /// </summary>
         public static Flush?[] CoreFlush(List<Vec2> fp, CoreData it, double? x = null, double? z = null, double? rot = null)
@@ -80,7 +91,8 @@ namespace Triband.Storey.Generate
                 }
                 return null;
             }
-            return new[] { OnEdge(P2(-hx, -ez), P2(-hx, ez)), OnEdge(P2(hx, -ez), P2(hx, ez)), null, OnEdge(P2(-ex, hz), P2(ex, hz)) };
+            // a single flight is open at both ends (in at the front, out at the back), so neither may stand on a wall
+            return new[] { OnEdge(P2(-hx, -ez), P2(-hx, ez)), OnEdge(P2(hx, -ez), P2(hx, ez)), null, it.type == CoreType.Flight ? null : OnEdge(P2(-ex, hz), P2(ex, hz)) };
         }
 
         /// <summary>A core fits an outline when its (grown) corners and edge midpoints are inside and no outline corner pokes into it.</summary>

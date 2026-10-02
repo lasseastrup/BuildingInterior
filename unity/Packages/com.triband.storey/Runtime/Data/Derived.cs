@@ -76,6 +76,7 @@ namespace Triband.Storey
 
         /// <summary>Top floor a core serves: its own top, or the building's top floor.</summary>
         public static int ShaftTop(BuildingData b, CoreData s) =>
-            s.top < 0 ? b.floors.Count - 1 : Math.Min(s.top, b.floors.Count - 1);
+            s.type == CoreType.Flight ? Math.Min(s.bottom + 1, b.floors.Count - 1)   // one floor up; from the top floor, the roof
+            : s.top < 0 ? b.floors.Count - 1 : Math.Min(s.top, b.floors.Count - 1);
     }
 }

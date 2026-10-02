@@ -23,6 +23,8 @@ namespace Triband.Storey.Editor
         /// <summary>The Facade tab's click tool: "", "entrance", "blank", or a detail kind ("ac", "vent", "dish", "escape", "awning").</summary>
         [SerializeField] internal string facadeTool = "";
         [SerializeField] internal int placeRot;
+        /// <summary>What the Stairs tool places: switchback stairs (every floor) or a single flight (one floor up).</summary>
+        [SerializeField] internal CoreType stairKind = CoreType.Stairs;
         [SerializeField] internal bool isolate;
         [SerializeField] internal string selectedCore = "";
         [SerializeField] internal int selectedWall = -1;

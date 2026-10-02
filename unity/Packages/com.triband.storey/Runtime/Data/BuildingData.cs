@@ -95,7 +95,11 @@ namespace Triband.Storey
         public double t;
     }
 
-    public enum CoreType { Stairs, Lift }
+    /// <summary>
+    /// Stairs: a switchback stair that serves every floor in its range. Lift. Flight: one straight flight from its floor
+    /// to the next (or up to a flat roof), in at its front on the floor it starts from and out at its back above.
+    /// </summary>
+    public enum CoreType { Stairs, Lift, Flight }
 
     public sealed class CoreData
     {

@@ -90,7 +90,13 @@ namespace Triband.Storey.Generate
                     if (Cores.StairHoleAt(b, s, k))
                     {
                         var f = Cores.FrameOf(b, s);
-                        holes.Add(new List<Vec2> { f.At2(-1.3, -1.6), f.At2(1.3, -1.6), f.At2(1.3, 2.6), f.At2(-1.3, 2.6) });
+                        if (s.type == CoreType.Flight)
+                        {
+                            // over the run only: the landing at the back is this floor
+                            double hw = Dim.FLIGHT_W / 2, z0 = -Dim.FLIGHT_D / 2 + Dim.FLIGHT_LANDING, z1 = Dim.FLIGHT_D / 2 - Dim.FLIGHT_LANDING;
+                            holes.Add(new List<Vec2> { f.At2(-hw, z0), f.At2(hw, z0), f.At2(hw, z1), f.At2(-hw, z1) });
+                        }
+                        else holes.Add(new List<Vec2> { f.At2(-1.3, -1.6), f.At2(1.3, -1.6), f.At2(1.3, 2.6), f.At2(-1.3, 2.6) });
                     }
             List<Vec2> V2(List<Vec2> pts) { var o = new List<Vec2>(pts.Count); foreach (var p in pts) o.Add(new Vec2(p.x + ox, p.z + oz)); return o; }
             void Surf(List<Vec2> contour, List<List<Vec2>> hs, double yy, P3 nr, Swatch c)
@@ -400,6 +406,45 @@ namespace Triband.Storey.Generate
                     int T = Derived.ShaftTop(b, s);
                     if (atRoof || (k == T && !Cores.ShaftRoof(b, s))) Rail(-1.3, -0.05);
                     if (k == s.bottom) Rail(0.05, 1.3);
+                }
+                else if (s.type == CoreType.Flight)
+                {
+                    // one straight flight to the floor above: in at the front (−z) on its own floor, out at the back (+z)
+                    // above, so each storey closes the other end; on the roof a bulkhead with its door at the back
+                    double hw = Dim.FLIGHT_W / 2, hd = Dim.FLIGHT_D / 2, CT = Dim.CORE_T, z0 = -hd + Dim.FLIGHT_LANDING, z1 = hd - Dim.FLIGHT_LANDING;
+                    bool start = k == s.bottom;
+                    double h = atRoof ? 2.7 : Derived.FloorH(b, k) - Dim.SLAB, xL = fL ? -hw : -hw - CT, xR = fR ? hw : hw + CT;
+                    Skip ends = TB | (atRoof ? Skip.Out | Skip.In : start ? Skip.Out : Skip.In);
+                    Skip across = TB | (fL ? Skip.UStart : Skip.None) | (fR ? Skip.UEnd : Skip.None);
+                    op.Ctx(Wl(-hw, -hd, -hw, hd, -1, 0), 1); if (!fL) Bx(-hw - CT, -hw, y, y + h, -hd, hd, C.core, C.coreIn, ends); else if (atRoof) Bx(-hw - TE, -hw, y, y + h, -hd - CT, hd + CT, C.wall, C.wall, TB);
+                    op.Ctx(Wl(hw, -hd, hw, hd, 1, 0), 1); if (!fR) Bx(hw, hw + CT, y, y + h, -hd, hd, C.core, C.coreIn, ends); else if (atRoof) Bx(hw, hw + TE, y, y + h, -hd - CT, hd + CT, C.wall, C.wall, TB);
+                    if (!fL) S(-hw - CT / 2, -hd, -hw - CT / 2, hd, CT / 2); else if (atRoof) S(-hw - TE / 2, -hd - CT, -hw - TE / 2, hd + CT, TE / 2);
+                    if (!fR) S(hw + CT / 2, -hd, hw + CT / 2, hd, CT / 2); else if (atRoof) S(hw + TE / 2, -hd - CT, hw + TE / 2, hd + CT, TE / 2);
+                    if (start)
+                    {
+                        op.Ctx(Wl(-hw - CT, hd, hw + CT, hd, 0, 1), 1); Bx(xL, xR, y, y + h, hd, hd + CT, C.core, C.coreIn, across);
+                        S(xL, hd + CT / 2, xR, hd + CT / 2, CT / 2);
+                    }
+                    else
+                    {
+                        op.Ctx(Wl(-hw - CT, -hd, hw + CT, -hd, 0, -1), 1); Bx(xL, xR, y, y + h, -hd - CT, -hd, C.core, C.coreIn, across);
+                        S(xL, -hd - CT / 2, xR, -hd - CT / 2, CT / 2);
+                    }
+                    if (atRoof)
+                    {
+                        op.Ctx(Wl(-hw - CT, hd, hw + CT, hd, 0, 1), 1);
+                        var ops = new List<Opening> { new Opening { u0 = -hw + 0.1, u1 = hw - 0.1, y0 = 0, y1 = 2.2, door = true } };
+                        Facade.WallOps(op, f, xL, xR, y, h, hd, hd + CT, ops, C.core, C.coreIn, across);
+                        foreach (var (a, e) in Facade.SolidRanges(xL, xR, ops)) S(a, hd + CT / 2, e, hd + CT / 2, CT / 2);
+                        op.Ctx(null, 0); Bx(fL ? -hw - TE - 0.1 : -hw - CT - 0.1, fR ? hw + TE + 0.1 : hw + CT + 0.1, y + h, y + h + 0.2, -hd - CT - 0.1, hd + CT + 0.1, C.roof);
+                    }
+                    op.Ctx(null, 0);
+                    if (Cores.HasFlight(b, s, k))
+                    {
+                        // risers of about 18 cm, whatever the storey's height, over a fixed run
+                        double fh = Derived.FloorH(b, k); int n = Math.Max(8, (int)Math.Round(fh / 0.18)); double run = (z1 - z0) / n;
+                        for (int i = 0; i < n; i++) { double za = z0 + i * run, t = y + (i + 1) * fh / n; Bx(-hw, hw, t - 0.2, t, za, za + run, C.step); }
+                    }
                 }
                 else
                 {

@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Stairs come as **Switchback** or **Single flight**, chosen under the Stairs tool or on selected stairs. A flight shows an arrow pointing up it, and can be reversed.
 - The Storey tool context (`StoreyToolContext`): the Shape, Facade and Interior tools belong to it, *Edit layout* enters it, and the built-in transform tools are off inside it.
 - Layouts stay inside the palette: with Color Pipeline, every edit, and opening a layout for editing, replaces colours the palette lacks with the nearest entry (`StoreyColorField.Conform`), and logs each change.
 - The Storey editor tools (docs/EDITOR.md, slices 6.4–6.7; stub-compiled, not yet run in an editor): Shape, Facade and Interior Scene view tools for a Storey Site, the Storey Floors overlay, the site inspector with the building bar and the three tabs, `FacadeStylePreset` assets, and the colour field hook with Color Pipeline's picker when it is installed (`Triband.Storey.Editor.ColorPipeline`).

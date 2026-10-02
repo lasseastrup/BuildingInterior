@@ -86,6 +86,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Draw walls by clicking a chain, or by dragging one. Rings mark points, diamonds mark walls, and dotted guides show alignment.
    - Doors, Erase, Stairs and Lift (**Turn 90°** in the inspector turns the next one), with green or red ghosts.
    - **Finish wall** in the Scene view ends a chain.
+   - Stairs come in two kinds, chosen under the Stairs tool or on selected stairs: **Switchback** (two flights and a landing per storey, every floor up to the top) and **Single flight** (one straight flight from its floor to the next, or up to a flat roof). The arrow on a flight points up it. You enter at the arrow's tail on the lower floor and come out at its head on the floor above. **Reverse** turns it round. A flight is 1.6 × 6.7 m, longer and narrower than switchback stairs. Its two ends are ways in and out, so only its sides can share a building wall.
    - Drag a core, a wall point and a "+": the walls and the building follow the pointer, and the drag is one undo step. Double-click a point to join or remove walls.
    - No key does anything Storey-specific.
    - Storey height, and the Storey Floors overlay: count, copy up, duplicate, delete.

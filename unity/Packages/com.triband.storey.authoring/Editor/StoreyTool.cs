@@ -161,6 +161,14 @@ namespace Triband.Storey.Editor
                 pts[j++] = W(b, new Vec2(R.c.x + R.u.x * a * R.hx + R.w.x * w * R.hz, R.c.z + R.u.z * a * R.hx + R.w.z * w * R.hz), y);
             Handles.color = c;
             Handles.DrawAAPolyLine(3f, pts);
+            if (it.type == CoreType.Flight)
+            {
+                // which way is up: an arrow from where the flight starts (front) to where it comes out (back)
+                Vector3 P(double a, double w) => W(b, new Vec2(R.c.x + R.u.x * a + R.w.x * w, R.c.z + R.u.z * a + R.w.z * w), y);
+                double l = R.hz * 0.7, hh = R.hx * 0.6;
+                Handles.DrawAAPolyLine(3f, P(0, -l), P(0, l));
+                Handles.DrawAAPolyLine(3f, P(-hh, l - hh), P(0, l), P(hh, l - hh));
+            }
         }
 
         protected static void Label(Vector3 at, string text) => Handles.Label(at, text, EditorStyles.whiteBoldLabel);

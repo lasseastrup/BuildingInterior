@@ -94,7 +94,7 @@ namespace Triband.Storey.Editor
                 case InteriorTool.Lift:
                     if (p == null) break;
                     {
-                        var (it, ok) = Shafts.Placement(b, k, p.Value, v.interiorTool == InteriorTool.Stairs ? CoreType.Stairs : CoreType.Lift, v.placeRot);
+                        var (it, ok) = Shafts.Placement(b, k, p.Value, v.interiorTool == InteriorTool.Stairs ? v.stairKind : CoreType.Lift, v.placeRot);
                         CoreRect(b, it, yy, ok ? Accent : Bad);
                     }
                     break;
@@ -123,7 +123,7 @@ namespace Triband.Storey.Editor
                 {
                     if (drag == Drag.None)
                     {
-                        BeginDragOf(e, Drag.Core, id, s.type == CoreType.Stairs ? "Move stairs" : "Move lift");
+                        BeginDragOf(e, Drag.Core, id, s.type == CoreType.Lift ? "Move lift" : "Move stairs");
                         v.selectedCore = s.id; v.selectedWall = -1; Inspectors();
                         var g = L(b, np); grabOffset = new Vec2(s.x - g.x, s.z - g.z);
                     }
@@ -236,13 +236,15 @@ namespace Triband.Storey.Editor
                 case InteriorTool.Stairs:
                 case InteriorTool.Lift:
                 {
-                    var type = v.interiorTool == InteriorTool.Stairs ? CoreType.Stairs : CoreType.Lift;
-                    bool placed = e.Apply(type == CoreType.Stairs ? "Stairs added" : "Lift added", d =>
+                    var type = v.interiorTool == InteriorTool.Stairs ? v.stairKind : CoreType.Lift;
+                    bool placed = e.Apply(type == CoreType.Lift ? "Lift added" : type == CoreType.Flight ? "Single flight added" : "Stairs added", d =>
                     {
                         var bb = d.buildings.First(x => x.id == b.id);
                         return Shafts.Place(bb, k, p, type, v.placeRot, Shafts.NewId(d)) != null;
                     });
-                    if (!placed) Notify(sv, "Needs room inside the footprint, clear of other cores");
+                    if (!placed) Notify(sv, type == CoreType.Flight && k == b.floors.Count - 1 && Roofs.IsPitched(b)
+                        ? "A flight from the top floor needs a flat roof to come up through"
+                        : "Needs room inside the footprint, clear of other cores");
                     return true;
                 }
             }

@@ -331,6 +331,11 @@ namespace Triband.Storey.Editor
                 for (int i = 0; i < b.shafts.Count; i++)
                 {
                     var s = b.shafts[i]; bool reach = Derived.ShaftTop(b, s) == N - 1; string id = s.id;
+                    if (s.type == CoreType.Flight)
+                    {
+                        EditorGUILayout.LabelField($"Single flight {i + 1}", s.bottom == N - 1 ? "comes up to the roof" : $"goes from {Floor(b, s.bottom)} to {Floor(b, s.bottom + 1)}");
+                        continue;
+                    }
                     using (new EditorGUI.DisabledScope(!reach))
                     {
                         bool roof = EditorGUILayout.Toggle($"{(s.type == CoreType.Stairs ? "Stairs" : "Lift")} {i + 1} reaches the roof", s.roof);
@@ -342,6 +347,12 @@ namespace Triband.Storey.Editor
             int tool = GUILayout.Toolbar((int)v.interiorTool, InteriorTools);
             if (tool != (int)v.interiorTool) { v.interiorTool = (InteriorTool)tool; SceneView.RepaintAll(); }
             EditorGUILayout.HelpBox(ToolHint(v.interiorTool), MessageType.None);
+            if (v.interiorTool == InteriorTool.Stairs)
+            {
+                int kind = GUILayout.Toolbar(v.stairKind == CoreType.Flight ? 1 : 0, new[] { new GUIContent("Switchback", "Two flights and a landing per storey, serving every floor up to the top (and the roof)"), new GUIContent("Single flight", "One straight flight from this floor to the next, or up to a flat roof") });
+                var want = kind == 1 ? CoreType.Flight : CoreType.Stairs;
+                if (want != v.stairKind) { v.stairKind = want; SceneView.RepaintAll(); }
+            }
             if (v.interiorTool == InteriorTool.Stairs || v.interiorTool == InteriorTool.Lift)
                 using (new EditorGUILayout.HorizontalScope())
                 {
@@ -375,8 +386,25 @@ namespace Triband.Storey.Editor
         void CoreInspector(StoreyEdit e, BuildingData b, CoreData s)
         {
             int N = b.floors.Count; string id = s.id;
-            EditorGUILayout.LabelField(s.type == CoreType.Stairs ? "Stairs" : "Lift", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(s.type == CoreType.Lift ? "Lift" : "Stairs", EditorStyles.boldLabel);
+            if (s.type != CoreType.Lift)
+            {
+                int kind = GUILayout.Toolbar(s.type == CoreType.Flight ? 1 : 0, new[] { "Switchback", "Single flight" });
+                var want = kind == 1 ? CoreType.Flight : CoreType.Stairs;
+                if (want != s.type && !e.ApplyTo(want == CoreType.Flight ? "Single flight" : "Switchback stairs", bb => Shafts.SetKind(bb, bb.shafts.First(x => x.id == id), want)))
+                    message = want == CoreType.Flight ? "No room for a single flight here (it is longer, and needs a flat roof from the top floor)" : "No room for switchback stairs here";
+            }
             var floors = Enumerable.Range(0, N).Select(k => Floor(b, k)).ToArray();
+            if (s.type == CoreType.Flight)
+            {
+                // one floor up: only where it starts is chosen (the top floor's flight comes up to the roof)
+                int start = EditorGUILayout.Popup("From", s.bottom, floors);
+                if (start != s.bottom && !e.ApplyTo("Flight moved to another floor", bb => { var c = bb.shafts.First(x => x.id == id); int was = c.bottom; c.bottom = start; if (Tiers.ShaftFits(bb, c) && (start < N - 1 || !Roofs.IsPitched(bb))) return true; c.bottom = was; return false; }))
+                    message = "No room for it there";
+                EditorGUILayout.LabelField("To", s.bottom == N - 1 ? (Roofs.IsPitched(b) ? "nowhere: the roof is pitched" : "the roof") : Floor(b, s.bottom + 1));
+                TurnAndRemove(e, s, id);
+                return;
+            }
             int from = EditorGUILayout.Popup("From", s.bottom, floors);
             if (from != s.bottom) e.ApplyTo("Core range", bb => { Shafts.SetBottom(bb.shafts.First(x => x.id == id), from); return true; });
             int to = EditorGUILayout.Popup("To", s.top < 0 ? 0 : s.top + 1, new[] { "Top floor" }.Concat(floors).ToArray());
@@ -384,6 +412,12 @@ namespace Triband.Storey.Editor
             if (top != s.top) e.ApplyTo("Core range", bb => { Shafts.SetTop(bb.shafts.First(x => x.id == id), top); return true; });
             bool roof = EditorGUILayout.Toggle("Continue to the roof", s.roof);
             if (roof != s.roof) e.ApplyTo(roof ? "Now reaches the roof" : "Stops at the top floor", bb => { bb.shafts.First(x => x.id == id).roof = roof; return true; });
+            TurnAndRemove(e, s, id);
+        }
+
+        /// <summary>Turning and removing, for every core.</summary>
+        void TurnAndRemove(StoreyEdit e, CoreData s, string id)
+        {
             using (new EditorGUILayout.HorizontalScope())
             {
                 double ang = EditorGUILayout.DelayedDoubleField("Angle", Math.Round(s.rot, 1));
@@ -393,6 +427,7 @@ namespace Triband.Storey.Editor
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (GUILayout.Button("Rotate 90°", EditorStyles.miniButton) && !e.ApplyTo("Turn core", bb => { var c = bb.shafts.First(x => x.id == id); return Shafts.SetAngle(bb, c, c.rot + 90); })) message = "No room to rotate here";
+                if (s.type == CoreType.Flight && GUILayout.Button(new GUIContent("Reverse", "Turn it round, so it starts at the other end"), EditorStyles.miniButton) && !e.ApplyTo("Flight reversed", bb => { var c = bb.shafts.First(x => x.id == id); return Shafts.SetAngle(bb, c, c.rot + 180); })) message = "No room to turn it round here";
                 if (GUILayout.Button("Remove", EditorStyles.miniButton)) { e.ApplyTo("Removed", bb => bb.shafts.RemoveAll(x => x.id == id) > 0); e.View.selectedCore = ""; }
             }
         }
@@ -403,7 +438,7 @@ namespace Triband.Storey.Editor
             InteriorTool.Wall => "Click to chain walls, or drag one · snaps to points (ring) and walls (diamond) · Alt: no snap · click the last point again, or Finish wall, to end",
             InteriorTool.Door => "Click a wall to add or remove a doorway",
             InteriorTool.Erase => "Click anything on this floor to remove it",
-            InteriorTool.Stairs => "Click to place · lines up with the nearest wall · runs to the top floor",
+            InteriorTool.Stairs => "Click to place · lines up with the nearest wall · switchback stairs run to the top floor; a single flight goes one floor up, the arrow pointing up it",
             _ => "Click to place · lines up with the nearest wall · serves every floor above",
         };
 

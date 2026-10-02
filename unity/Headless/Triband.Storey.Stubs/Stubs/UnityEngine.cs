@@ -192,6 +192,7 @@ namespace UnityEngine
         public static bool Toggle(bool value, string text, GUIStyle style, params GUILayoutOption[] options) => value;
         public static bool Toggle(bool value, GUIContent content, GUIStyle style, params GUILayoutOption[] options) => value;
         public static int Toolbar(int selected, string[] texts, params GUILayoutOption[] options) => selected;
+        public static int Toolbar(int selected, GUIContent[] contents, params GUILayoutOption[] options) => selected;
         public static void Label(string text, params GUILayoutOption[] options) { }
         public static void Label(string text, GUIStyle style, params GUILayoutOption[] options) { }
         public static void Space(float pixels) { }
