@@ -9,11 +9,11 @@ namespace Triband.Storey.Editor
 {
     /// <summary>
     /// The Storey tool context (docs/EDITOR.md §2): chosen in the Scene view's tool context menu for a selected Storey Site,
-    /// or by <b>Edit layout</b>. While it is active the Scene view's tools are the Shape, Facade and Interior tools, which
+    /// or by a tab in the site's inspector. While it is active the Scene view's tools are the Shape, Facade and Interior tools, which
     /// edit the layout. The built-in Move, Rotate, Scale, Rect and Transform tools are off, so the site cannot be moved by
     /// accident while its buildings are edited. Clicking empty space does not leave the context (Unity 6000.3 keeps
     /// every context but the GameObject one on such a click). Switching back to the GameObject context keeps the edit
-    /// open; <b>Stop editing</b> ends it.
+    /// open.
     /// </summary>
     [EditorToolContext("Storey", typeof(StoreySite))]
     internal sealed class StoreyToolContext : EditorToolContext
@@ -60,12 +60,6 @@ namespace Triband.Storey.Editor
             if (tab == StoreyTab.Shape) ToolManager.SetActiveTool<StoreyShapeTool>();
             else if (tab == StoreyTab.Facade) ToolManager.SetActiveTool<StoreyFacadeTool>();
             else ToolManager.SetActiveTool<StoreyInteriorTool>();
-        }
-
-        /// <summary>Back to the GameObject context, after an edit ends.</summary>
-        public static void Leave()
-        {
-            if (ToolManager.activeContextType == typeof(StoreyToolContext)) ToolManager.SetActiveContext<GameObjectToolContext>();
         }
     }
 }

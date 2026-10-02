@@ -10,7 +10,7 @@ These rules are ported to the engine-free `Runtime/Edit/` and judged against the
 
 ## 2. Authoring model in the editor
 
-- **One document per site.** A `.storey` file holds a street or district, as in the prototype, because party walls and edge snapping need the neighbours. A `StoreySite` component in the scene references the asset and draws it in edit mode. Buildings are selected inside it with the Storey tools (as ProBuilder selects faces), not as separate GameObjects. The tools belong to the **Storey tool context** (`StoreyToolContext`, an `EditorToolContext`). You enter it with *Edit layout*, or by choosing *Storey* in the Scene view's tool context menu with a site selected. While it is active, the Tools overlay shows Shape, Facade and Interior in place of Move, Rotate and Scale, so the site can't be moved by accident. Clicking empty space doesn't leave the context. *Stop editing* returns to the GameObject context.
+- **One document per site.** A `.storey` file holds a street or district, as in the prototype, because party walls and edge snapping need the neighbours. A `StoreySite` component in the scene references the asset and draws it in edit mode. Buildings are selected inside it with the Storey tools (as ProBuilder selects faces), not as separate GameObjects. The tools belong to the **Storey tool context** (`StoreyToolContext`, an `EditorToolContext`). You enter it with a tab (Shape, Facade, Interior) in the site's inspector, or by choosing *Storey* in the Scene view's tool context menu with a site selected. While it is active, the Tools overlay shows Shape, Facade and Interior in place of Move, Rotate and Scale, so the site can't be moved by accident. Clicking empty space doesn't leave the context; choose the GameObject context in the same menu to leave it.
 - **No keyboard shortcuts.** Every action (tool modes, isolate, floors, turning a core, removing, finishing a wall) is a button in the inspector, in the Storey Floors overlay or in the Scene view. `PackageLayoutTests` checks that the editor reads no keys. Per-building proxies in the Hierarchy can be added later if level design needs them.
 - **Edit session and undo.** Editing a site opens a `StoreyEditSession`, a hidden ScriptableObject holding the document's JSON. Every edit is `Undo.RecordObject(session, name)`, an operation from `Runtime/Edit`, and the JSON written back, so each edit is one named undo step and undo restores the text exactly. Saving (Ctrl+S, or leaving the tool) writes the `.storey` file and reimports it.
 - **Live preview.** The edited building and the neighbours whose shared walls changed regenerate after each edit, debounced, LOD0 only while editing (UNITY-PACKAGE-PLAN §4.3). Generation never runs in `OnValidate`.
@@ -34,10 +34,10 @@ Each slice is usable on its own and ends with its tests green. 6.1 and 6.2 are h
 Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildings an edit or an undo rebuilds; `ColorRowBookTests`: rows kept in place) and the Unity code compiles against the stubs. What only the editor can show:
 
 1. Add **Storey Site** to an empty GameObject; assign a `.storey` layout (the demo street, or `unity/Parity/demo-project.storey`) and the three materials (`Storey/…`, or the Color Palette Lit variants). The street draws **without pressing Play**, and nothing of it is saved with the scene (the generated objects are greyed out in the Hierarchy).
-2. **Edit layout** in the site's inspector, pick a building, type a floor count. The building (and the neighbours it shares walls with) changes at once; the rest of the street does not flicker.
+2. Select the site (editing starts at once), pick a building, type a floor count. The building (and the neighbours it shares walls with) changes at once; the rest of the street does not flicker.
 3. **Ctrl+Z / Ctrl+Y** step through the edits, each named in *Edit ▸ Undo History*.
-4. **Save** (or Ctrl+S, which saves the scene and the layout) writes the `.storey` file. Storey writes it in its own JSON layout, so the first save reformats a file that came from the prototype; the content is the same.
-5. Undo past a save: the inspector says *Unsaved* again. **Revert** goes back to the file; **Stop editing** asks before dropping changes.
+4. The layout saves itself to the `.storey` file: when you deselect the site, save the scene (Ctrl+S), enter Play mode or quit. There are no Save, Revert or Stop editing buttons; undo goes back as far as you need. Storey writes the file in its own JSON layout, so the first save reformats a file that came from the prototype; the content is the same.
+5. Change the `.storey` file outside the editor (a version control update) while the site has nothing unsaved: the site shows the new file at once.
 6. Enter and leave Play mode, and edit a script to force a domain reload, while editing: the edit and its undo history survive.
 
 ## 5. Slices 6.4–6.7: what is written, and checking it in the editor
@@ -65,7 +65,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
 
 **Checks in the editor**, after §4:
 
-1. **Edit layout**: the Scene view switches to the Storey tool context (the Tools overlay shows Shape, Facade and Interior, and Move, Rotate and Scale are gone). Click a building: it is selected, and the inspector shows its name and floor count. **Isolate** hides the others.
+1. Select the site and click a tab: the Scene view switches to the Storey tool context (the Tools overlay shows Shape, Facade and Interior, and Move, Rotate and Scale are gone). Click a building: it is selected, and the inspector shows its name and floor count. **Isolate** hides the others.
 2. **Shape:**
    - Drag a corner. It snaps to the neighbours' corners and edges, Alt moves it freely, and edge lengths show while you drag.
    - Drag a "+" to add a corner, and double-click a corner to remove it.

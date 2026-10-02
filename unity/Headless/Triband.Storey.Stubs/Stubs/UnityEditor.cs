@@ -71,9 +71,11 @@ namespace UnityEditor
 
     public class AssetPostprocessor { }
 
+    public enum PlayModeStateChange { EnteredEditMode, ExitingEditMode, EnteredPlayMode, ExitingPlayMode }
     public static class EditorApplication
     {
         public static event System.Func<bool> wantsToQuit;
+        public static event System.Action<PlayModeStateChange> playModeStateChanged;
         public static void QueuePlayerLoopUpdate() { }
         public static void EnterPlaymode() { }
         public static double timeSinceStartup => 0;

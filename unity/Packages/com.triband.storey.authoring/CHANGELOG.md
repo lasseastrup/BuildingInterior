@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+- Selecting a Storey Site starts editing it. The layout saves itself when the site is deselected, with the scene, before Play and on quit. The *Edit layout*, *Save*, *Revert* and *Stop editing* buttons are gone; undo replaces Revert.
+- An open layout with nothing unsaved follows its file when the file changes outside the editor.
+
 ### Added
 - **Details** in the Facade tab: window heads, glazing bars, frames, the band, street doors, plinth height, the foundation and brick patches, plus the Frames, Foundation and Plinth colours (docs/EDITOR.md §6.7).
 - Building templates (`StoreyBuildingTemplate`): **Save as template…** in the building bar, **New ▸ From template** to place one (docs/EDITOR.md §6.6).

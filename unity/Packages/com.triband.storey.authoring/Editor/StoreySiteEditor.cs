@@ -14,7 +14,8 @@ namespace Triband.Storey.Editor
     /// <summary>
     /// The site's inspector (docs/EDITOR.md slice 6.4; SPEC §9): the building bar (pick, new from a footprint, duplicate,
     /// delete, rename, isolate) and the Shape, Facade and Interior tabs, which also switch the Scene view's tool. What the
-    /// prototype's panel holds, field for field; Save, Revert and Stop editing at the bottom.
+    /// prototype's panel holds, field for field. Selecting the site starts editing it; the layout saves itself
+    /// (<see cref="StoreyEdit"/>).
     /// </summary>
     [CustomEditor(typeof(StoreySite))]
     internal sealed class StoreySiteEditor : UnityEditor.Editor
@@ -32,11 +33,9 @@ namespace Triband.Storey.Editor
             if (site.layout == null) return;
             EditorGUILayout.Space();
             var e = StoreyEdit.Of(site);
-            if (e == null)
-            {
-                if (GUILayout.Button("Edit layout")) { var ne = StoreyEdit.Begin(site); StoreyToolContext.Show(ne.View.tab); }
-                return;
-            }
+            // a different layout dropped into the field: the old one is saved, the new one opened
+            if (e != null && e.Path != AssetDatabase.GetAssetPath(site.layout)) { e.Save(); e.End(); e = null; }
+            e ??= StoreyEdit.Begin(site);
 
             var tr = site.transform;
             if (tr.rotation != Quaternion.identity || tr.lossyScale != Vector3.one)
@@ -59,8 +58,12 @@ namespace Triband.Storey.Editor
                     default: InteriorTab(e, b); break;
                 }
             }
-            EditorGUILayout.Space();
-            SaveBar(e);
+        }
+
+        void OnDisable()
+        {
+            // deselected: the layout is written to its file
+            if (target is StoreySite s && s != null && StoreyEdit.Of(s) is StoreyEdit e) e.Save();
         }
 
         static bool StoreyToolActive() => typeof(StoreyTool).IsAssignableFrom(ToolManager.activeToolType);
@@ -776,31 +779,5 @@ namespace Triband.Storey.Editor
         static string Floor(BuildingData b, int k) => k == b.floors.Count ? "Roof" : k == 0 ? "Ground" : "Floor " + k;
         static string Short(BuildingData b, int k) => k == b.floors.Count ? "R" : k == 0 ? "G" : k.ToString();
         static string Range(BuildingData b, Tier t) => t.k1 - 1 == t.k0 ? Floor(b, t.k0) : $"{Short(b, t.k0)}–{Short(b, t.k1 - 1)}";
-
-        // ---- save ----
-
-        void SaveBar(StoreyEdit e)
-        {
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                using (new EditorGUI.DisabledScope(!e.Dirty))
-                {
-                    if (GUILayout.Button("Save")) e.Save();
-                    if (GUILayout.Button("Revert")) e.Revert();
-                }
-                if (GUILayout.Button("Stop editing"))
-                {
-                    if (!e.Dirty) e.End();
-                    else
-                    {
-                        int r = EditorUtility.DisplayDialogComplex("Unsaved layout", e.Path + "\n\nSave the changes?", "Save", "Cancel", "Don't save");
-                        if (r == 0) { e.Save(); e.End(); }
-                        else if (r == 2) e.End();
-                    }
-                    if (StoreyEdit.Of((StoreySite)target) == null) StoreyToolContext.Leave();
-                }
-            }
-            if (e.Dirty) EditorGUILayout.HelpBox("Unsaved: Save, or save the scene (Ctrl+S).", MessageType.None);
-        }
     }
 }

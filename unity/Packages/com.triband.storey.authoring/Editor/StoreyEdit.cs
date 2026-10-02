@@ -14,8 +14,9 @@ namespace Triband.Storey.Editor
     /// <summary>
     /// Editing a site's layout (docs/EDITOR.md §2). Holds the layout's text, which is what Unity's undo records: every edit
     /// is one named undo step, and an undo hands the text back to the engine-free <see cref="EditSession"/>, which says
-    /// which buildings to build again. Saved to the <c>.storey</c> file on Save, with the scene, or when asked on quit.
-    /// Not saved with the scene itself; it survives domain reloads.
+    /// which buildings to build again. Opened when the site is selected, and saved to the <c>.storey</c> file by itself:
+    /// when the site is deselected, with the scene, before Play and on quit. Not saved with the scene itself; it survives
+    /// domain reloads.
     /// </summary>
     internal sealed class StoreyEdit : ScriptableObject
     {
@@ -191,16 +192,19 @@ namespace Triband.Storey.Editor
             AssetDatabase.ImportAsset(path);
         }
 
-        /// <summary>Back to the file's layout, as one undo step.</summary>
-        public void Revert()
+        /// <summary>
+        /// The file changed under an edit with nothing unsaved (a version control update, another tool): show what it
+        /// holds now, as one undo step.
+        /// </summary>
+        public void Reload()
         {
-            if (!Dirty) return;
-            Undo.RecordObject(this, "Revert layout");
-            text = file!.text;
+            if (Dirty || site == null || site.layout == null || site.layout.Json == text) return;
+            Undo.RecordObject(this, "Reload layout");
+            text = site.layout.Json; file!.text = text;
             Restored();
         }
 
-        /// <summary>Stop editing; unsaved changes are dropped (the caller asks first).</summary>
+        /// <summary>Close the edit; unsaved changes are dropped (callers save first).</summary>
         public void End()
         {
             open.Remove(this);
@@ -224,15 +228,16 @@ namespace Triband.Storey.Editor
         {
             Undo.undoRedoPerformed += () => { foreach (var e in open.ToList()) if (e != null) e.Restored(); };
             EditorSceneManager.sceneSaved += _ => { foreach (var e in open.ToList()) if (e != null) e.Save(); };   // Ctrl+S saves the layouts too
-            EditorApplication.wantsToQuit += () =>
-            {
-                var dirty = open.Where(e => e != null && e.Dirty).ToList();
-                if (dirty.Count == 0) return true;
-                int r = EditorUtility.DisplayDialogComplex("Unsaved layouts", string.Join("\n", dirty.Select(e => e.path)) + "\n\nSave the changes?", "Save", "Cancel", "Don't save");
-                if (r == 1) return false;
-                if (r == 0) foreach (var e in dirty) e.Save();
-                return true;
-            };
+            EditorApplication.playModeStateChanged += s => { if (s == PlayModeStateChange.ExitingEditMode) SaveAll(); };
+            EditorApplication.wantsToQuit += () => { SaveAll(); return true; };
+        }
+
+        static void SaveAll() { foreach (var e in open.ToList()) if (e != null) e.Save(); }
+
+        /// <summary>After a reimport: the open edits with nothing unsaved show what their files hold now.</summary>
+        internal static void ReloadAll()
+        {
+            foreach (var e in open.ToList()) if (e != null) e.Reload();
         }
     }
 
@@ -243,6 +248,7 @@ namespace Triband.Storey.Editor
         {
             if (imported.Any(p => p.EndsWith("." + StoreyImporter.Extension, StringComparison.OrdinalIgnoreCase)))
             {
+                StoreyEdit.ReloadAll();
                 EditorApplication.QueuePlayerLoopUpdate();
                 SceneView.RepaintAll();
             }
