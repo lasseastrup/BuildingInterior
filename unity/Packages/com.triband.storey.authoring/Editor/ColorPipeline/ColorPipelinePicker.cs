@@ -22,6 +22,8 @@ namespace Triband.Storey.Editor.ColorPipeline
         static ColorPipelinePicker()
         {
             StoreyColorField.Picker = new ColorPipelinePicker();
+            StoreyColorField.Defaults = () => StoreyColorSettings.Load()?.ToDefaults();
+            StoreyColorField.FillDefaults = FillDefaults;
             StoreyColorField.Conform = d =>
             {
                 ColorPaletteDefinition palette;
@@ -46,7 +48,8 @@ namespace Triband.Storey.Editor.ColorPipeline
             bool isId = ColorRef.IsPaletteId(value);
             if (isId && palette.TryGetColor(ColorPipelinePalette.Guid(value), out var d)) { def = d; c = d.Color; name = d.Name; }
             else if (isId) { var e = lookup(value); ColorUtility.TryParseHtmlString(e?.hex ?? "#FF00FF", out c); name = (e?.name ?? value) + " (not in the palette)"; }
-            else { ColorUtility.TryParseHtmlString(value, out c); name = value + " (matched to the palette on the next edit)"; }
+            else if (Nearest(palette, value) is ColorDefinition nd) { def = nd; c = nd.Color; name = $"{nd.Name} (nearest to {value.ToUpperInvariant()})"; }   // what it renders as
+            else { ColorUtility.TryParseHtmlString(value, out c); name = value; }
 
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -83,6 +86,39 @@ namespace Triband.Storey.Editor.ColorPipeline
                 }
             }
             return result;
+        }
+
+        // a hex colour's nearest entry, by the rule the renderer and conforming use; kept until the palette changes
+        static readonly Dictionary<string, ColorDefinition?> nearest = new Dictionary<string, ColorDefinition?>(StringComparer.OrdinalIgnoreCase);
+        static ColorPaletteDefinition? nearestOf; static int nearestCount;
+
+        static ColorDefinition? Nearest(ColorPaletteDefinition palette, string hex)
+        {
+            if (nearestOf != palette || nearestCount != palette.Colors.Count) { nearest.Clear(); nearestOf = palette; nearestCount = palette.Colors.Count; }
+            if (nearest.TryGetValue(hex, out var hit)) return hit;
+            var m = PaletteMatch.Nearest(hex, ColorPipelinePalette.Entries(palette));
+            ColorDefinition? d = null;
+            if (m != null) palette.TryGetColor(ColorPipelinePalette.Guid(m.Value.entry.id), out d);
+            return nearest[hex] = d;
+        }
+
+        static int FillDefaults()
+        {
+            ColorPaletteDefinition palette;
+            try { palette = ColorPaletteDefinition.Instance; } catch (Exception) { return 0; }
+            if (palette == null) return 0;
+            var s = StoreyColorSettings.Load();
+            if (s == null)
+            {
+                if (!AssetDatabase.IsValidFolder("Assets/Resources")) AssetDatabase.CreateFolder("Assets", "Resources");
+                s = ScriptableObject.CreateInstance<StoreyColorSettings>();
+                AssetDatabase.CreateAsset(s, "Assets/Resources/" + StoreyColorSettings.ResourcesName + ".asset");
+            }
+            Undo.RecordObject(s, "Store the default colours");
+            int n = s.FillUnsetDefaults(hex => Nearest(palette, hex)?.ID);
+            EditorUtility.SetDirty(s);
+            AssetDatabase.SaveAssets();
+            return n;
         }
 
         static SerializableGUID[]? Suggested(string field)

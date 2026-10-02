@@ -178,6 +178,7 @@ int atlasRow = offset / Shader.GetGlobalInt("_ColorAtlasWidth"); // goes into en
   - The colours it replaces are hex literals, and palette ids that the palette no longer has. A lost id is matched by its last colour in the layout's `palette` block. If the block doesn't have it, it is left alone and still renders as palette colour 0 with a warning.
   - The nearest entry is chosen exactly as the Model Remapper's auto-remap chooses it. The measure is `ColorFormulas`' CIE76 ΔE on colours floored to 8 bits, rounded half to even. The highest `GetColorSimilarity` wins, and the first of equal entries wins a tie.
   - This was checked against Color Pipeline's own `ColorFormulas` outside the repository. There was no difference over 200,000 random pairs, nor over 20,000 random colours matched against a 338-entry project palette. `PaletteConformTests` keeps the rule. `unity/tools/map_to_palette.py` uses the same rule.
+  - A style may leave an optional colour (doors, rails, lift buttons, …) unset, so it takes the project's default from `StoreyColorSettings`. A default the settings don't set is the prototype's hex colour, which renders as its nearest palette entry, and the inspector shows it as that entry. *Store the defaults in Storey Color Settings* writes those entries into the settings (`StoreyColorSettings.FillUnsetDefaults`), so after that no default is a hex colour either.
   - Without Color Pipeline there is no palette to keep to, so colours stay CSS hex.
 
 ### 3.9 Facade details (imported models, SPEC §4.4)

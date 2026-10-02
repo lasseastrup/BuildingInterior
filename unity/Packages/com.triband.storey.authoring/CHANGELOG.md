@@ -11,6 +11,8 @@
 - Package skeleton: editor assembly definition, smoke test (workstream 0).
 
 ### Changed
+- The facade presets are one **Preset** list (built-in, then the project's Facade Style assets) instead of a row of buttons.
+- With Color Pipeline, a default colour the project hasn't set shows as the palette colour it renders as, not "(matched to the palette on the next edit)", which was wrong: defaults are never matched by an edit. **Store the defaults in Storey Color Settings** stores them.
 - No keyboard shortcuts: the tool modes, Isolate, floor stepping, turning and removing are buttons (**Turn 90°** for placing stairs and lifts, **Finish wall** for a wall chain).
 
 ### Fixed

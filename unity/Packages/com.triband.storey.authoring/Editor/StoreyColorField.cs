@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using Triband.Storey.Edit;
+using Triband.Storey.Generate;
 using UnityEditor;
 using UnityEngine;
 
@@ -33,6 +34,15 @@ namespace Triband.Storey.Editor
         /// Color Pipeline's integration installs <see cref="PaletteConform.Apply"/> over its palette.
         /// </summary>
         public static Func<StoreyDocument, List<ConformedColor>>? Conform { get; set; }
+
+        /// <summary>The colours a style that leaves one out gets (the project's, with Color Pipeline); null for the prototype's.</summary>
+        public static Func<StyleDefaults?>? Defaults { get; set; }
+
+        /// <summary>
+        /// Store a palette colour for every default the project leaves unset (with Color Pipeline: in Storey Color
+        /// Settings, created if missing). Null when there is nothing to store them in. Returns how many it set.
+        /// </summary>
+        public static Func<int>? FillDefaults { get; set; }
 
         sealed class HexPicker : IStoreyColorPicker
         {

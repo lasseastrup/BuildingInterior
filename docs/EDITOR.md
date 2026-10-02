@@ -76,8 +76,8 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Something refused says why next to the pointer, for example "Stairs or a lift are in the way".
    - Each drag is one undo step.
 3. **Facade:**
-   - Presets (they keep the roof), windows, the three colours (Color Pipeline's picker if installed), the roof fields on the top style only.
-   - With Color Pipeline: a preset or a new building shows palette names, never "not a palette colour", and the Console lists each colour that was matched. Opening the demo street for editing matches its colours as one undo step.
+   - The **Preset** list (the five built-in presets, then the project's Facade Style assets; *Custom* when the style matches none; presets keep the roof), windows, the three colours (Color Pipeline's picker if installed), the roof fields on the top style only.
+   - With Color Pipeline: a preset or a new building shows palette names, never "not a palette colour", and the Console lists each colour that was matched. Opening the demo street for editing matches its colours as one undo step. Under *More options*, a default the project hasn't set shows as its nearest palette colour ("Brass (nearest to #8A8F93)"). **Store the defaults in Storey Color Settings** stores those colours, creating `Assets/Resources/StoreyColorSettings.asset` if there is none.
    - Give a setback its own style.
    - Entrance and Blank wall, then each detail: ghosts in orange (add) or green (remove), and refusals as a notification.
    - Save as preset…, then apply the asset to another building.

@@ -257,6 +257,7 @@ namespace Triband.Storey.Editor
                     Colour(e, b, k0, "Stairs and lifts", "core");
                     foreach (var f in new[] { ("Doors", "door"), ("Rails", "rail"), ("Metal", "metal"), ("Ceilings", "ceiling"), ("Lift inside", "liftInterior"), ("Lift button", "liftButton"), ("Detail metal", "detailMetal"), ("Grilles", "grille"), ("Detail dark", "detailDark"), ("Dishes", "dish") })
                         Colour(e, b, k0, f.Item1, f.Item2, optional: true);
+                    DefaultsNotice();
                 }
             }
             EditorGUILayout.LabelField("Click walls to add", EditorStyles.boldLabel);
@@ -272,21 +273,31 @@ namespace Triband.Storey.Editor
 
         void Presets(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
         {
+            // one list: the built-in presets, then the project's Facade Style assets; "Custom" once the style is edited
+            var assets = AssetDatabase.FindAssets("t:" + nameof(FacadeStylePreset)).Select(g => AssetDatabase.LoadAssetAtPath<FacadeStylePreset>(AssetDatabase.GUIDToAssetPath(g))).Where(a => a != null).Select(a => a!).ToList();
+            var names = Styles.Presets.Select(p => p.style.label).ToList();
+            if (assets.Count > 0) { names.Add(""); names.AddRange(assets.Select(a => "Project/" + a.name)); }
+            int current = Styles.Presets.ToList().FindIndex(p => p.key == st.preset);
+            bool custom = current < 0;
+            if (custom) { names.Insert(0, "Custom"); names.Insert(1, ""); }
+            int shift = custom ? 2 : 0;
             using (new EditorGUILayout.HorizontalScope())
             {
-                foreach (var (key, s) in Styles.Presets)
-                    if (GUILayout.Toggle(st.preset == key, s.label, EditorStyles.miniButton) && st.preset != key)
-                        e.ApplyTo(s.label + " applied", bb => { Styles.ApplyPreset(bb, k0, key); return true; });
-            }
-            var assets = AssetDatabase.FindAssets("t:" + nameof(FacadeStylePreset)).Select(g => AssetDatabase.LoadAssetAtPath<FacadeStylePreset>(AssetDatabase.GUIDToAssetPath(g))).Where(a => a != null).ToList();
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                foreach (var a in assets)
-                    if (GUILayout.Button(new GUIContent(a!.name, AssetDatabase.GetAssetPath(a)), EditorStyles.miniButton))
+                int pick = EditorGUILayout.Popup("Preset", custom ? 0 : current, names.ToArray());
+                int i = pick - shift;
+                if (pick != (custom ? 0 : current) && i >= 0)
+                {
+                    if (i < Styles.Presets.Count)
                     {
-                        var style = a.Style;
+                        var (key, ps) = Styles.Presets[i];
+                        e.ApplyTo(ps.label + " applied", bb => { Styles.ApplyPreset(bb, k0, key); return true; });
+                    }
+                    else if (i > Styles.Presets.Count)   // past the separator
+                    {
+                        var a = assets[i - Styles.Presets.Count - 1]; var style = a.Style;
                         e.ApplyTo(a.name + " applied", bb => { Styles.Apply(bb, k0, style); return true; });
                     }
+                }
                 if (GUILayout.Button(new GUIContent("Save as preset…", "Keep this style as a Facade Style asset, shared with every building"), EditorStyles.miniButton))
                 {
                     string path = EditorUtility.SaveFilePanelInProject("Facade style", st.label.Length > 0 ? st.label : "Facade Style", "asset", "Where the style preset goes");
@@ -403,7 +414,7 @@ namespace Triband.Storey.Editor
             var spec = StyleColorFields.All.First(f => f.name == field);
             var st = baseStyle ? b.style : Styles.Edited(b, k0);
             string? value = spec.get(st);
-            string shown = value ?? StyleColors.Of(st, SlotOf(field), new StyleDefaults()) ?? "#FF00FF";
+            string shown = value ?? StyleColors.Of(st, SlotOf(field), StoreyColorField.Defaults?.Invoke() ?? new StyleDefaults()) ?? "#FF00FF";
             var doc = e.Document;
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -413,6 +424,23 @@ namespace Triband.Storey.Editor
                     e.ApplyTo(label + " colour", bb => { spec.set(baseStyle ? bb.style : Styles.Edited(bb, k0), picked); return true; });
                 if (optional && value != null && GUILayout.Button(new GUIContent("Default", "Use the project's default colour"), EditorStyles.miniButton, GUILayout.Width(56)))
                     e.ApplyTo(label + " colour", bb => { spec.set(baseStyle ? bb.style : Styles.Edited(bb, k0), null!); return true; });
+            }
+        }
+
+        /// <summary>
+        /// The project leaves some defaults unset, so they are the prototype's colours, shown as their nearest palette
+        /// entries: offer to store those entries as the project's defaults.
+        /// </summary>
+        void DefaultsNotice()
+        {
+            if (StoreyColorField.FillDefaults == null) return;
+            var d = StoreyColorField.Defaults?.Invoke() ?? new StyleDefaults();
+            if (!new[] { d.door, d.rail, d.metal, d.ceiling, d.liftInterior, d.liftButton, d.detailMetal, d.grille, d.detailDark, d.dish }.Any(x => x != null && x.StartsWith("#"))) return;
+            EditorGUILayout.HelpBox("Some default colours aren't set for this project, so they show the nearest palette colour to the prototype's. Store those palette colours as the project's defaults (in Storey Color Settings) to pick them yourself.", MessageType.None);
+            if (GUILayout.Button("Store the defaults in Storey Color Settings"))
+            {
+                int n = StoreyColorField.FillDefaults();
+                message = n > 0 ? $"{n} default colour{(n == 1 ? "" : "s")} stored in Storey Color Settings." : null;
             }
         }
 

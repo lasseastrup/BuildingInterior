@@ -38,6 +38,25 @@ namespace Triband.Storey.ColorPipeline
 
         public static StoreyColorSettings? Load() => Resources.Load<StoreyColorSettings>(ResourcesName);
 
+        /// <summary>
+        /// Give every unset default the palette entry <paramref name="nearest"/> picks for the prototype's colour (what an
+        /// unset default already renders as), so no default is a colour outside the palette. Returns how many it set.
+        /// </summary>
+        public int FillUnsetDefaults(System.Func<string, SerializableGUID?> nearest)
+        {
+            var d = new StyleDefaults(); int n = 0;
+            SerializableGUID F(SerializableGUID id, string hex)
+            {
+                if (id.valid) return id;
+                var g = nearest(hex); if (g == null) return id;
+                n++; return g.Value;
+            }
+            door = F(door, d.door); rail = F(rail, d.rail); metal = F(metal, d.metal); ceiling = F(ceiling, d.ceiling);
+            liftInterior = F(liftInterior, d.liftInterior); liftButton = F(liftButton, d.liftButton);
+            detailMetal = F(detailMetal, d.detailMetal); grille = F(grille, d.grille); detailDark = F(detailDark, d.detailDark); dish = F(dish, d.dish);
+            return n;
+        }
+
         public StyleDefaults ToDefaults()
         {
             var d = new StyleDefaults();
