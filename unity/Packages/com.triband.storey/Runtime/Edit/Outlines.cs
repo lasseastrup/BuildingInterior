@@ -7,7 +7,7 @@ using Triband.Storey.Generate;
 namespace Triband.Storey.Edit
 {
     /// <summary>Why an outline is refused (<see cref="Outlines.Issue"/>), with the prototype's wording.</summary>
-    public enum OutlineIssue { None, Shape, Out, Up, Thin, Core }
+    public enum OutlineIssue { None, Shape, Out, Up, Thin, Core, Void }
 
     /// <summary>How <see cref="Outlines.Corner"/> cuts a corner: a straight chamfer, or a rounded arc.</summary>
     public enum CornerShape { Chamfer, Round }
@@ -26,6 +26,7 @@ namespace Triband.Storey.Edit
             OutlineIssue.Up => "The setback above would lose its footing",
             OutlineIssue.Thin => "Line the edge up with the floor below, or leave at least 0.8 m of terrace",
             OutlineIssue.Core => "Stairs or a lift are in the way",
+            OutlineIssue.Void => "A courtyard or atrium is in the way",
             _ => "",
         };
 
@@ -219,6 +220,7 @@ namespace Triband.Storey.Edit
                 if (!Cores.Levels(b, s).Any(k => k >= k0 && (k < k1 || (k == N && k1 == N)))) continue;
                 if (!Cores.CoreFits(fp, s)) return OutlineIssue.Core;
             }
+            if (!Voids.FitOutline(b, k0, fp)) return OutlineIssue.Void;
             return OutlineIssue.None;
         }
 

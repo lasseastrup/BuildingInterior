@@ -145,6 +145,7 @@ namespace UnityEditor
         public static void Label(Vector3 position, string text, GUIStyle style) { }
         public static Vector3 Slider2D(int id, Vector3 handlePos, Vector3 offset, Vector3 handleDir, Vector3 slideDir1, Vector3 slideDir2, float handleSize, CapFunction capFunction, Vector2 snap, bool drawHelper) => handlePos;
         public static Vector3 Slider(int controlID, Vector3 position, Vector3 direction, float size, CapFunction capFunction, float snap) => position;
+        public static bool Button(Vector3 position, Quaternion direction, float size, float pickSize, CapFunction capFunction) => false;
         public static void DotHandleCap(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType) { }
         public static void RectangleHandleCap(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType) { }
         public static void CubeHandleCap(int controlID, Vector3 position, Quaternion rotation, float size, EventType eventType) { }

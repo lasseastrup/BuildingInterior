@@ -198,6 +198,7 @@ namespace Triband.Storey.Editor
                 }
             }
             CornerSection(e, b, k0);
+            VoidSection(e, b);
             EditorGUILayout.LabelField("Storey height", EditorStyles.boldLabel);
             Slider(e, "Ground", b.groundHeight, 3, 6, 0.1, (bb, x) => bb.groundHeight = x);
             Slider(e, "Upper", b.floorHeight, 2.7, 4.5, 0.1, (bb, x) => bb.floorHeight = x);
@@ -251,6 +252,55 @@ namespace Triband.Storey.Editor
                     message = done == 0 ? "No corner can take a cut that size." : null;
                     v.selectedCorner = -1;
                 }
+            }
+        }
+
+        /// <summary>
+        /// The building's courtyards and atria (Voids): add one, pick which the Scene view edits, switch its kind, set the
+        /// storey it starts on, remove it.
+        /// </summary>
+        void VoidSection(StoreyEdit e, BuildingData b)
+        {
+            var v = e.View; int N = b.floors.Count;
+            EditorGUILayout.LabelField("Courtyards and atria", EditorStyles.boldLabel);
+            var floors = Enumerable.Range(0, N).Select(k => Floor(b, k)).ToArray();
+            for (int i = 0; i < b.voids.Count; i++)
+            {
+                var vd = b.voids[i]; string id = vd.id;
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    bool on = GUILayout.Toggle(v.selectedVoid == id, $"{(vd.kind == VoidKind.Courtyard ? "Courtyard" : "Atrium")} {i + 1}", EditorStyles.miniButton, GUILayout.Width(90));
+                    if (on && v.selectedVoid != id) { v.selectedVoid = id; SceneView.RepaintAll(); }
+                    int kind = GUILayout.Toolbar((int)vd.kind, new[] { new GUIContent("Courtyard", "Open to the sky, with facades and a door onto it"), new GUIContent("Atrium", "Inside: the floors above its bottom are open round it, under a skylight") }, EditorStyles.miniButton);
+                    if (kind != (int)vd.kind)
+                    {
+                        var why = VoidIssue.None;
+                        if (!e.ApplyTo(kind == 1 ? "Now an atrium" : "Now a courtyard", bb => (why = Voids.SetKind(bb, id, (VoidKind)kind)) == VoidIssue.None)) message = Voids.Why(why);
+                    }
+                    if (GUILayout.Button(new GUIContent("×", "Remove it"), EditorStyles.miniButton, GUILayout.Width(22)))
+                    {
+                        e.ApplyTo((vd.kind == VoidKind.Courtyard ? "Courtyard" : "Atrium") + " removed", bb => Voids.Remove(bb, id));
+                        if (v.selectedVoid == id) v.selectedVoid = "";
+                        return;
+                    }
+                }
+                int from = EditorGUILayout.Popup(vd.kind == VoidKind.Courtyard ? "   Paved on" : "   Floor on", Math.Min(vd.bottom, N - 1), floors);
+                if (from != vd.bottom)
+                {
+                    var why = VoidIssue.None;
+                    if (!e.ApplyTo("Starts on " + Floor(b, from), bb => (why = Voids.SetBottom(bb, id, from)) == VoidIssue.None)) message = Voids.Why(why);
+                }
+            }
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                foreach (var (kind, label) in new[] { (VoidKind.Courtyard, "Add courtyard"), (VoidKind.Atrium, "Add atrium") })
+                    if (GUILayout.Button(label))
+                    {
+                        string nid = "";
+                        bool ok = e.ApplyTo(label.Substring(4, 1).ToUpper() + label.Substring(5) + " added", bb => { var nv = Voids.Add(bb, kind, 0); nid = nv?.id ?? ""; return nv != null; });
+                        if (ok) { v.selectedVoid = nid; message = "Drag its green corners in the Scene view, or its centre to move it."; SceneView.RepaintAll(); }
+                        else message = "There's no room for one: it needs 2.5 × 2.5 m, 1.5 m inside the walls of every floor and clear of stairs and lifts.";
+                    }
             }
         }
 

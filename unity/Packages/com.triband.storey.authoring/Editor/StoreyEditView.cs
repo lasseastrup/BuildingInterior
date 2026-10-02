@@ -36,11 +36,13 @@ namespace Triband.Storey.Editor
         [SerializeField] internal Edit.CornerShape cornerShape = Edit.CornerShape.Chamfer;
         [SerializeField] internal float cornerSize = 2f;
         [SerializeField] internal bool cornerDoor;
+        /// <summary>The courtyard or atrium the Shape tool's handles edit, by id; "" for none.</summary>
+        [SerializeField] internal string selectedVoid = "";
 
         internal void Select(string id)
         {
             if (selectedId == id) return;
-            selectedId = id; tier = 0; floor = 0; selectedCore = ""; selectedWall = -1; selectedCorner = -1;
+            selectedId = id; tier = 0; floor = 0; selectedCore = ""; selectedWall = -1; selectedCorner = -1; selectedVoid = "";
         }
     }
 }

@@ -152,3 +152,36 @@ Engine-free: `Roofs.Make`, `RoofType.Mansard`, `FacadeStyle.mansard` and `Facade
 **Checks:**
 1. Set a building's roof to Mansard: steep sides, a shallow top. Change *Steep part*.
 2. Turn on Dormers on a hip, a gable and the mansard, then change *Dormers every*.
+
+### 6.3 Courtyards and atria
+
+**Courtyards and atria** in the Shape tab adds an opening through the building. It runs from a storey's floor up through the roof, and has two kinds:
+
+- **Courtyard:** open to the sky.
+  - Facades face into it, with windows and bands by the style.
+  - A door opens onto it on its bottom storey, in the middle of its longest edge.
+  - It's paved on its bottom storey (*Paved on*): the ground, or a podium deck on a floor above.
+  - A flat roof has a parapet round it. A pitched roof (hip, gable, shed or mansard) is cut back to the courtyard's walls, and walls rise from them to the roof, as a light well.
+- **Atrium:** inside the building.
+  - The floors above its bottom storey (*Floor on*) are cut open round it, with rails at each slab edge.
+  - A flat roof has a skylight over it: a curb and a glass roof. Under a pitched roof it stops at the top storey's ceiling.
+
+**Adding and editing.**
+- *Add courtyard* or *Add atrium* puts a rectangle in the roomiest part of the building, as big as fits, up to 8 × 8 m.
+- The selected one is green in the Scene view, at its bottom floor. Drag its corners (they line up with their neighbours; Alt moves them freely), click a + to add a corner, double-click a corner to remove it, and drag the centre to move it.
+- It must stay 1.5 m inside the outline of every floor it passes, clear of the stairs and lifts on the storeys it opens, and of other courtyards. A change that breaks this is refused, and says why.
+- The rules work both ways. Outlines, setbacks and cores are refused where they'd run into a courtyard, and a footprint preset drops courtyards that no longer fit.
+- Interior walls stop at the opening on the storeys it's open.
+
+**In play:** the walk model and the colliders are open over it. A courtyard is reached through its door; an atrium's rails stop you.
+
+Layouts with these are Storey's own: the prototype doesn't read them (`"voids"`).
+
+Engine-free: `Courtyards`, `Voids`, `VoidData` (`CourtyardTests`).
+
+**Checks:**
+1. *Add courtyard* on a 4-storey building. It shows green, and the building gets an open courtyard with windows facing in and a door on the ground floor. Drag a corner, and move it.
+2. Set *Paved on* to Floor 1: the ground floor is a room under it.
+3. Switch it to an atrium: rails on the floors above, and a skylight on the roof.
+4. Set the roof to Hip: the courtyard is a light well through it.
+5. Try to place stairs in it, or push an outside wall into it: both are refused.

@@ -180,6 +180,7 @@ namespace UnityEngine
         public static Quaternion identity => default;
         public static Quaternion Euler(float x, float y, float z) => default;
         public static Quaternion LookRotation(Vector3 forward, Vector3 upwards) => default;
+        public static Quaternion LookRotation(Vector3 forward) => default;
         public static bool operator ==(Quaternion a, Quaternion b) => true;
         public static bool operator !=(Quaternion a, Quaternion b) => false;
     }
@@ -240,6 +241,7 @@ namespace UnityEngine
         public static bool Toggle(bool value, GUIContent content, GUIStyle style, params GUILayoutOption[] options) => value;
         public static int Toolbar(int selected, string[] texts, params GUILayoutOption[] options) => selected;
         public static int Toolbar(int selected, GUIContent[] contents, params GUILayoutOption[] options) => selected;
+        public static int Toolbar(int selected, GUIContent[] contents, GUIStyle style, params GUILayoutOption[] options) => selected;
         public static void Label(string text, params GUILayoutOption[] options) { }
         public static void Label(string text, GUIStyle style, params GUILayoutOption[] options) { }
         public static void Space(float pixels) { }

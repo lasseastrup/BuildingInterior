@@ -117,7 +117,14 @@ namespace Triband.Storey
                 });
                 c.Check(dob, dp, "kind", "k", "edge", "t", "y");
             }
-            c.Check(o, path, "id", "name", "pos", "footprint", "floors", "shafts", "entrances", "details", "blank", "groundHeight", "floorHeight", "interior", "style", "gen");
+            i = 0;
+            foreach (var vv in c.Array(o, "voids", path))
+            {
+                var vo = c.Obj(vv, $"{path}.voids[{i}]"); var vp = $"{path}.voids[{i++}]";
+                b.voids.Add(new VoidData { id = c.Str(vo, "id", "", vp), kind = c.Enum<VoidKind>(vo, "kind", VoidKind.Courtyard, vp), shape = c.Points(vo, "shape", vp), bottom = c.Int(vo, "bottom", 0, vp) });
+                c.Check(vo, vp, "id", "kind", "shape", "bottom");
+            }
+            c.Check(o, path, "id", "name", "pos", "footprint", "floors", "shafts", "entrances", "details", "blank", "groundHeight", "floorHeight", "interior", "style", "gen", "voids");
             return b;
         }
 
@@ -271,6 +278,12 @@ namespace Triband.Storey
             o["interior"] = b.interior;
             o["style"] = Style(b.style);
             if (b.gen) o["gen"] = true;
+            if (b.voids.Count > 0)
+            {
+                var vs = new List<object?>();
+                foreach (var v in b.voids) vs.Add(new Dictionary<string, object?> { ["id"] = v.id, ["kind"] = Lower(v.kind), ["shape"] = Pts(v.shape), ["bottom"] = v.bottom });
+                o["voids"] = vs;
+            }
             return o;
         }
 

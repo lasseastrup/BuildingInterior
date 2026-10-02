@@ -69,8 +69,18 @@ namespace Triband.Storey.Generate
                 bool sh = Derived.ShellAt(b, k), shBelow = Derived.ShellAt(b, k - 1);
                 if (!(sh && shBelow) || k == N || sb) Slab(op, k, Cb, sh, false);
                 if (sb) { if (!Roofs.Draw(op, Roofs.TerraceRoof(site, b, k), Cb)) Terrace(op, sg, k, Cb); Overhang(op, k, g.C); }
-                if (k < N) { FacadeStorey(op, gl, sg, k, g); Details.Build(op, site, b, k, g.C, 0); if (!sh) Interior(op, sg, k, g.C); }
-                else Roof(op, sg, g, Cb);
+                foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && k == v.bottom && Courtyards.Live(b, v)) Courtyards.Pave(op, b, v, g.C);
+                if (k < N)
+                {
+                    FacadeStorey(op, gl, sg, k, g); Details.Build(op, site, b, k, g.C, 0);
+                    foreach (var v in b.voids) if (Courtyards.WallsAt(b, v, k)) Courtyards.Walls(op, gl, sg, b, v, k, g.C);
+                    if (!sh) { Interior(op, sg, k, g.C); foreach (var v in b.voids) if (Courtyards.RailsAt(b, v, k)) Courtyards.Rails(op, sg, b, v, k, g.C); }
+                }
+                else
+                {
+                    Roof(op, sg, g, Cb);
+                    if (!Roofs.IsPitched(b)) foreach (var v in b.voids) if (v.kind == VoidKind.Atrium && Courtyards.HoleAt(b, v, N)) Courtyards.Skylight(op, gl, sg, b, v, Cb);
+                }
                 if (!shell && !Derived.Filled(b, k)) Shafts(op, sg, k, g.C);
                 r.Segs.Add(sg);
                 yield return k;
@@ -103,6 +113,15 @@ namespace Triband.Storey.Generate
                         else holes.Add(new List<Vec2> { f.At2(-1.3, -1.6), f.At2(1.3, -1.6), f.At2(1.3, 2.6), f.At2(-1.3, 2.6) });
                     }
             List<Vec2> V2(List<Vec2> pts) { var o = new List<Vec2>(pts.Count); foreach (var p in pts) o.Add(new Vec2(p.x + ox, p.z + oz)); return o; }
+            // courtyards and atria cut every slab above their bottom; a courtyard's paving takes its bottom floor's place
+            var edged = new List<List<Vec2>>(holes);   // openings whose slab edge shows: stairs, and atria
+            var paved = new List<List<Vec2>>();
+            foreach (var v in b.voids)
+            {
+                if (Courtyards.HoleAt(b, v, k)) { var w = V2(v.shape); holes.Add(w); if (v.kind == VoidKind.Atrium) edged.Add(w); }
+                else if (v.kind == VoidKind.Courtyard && k == v.bottom && Courtyards.Live(b, v)) paved.Add(V2(v.shape));
+            }
+            var floorHoles = paved.Count == 0 ? holes : new List<List<Vec2>>(holes); floorHoles.AddRange(paved);
             void Surf(List<Vec2> contour, List<List<Vec2>> hs, double yy, P3 nr, Swatch c)
             {
                 var tris = Triangulate.Shape(contour, hs);
@@ -120,15 +139,15 @@ namespace Triband.Storey.Generate
                 if (step) op.Solids.Add(new Solid { Prism = V2(above!), y0 = yb, y1 = y });
             }
             var up = new P3(0, 1, 0); var down = new P3(0, -1, 0);
-            if (!step) Surf(outer, holes, y, up, k == N ? C.roof : C.floor);
+            if (!step) Surf(outer, floorHoles, y, up, k == N ? C.roof : C.floor);
             else
             {
-                if (!shell) Surf(V2(above!), holes, y, up, C.floor);
+                if (!shell) Surf(V2(above!), floorHoles, y, up, C.floor);
                 foreach (var poly in Geo.TerracePolys(below!, above!)) Surf(V2(poly[0]), poly.GetRange(1, poly.Count - 1).ConvertAll(V2), y, up, C.roof);
             }
             if (k > 0 && !topOnly) Surf(outer, holes, yb, down, C.ceil);
             if (step) foreach (var poly in Geo.TerracePolys(above!, below!)) Surf(V2(poly[0]), poly.GetRange(1, poly.Count - 1).ConvertAll(V2), yb, down, C.ceil);   // soffit under an overhang
-            foreach (var h in holes)
+            foreach (var h in edged)
             {
                 double cx = 0, cz = 0; foreach (var p in h) { cx += p.x; cz += p.z; } cx /= h.Count; cz /= h.Count;
                 for (int i = 0; i < h.Count; i++)
@@ -233,25 +252,7 @@ namespace Triband.Storey.Generate
                     var wc = Geo.WallCtx(e.a, e.u, e.w, e.L);
                     op.Ctx(wc, party ? 1 + 8 * (pc.r!.pIdx + 1) : 1); gl.Ctx(wc, 1);
                     Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : C.wall, C.inner, new Facade.PanelOpt { inner = !shell, threshold = k == 0, revealFrom = shell ? T * 0.45 : 0 });
-                    foreach (var o in ops)
-                    {
-                        if (o.door)
-                        {
-                            op.OBox(F, o.u0 - 0.08, o.u0, y, y + o.y1 + 0.08, T, T + 0.06, C.trim, C.trim, Skip.In | Skip.Bot);
-                            op.OBox(F, o.u1, o.u1 + 0.08, y, y + o.y1 + 0.08, T, T + 0.06, C.trim, C.trim, Skip.In | Skip.Bot);
-                            op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
-                            if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, T * 0.45, C.door, false);
-                        }
-                        else
-                        {
-                            if (shell) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, C.glassDark, false);
-                            else Facade.Pane(gl, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, C.glass, true);
-                            double ex = o.full ? 0 : 0.06, eh = o.full ? 0 : 0.04;
-                            op.OBox(F, o.u0 - ex, o.u1 + ex, y + o.y0 - 0.07, y + o.y0, T, T + 0.07, C.trim, C.trim, Skip.In);
-                            op.OBox(F, o.u0 - eh, o.u1 + eh, y + o.y1, y + o.y1 + 0.06, T, T + 0.04, C.trim, C.trim, Skip.In);
-                            if (o.u1 - o.u0 > 1.7) { double mm = (o.u0 + o.u1) / 2; op.OBox(F, mm - 0.03, mm + 0.03, y + o.y0, y + o.y1, T * 0.3, T * 0.6, C.trim, C.trim, Skip.Top | Skip.Bot); }
-                        }
-                    }
+                    Facade.Dress(op, gl, F, ops, y, C, shell);
                     if (!party) { op.Ctx(wc, 1); PieceStrips(op, k, F, m, pc, ops, y, h, C); }
                     var (cs, ce) = pm.Span(T / 2, T / 2);
                     var ranges = shell || party ? new List<(double, double)> { (cs, ce) } : Facade.SolidRanges(cs, ce, ops);
@@ -294,7 +295,7 @@ namespace Triband.Storey.Generate
             double y = Derived.FloorBase(b, k), hh = Derived.FloorH(b, k) - Dim.SLAB, ox = b.pos.x, oz = b.pos.z, E = Dim.T_INT / 2 - 0.02, t = Dim.T_INT / 2 + 0.025;
             var fp = Derived.OutlineAt(b, k);
             foreach (var w0 in b.floors[k].walls)
-                foreach (var wl in Geo.ClipWall(fp, w0))
+                foreach (var wl in Courtyards.ClipOut(b, k, Geo.ClipWall(fp, w0)))
                 {
                     var a = new Vec2(wl.a.x + ox, wl.a.z + oz); var c = new Vec2(wl.b.x + ox, wl.b.z + oz);
                     double dx = c.x - a.x, dz = c.z - a.z, L = Geo.Hypot(dx, dz); if (L < 0.05) continue;
@@ -353,6 +354,7 @@ namespace Triband.Storey.Generate
                 else Facade.StripPieces(op, F, m, R(m.Span(0, T)), y, y + 0.3, 0, T, C.trim, C.trim, Skip.Bot);
                 if (sg != null) foreach (var (cs, ce) in R(m.Span(T / 2, T / 2))) Facade.PushSeg(sg, F, cs, ce, T / 2, T / 2);
             }
+            foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && Courtyards.HoleAt(b, v, N)) Courtyards.RoofEdge(op, sg, b, v, C);
         }
 
         // ---- cores ---------------------------------------------------------------------------

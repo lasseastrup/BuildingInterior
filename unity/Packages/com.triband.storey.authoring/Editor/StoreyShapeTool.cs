@@ -22,7 +22,7 @@ namespace Triband.Storey.Editor
 
         public override GUIContent toolbarIcon => new GUIContent("Shape", "Storey Shape: outlines and setbacks");
 
-        enum Drag { None, Corner, Insert, Push, Move }
+        enum Drag { None, Corner, Insert, Push, Move, VoidCorner, VoidMove }
         Drag drag;
         int dragIndex, dragControl;
         List<Vec2>? dragBase;
@@ -31,6 +31,8 @@ namespace Triband.Storey.Editor
         string? refusal;
         // control ids by kind of handle, so adding a corner mid-drag does not renumber the other handles
         static readonly int CornerHint = "StoreyCorner".GetHashCode(), InsertHint = "StoreyInsert".GetHashCode(), PushHint = "StoreyPush".GetHashCode(), MoveHint = "StoreyMove".GetHashCode();
+        static readonly int VoidCornerHint = "StoreyVoidCorner".GetHashCode(), VoidInsertHint = "StoreyVoidInsert".GetHashCode(), VoidMoveHint = "StoreyVoidMove".GetHashCode();
+        Vec2 voidGrab;
 
         protected override void ToolGUI(StoreyEdit e, BuildingData b, SceneView sv)
         {
@@ -160,19 +162,108 @@ namespace Triband.Storey.Editor
                 }
             }
 
+            VoidHandles(e, b, sv, alt);
+
             if (drag != Drag.None)
             {
                 // edge lengths while dragging, and why the last change was refused
-                var cur = Tiers.Outline(e.Selected!, k0);
+                var dv = drag == Drag.VoidCorner || drag == Drag.VoidMove ? Voids.Of(e.Selected!, e.View.selectedVoid) : null;
+                var cur = dv != null ? dv.shape : Tiers.Outline(e.Selected!, k0);
+                double ly = dv != null ? Derived.FloorBase(e.Selected!, System.Math.Min(dv.bottom, e.Selected!.floors.Count)) + 0.03 : y;
                 for (int i = 0; i < cur.Count; i++)
                 {
                     var a = cur[i]; var c = cur[(i + 1) % cur.Count];
-                    Label(W(e.Selected!, new Vec2((a.x + c.x) / 2, (a.z + c.z) / 2), y), $"{Tiers.EdgeLen(cur, i):0.00} m");
+                    Label(W(e.Selected!, new Vec2((a.x + c.x) / 2, (a.z + c.z) / 2), ly), $"{Tiers.EdgeLen(cur, i):0.00} m");
                 }
                 if (refusal != null) Label(AlongRay(10), refusal);
                 // the drag ends when its handle lets go of the mouse, whichever event that came in (a used MouseUp
                 // no longer reads as one)
                 if (drag != Drag.Insert && GUIUtility.hotControl != dragControl) Finish(e, k0);
+            }
+        }
+
+        /// <summary>
+        /// The building's courtyards and atria, drawn green at their bottom floor: click one's outline or centre to select
+        /// it; the selected one's corners drag, a "+" on an edge adds a corner, a double-click removes one, and the centre
+        /// handle moves it. A change that does not fit is refused, and says why.
+        /// </summary>
+        void VoidHandles(StoreyEdit e, BuildingData b, SceneView sv, bool alt)
+        {
+            var ev = Event.current;
+            foreach (var v in b.voids.ToList())
+            {
+                if (v.shape.Count < 3) continue;
+                double y = Derived.FloorBase(b, System.Math.Min(v.bottom, b.floors.Count)) + 0.03;
+                bool sel = e.View.selectedVoid == v.id; string id = v.id;
+                if (ev.type == EventType.Repaint)
+                {
+                    var ring = v.shape.Select(p => W(b, p, y)).ToList(); ring.Add(ring[0]);
+                    Handles.color = sel ? Ok : new Color(Ok.r, Ok.g, Ok.b, 0.6f);
+                    if (sel) Handles.DrawAAPolyLine(4f, ring.ToArray()); else Handles.DrawDottedLines(ring.SelectMany((p, i) => i + 1 < ring.Count ? new[] { p, ring[i + 1] } : new Vector3[0]).ToArray(), 4f);
+                }
+                double cx = v.shape.Average(p => p.x), cz = v.shape.Average(p => p.z);
+                var centre = W(b, new Vec2(cx, cz), y);
+                int mid = GUIUtility.GetControlID(VoidMoveHint, FocusType.Passive);
+                Handles.color = Ok;
+                EditorGUI.BeginChangeCheck();
+                var np = Handles.Slider2D(mid, centre, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(centre, sel ? 0.13f : 0.09f), Handles.CircleHandleCap, Vector2.zero, false);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    if (!sel) { e.View.selectedVoid = id; Inspectors(); }
+                    if (drag != Drag.VoidMove) { BeginDragOf(e, Drag.VoidMove, 0, mid, "Move courtyard"); voidGrab = new Vec2(np.x, np.z); }
+                    double dx = Tiers.Cm(np.x - voidGrab.x), dz = Tiers.Cm(np.z - voidGrab.z);
+                    if (dx != 0 || dz != 0)
+                    {
+                        var why = VoidIssue.None;
+                        if (e.ApplyTo("Move courtyard", bb => (why = Voids.Move(bb, id, dx, dz)) == VoidIssue.None)) { voidGrab = new Vec2(voidGrab.x + dx, voidGrab.z + dz); refusal = null; }
+                        else refusal = Voids.Why(why);
+                    }
+                }
+                if (!sel) continue;
+                var shape = v.shape;
+                for (int i = 0; i < shape.Count; i++)
+                {
+                    int cid = GUIUtility.GetControlID(VoidCornerHint, FocusType.Passive);
+                    var at = W(b, shape[i], y);
+                    if (ev.type == EventType.MouseDown && ev.button == 0 && ev.clickCount == 2 && HandleUtility.nearestControl == cid)
+                    {
+                        int ii = i;
+                        if (!e.ApplyTo("Courtyard corner removed", bb => Voids.RemoveVertex(bb, id, ii))) Notify(sv, "A courtyard needs at least three corners, and room to fit");
+                        ev.Use(); return;
+                    }
+                    Handles.color = Ok;
+                    EditorGUI.BeginChangeCheck();
+                    var cp = Handles.Slider2D(cid, at, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(at), Handles.DotHandleCap, Vector2.zero, false);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        BeginDragOf(e, Drag.VoidCorner, i, cid, "Move courtyard corner");
+                        var q = new Vec2(Tiers.Cm(cp.x - b.pos.x), Tiers.Cm(cp.z - b.pos.z));
+                        if (!alt)
+                        {
+                            // in line with the neighbouring corners
+                            int n = shape.Count;
+                            foreach (int j in new[] { (i - 1 + n) % n, (i + 1) % n }) { var o = shape[j]; if (System.Math.Abs(o.x - q.x) < 0.4) q.x = o.x; if (System.Math.Abs(o.z - q.z) < 0.4) q.z = o.z; }
+                        }
+                        if (shape[i].x != q.x || shape[i].z != q.z)
+                        {
+                            var nf = Tiers.Copy(shape); nf[i] = q; int ii = i; var why = VoidIssue.None;
+                            refusal = e.ApplyTo("Move courtyard corner", bb => (why = Voids.SetShape(bb, id, nf)) == VoidIssue.None) ? null : Voids.Why(why);
+                        }
+                    }
+                }
+                for (int i = 0; i < shape.Count; i++)
+                {
+                    var a = shape[i]; var c = shape[(i + 1) % shape.Count];
+                    int pid = GUIUtility.GetControlID(VoidInsertHint, FocusType.Passive);
+                    if (Tiers.EdgeLen(shape, i) <= 1.2) continue;
+                    var m = W(b, new Vec2((a.x + c.x) / 2, (a.z + c.z) / 2), y);
+                    Handles.color = Faint;
+                    if (Handles.Button(m, Quaternion.LookRotation(Vector3.up), Size(m, 0.05f), Size(m, 0.07f), Handles.RectangleHandleCap))
+                    {
+                        int ii = i;
+                        e.ApplyTo("Courtyard corner added", bb => { Voids.InsertVertex(bb, id, ii); return true; });
+                    }
+                }
             }
         }
 

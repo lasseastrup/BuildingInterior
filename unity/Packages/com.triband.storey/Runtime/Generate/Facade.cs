@@ -120,6 +120,34 @@ namespace Triband.Storey.Generate
             return ops;
         }
 
+        /// <summary>
+        /// What dresses a facade's openings in LOD0: door frames and canopies, window sills, heads and mullions, and the
+        /// panes (see-through glass in <paramref name="gl"/>; opaque panes and closed doors on a <paramref name="shell"/> storey).
+        /// </summary>
+        public static void Dress(MeshBuilder op, MeshBuilder gl, Frame F, List<Opening> ops, double y, Palette C, bool shell)
+        {
+            double T = Dim.T_EXT;
+            foreach (var o in ops)
+            {
+                if (o.door)
+                {
+                    op.OBox(F, o.u0 - 0.08, o.u0, y, y + o.y1 + 0.08, T, T + 0.06, C.trim, C.trim, Skip.In | Skip.Bot);
+                    op.OBox(F, o.u1, o.u1 + 0.08, y, y + o.y1 + 0.08, T, T + 0.06, C.trim, C.trim, Skip.In | Skip.Bot);
+                    op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
+                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, T * 0.45, C.door, false);
+                }
+                else
+                {
+                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, C.glassDark, false);
+                    else Facade.Pane(gl, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, C.glass, true);
+                    double ex = o.full ? 0 : 0.06, eh = o.full ? 0 : 0.04;
+                    op.OBox(F, o.u0 - ex, o.u1 + ex, y + o.y0 - 0.07, y + o.y0, T, T + 0.07, C.trim, C.trim, Skip.In);
+                    op.OBox(F, o.u0 - eh, o.u1 + eh, y + o.y1, y + o.y1 + 0.06, T, T + 0.04, C.trim, C.trim, Skip.In);
+                    if (o.u1 - o.u0 > 1.7) { double mm = (o.u0 + o.u1) / 2; op.OBox(F, mm - 0.03, mm + 0.03, y + o.y0, y + o.y1, T * 0.3, T * 0.6, C.trim, C.trim, Skip.Top | Skip.Bot); }
+                }
+            }
+        }
+
         /// <summary>Stretches between doors (walls to collide with).</summary>
         public static List<(double, double)> SolidRanges(double uA, double uB, List<Opening> ops)
         {

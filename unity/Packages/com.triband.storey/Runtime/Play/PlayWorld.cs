@@ -139,6 +139,7 @@ namespace Triband.Storey.Play
                     if (yk > y + StepUp || yk <= best) continue;
                     if (!(k > 0 && On(Derived.OutlineAt(b, k - 1))) && !(k < N && On(Derived.OutlineAt(b, k)))) continue;   // the storey below's roof or terrace, or this storey's floor
                     if (b.shafts.Any(s => Cores.StairHoleAt(b, s, k) && InHole(s, ToCore(s, lx, lz).x, ToCore(s, lx, lz).z))) continue;
+                    if (b.voids.Any(v => Courtyards.HoleAt(b, v, k) && Geo.Pip(v.shape, lx, lz))) continue;   // a courtyard or an atrium is open here
                     best = yk;
                 }
                 foreach (var s in b.shafts)

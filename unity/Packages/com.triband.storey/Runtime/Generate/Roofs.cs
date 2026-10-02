@@ -41,7 +41,9 @@ namespace Triband.Storey.Generate
         {
             var st = Derived.StyleAt(b, b.floors.Count); if (st.roofType == RoofType.Flat) return null;
             int N = b.floors.Count, k0 = Derived.TierStart(b, N); var raw = Derived.OutlineAt(b, N);
-            return Make(b, st.roofType, st.pitch, st.eave, raw, PartyKinds(site, b, k0, raw), Derived.RoofY(b), null, st.mansard, st.dormers);
+            var R = Make(b, st.roofType, st.pitch, st.eave, raw, PartyKinds(site, b, k0, raw), Derived.RoofY(b), null, st.mansard, st.dormers);
+            if (b.voids.Count > 0) R.Parts = Courtyards.CutRoof(b, R.Parts, Derived.RoofY(b));   // courtyards open through the roof
+            return R;
         }
 
         static string[] PartyKinds(Site site, BuildingData b, int k0, List<Vec2> raw)

@@ -48,8 +48,14 @@ namespace Triband.Storey.Generate
                     }
                 }
                 Details.Build(op, site, b, k, C, 1);
+                foreach (var v in b.voids)
+                {
+                    if (Courtyards.WallsAt(b, v, k)) Courtyards.Walls(op, null, null, b, v, k, C);
+                    if (v.kind == VoidKind.Courtyard && k == v.bottom) Courtyards.Pave(op, b, v, C);
+                }
             }
             { var g = L0.At(N); L0.Roof(op, null, g, g.C); }
+            if (!Roofs.IsPitched(b)) foreach (var v in b.voids) if (v.kind == VoidKind.Atrium && Courtyards.HoleAt(b, v, N)) Courtyards.Skylight(op, null, null, b, v, L0.At(N).C);
             if (b.interior)
             {
                 var C = L0.At(N).C; double y = Derived.RoofY(b);

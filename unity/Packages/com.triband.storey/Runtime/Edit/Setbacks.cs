@@ -69,6 +69,7 @@ namespace Triband.Storey.Edit
             foreach (var t in Tiers.Of(b))
                 if (t.k0 > 0 && Outlines.Issue(b, t.k0, Derived.OutlineAt(b, t.k0)) != OutlineIssue.None) Remove(b, t.k0);
             b.shafts = b.shafts.Where(s => Tiers.ShaftFits(b, s)).ToList();
+            b.voids = b.voids.Where(v => Voids.Issue(b, v) == VoidIssue.None).ToList();
         }
     }
 }

@@ -188,7 +188,12 @@ namespace Triband.Storey.Generate
                             Quad(new[] { F.At(u0, y0, w0), F.At(u0, y0, w1), F.At(u0, y1, w1), F.At(u0, y1, w0) }, new P3(-e.u.x, 0, -e.u.z), ZZ, 0, 3);
                             Quad(new[] { F.At(u1, y0, w0), F.At(u1, y0, w1), F.At(u1, y1, w1), F.At(u1, y1, w0) }, new P3(e.u.x, 0, e.u.z), ZZ, 0, 3);
                         }
-                if (last && !pitched) Flat(new List<List<Vec2>> { fp }, top, 2, false);
+                if (last && !pitched)
+                {
+                    var rings = new List<List<Vec2>> { fp };
+                    foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, N)) rings.Add(v.shape);
+                    Flat(rings, top, 2, false);
+                }
                 else if (last) RoofPieces(Roofs.Parts(site, b)!.Parts);
                 else
                 {
@@ -206,6 +211,26 @@ namespace Triband.Storey.Generate
                             Quad(new[] { F.At(s0, yp, 0), F.At(e0, yp, 0), F.At(e1, yp, T), F.At(s1, yp, T) }, new P3(0, 1, 0), ZZ, 0, 3);
                         }
                     }
+                }
+            }
+            // courtyards: plain walls facing into each, from its paving up to the roof's top, and the paving
+            int courtSlot = -1;
+            foreach (var v in b.voids)
+            {
+                if (v.kind != VoidKind.Courtyard || !Courtyards.Live(b, v)) continue;
+                if (courtSlot < 0) courtSlot = Row(L0.At(N).C);
+                slot = courtSlot;
+                double y0 = Derived.FloorBase(b, v.bottom), y1 = pitched ? top : yTop;
+                foreach (var ring in Courtyards.Offset(v.shape, -T))
+                {
+                    bool ccw = Geo.Area2(ring) > 0; int n = ring.Count;
+                    for (int i = 0; i < n; i++)
+                    {
+                        var a = ring[i]; var c = ring[(i + 1) % n]; double L = Geo.Hypot(c.x - a.x, c.z - a.z); if (L < 1e-4) continue;
+                        double ux = (c.x - a.x) / L, uz = (c.z - a.z) / L; var nIn = ccw ? new P3(-uz, 0, ux) : new P3(uz, 0, -ux);
+                        Quad(new[] { new P3(a.x + ox, y0, a.z + oz), new P3(c.x + ox, y0, c.z + oz), new P3(c.x + ox, y1, c.z + oz), new P3(a.x + ox, y1, a.z + oz) }, nIn, ZZ, 0, 4);
+                    }
+                    Flat(new List<List<Vec2>> { ring }, y0, 2, false);
                 }
             }
             return M;

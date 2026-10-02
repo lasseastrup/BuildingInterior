@@ -136,6 +136,7 @@ namespace Triband.Storey.Play
                 if (k < N) outlines.Add(World(b, Derived.OutlineAt(b, k)));       // this storey's floor (an overhang reaches past the one below)
                 var holes = new List<List<Vec2>>();
                 foreach (var s in b.shafts) if (Cores.StairHoleAt(b, s, k)) holes.Add(HoleOf(b, s));
+                foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, k)) holes.Add(World(b, v.shape));
                 double y = Derived.FloorBase(b, k);
                 // as far out as the walk model lets the player stand: slabs run out under the walls
                 foreach (var poly in Geo.GrownUnion(outlines, Dim.T_EXT + 0.02, holes)) Flat(poly, y, CollisionKind.Floor);

@@ -24,7 +24,7 @@ namespace Triband.Storey.Edit
         public static bool FitsLevels(BuildingData b, CoreData it, int k0, int k1, double? x = null, double? z = null, double? rot = null)
         {
             for (int k = k0; k <= k1; k++) if (!Cores.CoreFits(Derived.OutlineAt(b, k), it, 0.16, x, z, rot)) return false;
-            return true;
+            return Voids.CoreClear(b, it, k0, k1, x, z, rot);   // and clear of the courtyards and atria open there
         }
 
         /// <summary>Two cores closer than the gap (separating-axis test on the oriented rectangles).</summary>

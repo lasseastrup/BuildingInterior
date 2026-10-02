@@ -48,7 +48,7 @@ namespace Triband.Storey.Edit
         public static bool ShaftFits(BuildingData b, CoreData s)
         {
             for (int k = s.bottom; k <= Derived.ShaftTop(b, s); k++) if (!Cores.CoreFits(Derived.OutlineAt(b, k), s)) return false;
-            return true;
+            return Voids.CoreClear(b, s, s.bottom, Derived.ShaftTop(b, s));
         }
 
         /// <summary>The prototype's <c>cm</c>: editing is free-form, coordinates are kept to the centimetre (JavaScript's rounding, halves up).</summary>

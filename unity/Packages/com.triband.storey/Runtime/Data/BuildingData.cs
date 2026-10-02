@@ -63,6 +63,27 @@ namespace Triband.Storey
         public FacadeStyle style = new FacadeStyle();
         /// <summary>True for buildings the prototype's city generator made; they are not part of the layout proper.</summary>
         public bool gen;
+        /// <summary>Courtyards and atria: openings through the storeys from <see cref="VoidData.bottom"/> up. Storey's own.</summary>
+        public List<VoidData> voids = new List<VoidData>();
+    }
+
+    /// <summary>
+    /// A courtyard is open to the sky, with facades facing into it and a door onto it on its bottom storey. An atrium is
+    /// inside: the floors above its bottom storey are open round it behind rails, under a skylight on a flat roof.
+    /// </summary>
+    public enum VoidKind { Courtyard, Atrium }
+
+    /// <summary>
+    /// An opening through the building (building-local outline, any simple polygon): from the floor of storey
+    /// <see cref="bottom"/> up through the roof. Storey's own.
+    /// </summary>
+    public sealed class VoidData
+    {
+        public string id = "";
+        public VoidKind kind;
+        public List<Vec2> shape = new List<Vec2>();
+        /// <summary>The storey whose floor is the void's floor: a courtyard's paving, an atrium's bottom floor.</summary>
+        public int bottom;
     }
 
     public sealed class FloorData
