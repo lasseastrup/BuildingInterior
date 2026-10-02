@@ -493,6 +493,28 @@ namespace Triband.Storey.Tests
             Assert.Equal(layouts, tags);
         }
 
+        /// <summary>
+        /// The editor has no keyboard shortcuts of its own (every action is a button), and its Scene view tools are the
+        /// Storey tool context's, so they show only in that context and the built-in transform tools stay off there.
+        /// </summary>
+        [Fact]
+        public void TheEditorToolsUseTheContextAndNoShortcuts()
+        {
+            var dir = Path.Combine(Layout.UnityRoot, "Packages", "com.triband.storey.authoring", "Editor");
+            int tools = 0;
+            foreach (var f in Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories))
+            {
+                string src = Code(File.ReadAllText(f));
+                Assert.False(Regex.IsMatch(src, @"\bKeyCode\.|EventType\.Key(Down|Up)\b|\bShortcut(Attribute)?\b"), $"{Path.GetFileName(f)} handles keys");
+                foreach (Match m in Regex.Matches(src, @"\[EditorTool\(([^\]]*)\)\]"))
+                {
+                    tools++;
+                    Assert.Contains("typeof(StoreyToolContext)", m.Groups[1].Value);
+                }
+            }
+            Assert.Equal(3, tools);
+        }
+
         private static string Code(string text)
         {
             var code = new System.Text.StringBuilder(text.Length);

@@ -10,9 +10,10 @@ namespace Triband.Storey.Editor
 {
     /// <summary>
     /// What the three Storey tools share (docs/EDITOR.md slices 6.5–6.7): only one set of handles in the Scene view at a
-    /// time (SPEC §9), a click that hits nothing of the tool's selects the building under the pointer, I isolates, [ and ]
-    /// step floors, and the site is drawn with the view the tab wants (the active storey clipped and cut away as in
-    /// play in the Interior tab).
+    /// time (SPEC §9), a click that hits nothing of the tool's selects the building under the pointer, and the site is
+    /// drawn with the view the tab wants (the active storey clipped and cut away as in play in the Interior tab). They
+    /// belong to <see cref="StoreyToolContext"/>. No keyboard shortcuts: everything is a button in the inspector or the
+    /// Storey Floors overlay.
     /// </summary>
     internal abstract class StoreyTool : EditorTool
     {
@@ -27,9 +28,6 @@ namespace Triband.Storey.Editor
 
         protected virtual void Release(StoreyEdit e, BuildingData b, Vec3d origin, Vec3d dir, SceneView sv) { }
 
-        /// <summary>A key the tool handles (the shared ones are taken first).</summary>
-        protected virtual bool Key(StoreyEdit e, BuildingData b, KeyCode key) => false;
-
         public override void OnToolGUI(EditorWindow window)
         {
             if (window is not SceneView sv) return;
@@ -38,7 +36,7 @@ namespace Triband.Storey.Editor
             if (e == null) { site.View = null; Hint("Edit layout in the Storey Site inspector to use this tool."); return; }
             if (e.View.tab != Tab) { e.View.tab = Tab; Inspectors(); }
             var b = e.Selected;
-            if (b != null) { ClampView(e, b); Keys(e, b); }
+            if (b != null) ClampView(e, b);
             // the layout lives in the site's local space: the meshes are the site's children, so the handles and rays are too
             toLocal = site.transform.worldToLocalMatrix;
             using (new Handles.DrawingScope(site.transform.localToWorldMatrix))
@@ -75,21 +73,6 @@ namespace Triband.Storey.Editor
                 ev.Use();
             }
             else if (ev.type == EventType.MouseDrag && GUIUtility.hotControl == id) { ev.Use(); sv.Repaint(); }
-        }
-
-        void Keys(StoreyEdit e, BuildingData b)
-        {
-            var ev = Event.current;
-            if (ev.type != EventType.KeyDown || ev.control || ev.command) return;
-            bool used = true;
-            switch (ev.keyCode)
-            {
-                case KeyCode.I: e.View.isolate = !e.View.isolate; break;
-                case KeyCode.LeftBracket: e.View.floor = System.Math.Max(0, e.View.floor - 1); break;
-                case KeyCode.RightBracket: e.View.floor = System.Math.Min(b.floors.Count, e.View.floor + 1); break;
-                default: used = Key(e, b, ev.keyCode); break;
-            }
-            if (used) { ev.Use(); Inspectors(); }
         }
 
         static void ClampView(StoreyEdit e, BuildingData b)

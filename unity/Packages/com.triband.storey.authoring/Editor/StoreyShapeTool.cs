@@ -15,7 +15,7 @@ namespace Triband.Storey.Editor
     /// height with the outline below dotted. Corners snap to neighbours, the outline below and the next corners (Alt:
     /// free); a refused change says why. Double-click a corner to remove it. Every drag is one undo step.
     /// </summary>
-    [EditorTool("Storey Shape", typeof(StoreySite))]
+    [EditorTool("Storey Shape", typeof(StoreySite), typeof(StoreyToolContext))]
     internal sealed class StoreyShapeTool : StoreyTool
     {
         protected override StoreyTab Tab => StoreyTab.Shape;
@@ -149,7 +149,9 @@ namespace Triband.Storey.Editor
                     Label(W(e.Selected!, new Vec2((a.x + c.x) / 2, (a.z + c.z) / 2), y), $"{Tiers.EdgeLen(cur, i):0.00} m");
                 }
                 if (refusal != null) Label(AlongRay(10), refusal);
-                if (drag != Drag.Insert && ev.rawType == EventType.MouseUp && GUIUtility.hotControl == 0) Finish(e, k0);
+                // the drag ends when its handle lets go of the mouse, whichever event that came in (a used MouseUp
+                // no longer reads as one)
+                if (drag != Drag.Insert && GUIUtility.hotControl != dragControl) Finish(e, k0);
             }
         }
 
@@ -186,7 +188,5 @@ namespace Triband.Storey.Editor
             e.ApplyTo("Change outline", bb => (why = Outlines.Set(bb, k0, nf)) == OutlineIssue.None);
             refusal = why == OutlineIssue.None ? null : Outlines.Why(why);
         }
-
-        protected override bool Key(StoreyEdit e, BuildingData b, KeyCode key) => false;
     }
 }

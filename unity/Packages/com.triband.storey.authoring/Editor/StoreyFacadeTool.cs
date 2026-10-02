@@ -14,7 +14,7 @@ namespace Triband.Storey.Editor
     /// with the tool picked in the Facade tab (an entrance or terrace door, a blank wall, or a facade detail), and the
     /// click that adds it or takes it off again. A refused click says why.
     /// </summary>
-    [EditorTool("Storey Facade", typeof(StoreySite))]
+    [EditorTool("Storey Facade", typeof(StoreySite), typeof(StoreyToolContext))]
     internal sealed class StoreyFacadeTool : StoreyTool
     {
         protected override StoreyTab Tab => StoreyTab.Facade;
@@ -80,13 +80,6 @@ namespace Triband.Storey.Editor
             else if (Enum.TryParse<DetailKind>(tool, true, out var kind))
                 e.ApplyTo(Details.Catalogue[kind].label, bb => (err = Facades.ToggleDetail(new Site(e.Document.buildings), bb, h, kind)) == null);
             if (err != null) Notify(sv, err);
-            return true;
-        }
-
-        protected override bool Key(StoreyEdit e, BuildingData b, KeyCode key)
-        {
-            if (key != KeyCode.Escape || e.View.facadeTool.Length == 0) return false;
-            e.View.facadeTool = "";
             return true;
         }
     }

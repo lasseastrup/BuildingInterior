@@ -210,6 +210,7 @@ namespace UnityEngine
     {
         public static void Label(Rect position, string text, GUIStyle style) { }
         public static bool Button(Rect position, GUIContent content, GUIStyle style) => false;
+        public static bool Button(Rect position, string text) => false;
     }
 
     public static class GUILayoutUtility

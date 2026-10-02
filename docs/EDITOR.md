@@ -10,7 +10,8 @@ These rules are ported to the engine-free `Runtime/Edit/` and judged against the
 
 ## 2. Authoring model in the editor
 
-- **One document per site.** A `.storey` file holds a street or district, as in the prototype, because party walls and edge snapping need the neighbours. A `StoreySite` component in the scene references the asset and draws it in edit mode. Buildings are selected inside it with the Storey tools (as ProBuilder selects faces), not as separate GameObjects. Per-building proxies in the Hierarchy can be added later if level design needs them.
+- **One document per site.** A `.storey` file holds a street or district, as in the prototype, because party walls and edge snapping need the neighbours. A `StoreySite` component in the scene references the asset and draws it in edit mode. Buildings are selected inside it with the Storey tools (as ProBuilder selects faces), not as separate GameObjects. The tools belong to the **Storey tool context** (`StoreyToolContext`, an `EditorToolContext`). You enter it with *Edit layout*, or by choosing *Storey* in the Scene view's tool context menu with a site selected. While it is active, the Tools overlay shows Shape, Facade and Interior in place of Move, Rotate and Scale, so the site can't be moved by accident. Clicking empty space doesn't leave the context. *Stop editing* returns to the GameObject context.
+- **No keyboard shortcuts.** Every action (tool modes, isolate, floors, turning a core, removing, finishing a wall) is a button in the inspector, in the Storey Floors overlay or in the Scene view. `PackageLayoutTests` checks that the editor reads no keys. Per-building proxies in the Hierarchy can be added later if level design needs them.
 - **Edit session and undo.** Editing a site opens a `StoreyEditSession`, a hidden ScriptableObject holding the document's JSON. Every edit is `Undo.RecordObject(session, name)`, an operation from `Runtime/Edit`, and the JSON written back, so each edit is one named undo step and undo restores the text exactly. Saving (Ctrl+S, or leaving the tool) writes the `.storey` file and reimports it.
 - **Live preview.** The edited building and the neighbours whose shared walls changed regenerate after each edit, debounced, LOD0 only while editing (UNITY-PACKAGE-PLAN §4.3). Generation never runs in `OnValidate`.
 
@@ -58,15 +59,14 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
 
 **Where this differs from the plan, for now:**
 - The inspector is IMGUI, not UI Toolkit. It is rebuilt from the layout on every draw, which keeps it simple while the fields settle; moving it to UI Toolkit later changes no data.
-- Shortcuts are handled by the tools while the Scene view has focus (V W D X S L R, [ ], I, Esc, Delete), not registered with the ShortcutManager, so they cannot be rebound yet.
-- Dragging a wall joint or a "+" previews the move and applies it on release. Corners, edges, buildings and cores apply live.
+- Dragging a wall point or a "+" moves the walls live. Each frame redoes the move from where the drag began, so the result is the prototype's single move on release: a point passing over another doesn't merge with it on the way.
 - While dragging, the edited building rebuilds all its LODs once per frame, not LOD0 only.
 - Facade details are the five built-in kinds. `FacadeDetailDefinition` assets (SPEC §4.4) need the generator to place imported models (docs/COLOURS.md §3.9) and come with that work.
 - Play from the Interior tab ("drop the character on this floor") waits for the play kit (workstream 5).
 
 **Checks in the editor**, after §4:
 
-1. **Edit layout**, then click a building in the Scene view: it is selected, and the inspector shows its name and floor count. I isolates it.
+1. **Edit layout**: the Scene view switches to the Storey tool context (the Tools overlay shows Shape, Facade and Interior, and Move, Rotate and Scale are gone). Click a building: it is selected, and the inspector shows its name and floor count. **Isolate** hides the others.
 2. **Shape:**
    - Drag a corner. It snaps to the neighbours' corners and edges, Alt moves it freely, and edge lengths show while you drag.
    - Drag a "+" to add a corner, and double-click a corner to remove it.
@@ -84,8 +84,10 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
 4. **Interior:**
    - The floors above the active one are hidden, and walls between the camera and the focus drop to a stub.
    - Draw walls by clicking a chain, or by dragging one. Rings mark points, diamonds mark walls, and dotted guides show alignment.
-   - Doors, Erase, Stairs and Lift (R turns them), with green or red ghosts.
-   - Drag a core, a joint and a "+". Double-click a joint to join or remove walls.
+   - Doors, Erase, Stairs and Lift (**Turn 90°** in the inspector turns the next one), with green or red ghosts.
+   - **Finish wall** in the Scene view ends a chain.
+   - Drag a core, a wall point and a "+": the walls and the building follow the pointer, and the drag is one undo step. Double-click a point to join or remove walls.
+   - No key does anything Storey-specific.
    - Storey height, and the Storey Floors overlay: count, copy up, duplicate, delete.
 5. **The exit test (Plan §8):** a styled 3-floor building in under 2 minutes. Then 10 floors with roof access in under 5: type 10 in the overlay, place stairs on the ground floor, check *reaches the roof* on the roof.
 

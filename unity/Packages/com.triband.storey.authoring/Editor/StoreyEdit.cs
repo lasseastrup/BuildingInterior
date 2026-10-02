@@ -55,6 +55,8 @@ namespace Triband.Storey.Editor
         }
 
         int group = -1;
+        string? dragText;
+        StoreyDocument? dragStart;
 
         /// <summary>Start a drag: every edit until <see cref="EndDrag"/> becomes one undo step.</summary>
         public void BeginDrag(string undoName)
@@ -62,12 +64,44 @@ namespace Triband.Storey.Editor
             Undo.IncrementCurrentGroup();
             Undo.SetCurrentGroupName(undoName);
             group = Undo.GetCurrentGroup();
+            dragText = text;
+            dragStart = null;
         }
 
         public void EndDrag()
         {
             if (group >= 0) Undo.CollapseUndoOperations(group);
             group = -1;
+            dragText = null; dragStart = null;
+        }
+
+        /// <summary>The layout as it was when the drag began (for handles that must stay put while it changes), or null.</summary>
+        public StoreyDocument? DragStart => dragText == null ? null : dragStart ??= PrototypeJson.Read(dragText).Document;
+
+        /// <summary>
+        /// One frame of a drag that is redone from where it began: the layout goes back to the drag's start, then
+        /// <paramref name="op"/> runs on the selected building. Wall points and splits move this way, so the walls follow
+        /// the pointer while the result is the prototype's single move on release (a point passing over another does not
+        /// merge with it on the way).
+        /// </summary>
+        public bool ApplyFromDragStart(string undoName, Func<BuildingData, bool> op)
+        {
+            if (dragText == null) return ApplyTo(undoName, op);
+            string bid = View.selectedId;
+            Undo.RecordObject(this, undoName);
+            var back = Core.Load(dragText);
+            var b = Core.Document.buildings.FirstOrDefault(x => x.id == bid);
+            bool ok = b != null && op(b);
+            if (!ok) Core.Discard();
+            var change = Core.Commit();
+            change.structural |= back.structural;
+            change.rebuild.UnionWith(back.rebuild);
+            if (change.None) return ok;
+            text = Core.Text;
+            EditorUtility.SetDirty(this);
+            site!.Preview(Core.Document, text, change);
+            Poke();
+            return ok;
         }
         EditSession Core => core ??= new EditSession(text);
 

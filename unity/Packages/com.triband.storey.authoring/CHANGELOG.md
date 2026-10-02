@@ -3,8 +3,15 @@
 ## [Unreleased]
 
 ### Added
+- The Storey tool context (`StoreyToolContext`): the Shape, Facade and Interior tools belong to it, *Edit layout* enters it, and the built-in transform tools are off inside it.
 - Layouts stay inside the palette: with Color Pipeline, every edit, and opening a layout for editing, replaces colours the palette lacks with the nearest entry (`StoreyColorField.Conform`), and logs each change.
 - The Storey editor tools (docs/EDITOR.md, slices 6.4–6.7; stub-compiled, not yet run in an editor): Shape, Facade and Interior Scene view tools for a Storey Site, the Storey Floors overlay, the site inspector with the building bar and the three tabs, `FacadeStylePreset` assets, and the colour field hook with Color Pipeline's picker when it is installed (`Triband.Storey.Editor.ColorPipeline`).
 - Editing a site's layout (docs/EDITOR.md, slice 6.3; not yet run in an editor): `StoreyEdit` makes every edit one named undo step, saves to the `.storey` file (also on scene save, and asks on quit) and survives domain reloads; a first `StoreySite` inspector starts and ends an edit and sets floor counts. A reimported `.storey` file shows at once.
 - `.storey` ScriptedImporter and **Tools > Storey > Import Prototype Layout...** (workstream 1).
 - Package skeleton: editor assembly definition, smoke test (workstream 0).
+
+### Changed
+- No keyboard shortcuts: the tool modes, Isolate, floor stepping, turning and removing are buttons (**Turn 90°** for placing stairs and lifts, **Finish wall** for a wall chain).
+
+### Fixed
+- Dragging a wall point or a "+" now moves the walls while dragging. Before, it showed only a dotted preview, and the move could fail to apply on release.

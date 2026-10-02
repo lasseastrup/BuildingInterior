@@ -66,7 +66,11 @@ namespace UnityEditor
     {
         public static event System.Func<bool> wantsToQuit;
         public static void QueuePlayerLoopUpdate() { }
+        public delegate void CallbackFunction();
+        public static CallbackFunction delayCall;
     }
+
+    public enum Tool { View = 0, Move = 1, Rotate = 2, Scale = 3, Rect = 4, Transform = 5, Custom = 6, None = -1 }
 
     public static class Undo
     {
@@ -187,6 +191,7 @@ namespace UnityEditor
         public static bool Foldout(bool foldout, string content, bool toggleOnLabelClick) => foldout;
         public static void LabelField(string label, params GUILayoutOption[] options) { }
         public static void LabelField(string label, GUIStyle style, params GUILayoutOption[] options) { }
+        public static void LabelField(string label, string label2, params GUILayoutOption[] options) { }
         public static void PrefixLabel(string label) { }
         public static Color ColorField(GUIContent label, Color value, bool showEyedropper, bool showAlpha, bool hdr, params GUILayoutOption[] options) => value;
     }
@@ -228,8 +233,22 @@ namespace UnityEditor.EditorTools
 {
     public sealed class EditorToolAttribute : System.Attribute
     {
-        public EditorToolAttribute(string displayName, System.Type componentToolTarget) { }
+        public EditorToolAttribute(string displayName, System.Type componentToolTarget, System.Type editorToolContext) { }
     }
+
+    public sealed class EditorToolContextAttribute : System.Attribute
+    {
+        public EditorToolContextAttribute(string displayName, System.Type targetType) { }
+    }
+
+    public abstract class EditorToolContext : ScriptableObject
+    {
+        public virtual bool overridesDefaultSelection => false;
+        public virtual void OnActivated() { }
+        protected virtual System.Type GetEditorToolType(Tool tool) => null;
+    }
+
+    public sealed class GameObjectToolContext : EditorToolContext { }
 
     public abstract class EditorTool : ScriptableObject
     {
@@ -243,6 +262,8 @@ namespace UnityEditor.EditorTools
     {
         public static System.Type activeToolType => typeof(object);
         public static void SetActiveTool<T>() where T : EditorTool { }
+        public static System.Type activeContextType => typeof(object);
+        public static void SetActiveContext<T>() where T : EditorToolContext { }
         public static void RestorePreviousPersistentTool() { }
     }
 }

@@ -22,7 +22,7 @@ namespace Triband.Storey.Editor
         static readonly string[] TabNames = { "Shape", "Facade", "Interior" };
         static readonly string[] ShapeKeys = { "rect", "L", "U", "T", "oct" }, ShapeLabels = { "Rect", "L", "U", "T", "Octa" };
         static readonly (string tool, string label)[] FacadeTools = { ("entrance", "Entrance"), ("blank", "Blank wall"), ("ac", "AC unit"), ("vent", "Vent"), ("dish", "Dish"), ("escape", "Fire escape"), ("awning", "Awning") };
-        static readonly string[] InteriorTools = { "Select (V)", "Wall (W)", "Door (D)", "Erase (X)", "Stairs (S)", "Lift (L)" };
+        static readonly string[] InteriorTools = { "Select", "Wall", "Door", "Erase", "Stairs", "Lift" };
         string? message;
 
         public override void OnInspectorGUI()
@@ -34,7 +34,7 @@ namespace Triband.Storey.Editor
             var e = StoreyEdit.Of(site);
             if (e == null)
             {
-                if (GUILayout.Button("Edit layout")) { StoreyEdit.Begin(site); ToolManager.SetActiveTool<StoreyShapeTool>(); }
+                if (GUILayout.Button("Edit layout")) { var ne = StoreyEdit.Begin(site); StoreyToolContext.Show(ne.View.tab); }
                 return;
             }
 
@@ -67,9 +67,7 @@ namespace Triband.Storey.Editor
         static void SetTab(StoreyEditView v, StoreyTab t)
         {
             v.tab = t;
-            if (t == StoreyTab.Shape) ToolManager.SetActiveTool<StoreyShapeTool>();
-            else if (t == StoreyTab.Facade) ToolManager.SetActiveTool<StoreyFacadeTool>();
-            else ToolManager.SetActiveTool<StoreyInteriorTool>();
+            StoreyToolContext.Show(t);
         }
 
         // ---- building bar ----
@@ -120,7 +118,7 @@ namespace Triband.Storey.Editor
             {
                 string name = EditorGUILayout.DelayedTextField("Name", sb.name);
                 if (name != sb.name && name.Trim().Length > 0) e.ApplyTo("Renamed to " + name, bb => { bb.name = name.Trim(); return true; });
-                bool iso = GUILayout.Toggle(v.isolate, new GUIContent("Isolate", "Hide every other building (I)"), EditorStyles.miniButton, GUILayout.Width(56));
+                bool iso = GUILayout.Toggle(v.isolate, new GUIContent("Isolate", "Hide every other building"), EditorStyles.miniButton, GUILayout.Width(56));
                 if (iso != v.isolate) { v.isolate = iso; SceneView.RepaintAll(); }
             }
         }
@@ -267,7 +265,7 @@ namespace Triband.Storey.Editor
                 foreach (var (tool, label) in FacadeTools)
                 {
                     bool on = GUILayout.Toggle(v.facadeTool == tool, label, EditorStyles.miniButton);
-                    if (on != (v.facadeTool == tool)) { v.facadeTool = on ? tool : ""; if (on) ToolManager.SetActiveTool<StoreyFacadeTool>(); SceneView.RepaintAll(); }
+                    if (on != (v.facadeTool == tool)) { v.facadeTool = on ? tool : ""; if (on) StoreyToolContext.Show(StoreyTab.Facade); SceneView.RepaintAll(); }
                 }
             }
         }
@@ -333,6 +331,12 @@ namespace Triband.Storey.Editor
             int tool = GUILayout.Toolbar((int)v.interiorTool, InteriorTools);
             if (tool != (int)v.interiorTool) { v.interiorTool = (InteriorTool)tool; SceneView.RepaintAll(); }
             EditorGUILayout.HelpBox(ToolHint(v.interiorTool), MessageType.None);
+            if (v.interiorTool == InteriorTool.Stairs || v.interiorTool == InteriorTool.Lift)
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField("Placed at", $"{v.placeRot}° from the nearest wall");
+                    if (GUILayout.Button("Turn 90°", EditorStyles.miniButton, GUILayout.Width(64))) { v.placeRot = (v.placeRot + 90) % 360; SceneView.RepaintAll(); }
+                }
 
             var core = b.shafts.FirstOrDefault(s => s.id == v.selectedCore);
             if (core != null) CoreInspector(e, b, core);
@@ -385,11 +389,11 @@ namespace Triband.Storey.Editor
         static string ToolHint(InteriorTool t) => t switch
         {
             InteriorTool.Select => "Drag wall points to reshape rooms · drag + to split a wall · double-click a point to join or remove · drag stairs and lifts · Alt: no snap",
-            InteriorTool.Wall => "Click to chain walls · snaps to points (ring) and walls (diamond) · Esc to finish",
+            InteriorTool.Wall => "Click to chain walls, or drag one · snaps to points (ring) and walls (diamond) · Alt: no snap · click the last point again, or Finish wall, to end",
             InteriorTool.Door => "Click a wall to add or remove a doorway",
             InteriorTool.Erase => "Click anything on this floor to remove it",
-            InteriorTool.Stairs => "Click to place · lines up with the nearest wall · runs to the top floor · R turns 90°",
-            _ => "Click to place · lines up with the nearest wall · serves every floor above · R turns 90°",
+            InteriorTool.Stairs => "Click to place · lines up with the nearest wall · runs to the top floor",
+            _ => "Click to place · lines up with the nearest wall · serves every floor above",
         };
 
         // ---- fields ----
@@ -466,7 +470,7 @@ namespace Triband.Storey.Editor
                         if (r == 0) { e.Save(); e.End(); }
                         else if (r == 2) e.End();
                     }
-                    if (StoreyEdit.Of((StoreySite)target) == null && StoreyToolActive()) ToolManager.RestorePreviousPersistentTool();
+                    if (StoreyEdit.Of((StoreySite)target) == null) StoreyToolContext.Leave();
                 }
             }
             if (e.Dirty) EditorGUILayout.HelpBox("Unsaved: Save, or save the scene (Ctrl+S).", MessageType.None);

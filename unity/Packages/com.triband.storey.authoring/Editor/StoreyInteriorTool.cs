@@ -12,11 +12,12 @@ namespace Triband.Storey.Editor
 {
     /// <summary>
     /// The Interior tool (docs/EDITOR.md slice 6.6) on the active storey, with the floors above clipped and the walls in
-    /// the way cut away as in play. Select (V): drag stairs and lifts, wall joints and the "+" on a wall; click a wall to
-    /// select it; Delete removes, R turns a core. Wall (W): click to chain walls, or drag one; snaps to points (ring) and
-    /// walls (diamond), Alt for free, Esc to finish. Door (D), Erase (X), Stairs (S), Lift (L; R turns the new core).
+    /// the way cut away as in play. The mode is picked in the Interior tab (no shortcuts). Select: drag stairs and lifts,
+    /// wall points and the "+" on a wall, and the walls follow; click a wall or a core to select it, then remove or turn
+    /// it in the inspector. Wall: click to chain walls, or drag one; snaps to points (ring) and walls (diamond), Alt for
+    /// free; click the last point again, or Finish wall, to end the chain. Door, Erase, Stairs and Lift.
     /// </summary>
-    [EditorTool("Storey Interior", typeof(StoreySite))]
+    [EditorTool("Storey Interior", typeof(StoreySite), typeof(StoreyToolContext))]
     internal sealed class StoreyInteriorTool : StoreyTool
     {
         protected override StoreyTab Tab => StoreyTab.Interior;
@@ -31,7 +32,7 @@ namespace Triband.Storey.Editor
         // a drag in progress with the Select tool
         enum Drag { None, Core, Joint, Split }
         Drag drag;
-        string dragKey = ""; int dragWall = -1; Vec2 grabOffset; Vector3 dragAt;
+        int dragId; Vec2 grabOffset; Vector3 dragAt;
 
         protected override void ToolGUI(StoreyEdit e, BuildingData b, SceneView sv)
         {
@@ -41,6 +42,7 @@ namespace Triband.Storey.Editor
             double y = Derived.FloorBase(b, k), yy = y + 0.02;
             var ev = Event.current; bool alt = ev.alt;
             var walls = b.floors[k].walls;
+            if (v.interiorTool != InteriorTool.Wall) chain = false;
 
             // what is on this storey
             for (int wi = 0; wi < walls.Count; wi++)
@@ -97,13 +99,19 @@ namespace Triband.Storey.Editor
                     }
                     break;
             }
+            if (chain)
+            {
+                Handles.BeginGUI();
+                if (GUI.Button(new Rect(10, 36, 110, 22), "Finish wall")) { chain = false; ev.Use(); }
+                Handles.EndGUI();
+            }
         }
 
         // ---- Select: cores, joints, wall splits ----
 
         void SelectHandles(StoreyEdit e, BuildingData b, int k, double yy, bool alt)
         {
-            var ev = Event.current; var v = e.View; var walls = b.floors[k].walls;
+            var ev = Event.current; var v = e.View;
             foreach (var s in b.shafts.Where(s => Cores.Levels(b, s).Contains(k)).ToList())
             {
                 int id = GUIUtility.GetControlID(CoreHint, FocusType.Passive);
@@ -115,7 +123,7 @@ namespace Triband.Storey.Editor
                 {
                     if (drag == Drag.None)
                     {
-                        drag = Drag.Core; e.BeginDrag(s.type == CoreType.Stairs ? "Move stairs" : "Move lift");
+                        Start(e, Drag.Core, id, s.type == CoreType.Stairs ? "Move stairs" : "Move lift");
                         v.selectedCore = s.id; v.selectedWall = -1; Inspectors();
                         var g = L(b, np); grabOffset = new Vec2(s.x - g.x, s.z - g.z);
                     }
@@ -124,30 +132,37 @@ namespace Triband.Storey.Editor
                 }
             }
 
-            var nodes = Walls.Nodes(walls);
-            foreach (var n in nodes)
+            // while a point or a "+" is dragged the walls are redone from the drag's start each frame: the handles stay
+            // where the drag began (the same controls, keys and walls) and only the dragged one follows the pointer
+            var hb = (drag == Drag.Joint || drag == Drag.Split ? e.DragStart?.buildings.FirstOrDefault(x => x.id == b.id) : null) ?? b;
+            var walls = hb.floors[k].walls;
+
+            foreach (var n in Walls.Nodes(walls))
             {
                 int id = GUIUtility.GetControlID(JointHint, FocusType.Passive);
                 var pt = n[0].atB ? walls[n[0].wall].b : walls[n[0].wall].a; var at = W(b, pt, yy);
                 string key = Walls.Key(pt);
-                if (ev.type == EventType.MouseDown && ev.button == 0 && ev.clickCount == 2 && HandleUtility.nearestControl == id)
+                if (drag == Drag.None && ev.type == EventType.MouseDown && ev.button == 0 && ev.clickCount == 2 && HandleUtility.nearestControl == id)
                 {
                     string? msg = null;
                     e.ApplyTo("Walls joined or removed", bb => (msg = Walls.RemoveJoint(bb, k, key)) != null);
                     if (msg != null && SceneView.lastActiveSceneView != null) Notify(SceneView.lastActiveSceneView, msg);
                     ev.Use(); return;
                 }
+                bool mine = drag == Drag.Joint && dragId == id;
                 Handles.color = Color.white;
                 EditorGUI.BeginChangeCheck();
-                var np = Handles.Slider2D(id, drag == Drag.Joint && dragKey == key ? dragAt : at, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(at, 0.06f), Handles.DotHandleCap, Vector2.zero, false);
-                if (EditorGUI.EndChangeCheck()) { drag = Drag.Joint; dragKey = key; dragAt = np; }
-                if (drag == Drag.Joint && dragKey == key)
+                var np = Handles.Slider2D(id, mine ? dragAt : at, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(at, 0.06f), Handles.DotHandleCap, Vector2.zero, false);
+                if (EditorGUI.EndChangeCheck())
                 {
-                    // preview: the walls ending here, to where the joint would land
-                    var q = Walls.Snap(b, k, L(b, dragAt), new SnapOptions { free = alt });
-                    foreach (var (wi, atB) in n) { Handles.color = Accent; Handles.DrawDottedLine(W(b, atB ? walls[wi].a : walls[wi].b, yy), W(b, q.Point, yy), 4f); }
-                    Marker(b, q, yy);
+                    if (drag == Drag.None) { Start(e, Drag.Joint, id, "Move wall point"); mine = true; }
+                    if (mine)
+                    {
+                        dragAt = np; var to = L(b, np);
+                        e.ApplyFromDragStart("Move wall point", bb => Walls.MoveJoint(bb, k, key, to, alt));
+                    }
                 }
+                if (mine) Marker(b, Walls.Snap(hb, k, L(b, dragAt), new SnapOptions { free = alt }), yy);
             }
 
             for (int wi = 0; wi < walls.Count; wi++)
@@ -155,26 +170,34 @@ namespace Triband.Storey.Editor
                 int id = GUIUtility.GetControlID(SplitHint, FocusType.Passive);
                 var w = walls[wi]; if (Tiers.Hypot(w.b.x - w.a.x, w.b.z - w.a.z) <= 1.2) continue;
                 var mid = W(b, new Vec2((w.a.x + w.b.x) / 2, (w.a.z + w.b.z) / 2), yy);
+                bool mine = drag == Drag.Split && dragId == id;
                 Handles.color = Faint;
                 EditorGUI.BeginChangeCheck();
-                var np = Handles.Slider2D(id, drag == Drag.Split && dragWall == wi ? dragAt : mid, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(mid, 0.05f), Handles.RectangleHandleCap, Vector2.zero, false);
-                if (EditorGUI.EndChangeCheck()) { drag = Drag.Split; dragWall = wi; dragAt = np; }
-                if (drag == Drag.Split && dragWall == wi)
+                var np = Handles.Slider2D(id, mine ? dragAt : mid, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(mid, 0.05f), Handles.RectangleHandleCap, Vector2.zero, false);
+                if (EditorGUI.EndChangeCheck())
                 {
-                    Handles.color = Accent;
-                    Handles.DrawDottedLine(W(b, w.a, yy), dragAt, 4f); Handles.DrawDottedLine(dragAt, W(b, w.b, yy), 4f);
+                    if (drag == Drag.None) { Start(e, Drag.Split, id, "Split wall"); mine = true; }
+                    if (mine)
+                    {
+                        dragAt = np; var to = L(b, np); int wall = wi;
+                        e.ApplyFromDragStart("Split wall", bb => { Walls.SplitAndDrag(bb, k, wall, to, alt); return true; });
+                    }
                 }
             }
 
-            if (drag != Drag.None && ev.rawType == EventType.MouseUp && GUIUtility.hotControl == 0)
+            // the drag ends when its handle lets go of the mouse, whichever event that came in
+            if (drag != Drag.None && GUIUtility.hotControl != dragId)
             {
-                var to = L(b, dragAt); string key = dragKey; int wall = dragWall;
-                if (drag == Drag.Core) e.EndDrag();
-                else if (drag == Drag.Joint) e.ApplyTo("Move wall point", bb => Walls.MoveJoint(bb, k, key, to, alt));
-                else if (drag == Drag.Split) e.ApplyTo("Split wall", bb => { Walls.SplitAndDrag(bb, k, wall, to, alt); return true; });
-                drag = Drag.None; dragKey = ""; dragWall = -1;
+                e.EndDrag();
+                drag = Drag.None; dragId = 0;
                 Inspectors();
             }
+        }
+
+        void Start(StoreyEdit e, Drag kind, int id, string undoName)
+        {
+            drag = kind; dragId = id;
+            e.BeginDrag(undoName);
         }
 
         // ---- clicks ----
@@ -236,37 +259,6 @@ namespace Triband.Storey.Editor
             if (fresh) { if (len > 0.5) { e.ApplyTo("Wall added", bb => { Walls.Add(bb, k, s, q); return true; }); chain = false; } }   // a drag draws one wall
             else if (len < 0.3) chain = false;                                                                                      // a click on the last point ends the chain
             else { e.ApplyTo("Wall added", bb => { Walls.Add(bb, k, s, q); return true; }); chainStart = q; }
-        }
-
-        protected override bool Key(StoreyEdit e, BuildingData b, KeyCode key)
-        {
-            var v = e.View;
-            switch (key)
-            {
-                case KeyCode.V: v.interiorTool = InteriorTool.Select; chain = false; return true;
-                case KeyCode.W: v.interiorTool = InteriorTool.Wall; return true;
-                case KeyCode.D: v.interiorTool = InteriorTool.Door; chain = false; return true;
-                case KeyCode.X: v.interiorTool = InteriorTool.Erase; chain = false; return true;
-                case KeyCode.S: v.interiorTool = InteriorTool.Stairs; chain = false; return true;
-                case KeyCode.L: v.interiorTool = InteriorTool.Lift; chain = false; return true;
-                case KeyCode.Escape: if (!chain) return false; chain = false; return true;
-                case KeyCode.R:
-                    if (v.interiorTool == InteriorTool.Stairs || v.interiorTool == InteriorTool.Lift) { v.placeRot = (v.placeRot + 90) % 360; return true; }
-                    if (v.selectedCore.Length > 0)
-                    {
-                        string id = v.selectedCore;
-                        if (!e.ApplyTo("Turn core", bb => { var s = bb.shafts.First(x => x.id == id); return Shafts.SetAngle(bb, s, s.rot + 90); }) && SceneView.lastActiveSceneView != null)
-                            Notify(SceneView.lastActiveSceneView, "No room to rotate here");
-                        return true;
-                    }
-                    return false;
-                case KeyCode.Delete:
-                case KeyCode.Backspace:
-                    if (v.selectedCore.Length > 0) { string id = v.selectedCore; e.ApplyTo("Removed", bb => bb.shafts.RemoveAll(x => x.id == id) > 0); v.selectedCore = ""; return true; }
-                    if (v.selectedWall >= 0) { int wi = v.selectedWall, k = v.floor; e.ApplyTo("Removed", bb => { if (wi >= bb.floors[k].walls.Count) return false; bb.floors[k].walls.RemoveAt(wi); return true; }); v.selectedWall = -1; return true; }
-                    return false;
-            }
-            return false;
         }
 
         // ---- drawing ----
