@@ -339,6 +339,18 @@ namespace Triband.Storey.Editor
                 }
                 return;
             }
+            int fill = GUILayout.Toolbar(b.floors[k].filled ? 1 : 0, new[] { new GUIContent("Rooms", "A storey to walk in: walls, doors, stairs and lift stops"), new GUIContent("Filled", "Nothing inside: opaque windows and closed doors, no rooms or stairs; lifts pass through without stopping") });
+            if ((fill == 1) != b.floors[k].filled)
+            {
+                bool to = fill == 1; int kk = k;
+                e.ApplyTo(to ? $"{Floor(b, k)} filled" : $"{Floor(b, k)} opened", bb => { bb.floors[kk].filled = to; return true; });
+                v.selectedCore = ""; v.selectedWall = -1;
+            }
+            if (b.floors[k].filled)
+            {
+                EditorGUILayout.HelpBox("Filled: this storey has nothing inside. Its windows are opaque and its doors closed. Stairs stop at the storeys on either side, and lifts pass through without stopping. The rooms drawn here are kept if you switch back.", MessageType.None);
+                return;
+            }
             PlayHere(e, b, k);
             int tool = GUILayout.Toolbar((int)v.interiorTool, InteriorTools);
             if (tool != (int)v.interiorTool) { v.interiorTool = (InteriorTool)tool; SceneView.RepaintAll(); }

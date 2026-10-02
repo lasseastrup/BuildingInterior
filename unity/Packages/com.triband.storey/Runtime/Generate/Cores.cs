@@ -52,13 +52,26 @@ namespace Triband.Storey.Generate
             return out_;
         }
 
+        /// <summary>The slab at level k is open over the stairs: a flight comes up to it from the storey below.</summary>
         public static bool StairHoleAt(BuildingData b, CoreData s, int k) =>
-            IsStairs(s) && k > s.bottom && (k <= Derived.ShaftTop(b, s) || (k == b.floors.Count && ShaftRoof(b, s)));
+            IsStairs(s) && k > s.bottom && (k <= Derived.ShaftTop(b, s) || (k == b.floors.Count && ShaftRoof(b, s))) && !Derived.Filled(b, k) && !Derived.Filled(b, k - 1);
 
+        /// <summary>
+        /// A flight goes up from storey k to the next. Never into or out of a filled storey: stairs stop at one (and the
+        /// storeys on either side rail the dead end).
+        /// </summary>
         public static bool HasFlight(BuildingData b, CoreData s, int k)
         {
             int T = Derived.ShaftTop(b, s);
-            return IsStairs(s) && k >= s.bottom && (k < T || (k == T && ShaftRoof(b, s)));
+            return IsStairs(s) && k >= s.bottom && (k < T || (k == T && ShaftRoof(b, s))) && !Derived.Filled(b, k) && !Derived.Filled(b, k + 1);
+        }
+
+        /// <summary>The storeys a core can be used on: its levels but the filled ones (a lift passes those without stopping).</summary>
+        public static List<int> Stops(BuildingData b, CoreData s)
+        {
+            var l = Levels(b, s);
+            l.RemoveAll(k => Derived.Filled(b, k));
+            return l;
         }
 
         /// <summary>A side of the core that sits on an outline edge: the edge and the stretch along it.</summary>

@@ -100,7 +100,7 @@ namespace Triband.Storey.PlayKit
             var lift = world?.LiftAt(State.x, State.y, State.z);
             if (lift != null && State.ride == null)
             {
-                var (b, sh, floor) = lift.Value; var levels = Generate.Cores.Levels(b, sh);
+                var (b, sh, floor) = lift.Value; var levels = Generate.Cores.Stops(b, sh);
                 GUI.Box(new Rect(10, 20 + s, s * 1.4f + 10, (s + 4) * levels.Count + 10), "");
                 for (int i = levels.Count - 1, row = 0; i >= 0; i--, row++)
                 {

@@ -63,11 +63,13 @@ namespace Triband.Storey.Generate
             for (int k = 0; k <= N; k++)
             {
                 var sg = new List<Seg>(); var g = At(k); bool sb = Derived.IsSetback(b, k); var Cb = At(Math.Max(0, k - 1)).C;
-                if (!shell || k == N || sb) Slab(op, k, Cb, shell, false);
+                // a filled storey is built as a shell-only building's storeys are; a slab between two of them is not needed
+                bool sh = Derived.ShellAt(b, k), shBelow = Derived.ShellAt(b, k - 1);
+                if (!(sh && shBelow) || k == N || sb) Slab(op, k, Cb, sh, false);
                 if (sb) { if (!Roofs.Draw(op, Roofs.TerraceRoof(site, b, k), Cb)) Terrace(op, sg, k, Cb); Overhang(op, k, g.C); }
-                if (k < N) { FacadeStorey(op, gl, sg, k, g); Details.Build(op, site, b, k, g.C, 0); if (!shell) Interior(op, sg, k, g.C); }
+                if (k < N) { FacadeStorey(op, gl, sg, k, g); Details.Build(op, site, b, k, g.C, 0); if (!sh) Interior(op, sg, k, g.C); }
                 else Roof(op, sg, g, Cb);
-                if (!shell) Shafts(op, sg, k, g.C);
+                if (!shell && !Derived.Filled(b, k)) Shafts(op, sg, k, g.C);
                 r.Segs.Add(sg);
                 yield return k;
             }
@@ -215,7 +217,7 @@ namespace Triband.Storey.Generate
         /// <summary>LOD0 facade of one storey: panels with window and door holes, recessed panes, frames and trims.</summary>
         public void FacadeStorey(MeshBuilder op, MeshBuilder gl, List<Seg> sg, int k, TierCtx g)
         {
-            var Wp = g.Wp; var C = g.C; int n = Wp.Count; double h = Derived.FloorH(b, k), y = Derived.FloorBase(b, k), T = Dim.T_EXT;
+            var Wp = g.Wp; var C = g.C; int n = Wp.Count; bool shell = Derived.ShellAt(b, k); double h = Derived.FloorH(b, k), y = Derived.FloorBase(b, k), T = Dim.T_EXT;   // shell: this storey (a filled one is closed as a shell building is)
             for (int i = 0; i < n; i++)
             {
                 var e = Geo.EdgeInfo(Wp, i, g.ccw); var F = e.F;
@@ -404,8 +406,8 @@ namespace Triband.Storey.Generate
                         S(x0, -1.6, x1, -1.6, 0.04);
                     }
                     int T = Derived.ShaftTop(b, s);
-                    if (atRoof || (k == T && !Cores.ShaftRoof(b, s))) Rail(-1.3, -0.05);
-                    if (k == s.bottom) Rail(0.05, 1.3);
+                    if (!Cores.HasFlight(b, s, k)) Rail(-1.3, -0.05);                        // nothing goes on up from here (the top, or a filled storey above)
+                    if (k == s.bottom || !Cores.HasFlight(b, s, k - 1)) Rail(0.05, 1.3);     // nothing comes up to here (the bottom, or a filled storey below)
                 }
                 else if (s.type == CoreType.Flight)
                 {

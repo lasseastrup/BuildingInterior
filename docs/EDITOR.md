@@ -95,5 +95,10 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - No key does anything Storey-specific.
    - Storey height, and the Storey Floors overlay: count, copy up, duplicate, delete.
    - **Play from this floor** starts Play mode on the active storey (docs/PLAY.md §4).
+   - **Rooms / Filled** on a floor:
+     - A filled storey has nothing inside: opaque windows and closed doors, no rooms and no stairs. The Storey Floors overlay marks it ▪.
+     - A lift passes through it without stopping, so its panel lists only open floors.
+     - Stairs stop at a filled storey, with rails across the dead end.
+     - Example: an 11-storey block with floors 1 to 9 filled, and a lift from the ground straight to floor 10.
 5. **The exit test (Plan §8):** a styled 3-floor building in under 2 minutes. Then 10 floors with roof access in under 5: type 10 in the overlay, place stairs on the ground floor, check *reaches the roof* on the roof.
 

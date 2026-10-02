@@ -211,7 +211,7 @@ namespace Triband.Storey.Play
         {
             k = Math.Min(k, b.floors.Count);
             var fp = Derived.OutlineAt(b, k);
-            var s = b.shafts.FirstOrDefault(x => Cores.Levels(b, x).Contains(k));
+            var s = b.shafts.FirstOrDefault(x => Cores.Stops(b, x).Contains(k));
             if (s != null)
             {
                 double a = s.rot * Math.PI / 180, d = s.type == CoreType.Lift ? -2.2 : s.type == CoreType.Flight ? -(Dim.FLIGHT_D / 2 + 0.8) : -3.4;
@@ -232,7 +232,7 @@ namespace Triband.Storey.Play
             {
                 if (s.type != CoreType.Lift) continue;
                 var q = ToCore(s, x - b.pos.x, z - b.pos.z);
-                if (Math.Abs(q.x) < 1.2 && Math.Abs(q.z) < 1.2 && Cores.Levels(b, s).Contains(floor)) return (b, s, floor);
+                if (Math.Abs(q.x) < 1.2 && Math.Abs(q.z) < 1.2 && Cores.Stops(b, s).Contains(floor)) return (b, s, floor);
             }
             return null;
         }

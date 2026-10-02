@@ -39,6 +39,7 @@ namespace Triband.Storey.Editor
             var v = e.View; int k = v.floor, N = b.floors.Count;
             if (!b.interior) { Hint("Shell only: switch to Walk-in interior in the Interior tab to edit rooms."); return; }
             if (k == N) { Hint("The roof: roof access is set per stair or lift in the Interior tab. Pick a floor below to edit rooms."); return; }
+            if (b.floors[k].filled) { Hint("A filled storey: nothing inside. Switch it to Rooms in the Interior tab to edit it."); return; }
             double y = Derived.FloorBase(b, k), yy = y + 0.02;
             var ev = Event.current; bool alt = ev.alt;
             var walls = b.floors[k].walls;

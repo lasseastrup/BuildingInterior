@@ -79,6 +79,12 @@ namespace Triband.Storey
         /// <summary>Roof over the uncovered part of the tier below instead of a terrace; null = terrace.</summary>
         public TerraceRoofData? terraceRoof;
 
+        /// <summary>
+        /// A filled storey: nothing inside, as a shell-only building's storeys (opaque windows, closed doors, no rooms
+        /// or stairs). Lifts pass through it without stopping. Storey's own; walk-in buildings only.
+        /// </summary>
+        public bool filled;
+
         public bool HasShape => shape.Count > 0;
         public bool HasHeight => h.HasValue;
     }

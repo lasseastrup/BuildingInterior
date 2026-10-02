@@ -11,6 +11,12 @@ namespace Triband.Storey
     /// </summary>
     public static class Derived
     {
+        /// <summary>Storey k is filled: a walk-in building's storey with nothing inside (false outside 0..N−1).</summary>
+        public static bool Filled(BuildingData b, int k) => b.interior && k >= 0 && k < b.floors.Count && b.floors[k].filled;
+
+        /// <summary>Storey k has no inside: the whole building is shell-only, or the storey is filled. Below 0, true.</summary>
+        public static bool ShellAt(BuildingData b, int k) => !b.interior || k < 0 || (k < b.floors.Count && b.floors[k].filled);
+
         /// <summary>Height of storey <paramref name="k"/>: its override, or the ground/upper default.</summary>
         public static double FloorH(BuildingData b, int k)
         {

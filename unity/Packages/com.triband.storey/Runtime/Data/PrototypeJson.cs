@@ -128,6 +128,7 @@ namespace Triband.Storey
                 h = c.Opt(o, "h", path),
                 shape = c.Points(o, "shape", path),
                 blank = c.Ints(o, "blank", path),
+                filled = c.Bool(o, "filled", false, path),
             };
             int i = 0;
             foreach (var w in c.Array(o, "walls", path))
@@ -152,7 +153,7 @@ namespace Triband.Storey
                 c.Check(to, path + ".terraceRoof", "pitch");
             }
             // "props" is a leftover key some test layouts carry; the prototype never reads it.
-            c.Check(o, path, "walls", "h", "shape", "blank", "style", "terraceRoof", "props");
+            c.Check(o, path, "walls", "h", "shape", "blank", "style", "terraceRoof", "props", "filled");
             return f;
         }
 
@@ -284,6 +285,7 @@ namespace Triband.Storey
             }
             o["walls"] = walls;
             if (f.h.HasValue) o["h"] = f.h.Value;
+            if (f.filled) o["filled"] = true;
             if (f.HasShape) { o["shape"] = Pts(f.shape); o["blank"] = Ints(f.blank); }
             if (f.style != null) o["style"] = Style(f.style);
             if (f.terraceRoof != null) o["terraceRoof"] = new Dictionary<string, object?> { ["pitch"] = f.terraceRoof.pitch };

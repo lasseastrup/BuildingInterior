@@ -89,7 +89,7 @@ namespace Triband.Storey.Play
             if (p.ride != null) return false;
             var at = world.LiftAt(p.x, p.y, p.z); if (at == null) return false;
             var (b, s, floor) = at.Value;
-            if (k == floor || !Cores.Levels(b, s).Contains(k)) return false;
+            if (k == floor || !Cores.Stops(b, s).Contains(k)) return false;   // a filled storey is passed, never stopped at
             p.ride = new LiftRide { b = b, s = s, to = Derived.FloorBase(b, k) };
             return true;
         }

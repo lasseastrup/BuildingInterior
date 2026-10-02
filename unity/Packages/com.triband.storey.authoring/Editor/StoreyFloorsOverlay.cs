@@ -41,7 +41,7 @@ namespace Triband.Storey.Editor
             {
                 using (new GUILayout.HorizontalScope())
                 {
-                    string label = k == N ? "Roof" : k == 0 ? "Ground" : "Floor " + k;
+                    string label = (k == N ? "Roof" : k == 0 ? "Ground" : "Floor " + k) + (k < N && b.floors[k].filled ? " ▪" : "");   // ▪ filled
                     bool on = GUILayout.Toggle(v.floor == k, label, EditorStyles.miniButton, GUILayout.Width(70));
                     if (on && v.floor != k) { v.floor = k; v.selectedCore = ""; v.selectedWall = -1; SceneView.RepaintAll(); }
                     if (k < N)
