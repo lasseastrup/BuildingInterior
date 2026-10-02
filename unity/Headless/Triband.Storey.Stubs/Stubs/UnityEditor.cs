@@ -67,6 +67,7 @@ namespace UnityEditor
         public Object target => new Object();
         public virtual void OnInspectorGUI() { }
         public bool DrawDefaultInspector() => false;
+        public SerializedObject serializedObject { get; } = new SerializedObject();
     }
 
     public class AssetPostprocessor { }
@@ -114,14 +115,37 @@ namespace UnityEditor
         public void ShowNotification(GUIContent notification, double fadeoutWait) { }
     }
 
+    public static class SessionState
+    {
+        public static bool GetBool(string key, bool defaultValue) => defaultValue;
+        public static void SetBool(string key, bool value) { }
+    }
+
+    public class SerializedProperty
+    {
+        public string name => "";
+        public bool NextVisible(bool enterChildren) => false;
+    }
+
+    public class SerializedObject
+    {
+        public void Update() { }
+        public bool ApplyModifiedProperties() => false;
+        public SerializedProperty FindProperty(string path) => new SerializedProperty();
+        public SerializedProperty GetIterator() => new SerializedProperty();
+    }
+
     public static class EditorGUIUtility
     {
+        public static bool isProSkin => true;
+        public static float currentViewWidth => 400;
         public static float labelWidth => 0;
         public static void PingObject(Object obj) { }
     }
 
     public static class EditorStyles
     {
+        public static GUIStyle foldout => new GUIStyle();
         public static GUIStyle boldLabel => new GUIStyle();
         public static GUIStyle miniButton => new GUIStyle();
         public static GUIStyle miniLabel => new GUIStyle();
@@ -186,6 +210,11 @@ namespace UnityEditor
         public static void BeginChangeCheck() { }
         public static bool EndChangeCheck() => false;
         public static void DrawRect(Rect rect, Color color) { }
+        public sealed class IndentLevelScope : System.IDisposable
+        {
+            public IndentLevelScope() { }
+            public void Dispose() { }
+        }
         public sealed class DisabledScope : System.IDisposable
         {
             public DisabledScope(bool disabled) { }
@@ -195,6 +224,14 @@ namespace UnityEditor
 
     public static class EditorGUILayout
     {
+        public static bool PropertyField(SerializedProperty property, params GUILayoutOption[] options) => false;
+        public static bool PropertyField(SerializedProperty property, GUIContent label, params GUILayoutOption[] options) => false;
+        public static bool PropertyField(SerializedProperty property, bool includeChildren, params GUILayoutOption[] options) => false;
+        public sealed class VerticalScope : System.IDisposable
+        {
+            public VerticalScope(GUIStyle style, params GUILayoutOption[] options) { }
+            public void Dispose() { }
+        }
         public sealed class HorizontalScope : System.IDisposable
         {
             public HorizontalScope(params GUILayoutOption[] options) { }
@@ -215,6 +252,8 @@ namespace UnityEditor
         public static bool Toggle(GUIContent label, bool value, params GUILayoutOption[] options) => value;
         public static System.Enum EnumPopup(string label, System.Enum selected, params GUILayoutOption[] options) => selected;
         public static bool Foldout(bool foldout, string content, bool toggleOnLabelClick) => foldout;
+        public static bool Foldout(bool foldout, GUIContent content, bool toggleOnLabelClick) => foldout;
+        public static bool Foldout(bool foldout, GUIContent content, bool toggleOnLabelClick, GUIStyle style) => foldout;
         public static void LabelField(string label, params GUILayoutOption[] options) { }
         public static void LabelField(string label, GUIStyle style, params GUILayoutOption[] options) { }
         public static void LabelField(string label, string label2, params GUILayoutOption[] options) { }

@@ -340,3 +340,32 @@ Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`), `FacadeS
 4. Make a door with a Leaf part and pick it under Street door. On a shell building the door shows; on a walk-in building the leaf is gone and you can walk in.
 5. Change the model in your DCC tool and reimport it: the buildings update.
 6. Enter Play mode, and make a build: the windows and doors are there.
+
+### 6.10 The site inspector's layout
+
+The site's inspector reads top to bottom in the order you work: which layout, which building, what's wrong, which mode, then that mode's settings. The rare settings come last.
+
+1. **Layout**: the `.storey` file. Selecting the site starts editing it (§4).
+2. **Building** card: pick a building, *New ▾* (a shape or a template), *Duplicate*, *Delete*, its name, *Isolate* and *Save as template…*. A box is kept for controls that act together; everything in this card acts on the building picked at its top.
+3. **Problems**: one quiet line when there are none, or a warning foldout with the count.
+4. **Shape / Facade / Interior**: three large buttons, each with an icon and a line saying what it's for. The selected one is tinted, with an accent bar along its bottom. On a narrow inspector the line moves under the bar.
+5. The mode's settings in named groups, each a header with a hairline and space above it, not a box:
+   - **Shape:** *Outline* (setbacks, presets), *Corners*, *Courtyards and atria* (folded until the building has one), *Storey heights*.
+   - **Facade:** *Style for* (with setbacks), *Style* (preset), *Windows and doors* (type, artist's window, width, bay spacing, heads, glazing bars, frames, street doors), *Walls* (ground floor, bands, plinth, foundation, brick patches), *Colours* (*More colours* folded), *Roof*, *Details by rule* (folded), *Place on walls* (two rows of tools), *Bridges*.
+   - **Interior:** *Inside* (walk-in or shell), *Floor*, *Tools*, the selection, *This storey's height*, *Interior colours* (folded).
+6. **Site settings** (folded): materials, the LOD shown, colliders, and the artist's windows and doors the layout uses.
+
+Foldouts remember whether they're open for the rest of the editor session.
+
+The rules follow Unity's editor guidelines: groups set apart by spacing and headers, and containers only where the controls interact as a group. They also follow the Gestalt grouping principles (proximity and common region) and progressive disclosure for the less-used settings.
+- [Unity Foundations: content organisation](https://foundations.unity.com/patterns/content-organization), [Unity Foundations: foldout](https://foundations.unity.com/components/foldout)
+- [NN/g: common region](https://www.nngroup.com/articles/common-region/), [Laws of UX: common region](https://lawsofux.com/law-of-common-region/)
+- [UX Planet: how to design a properties panel](https://uxplanet.org/how-to-design-properties-panel-4d562cc47da3), [Retool: simplifying the inspector](https://retool.com/blog/simplifying-retools-inspector)
+
+Code: `StoreyInspectorUI` (`Section`, `Fold`, `ModeBar`, the three icons, drawn so they follow the editor skin).
+
+**Checks:**
+1. Select a site. The layout, the building card, the problems line and the three mode buttons are all visible without scrolling at a normal inspector height.
+2. Click each mode: the button tints and the Scene view's tool changes.
+3. Narrow the inspector: the mode buttons keep their icons and names, and the description moves below them.
+4. Switch the editor to the light skin: the icons and accents are still readable.

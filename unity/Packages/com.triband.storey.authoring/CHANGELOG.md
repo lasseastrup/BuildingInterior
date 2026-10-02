@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 ### Changed
+- The site inspector, laid out for reading at a glance (docs/EDITOR.md §6.10):
+  - large Shape, Facade and Interior buttons with icons;
+  - a building card;
+  - a one-line problems summary;
+  - named groups in each mode, with the less-used ones folded;
+  - the site's own settings folded at the bottom.
+
+  The Facade tab's *More options* is gone: its fields moved into the groups they belong to.
 - A cut corner is one point in the Shape tool. Selecting it shows its cut, which changes as you set it; **Make sharp** and **Clear all** take cuts away (docs/EDITOR.md §6.1).
 - Selecting a Storey Site starts editing it. The layout saves itself when the site is deselected, with the scene, before Play and on quit. The *Edit layout*, *Save*, *Revert* and *Stop editing* buttons are gone; undo replaces Revert.
 - An open layout with nothing unsaved follows its file when the file changes outside the editor.

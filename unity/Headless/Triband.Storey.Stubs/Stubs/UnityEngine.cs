@@ -215,8 +215,11 @@ namespace UnityEngine
 
     public struct Rect
     {
-        public Rect(float x, float y, float width, float height) { this.x = x; this.yMax = y + height; this.width = width; }
-        public float x, yMax, width;
+        public Rect(float x, float y, float width, float height) { this.x = x; this.y = y; this.width = width; this.height = height; }
+        public float x, y, width, height;
+        public float xMax { get => x + width; set => width = value - x; }
+        public float yMax { get => y + height; set => height = value - y; }
+        public bool Contains(Vector2 p) => false;
     }
 
     public class Camera : Behaviour { public static Camera main => null; public static Camera current => null; }
@@ -235,11 +238,19 @@ namespace UnityEngine
         public static GUIStyle none => new GUIStyle();
         public int fontSize { get; set; }
         public TextAnchor alignment { get; set; }
+        public bool wordWrap { get; set; }
+        public FontStyle fontStyle { get; set; }
+        public GUIStyleState normal { get; } = new GUIStyleState();
+        public void Draw(Rect position, string text, bool isHover, bool isActive, bool on, bool hasKeyboardFocus) { }
     }
+
+    public enum FontStyle { Normal = 0, Bold = 1, Italic = 2, BoldAndItalic = 3 }
+
+    public sealed class GUIStyleState { public Color textColor { get; set; } }
 
     public enum TextAnchor { UpperLeft = 0, UpperCenter = 1, UpperRight = 2, MiddleLeft = 3, MiddleCenter = 4, MiddleRight = 5, LowerLeft = 6, LowerCenter = 7, LowerRight = 8 }
 
-    public sealed class GUISkin : Object { public GUIStyle box => new GUIStyle(); }
+    public sealed class GUISkin : Object { public GUIStyle box => new GUIStyle(); public GUIStyle button => new GUIStyle(); }
 
     public sealed class GUILayoutOption { }
 
@@ -261,6 +272,7 @@ namespace UnityEngine
         public static GUILayoutOption Width(float width) => new GUILayoutOption();
         public static GUILayoutOption MinWidth(float minWidth) => new GUILayoutOption();
         public static GUILayoutOption Height(float height) => new GUILayoutOption();
+        public static GUILayoutOption ExpandWidth(bool expand) => new GUILayoutOption();
 
         public sealed class HorizontalScope : System.IDisposable
         {
@@ -272,6 +284,7 @@ namespace UnityEngine
     public static class GUI
     {
         public static Color color { get => default; set { } }
+        public static Color contentColor { get => default; set { } }
         public static void Label(Rect position, string text, GUIStyle style) { }
         public static bool Button(Rect position, GUIContent content, GUIStyle style) => false;
         public static bool Button(Rect position, string text) => false;
