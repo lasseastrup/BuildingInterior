@@ -15,8 +15,11 @@ namespace Triband.Storey.Generate
         public const double CORE_T = 0.15;
         public const double STAIR_W = 2.6, STAIR_D = 5.2;
         public const double LIFT_W = 2.4, LIFT_D = 2.4;
-        /// <summary>A single straight flight: inner width and length, and the landing at each end (a 4.6 m run between them).</summary>
-        public const double FLIGHT_W = 1.3, FLIGHT_D = 6.4, FLIGHT_LANDING = 0.9;
+        /// <summary>
+        /// Stacked straight flights: the footprint (the flight lane and the walkway beside it), the flight lane's width,
+        /// and the landing at each end (a 4.6 m run between them).
+        /// </summary>
+        public const double FLIGHT_W = 2.6, FLIGHT_D = 6.4, FLIGHT_LANE = 1.3, FLIGHT_LANDING = 0.9;
     }
 
     /// <summary>Faces a box can leave out because something covers them.</summary>

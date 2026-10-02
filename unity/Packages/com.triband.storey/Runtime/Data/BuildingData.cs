@@ -96,8 +96,9 @@ namespace Triband.Storey
     }
 
     /// <summary>
-    /// Stairs: a switchback stair that serves every floor in its range. Lift. Flight: one straight flight from its floor
-    /// to the next (or up to a flat roof), in at its front on the floor it starts from and out at its back above.
+    /// Stairs: a switchback stair that serves every floor in its range. Lift. Flight: straight flights stacked one above
+    /// the other over the same floor range, with no walls: up the flight from the front, off at the back, and back along
+    /// the walkway beside it to the next flight.
     /// </summary>
     public enum CoreType { Stairs, Lift, Flight }
 

@@ -163,11 +163,12 @@ namespace Triband.Storey.Editor
             Handles.DrawAAPolyLine(3f, pts);
             if (it.type == CoreType.Flight)
             {
-                // which way is up: an arrow from where the flight starts (front) to where it comes out (back)
+                // which way is up: an arrow up the flight lane (the −u half), and the walkway back beside it dotted
                 Vector3 P(double a, double w) => W(b, new Vec2(R.c.x + R.u.x * a + R.w.x * w, R.c.z + R.u.z * a + R.w.z * w), y);
-                double l = R.hz * 0.7, hh = R.hx * 0.6;
-                Handles.DrawAAPolyLine(3f, P(0, -l), P(0, l));
-                Handles.DrawAAPolyLine(3f, P(-hh, l - hh), P(0, l), P(hh, l - hh));
+                double l = R.hz * 0.7, lane = Generate.Dim.FLIGHT_LANE, ax = -R.hx + lane / 2, hh = lane * 0.35, xm = -R.hx + lane;
+                Handles.DrawAAPolyLine(3f, P(ax, -l), P(ax, l));
+                Handles.DrawAAPolyLine(3f, P(ax - hh, l - hh), P(ax, l), P(ax + hh, l - hh));
+                Handles.DrawDottedLine(P(xm, -R.hz), P(xm, R.hz), 3f);
             }
         }
 

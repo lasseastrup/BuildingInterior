@@ -86,7 +86,11 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Draw walls by clicking a chain, or by dragging one. Rings mark points, diamonds mark walls, and dotted guides show alignment.
    - Doors, Erase, Stairs and Lift (**Turn 90°** in the inspector turns the next one), with green or red ghosts.
    - **Finish wall** in the Scene view ends a chain.
-   - Stairs come in two kinds, chosen under the Stairs tool or on selected stairs: **Switchback** (two flights and a landing per storey, every floor up to the top) and **Single flight** (one straight flight from its floor to the next, or up to a flat roof). The arrow on a flight points up it. You enter at the arrow's tail on the lower floor and come out at its head on the floor above. **Reverse** turns it round. A flight is 1.6 × 6.7 m, longer and narrower than switchback stairs. Its two ends are ways in and out, so only its sides can share a building wall.
+   - Stairs come in two kinds, chosen under the Stairs tool or on selected stairs. Both serve the same floors: from where they're placed up to the top floor and the roof, or whatever **From** and **To** say.
+     - **Switchback:** two flights and a landing per storey, in a walled stairwell.
+     - **Straight flights:** one flight per storey with no walls, stacked one above the other, and a walkway beside it back to the start of the next flight. They're 2.6 × 6.4 m: a 1.3 m flight lane and a 1.3 m walkway.
+     - On a straight flight, rails run along both sides of the opening on each storey above, and across its front on the top storey. A building wall stands in for the rail on a side against it. On a flat roof, a bulkhead with its door at the back closes the stair in.
+     - The arrow shows which way the flights go up, and the dotted line marks the walkway. **Reverse** turns them round (the walkway changes side too). Only the sides can share a building wall, because both ends are landings.
    - Drag a core, a wall point and a "+": the walls and the building follow the pointer, and the drag is one undo step. Double-click a point to join or remove walls.
    - No key does anything Storey-specific.
    - Storey height, and the Storey Floors overlay: count, copy up, duplicate, delete.

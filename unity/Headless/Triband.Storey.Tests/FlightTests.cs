@@ -8,8 +8,8 @@ using Xunit;
 namespace Triband.Storey.Tests
 {
     /// <summary>
-    /// Single flights (<see cref="CoreType.Flight"/>): a straight stair from its floor to the next, or up to a flat roof.
-    /// Storey's own (not in the prototype), so these are its spec.
+    /// Straight flights (<see cref="CoreType.Flight"/>): flights stacked over the same floor range as switchback stairs,
+    /// with a walkway back beside them and no walls. Storey's own (not in the prototype), so these are its spec.
     /// </summary>
     public class FlightTests
     {
@@ -28,28 +28,26 @@ namespace Triband.Storey.Tests
             Shafts.Place(b, k, new Vec2(x, z), CoreType.Flight, rot, Shafts.NewId(d))!;
 
         [Fact]
-        public void AFlightServesItsFloorAndTheNext()
+        public void FlightsServeTheSameFloorsAsSwitchbackStairs()
         {
             var (d, b) = Block();
             var s = Place(d, b, 0);
             Assert.NotNull(s);
+            Assert.Equal(new[] { 0, 1, 2, 3 }, Cores.Levels(b, s));   // up to the roof, as switchback stairs are placed
+            Assert.Equal(new[] { 0, 1, 2 }, Enumerable.Range(0, 4).Where(k => Cores.HasFlight(b, s, k)));
+            Assert.Equal(new[] { 1, 2, 3 }, Enumerable.Range(0, 4).Where(k => Cores.StairHoleAt(b, s, k)));
+            Shafts.SetTop(s, 1);
             Assert.Equal(new[] { 0, 1 }, Cores.Levels(b, s));
-            Assert.True(Cores.HasFlight(b, s, 0)); Assert.False(Cores.HasFlight(b, s, 1));
-            Assert.Equal(new[] { 1 }, Enumerable.Range(0, 4).Where(k => Cores.StairHoleAt(b, s, k)));
-            Assert.False(Cores.ShaftRoof(b, s));
+            Assert.Equal(new[] { 0 }, Enumerable.Range(0, 4).Where(k => Cores.HasFlight(b, s, k)));
         }
 
         [Fact]
-        public void FromTheTopFloorItNeedsAFlatRoof()
+        public void UnderAPitchedRoofTheyStopAtTheTopFloor()
         {
-            var (d, b) = Block();
-            var s = Place(d, b, 2);
-            Assert.Equal(new[] { 2, 3 }, Cores.Levels(b, s));
-            Assert.True(Cores.ShaftRoof(b, s));
-            Assert.True(Cores.StairHoleAt(b, s, 3));
-            var (d2, gable) = Block(roof: RoofType.Gable);
-            Assert.False(Shafts.Placement(gable, 2, new Vec2(6, 4.5), CoreType.Flight, 0).ok);
-            Assert.NotNull(Place(d2, gable, 1));   // below the top floor a pitched roof is no matter
+            var (d, b) = Block(roof: RoofType.Gable);
+            var s = Place(d, b, 0);
+            Assert.Equal(new[] { 0, 1, 2 }, Cores.Levels(b, s));
+            Assert.False(Cores.ShaftRoof(b, s));
         }
 
         [Fact]
@@ -74,9 +72,9 @@ namespace Triband.Storey.Tests
             var (d, b) = Block();
             var s = Shafts.Place(b, 0, new Vec2(6, 4.5), CoreType.Stairs, 0, Shafts.NewId(d))!;
             Assert.True(Shafts.SetKind(b, s, CoreType.Flight));
-            Assert.Equal(CoreType.Flight, s.type); Assert.Equal(new[] { 0, 1 }, Cores.Levels(b, s));
+            Assert.Equal(CoreType.Flight, s.type); Assert.Equal(new[] { 0, 1, 2, 3 }, Cores.Levels(b, s));   // the same floors
             Assert.True(Shafts.SetKind(b, s, CoreType.Stairs));
-            Assert.Equal(new[] { 0, 1, 2, 3 }, Cores.Levels(b, s));   // a switchback reaches the roof again
+            Assert.Equal(CoreType.Stairs, s.type);
             var lift = Shafts.Place(b, 0, new Vec2(2, 2), CoreType.Lift, 0, Shafts.NewId(d))!;
             Assert.False(Shafts.SetKind(b, lift, CoreType.Flight));
         }
@@ -95,20 +93,31 @@ namespace Triband.Storey.Tests
 
         public static IEnumerable<object[]> Layouts()
         {
-            // in the middle, against a side wall, from the top floor to the roof, and two chained one above the other's landing
+            // bottom to roof in the middle, with the flight lane or the walkway against a side wall, from the top floor only,
+            // and two side by side
             yield return new object[] { "middle", new[] { (0, 6.0, 4.5, 0.0) } };
-            yield return new object[] { "side wall", new[] { (0, 12 - Dim.FLIGHT_W / 2, 4.5, 0.0) } };
-            yield return new object[] { "to the roof", new[] { (2, 6.0, 4.5, 0.0) } };
-            yield return new object[] { "side wall to the roof", new[] { (2, Dim.FLIGHT_W / 2, 4.5, 0.0) } };
-            yield return new object[] { "two storeys", new[] { (0, 3.0, 4.5, 0.0), (1, 9.0, 4.5, 180.0) } };
+            yield return new object[] { "side wall, flight lane", new[] { (0, Dim.FLIGHT_W / 2, 4.5, 0.0) } };
+            yield return new object[] { "side wall, walkway", new[] { (0, 12 - Dim.FLIGHT_W / 2, 4.5, 0.0) } };
+            yield return new object[] { "top floor to the roof", new[] { (2, 6.0, 4.5, 0.0) } };
+            yield return new object[] { "two", new[] { (0, 3.0, 4.5, 0.0), (1, 9.0, 4.5, 180.0) } };
         }
 
         [Theory, MemberData(nameof(Layouts))]
-        public void TheGeometryIsClean(string name, (int k, double x, double z, double rot)[] flights)
+        public void TheGeometryIsClean(string name, (int k, double x, double z, double rot)[] flights) => Clean(name, flights, RoofType.Flat, null);
+
+        [Fact]
+        public void TheGeometryIsCleanWhereItStopsShort()
         {
-            var (d, b) = Block();
+            Clean("stops at the first floor", new[] { (0, 6.0, 4.5, 0.0) }, RoofType.Flat, 1);
+            Clean("under a gable roof", new[] { (0, 6.0, 4.5, 0.0) }, RoofType.Gable, null);
+        }
+
+        static void Clean(string name, (int k, double x, double z, double rot)[] flights, RoofType roof, int? top)
+        {
+            var (d, b) = Block(roof: roof);
             foreach (var f in flights) Assert.True(Place(d, b, f.k, f.x, f.z, f.rot) != null, $"{name}: no room at {f}");
-            if (name.StartsWith("side wall"))   // the building's wall stands in for the flight's own there
+            if (top != null) Shafts.SetTop(b.shafts[0], top.Value);
+            if (name.StartsWith("side wall"))   // the building's wall stands in for the rail there
                 Assert.Contains(Cores.CoreFlush(b.footprint, b.shafts[0]).Take(2), x => x != null);
             var site = new Site(d.buildings);
             foreach (var mesh in new[] { Lod0.Build(site, b, solids: true).Op, Lod1.Build(site, b, solids: true) })
@@ -119,17 +128,35 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
-        public void TheTopStepIsTheNextFloor()
+        public void EachFlightEndsOnTheFloorAbove()
         {
             var (d, b) = Block();
             var s = Place(d, b, 0);
             var op = Lod0.Build(new Site(d.buildings), b, solids: true).Op;
             var f = Cores.FrameOf(b, s);
-            // the steps: solids in the flight's frame within its run
             double z0 = -Dim.FLIGHT_D / 2 + Dim.FLIGHT_LANDING, z1 = Dim.FLIGHT_D / 2 - Dim.FLIGHT_LANDING;
             var steps = op.Solids!.Where(x => !x.Mitred && x.F.O.x == f.O.x && x.F.O.z == f.O.z && x.w0 >= z0 - 1e-9 && x.w1 <= z1 + 1e-9 && System.Math.Abs(x.y1 - x.y0 - 0.2) < 1e-9).ToList();
-            Assert.Equal((int)System.Math.Round(Derived.FloorH(b, 0) / 0.18), steps.Count);
-            Assert.Equal(Derived.FloorBase(b, 1), steps.Max(x => x.y1), 9);
+            for (int k = 0; k < 3; k++)
+            {
+                double lo = Derived.FloorBase(b, k), hi = Derived.FloorBase(b, k + 1);
+                var mine = steps.Where(x => x.y1 > lo + 1e-9 && x.y1 <= hi + 1e-9).ToList();
+                Assert.Equal((int)System.Math.Round(Derived.FloorH(b, k) / 0.18), mine.Count);
+                Assert.Equal(hi, mine.Max(x => x.y1), 9);
+                Assert.All(mine, x => Assert.True(x.u1 <= -Dim.FLIGHT_W / 2 + Dim.FLIGHT_LANE + 1e-9));   // in the flight lane, the walkway clear
+            }
+        }
+
+        [Fact]
+        public void BelowTheRoofThereAreNoWalls()
+        {
+            // nothing of the flight's taller than a rail on the storeys inside the building
+            var (d, b) = Block();
+            var s = Place(d, b, 0);
+            var op = Lod0.Build(new Site(d.buildings), b, solids: true).Op;
+            var f = Cores.FrameOf(b, s);
+            double roof = Derived.RoofY(b);
+            var tall = op.Solids!.Where(x => !x.Mitred && x.F.O.x == f.O.x && x.F.O.z == f.O.z && x.y0 < roof - 1e-9 && x.y1 - x.y0 > 1.1).ToList();
+            Assert.Empty(tall);
         }
     }
 }

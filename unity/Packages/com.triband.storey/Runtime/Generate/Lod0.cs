@@ -92,9 +92,9 @@ namespace Triband.Storey.Generate
                         var f = Cores.FrameOf(b, s);
                         if (s.type == CoreType.Flight)
                         {
-                            // over the run only: the landing at the back is this floor
-                            double hw = Dim.FLIGHT_W / 2, z0 = -Dim.FLIGHT_D / 2 + Dim.FLIGHT_LANDING, z1 = Dim.FLIGHT_D / 2 - Dim.FLIGHT_LANDING;
-                            holes.Add(new List<Vec2> { f.At2(-hw, z0), f.At2(hw, z0), f.At2(hw, z1), f.At2(-hw, z1) });
+                            // over the flight lane's run only: the landings and the walkway are this floor
+                            double hw = Dim.FLIGHT_W / 2, xm = -hw + Dim.FLIGHT_LANE, z0 = -Dim.FLIGHT_D / 2 + Dim.FLIGHT_LANDING, z1 = Dim.FLIGHT_D / 2 - Dim.FLIGHT_LANDING;
+                            holes.Add(new List<Vec2> { f.At2(-hw, z0), f.At2(xm, z0), f.At2(xm, z1), f.At2(-hw, z1) });
                         }
                         else holes.Add(new List<Vec2> { f.At2(-1.3, -1.6), f.At2(1.3, -1.6), f.At2(1.3, 2.6), f.At2(-1.3, 2.6) });
                     }
@@ -409,41 +409,57 @@ namespace Triband.Storey.Generate
                 }
                 else if (s.type == CoreType.Flight)
                 {
-                    // one straight flight to the floor above: in at the front (−z) on its own floor, out at the back (+z)
-                    // above, so each storey closes the other end; on the roof a bulkhead with its door at the back
-                    double hw = Dim.FLIGHT_W / 2, hd = Dim.FLIGHT_D / 2, CT = Dim.CORE_T, z0 = -hd + Dim.FLIGHT_LANDING, z1 = hd - Dim.FLIGHT_LANDING;
-                    bool start = k == s.bottom;
-                    double h = atRoof ? 2.7 : Derived.FloorH(b, k) - Dim.SLAB, xL = fL ? -hw : -hw - CT, xR = fR ? hw : hw + CT;
-                    Skip ends = TB | (atRoof ? Skip.Out | Skip.In : start ? Skip.Out : Skip.In);
-                    Skip across = TB | (fL ? Skip.UStart : Skip.None) | (fR ? Skip.UEnd : Skip.None);
-                    op.Ctx(Wl(-hw, -hd, -hw, hd, -1, 0), 1); if (!fL) Bx(-hw - CT, -hw, y, y + h, -hd, hd, C.core, C.coreIn, ends); else if (atRoof) Bx(-hw - TE, -hw, y, y + h, -hd - CT, hd + CT, C.wall, C.wall, TB);
-                    op.Ctx(Wl(hw, -hd, hw, hd, 1, 0), 1); if (!fR) Bx(hw, hw + CT, y, y + h, -hd, hd, C.core, C.coreIn, ends); else if (atRoof) Bx(hw, hw + TE, y, y + h, -hd - CT, hd + CT, C.wall, C.wall, TB);
-                    if (!fL) S(-hw - CT / 2, -hd, -hw - CT / 2, hd, CT / 2); else if (atRoof) S(-hw - TE / 2, -hd - CT, -hw - TE / 2, hd + CT, TE / 2);
-                    if (!fR) S(hw + CT / 2, -hd, hw + CT / 2, hd, CT / 2); else if (atRoof) S(hw + TE / 2, -hd - CT, hw + TE / 2, hd + CT, TE / 2);
-                    if (start)
-                    {
-                        op.Ctx(Wl(-hw - CT, hd, hw + CT, hd, 0, 1), 1); Bx(xL, xR, y, y + h, hd, hd + CT, C.core, C.coreIn, across);
-                        S(xL, hd + CT / 2, xR, hd + CT / 2, CT / 2);
-                    }
-                    else
-                    {
-                        op.Ctx(Wl(-hw - CT, -hd, hw + CT, -hd, 0, -1), 1); Bx(xL, xR, y, y + h, -hd - CT, -hd, C.core, C.coreIn, across);
-                        S(xL, -hd - CT / 2, xR, -hd - CT / 2, CT / 2);
-                    }
+                    // straight flights stacked one above the other, with no walls: up the flight lane (the −x half) from the
+                    // front (−z), off at the back, then back along the walkway (the +x half) to the next flight. Rails where
+                    // the floor is open: both sides of the flight lane on every storey a flight comes up through (the
+                    // building's wall stands in on a side against it), and across the front where no flight carries on.
+                    // On the roof a bulkhead closes it in, with its door at the back.
+                    double hw = Dim.FLIGHT_W / 2, hd = Dim.FLIGHT_D / 2, CT = Dim.CORE_T, xm = -hw + Dim.FLIGHT_LANE;
+                    double z0 = -hd + Dim.FLIGHT_LANDING, z1 = hd - Dim.FLIGHT_LANDING;
                     if (atRoof)
                     {
+                        double h = 2.7, xL = fL ? -hw : -hw - CT, xR = fR ? hw : hw + CT;
+                        Skip across = TB | (fL ? Skip.UStart : Skip.None) | (fR ? Skip.UEnd : Skip.None);
+                        op.Ctx(Wl(-hw, -hd, -hw, hd, -1, 0), 1); if (!fL) Bx(-hw - CT, -hw, y, y + h, -hd, hd, C.core, C.coreIn, TB | Skip.Out | Skip.In); else Bx(-hw - TE, -hw, y, y + h, -hd - CT, hd + CT, C.wall, C.wall, TB);
+                        op.Ctx(Wl(hw, -hd, hw, hd, 1, 0), 1); if (!fR) Bx(hw, hw + CT, y, y + h, -hd, hd, C.core, C.coreIn, TB | Skip.Out | Skip.In); else Bx(hw, hw + TE, y, y + h, -hd - CT, hd + CT, C.wall, C.wall, TB);
+                        if (!fL) S(-hw - CT / 2, -hd, -hw - CT / 2, hd, CT / 2); else S(-hw - TE / 2, -hd - CT, -hw - TE / 2, hd + CT, TE / 2);
+                        if (!fR) S(hw + CT / 2, -hd, hw + CT / 2, hd, CT / 2); else S(hw + TE / 2, -hd - CT, hw + TE / 2, hd + CT, TE / 2);
+                        op.Ctx(Wl(-hw - CT, -hd, hw + CT, -hd, 0, -1), 1); Bx(xL, xR, y, y + h, -hd - CT, -hd, C.core, C.coreIn, across);
+                        S(xL, -hd - CT / 2, xR, -hd - CT / 2, CT / 2);
                         op.Ctx(Wl(-hw - CT, hd, hw + CT, hd, 0, 1), 1);
-                        var ops = new List<Opening> { new Opening { u0 = -hw + 0.1, u1 = hw - 0.1, y0 = 0, y1 = 2.2, door = true } };
+                        var ops = new List<Opening> { new Opening { u0 = -0.6, u1 = 0.6, y0 = 0, y1 = 2.2, door = true } };
                         Facade.WallOps(op, f, xL, xR, y, h, hd, hd + CT, ops, C.core, C.coreIn, across);
                         foreach (var (a, e) in Facade.SolidRanges(xL, xR, ops)) S(a, hd + CT / 2, e, hd + CT / 2, CT / 2);
                         op.Ctx(null, 0); Bx(fL ? -hw - TE - 0.1 : -hw - CT - 0.1, fR ? hw + TE + 0.1 : hw + CT + 0.1, y + h, y + h + 0.2, -hd - CT - 0.1, hd + CT + 0.1, C.roof);
                     }
                     op.Ctx(null, 0);
+                    if (Cores.StairHoleAt(b, s, k))
+                    {
+                        // 2 cm clear of the flight lane, so no rail face lies on a step's
+                        void RailZ(double x)
+                        {
+                            Bx(x - 0.02, x + 0.02, y + 0.95, y + 1.02, z0 + 0.04, z1 - 0.04, C.rail);
+                            Bx(x - 0.02, x + 0.02, y, y + 1.02, z0, z0 + 0.04, C.rail, null, Skip.Bot);
+                            Bx(x - 0.02, x + 0.02, y, y + 1.02, z1 - 0.04, z1, C.rail, null, Skip.Bot);
+                            S(x, z0, x, z1, 0.04);
+                        }
+                        RailZ(xm + 0.04);
+                        if (!fL && !atRoof) RailZ(-hw - 0.04);   // on the roof the bulkhead wall is there
+                        if (!Cores.HasFlight(b, s, k))
+                        {
+                            // the top: nothing carries on up, so the front of the opening is railed too
+                            double zr = z0 - 0.04, x0 = fL ? -hw + 0.02 : -hw - 0.06, x1 = xm + 0.06;
+                            Bx(x0 + 0.04, x1 - 0.04, y + 0.95, y + 1.02, zr - 0.02, zr + 0.02, C.rail);
+                            Bx(x0, x0 + 0.04, y, y + 1.02, zr - 0.02, zr + 0.02, C.rail, null, Skip.Bot);
+                            Bx(x1 - 0.04, x1, y, y + 1.02, zr - 0.02, zr + 0.02, C.rail, null, Skip.Bot);
+                            S(x0, zr, x1, zr, 0.04);
+                        }
+                    }
                     if (Cores.HasFlight(b, s, k))
                     {
                         // risers of about 18 cm, whatever the storey's height, over a fixed run
                         double fh = Derived.FloorH(b, k); int n = Math.Max(8, (int)Math.Round(fh / 0.18)); double run = (z1 - z0) / n;
-                        for (int i = 0; i < n; i++) { double za = z0 + i * run, t = y + (i + 1) * fh / n; Bx(-hw, hw, t - 0.2, t, za, za + run, C.step); }
+                        for (int i = 0; i < n; i++) { double za = z0 + i * run, t = y + (i + 1) * fh / n; Bx(-hw, xm, t - 0.2, t, za, za + run, C.step); }
                     }
                 }
                 else

@@ -237,14 +237,12 @@ namespace Triband.Storey.Editor
                 case InteriorTool.Lift:
                 {
                     var type = v.interiorTool == InteriorTool.Stairs ? v.stairKind : CoreType.Lift;
-                    bool placed = e.Apply(type == CoreType.Lift ? "Lift added" : type == CoreType.Flight ? "Single flight added" : "Stairs added", d =>
+                    bool placed = e.Apply(type == CoreType.Lift ? "Lift added" : type == CoreType.Flight ? "Straight flights added" : "Stairs added", d =>
                     {
                         var bb = d.buildings.First(x => x.id == b.id);
                         return Shafts.Place(bb, k, p, type, v.placeRot, Shafts.NewId(d)) != null;
                     });
-                    if (!placed) Notify(sv, type == CoreType.Flight && k == b.floors.Count - 1 && Roofs.IsPitched(b)
-                        ? "A flight from the top floor needs a flat roof to come up through"
-                        : "Needs room inside the footprint, clear of other cores");
+                    if (!placed) Notify(sv, "Needs room inside the footprint, clear of other cores");
                     return true;
                 }
             }

@@ -89,27 +89,25 @@ namespace Triband.Storey.Edit
             double x = Tiers.Cm(p.x), z = Tiers.Cm(p.z);
             var it = new CoreData { type = type, x = x, z = z, rot = (WallAngle(Derived.OutlineAt(b, k), x, z) + placeRot) % 360 };
             int N = b.floors.Count;
-            // a single flight serves its floor and the next; from the top floor it needs a flat roof to come up through
-            int top = type == CoreType.Flight ? Math.Min(k + 1, N - 1) : N - 1;
             if (k < N)
             {
                 var sn = Snap(Derived.OutlineAt(b, k), it, x, z, it.rot);
-                if (FitsLevels(b, it, k, top, sn.x, sn.z)) { it.x = sn.x; it.z = sn.z; }
+                if (FitsLevels(b, it, k, N - 1, sn.x, sn.z)) { it.x = sn.x; it.z = sn.z; }
             }
-            bool ok = k < N && FitsLevels(b, it, k, top) && (type != CoreType.Flight || k < N - 1 || !Roofs.IsPitched(b));
+            bool ok = k < N && FitsLevels(b, it, k, N - 1);
             if (ok) ok = !b.shafts.Any(s => Overlap(s, it));
             return (it, ok);
         }
 
         /// <summary>
-        /// The Stairs or Lift tool's click: the new core, from storey k to the top floor (stairs reach the roof; a single
-        /// flight goes one floor up), or null where it does not fit.
+        /// The Stairs or Lift tool's click: the new core, from storey k to the top floor (stairs of either kind reach the
+        /// roof), or null where it does not fit.
         /// </summary>
         public static CoreData? Place(BuildingData b, int k, Vec2 p, CoreType type, double placeRot, string id)
         {
             var (it, ok) = Placement(b, k, p, type, placeRot);
             if (!ok) return null;
-            var s = new CoreData { id = id, type = it.type, x = it.x, z = it.z, rot = it.rot, bottom = k, top = -1, roof = it.type == CoreType.Stairs };
+            var s = new CoreData { id = id, type = it.type, x = it.x, z = it.z, rot = it.rot, bottom = k, top = -1, roof = Cores.IsStairs(it) };
             b.shafts.Add(s);
             return s;
         }
@@ -148,17 +146,16 @@ namespace Triband.Storey.Edit
         }
 
         /// <summary>
-        /// Switch stairs between a switchback serving every floor and a single flight to the floor above, in place: false,
-        /// unchanged, when the other kind has no room there. A flight turned back into a switchback reaches the roof again.
+        /// Switch stairs between switchback and straight flights, in place and over the same floors: false, unchanged,
+        /// when the other kind has no room there.
         /// </summary>
         public static bool SetKind(BuildingData b, CoreData sh, CoreType type)
         {
             if (sh.type == type) return true;
             if (sh.type == CoreType.Lift || type == CoreType.Lift) return false;
-            var other = new CoreData { id = sh.id, type = type, x = sh.x, z = sh.z, rot = sh.rot, bottom = sh.bottom, top = type == CoreType.Flight ? -1 : sh.top, roof = type == CoreType.Stairs || sh.roof };
-            if (type == CoreType.Flight && sh.bottom >= b.floors.Count - 1 && Roofs.IsPitched(b)) return false;
+            var other = new CoreData { id = sh.id, type = type, x = sh.x, z = sh.z, rot = sh.rot, bottom = sh.bottom, top = sh.top, roof = sh.roof };
             if (!Tiers.ShaftFits(b, other) || b.shafts.Any(x => !ReferenceEquals(x, sh) && Overlap(x, other))) return false;
-            sh.type = type; sh.top = other.top; sh.roof = other.roof;
+            sh.type = type;
             return true;
         }
 

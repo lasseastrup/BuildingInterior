@@ -42,8 +42,7 @@ namespace Triband.Storey.Generate
             return Math.Abs(qx) <= s.W / 2 + m && Math.Abs(qz) <= s.D / 2 + m;
         }
 
-        public static bool ShaftRoof(BuildingData b, CoreData s) =>
-            (s.type == CoreType.Flight ? s.bottom == b.floors.Count - 1 : s.roof && Derived.ShaftTop(b, s) == b.floors.Count - 1) && !Roofs.IsPitched(b);
+        public static bool ShaftRoof(BuildingData b, CoreData s) => s.roof && Derived.ShaftTop(b, s) == b.floors.Count - 1 && !Roofs.IsPitched(b);
 
         public static List<int> Levels(BuildingData b, CoreData s)
         {
@@ -54,14 +53,12 @@ namespace Triband.Storey.Generate
         }
 
         public static bool StairHoleAt(BuildingData b, CoreData s, int k) =>
-            s.type == CoreType.Flight ? k == s.bottom + 1 && Levels(b, s).Contains(k)
-            : s.type == CoreType.Stairs && k > s.bottom && (k <= Derived.ShaftTop(b, s) || (k == b.floors.Count && ShaftRoof(b, s)));
+            IsStairs(s) && k > s.bottom && (k <= Derived.ShaftTop(b, s) || (k == b.floors.Count && ShaftRoof(b, s)));
 
         public static bool HasFlight(BuildingData b, CoreData s, int k)
         {
-            if (s.type == CoreType.Flight) return k == s.bottom && Levels(b, s).Count == 2;   // nothing to climb to under a pitched roof
             int T = Derived.ShaftTop(b, s);
-            return s.type == CoreType.Stairs && k >= s.bottom && (k < T || (k == T && ShaftRoof(b, s)));
+            return IsStairs(s) && k >= s.bottom && (k < T || (k == T && ShaftRoof(b, s)));
         }
 
         /// <summary>A side of the core that sits on an outline edge: the edge and the stretch along it.</summary>
@@ -91,7 +88,7 @@ namespace Triband.Storey.Generate
                 }
                 return null;
             }
-            // a single flight is open at both ends (in at the front, out at the back), so neither may stand on a wall
+            // a flight's landings are at both ends (on at the front, off at the back), so neither may stand on a wall
             return new[] { OnEdge(P2(-hx, -ez), P2(-hx, ez)), OnEdge(P2(hx, -ez), P2(hx, ez)), null, it.type == CoreType.Flight ? null : OnEdge(P2(-ex, hz), P2(ex, hz)) };
         }
 
