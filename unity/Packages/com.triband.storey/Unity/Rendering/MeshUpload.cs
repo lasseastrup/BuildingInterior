@@ -54,7 +54,8 @@ namespace Triband.Storey.Unity
         /// gives the colour row of each style the swatches name (party walls name a neighbour's).
         /// </summary>
         /// <param name="optimize">Reorder for the GPU's vertex cache (<c>Mesh.Optimize</c>): worth it for meshes that stay; the editor's previews, rebuilt on every drag, skip it.</param>
-        public static Mesh Upload(MeshBuilder gb, string name, Func<StyleRef, int> rowOf, int wallBase = -1, bool optimize = false)
+        /// <param name="windows">Opaque panes carry their place on the pane for the window shader (the opaque meshes; not the see-through glass).</param>
+        public static Mesh Upload(MeshBuilder gb, string name, Func<StyleRef, int> rowOf, int wallBase = -1, bool optimize = false, bool windows = false)
         {
             gb.Weld();
             int nv = gb.Verts;
@@ -84,6 +85,7 @@ namespace Triband.Storey.Unity
                 var (cr, cg, cb, ca) = ColorRows.EncodeVertex(rowOf(s.style), s.slot, s.tone);
                 var pos = new Vector3((float)p.x, (float)p.y, (float)p.z);
                 verts[i] = new Vertex { position = pos, nx = S8(n.x), ny = S8(n.y), nz = S8(n.z), r = cr, g = cg, b = cb, a = ca, tag = gb.Tag };
+                if (windows && s.slot == ColorSlot.Glass && gb.PaneUV.TryGetValue(i, out var uv)) { var (pa, pw, pb) = ColorRows.EncodePane(uv.u, uv.v, uv.id); verts[i].a = pa; verts[i].nw = pw; verts[i].b = pb; }
                 if (first) { bounds = new Bounds(pos, Vector3.zero); first = false; } else bounds.Encapsulate(pos);
             }
             const MeshUpdateFlags flags = MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontNotifyMeshUsers;

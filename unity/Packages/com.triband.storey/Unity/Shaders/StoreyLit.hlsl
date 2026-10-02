@@ -15,6 +15,9 @@
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "StoreyOcclusion.hlsl"
 #include "StoreyPalette.hlsl"
+#if !defined(STOREY_DEPTH) && !defined(STOREY_GLASS)
+#include "StoreyWindow.hlsl"
+#endif
 #ifdef STOREY_MASSING
 #include "StoreyFacade.hlsl"
 #endif
@@ -64,6 +67,7 @@ struct Varyings
     float4 fac2       : TEXCOORD7;   // fac2.xy, slot
 #endif
     float4 shadowCoord : TEXCOORD8;
+    float4 win        : TEXCOORD9;   // a window pane: u, v across and up it, 1 on a pane (LOD0/LOD1)
     UNITY_VERTEX_INPUT_INSTANCE_ID
     UNITY_VERTEX_OUTPUT_STEREO
 };
@@ -95,7 +99,12 @@ Varyings StoreyVert(Attributes IN)
 #endif
     if (!shown) OUT.positionCS = float4(2.0, 2.0, 2.0, 1.0);   // LOD not shown: clip the whole triangle
 #if !defined(STOREY_MASSING) && !defined(STOREY_DEPTH)
-    OUT.color = float4(StoreyVertexColor(IN.color), 1.0);   // a face's vertices share one swatch: exact per vertex
+    // a window pane carries its place on the pane (the shade byte and the normal's fourth byte) and the window's number
+    // (the slot byte) instead (MeshUpload); its slot and shade are the opaque glass's
+    uint4 ce = (uint4)round(IN.color * 255.0);
+    bool pane = IN.normalOS.w > 0.5 / 127.0;
+    OUT.color = float4(pane ? StoreyPaletteColor(ce.x | (ce.y << 8), 6u, 0.42) : StoreyVertexColor(IN.color), 1.0);   // a face's vertices share one swatch: exact per vertex
+    OUT.win = pane ? float4(IN.color.a, (IN.normalOS.w * 127.0 - 1.0) / 126.0, 1.0, (float)ce.z) : float4(0, 0, 0, 0);
 #endif
     OUT.wall = wall;
     OUT.misc = float4(kind, wid, v.bid, v.lod);

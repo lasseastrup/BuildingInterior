@@ -163,6 +163,12 @@ namespace UnityEngine
         public static implicit operator Vector4(Vector3 v) => new Vector4(v.x, v.y, v.z, 0);
     }
 
+    public struct Vector2Int
+    {
+        public int x, y;
+        public Vector2Int(int x, int y) { this.x = x; this.y = y; }
+    }
+
     public struct Vector4
     {
         public float x, y, z, w;
@@ -175,6 +181,7 @@ namespace UnityEngine
         public Color(float r, float g, float b, float a = 1) { this.r = r; this.g = g; this.b = b; this.a = a; }
         public static Color white => default;
         public static Color Lerp(Color a, Color b, float t) => a;
+        public static implicit operator Vector4(Color c) => new Vector4(c.r, c.g, c.b, c.a);
     }
 
     public struct Quaternion
@@ -342,6 +349,7 @@ namespace UnityEngine
 
     public sealed class Texture2D : Texture
     {
+        public static Texture2D blackTexture => null;
         public Texture2D(int width, int height, TextureFormat textureFormat, bool mipChain) { }
         public void SetPixels(Color[] colors) { }
         public void Apply(bool updateMipmaps = true, bool makeNoLongerReadable = false) { }

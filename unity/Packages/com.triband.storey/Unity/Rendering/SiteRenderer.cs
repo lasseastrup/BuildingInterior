@@ -238,9 +238,9 @@ namespace Triband.Storey.Unity
                 table.MarkWallDataDirty();
             }
             bool opt = Application.isPlaying;   // edit mode rebuilds on every drag: skip the cache reorder there
-            Add(bt, "LOD0", MeshUpload.Upload(Tagged(l0.Op, bt.idx), b.name + " LOD0", RowOf, bt.wallBase, opt), opaque, true);
+            Add(bt, "LOD0", MeshUpload.Upload(Tagged(l0.Op, bt.idx), b.name + " LOD0", RowOf, bt.wallBase, opt, windows: true), opaque, true);
             Add(bt, "LOD0 glass", MeshUpload.Upload(Tagged(l0.Glass, bt.idx), b.name + " glass", RowOf, bt.wallBase, opt), glass, false);
-            Add(bt, "LOD1", MeshUpload.Upload(Tagged(Lod1.Build(site!, b), bt.idx + Lod1.LOD_TAG), b.name + " LOD1", RowOf, -1, opt), opaque, true);
+            Add(bt, "LOD1", MeshUpload.Upload(Tagged(Lod1.Build(site!, b), bt.idx + Lod1.LOD_TAG), b.name + " LOD1", RowOf, -1, opt, windows: true), opaque, true);
 
             var l2 = Lod2.Build(site!, b);
             var rowMap = new int[l2.Rows.Count];

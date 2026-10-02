@@ -46,6 +46,11 @@ namespace Triband.Storey.Generate
         /// <summary>The floor height of the storey being generated, recorded with each wall.</summary>
         public double StoreyBase;
         public List<Solid>? Solids;
+        /// <summary>
+        /// Where on its window pane a vertex is, 0 to 1 across and up (vertex index → u, v): the window shader maps a
+        /// room behind the pane by it (docs/EDITOR.md §6.8). Only pane vertices have one.
+        /// </summary>
+        public readonly Dictionary<int, (double u, double v, byte id)> PaneUV = new Dictionary<int, (double u, double v, byte id)>();
         /// <summary>Building index + 65536 × LOD, written into every vertex at upload.</summary>
         public int Tag { get; private set; }
         public readonly bool Lean;
@@ -90,6 +95,12 @@ namespace Triband.Storey.Generate
                 W.Clear(); W.AddRange(w); K.Clear(); K.AddRange(k); WI.Clear(); WI.AddRange(wi);
             }
             for (int t = 0; t < I.Count; t++) I[t] = map[I[t]];
+            if (PaneUV.Count > 0)
+            {
+                var uv = new Dictionary<int, (double, double, byte)>(PaneUV.Count);
+                foreach (var kv in PaneUV) if (!uv.ContainsKey(map[kv.Key])) uv[map[kv.Key]] = kv.Value;
+                PaneUV.Clear(); foreach (var kv in uv) PaneUV[kv.Key] = kv.Value;
+            }
             return gone;
         }
 

@@ -281,3 +281,26 @@ Layout keys: `head`, `panes`, `frames`, `bandH`, `bandDepth`, `bandWall`, `doorT
 **Checks:**
 1. Arch heads, 2 × 3 panes, Frames, Band 0.65 m in a wall shade, Glazed doors, Plinth 0.8 m with a grey Plinth colour, Foundation, Brick patches 0.6: the building looks like the artist's.
 2. Set Foundation *Below ground* to 1 m and lower the ground (or lift the site): the foundation shows down to it.
+
+### 6.8 Windows
+
+Windows show a room behind the glass, after the project's *Window* shader graph. Add **Storey Windows** (*Add Component › Storey › Storey Windows*) to any object in the scene and give it the room atlas. Without the component, or with no atlas, the glass is the plain dark glass of before.
+
+- **Rooms:** each window shows one cell of the atlas (*Atlas grid* columns × rows) as a box behind the pane, in perspective (*Depth*). Each window picks its own room and is mirrored at random.
+- **By day:** the room is lit by the main light's colour times *Tint*.
+- **At night:** as *Night blend* rises from 0 to 1, more windows light up, up to *Light chance* of them. Each lit window takes a lamp colour between *Light* and *Light 2*. A day and night system can set `StoreyWindows.NightBlend` instead of the field.
+- **Glare:** an optional texture over the glass, at *Glare strength* (0.03 in the shader graph).
+
+Which room a window shows, and when it lights, comes from a number worked out from the window's centre on the wall. LOD0 and LOD1 bake it into the pane's vertices, and LOD2's shader works it out the same way, so a window keeps its room and its light across an LOD switch.
+
+Limits:
+- It applies to the panes that aren't see-through: shell and filled storeys in LOD0, every window in LOD1, and LOD2's painted windows. A walk-in storey keeps its see-through glass, because the real room is behind it.
+- There is no fog term yet.
+- `StoreyWindowParallax` in StoreyWindow.hlsl takes the same inputs as the shader graph's `WindowInteriorParallax_float`, so that node's code can replace it.
+- In LOD2, a window whose painted rectangle is a little off the real one can, rarely, pick a different room than in LOD1.
+
+**Checks:**
+1. Add Storey Windows with the room atlas and its grid. Shell and filled storeys show rooms, each window its own, and they move in perspective as the camera moves.
+2. Drag *Night blend* from 0 to 1: windows light up one by one in the lamp colours.
+3. Zoom out through LOD1 and LOD2: each window keeps its room and its light.
+4. Remove the component: the glass goes back to plain dark glass.

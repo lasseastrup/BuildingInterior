@@ -45,4 +45,34 @@ float3 StoreyFacadeColor(float4 fac, float2 fac2, float slot)
     return c;
 }
 
+// Where a pixel of LOD2's facade is on one of its painted windows: 1 inside one (uv across and up it, along the
+// wall's own "across", cross(up, outward normal), as the geometry LODs store it; the window's number from its centre
+// on the wall's face in site space, as Facade.WindowId), 0 elsewhere, and 0 where the windows are too small on
+// screen to draw (they fade to their average there, as in StoreyFacadeColor). origY: the height before Sink.
+float StoreyFacadeWindow(float4 fac, float2 fac2, float slot, float3 posWS, float origY, float3 N, out float2 uv, out float id)
+{
+    uv = 0; id = 0;
+    // the derivatives first, before any early return
+    float3 p = TransformWorldToObject(float3(posWS.x, origY, posWS.z));
+    float3 T = normalize(cross(float3(0, 1, 0), TransformWorldToObjectDir(N)));
+    float along = dot(p, T);
+    float fu = fwidth(fac.x), fv = fwidth(fac.y);
+    // the facade's u runs along the wall one way or the other: which, from how the site-space point moves with it
+    float su = dot(float2(ddx(along), ddy(along)), float2(ddx(fac.x), ddy(fac.x))) < 0.0 ? -1.0 : 1.0;
+    if (fac2.y > 1.5) return 0;
+    float4 sp = StoreyParam(slot, 4), run = StoreyParam(slot, 5);
+    float u = fac.x, v = fac.y, uS = fac.z, uE = fac.w, bay = fac2.x, h = run.x;
+    if (v >= run.z || bay <= 0.0 || sp.w <= sp.z + 0.4) return 0;
+    float ww = sp.x >= 0.0 ? bay - sp.x : min(sp.y, bay - 0.5);
+    if (ww < 0.45 || u < uS || u > uE) return 0;
+    if (min(bay / max(fu, 1e-4), h / max(fv, 1e-4)) < 8.0) return 0;
+    float lv = v - floor(v / h) * h;
+    float cx = uS + (floor((u - uS) / bay) + 0.5) * bay;
+    uv = float2((u - (cx - ww * 0.5)) / ww, (lv - sp.z) / (sp.w - sp.z));
+    if (su < 0.0) uv.x = 1.0 - uv.x;
+    float3 c = p + T * (su * (cx - u)) + float3(0, (sp.z + sp.w) * 0.5 - lv, 0);
+    id = StoreyWindowId(c);
+    return all(uv >= 0.0) && all(uv <= 1.0) ? 1.0 : 0.0;
+}
+
 #endif

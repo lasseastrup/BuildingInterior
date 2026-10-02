@@ -27,6 +27,18 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     s.isFront = isFront;
 
     float4 color = StoreyLighting(s);
+#if !defined(STOREY_GLASS)
+    if (_StoreyWindowsOn > 0.5)
+    {
+    #ifdef STOREY_MASSING
+        float2 wuv; float id; float onPane = StoreyFacadeWindow(IN.fac, IN.fac2.xy, IN.fac2.z, s.positionWS, IN.occ.z, s.normalWS, wuv, id);
+    #else
+        float2 wuv = IN.win.xy; float id = IN.win.w; float onPane = IN.win.z;
+    #endif
+        float2 wdx = ddx(wuv), wdy = ddy(wuv);   // uniform branch: every pixel of the quad takes them
+        if (onPane > 0.5 && isFront) color.rgb = StoreyWindowPane(wuv, wdx, wdy, id, s.positionWS, s.normalWS);
+    }
+#endif
 #ifdef STOREY_CAP
     if (!isFront) color.rgb = _StoreyCap.rgb;   // a cut exposes a wall's inside: the section cap
 #endif

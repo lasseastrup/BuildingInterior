@@ -69,6 +69,20 @@ namespace Triband.Storey.Generate
             return (int)((e & 1) == 0 ? w & 0xFFFF : w >> 16);
         }
 
+        /// <summary>
+        /// A window pane's vertex (docs/EDITOR.md §6.8): its place on the pane across (the colour's shade byte, 0 to 255),
+        /// up (the normal's fourth byte, 1 to 127; 0 marks every other vertex) and the window's number (the slot byte). A
+        /// pane's slot and shade are the opaque glass's, fixed in the shader.
+        /// </summary>
+        public static (byte a, sbyte nw, byte b) EncodePane(double u, double v, byte id) =>
+            ((byte)Math.Round(Math.Max(0, Math.Min(1, u)) * 255), (sbyte)(1 + Math.Round(Math.Max(0, Math.Min(1, v)) * 126)), id);
+
+        /// <summary>What the shader reads back (StoreyWindow.hlsl): u, v, the window's number.</summary>
+        public static (double u, double v, int id) DecodePane(byte a, sbyte nw, byte b) => (a / 255.0, (nw - 1) / 126.0, b);
+
+        /// <summary>A pane's shade: the opaque glass's (<c>Palette.glassDark</c>).</summary>
+        public const double PaneTone = 0.42;
+
         /// <summary>The LOD0/LOD1 vertex colour bytes: row low, row high, slot, tone × 128.</summary>
         public static (byte r, byte g, byte b, byte a) EncodeVertex(int row, ColorSlot slot, double tone)
         {
