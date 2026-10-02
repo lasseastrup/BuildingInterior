@@ -40,6 +40,7 @@ namespace Triband.Storey.Unity
         {
             public Vector3 position;
             public sbyte nx, ny, nz, nw;
+            public float tag;   // building index + 2 × 65536: without it the shader takes the massing for building 0's LOD0
             public Vector4 fac;
             public Vector2 fac2;
             public float slot;
@@ -112,6 +113,7 @@ namespace Triband.Storey.Unity
             {
                 new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
                 new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
+                new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 1),
                 new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 4),
                 new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, 2),
                 new VertexAttributeDescriptor(VertexAttribute.TexCoord3, VertexAttributeFormat.Float32, 1),
@@ -124,7 +126,7 @@ namespace Triband.Storey.Unity
                 var pos = new Vector3((float)p.x, (float)p.y, (float)p.z);
                 verts[i] = new MassVertex
                 {
-                    position = pos, nx = (sbyte)n.x, ny = (sbyte)n.y, nz = (sbyte)n.z,
+                    position = pos, nx = (sbyte)n.x, ny = (sbyte)n.y, nz = (sbyte)n.z, tag = m.Tag,
                     fac = new Vector4((float)m.Fac[i * 4], (float)m.Fac[i * 4 + 1], (float)m.Fac[i * 4 + 2], (float)m.Fac[i * 4 + 3]),
                     fac2 = new Vector2((float)m.Fac2[i * 2], (float)m.Fac2[i * 2 + 1]),
                     slot = rowMap[m.Slot[i]],

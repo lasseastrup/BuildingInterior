@@ -479,6 +479,20 @@ namespace Triband.Storey.Tests
         private static string Normalise(string path) => Path.GetFullPath(path).Replace('\\', '/').TrimEnd('/');
 
         /// <summary>The text with comments and string literals blanked, so a lint over it reads code only.</summary>
+        /// <summary>
+        /// Every mesh Storey uploads carries the building tag (TEXCOORD0: building index + 65536 × LOD), which the vertex
+        /// shader uses to show one LOD per building. A layout without it reads 0, so its mesh shows as building 0's LOD0:
+        /// the LOD2 massing once drew over every LOD0 building that way, z-fighting with it.
+        /// </summary>
+        [Fact]
+        public void EveryUploadedMeshCarriesTheBuildingTag()
+        {
+            string src = File.ReadAllText(Path.Combine(Layout.UnityRoot, "Packages", "com.triband.storey", "Unity", "Rendering", "MeshUpload.cs"));
+            int layouts = Regex.Matches(src, @"VertexAttribute\.Position\b").Count, tags = Regex.Matches(src, @"VertexAttribute\.TexCoord0\b").Count;
+            Assert.True(layouts > 0);
+            Assert.Equal(layouts, tags);
+        }
+
         private static string Code(string text)
         {
             var code = new System.Text.StringBuilder(text.Length);
