@@ -23,7 +23,7 @@ The walk model's collision is the prototype's model, not physics: walkable surfa
 | 5.1 | Walk model (**done**: `Play/PlayWorld`, `Walker`, `FollowCamera`; every `play.json` query and the 16 walks match) | `Runtime/Play`: the building and floor the player is in, the surface under a point (floors, terraces, roofs, both kinds of stairs, slab holes), collision against LOD0's segments, the player step (walk, run, gravity, step-up limit), the lift ride, the follow camera | `play.json`'s segments, surface, collide and loc cases match; the walks' player and camera match frame by frame |
 | 5.2 | Occlusion core (**done**: `Occlusion/OcclusionCore`, `SinkFootprint`; the walks' view, occluders, rows and walls match frame by frame) | `Runtime/Occlusion`: the view (active building, ceiling clip, cutaway range, the camera offset applied to the player), the sliding cutaway per wall id, buildings in the way (the three rays, the door rule, the fade and hold, slots, Slice heights, Sink's plan and rows), camera assist, Sink's footprint mesh | The walks' view, occluders and walls match frame by frame |
 | 5.3 | `OcclusionSystem` (**written; editor check outstanding**, §4: `StoreyOcclusion`, `StoreyOcclusionSettings`) | The Unity component: takes a camera and a focus, runs 5.2 each frame, writes `_StoreyState.w`, `_StoreyOcc`, `_StoreyWall` and the globals, shows the footprint meshes; `StoreyOcclusionSettings` (mode, stub, base height, hole size, silhouette, assist) | The demo street in Play mode occludes as in the prototype |
-| 5.4 | Play kit (**written; editor check outstanding**, §4: `StoreyPlayKit`, `StoreyCharacter`, `StoreyPlayCamera`, `Storey/Silhouette`) | `com.triband.storey.playkit`: third-person controller on 5.1, follow camera with orbit, keyboard, gamepad and on-screen joystick, lift panel, silhouette; **Play from this floor** in the Interior tab | Walk every floor of a 10-floor building from any camera yaw without losing the character (SPEC §8) |
+| 5.4 | Play kit (**written; editor check outstanding**, §4: `StoreyPlayKit`, `StoreyCharacter`, `StoreyPlayCamera`, `Storey/Silhouette`) | `com.triband.storey.playkit`: third-person controller on 5.1, follow camera with orbit, keyboard, gamepad and on-screen joystick, lift panel, silhouette | Walk every floor of a 10-floor building from any camera yaw without losing the character (SPEC §8) |
 | 5.5 | Device run | iPhone 7 and iPhone 14 builds of the demo street; draws, triangles, memory and frame time recorded; the minimum tier's quality settings | The numbers replace the estimates in UNITY-PACKAGE-PLAN §6.6 |
 
 5.1 and 5.2 are headless; 5.3 and 5.4 need an editor session to check, 5.5 a device.
@@ -42,7 +42,6 @@ Straight flights (`CoreType.Flight`) are not in the prototype. Their walk surfac
 
   It shows Sink's footprints. The site's renderer hands it the view in Play mode and leaves its own view globals alone.
 - **The play kit:** add **Storey Play Kit** to any object (*Add Component ▸ Storey ▸ Play Kit*). It adds the occlusion system to the site if there is none, and makes the character and the camera. The character walks the walk model, with no physics.
-- **Play from this floor:** a button in the Interior tab. It starts Play mode on the active storey, in front of its stairs or lift. A scene without a play kit gets one.
 
 **Controls.**
 - **Keyboard:** WASD or the arrows to walk, Shift to run, Q and E to turn the camera.
@@ -74,8 +73,7 @@ The play kit depends on the Input System package. With the project's *Active Inp
    - **Fade:** it ghosts out above a dark base.
    - Nothing changes in the shadows.
 6. **Silhouette:** the character shows in orange through walls.
-7. **Play from this floor:** in the Interior tab on floor 3. Play starts there.
-8. **Moved site:** move the site off the origin and repeat 2.
+7. **Moved site:** move the site off the origin and repeat 2.
 
 **Not yet:**
 - The lift car is not drawn.

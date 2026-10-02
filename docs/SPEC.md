@@ -33,7 +33,7 @@ Goal: designers can build a good-looking building with 10 floors and rooftop acc
 3. **Nothing is destructive without undo.** Delete floor / building / footprint preset are all one Ctrl+Z away. That's why the prototype has no confirmation dialogs.
 4. **The edit view and play view use the same occlusion.** In the Interior tab the active floor is sliced and cut away exactly as in play, so what the designer sees is what the player gets.
 5. **Snap to what is already there.** Corners, walls and axis alignment snap while drawing and dragging; there is no grid. Hold Alt for fully free placement.
-6. **Test instantly.** Pressing Play from the Interior tab drops the character on the floor being edited, next to the nearest core.
+6. **Test instantly.** Pressing Play from the Interior tab drops the character on the floor being edited, next to the nearest core. (The Unity editor does not have this: add the Play Kit and press Play.)
 
 ## 3. Data model (Unity: ScriptableObject or serialised class, generated at edit time)
 

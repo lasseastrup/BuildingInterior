@@ -7,7 +7,7 @@ namespace Triband.Storey.PlayKit
     /// <summary>
     /// The play kit in one component (docs/PLAY.md, slice 5.4): add it next to a Storey Site, press Play, and walk the
     /// layout. It adds the site's occlusion system if there is none, and makes the character and the camera (the main
-    /// camera, or a new one). The character starts where this object is, or where <b>Play from this floor</b> asked.
+    /// camera, or a new one). The character starts where this object is.
     /// A project with its own character and camera uses <see cref="StoreyOcclusion"/> directly instead.
     /// </summary>
     [AddComponentMenu("Storey/Play Kit/Storey Play Kit")]
@@ -23,9 +23,7 @@ namespace Triband.Storey.PlayKit
 
         void Awake()
         {
-            var request = PlayFrom.Take();
             if (site == null) site = GetComponent<StoreySite>();
-            if (site == null && request != null) foreach (var s in FindObjectsByType<StoreySite>(FindObjectsSortMode.None)) if (s.name == request.Value.site) site = s;
             if (site == null) site = FindAnyObjectByType<StoreySite>();
             if (site == null) { Debug.LogWarning("Storey Play Kit: no Storey Site in the scene to walk."); enabled = false; return; }
 
@@ -41,22 +39,10 @@ namespace Triband.Storey.PlayKit
             Character = new GameObject("Storey Character").AddComponent<StoreyCharacter>();
             Character.occlusion = occ; Character.viewCamera = cam;
             occ.player = Character.transform;
-            if (request != null) Character.Spawn(request.Value.feet, request.Value.yaw);
-            else Character.Spawn(transform.position, transform.eulerAngles.y * Mathf.Deg2Rad);
+            Character.Spawn(transform.position, transform.eulerAngles.y * Mathf.Deg2Rad);
 
             PlayCamera = cam.GetComponent<StoreyPlayCamera>() ?? cam.gameObject.AddComponent<StoreyPlayCamera>();
             PlayCamera.character = Character; PlayCamera.occlusion = occ;
-        }
-
-        /// <summary>
-        /// Play from this floor (the editor's Interior tab): when Play mode starts with a request and the scene has no
-        /// play kit, one is made, so a layout can be walked with no setup.
-        /// </summary>
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        static void PlayFromRequest()
-        {
-            if (!PlayFrom.Pending || FindAnyObjectByType<StoreyPlayKit>() != null) return;
-            new GameObject("Storey Play Kit").AddComponent<StoreyPlayKit>();
         }
     }
 }
