@@ -129,6 +129,18 @@ namespace Triband.Storey.Generate
             if (!Lean) { W.Add(curW[0]); W.Add(curW[1]); W.Add(curW[2]); W.Add(curW[3]); K.Add(curK); WI.Add(curI); }
         }
 
+        /// <summary>
+        /// Triangles as they come (an artist's mesh: <see cref="OpeningKinds"/>): one vertex per point with its own normal,
+        /// the winding as given (front faces wind as the generator's own). Returns the first new vertex.
+        /// </summary>
+        public int Mesh(IReadOnlyList<P3> pts, IReadOnlyList<P3> nrm, IReadOnlyList<int> tris, Swatch c)
+        {
+            int bse = P.Count;
+            for (int i = 0; i < pts.Count; i++) V(pts[i], nrm[i], c);
+            foreach (int t in tris) I.Add(bse + t);
+            return bse;
+        }
+
         /// <summary>A convex planar polygon, fanned; winding fixed to face along <paramref name="nr"/>.</summary>
         public void Poly(P3[] pts, P3 nr, Swatch c)
         {

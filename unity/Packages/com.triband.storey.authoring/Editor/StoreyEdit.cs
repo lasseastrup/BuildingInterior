@@ -187,6 +187,7 @@ namespace Triband.Storey.Editor
         public void Save()
         {
             if (!Dirty) return;
+            if (site != null) StoreyOpenings.Sync(site, Document);   // the artist's windows and doors the layout uses
             File.WriteAllText(path, text);
             file!.text = text;
             AssetDatabase.ImportAsset(path);

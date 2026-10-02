@@ -273,6 +273,8 @@ namespace Triband.Storey
         public bool bandWall;
         /// <summary>Street doors.</summary>
         public DoorType doorType = DoorType.Canopy;
+        /// <summary>An artist-made window and street door (<see cref="Generate.OpeningKinds"/>), by id; null = the generator's own.</summary>
+        public string? windowKind, doorKind;
         /// <summary>The ground floor's plinth height; null = 0.45 m.</summary>
         public double? plinthH;
         /// <summary>A foundation along the foot of the ground floor: how deep it goes below ground (null = none), and how high it shows (null = 0.2 m).</summary>

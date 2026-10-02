@@ -16,6 +16,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- Artist-made windows and street doors (docs/EDITOR.md §6.9). Engine-free: `OpeningKind` and `OpeningKinds`, plus `FacadeStyle.windowKind` and `doorKind`. Unity: the `StoreyOpening` asset (*Create › Storey › Window or Door*) and `StoreySite.openings`. `MeshBuilder.Mesh` takes raw triangles; `Facade.PaneUV` is split out of `Facade.Pane`.
 - Windows with rooms behind them (docs/EDITOR.md §6.8), after the project's Window shader graph. Add the `StoreyWindows` component and give it a room atlas.
   - Opaque panes in LOD0 and LOD1 carry their place on the pane and the window's number (`MeshBuilder.PaneUV`, `ColorRows.EncodePane`, `Facade.WindowId`).
   - LOD2's painted windows work out the same number, so a window keeps its room and its light across an LOD switch.

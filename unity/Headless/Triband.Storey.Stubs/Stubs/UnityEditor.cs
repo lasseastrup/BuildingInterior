@@ -205,6 +205,7 @@ namespace UnityEditor
         public static void Space() { }
         public static int Popup(string label, int selectedIndex, string[] displayedOptions, params GUILayoutOption[] options) => selectedIndex;
         public static int Popup(int selectedIndex, string[] displayedOptions, params GUILayoutOption[] options) => selectedIndex;
+        public static int Popup(GUIContent label, int selectedIndex, GUIContent[] displayedOptions, params GUILayoutOption[] options) => selectedIndex;
         public static int DelayedIntField(string label, int value, params GUILayoutOption[] options) => value;
         public static int DelayedIntField(int value, params GUILayoutOption[] options) => value;
         public static string DelayedTextField(string label, string text, params GUILayoutOption[] options) => text;

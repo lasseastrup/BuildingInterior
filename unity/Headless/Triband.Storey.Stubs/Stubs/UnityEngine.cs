@@ -36,6 +36,7 @@ namespace UnityEngine
     {
         public const float PI = 3.14159274f, Deg2Rad = PI / 180f, Rad2Deg = 180f / PI;
         public static float Max(float a, float b) => a;
+        public static float Abs(float f) => f;
         public static int Max(int a, int b) => a;
         public static float Min(float a, float b) => a;
         public static int Min(int a, int b) => a;
@@ -92,6 +93,8 @@ namespace UnityEngine
         public ContextMenu(string itemName) { }
     }
 
+    [System.AttributeUsage(System.AttributeTargets.Field)]
+    public sealed class HideInInspector : System.Attribute { }
     public sealed class TooltipAttribute : PropertyAttribute
     {
         public TooltipAttribute(string tooltip) { }
@@ -314,8 +317,12 @@ namespace UnityEngine
 
     public struct Bounds
     {
-        public Bounds(Vector3 center, Vector3 size) { }
+        public Bounds(Vector3 center, Vector3 size) : this() { }
         public void Encapsulate(Vector3 point) { }
+        public Vector3 center { get; set; }
+        public Vector3 size { get; set; }
+        public Vector3 min { get; set; }
+        public Vector3 max { get; set; }
     }
 
     public class Shader : Object
@@ -375,6 +382,11 @@ namespace UnityEngine
         public void SetIndexBufferData<T>(T[] data, int dataStart, int meshBufferStart, int count, UnityEngine.Rendering.MeshUpdateFlags flags = UnityEngine.Rendering.MeshUpdateFlags.Default) where T : struct { }
         public void SetSubMesh(int index, UnityEngine.Rendering.SubMeshDescriptor desc, UnityEngine.Rendering.MeshUpdateFlags flags = UnityEngine.Rendering.MeshUpdateFlags.Default) { }
         public void UploadMeshData(bool markNoLongerReadable) { }
+        public Vector3[] vertices { get; set; } = System.Array.Empty<Vector3>();
+        public Vector3[] normals { get; set; } = System.Array.Empty<Vector3>();
+        public int[] GetTriangles(int submesh) => System.Array.Empty<int>();
+        public void RecalculateNormals() { }
+        public bool isReadable => true;
     }
 }
 
@@ -466,6 +478,7 @@ namespace UnityEngine
         public Transform transform { get; } = new Transform();
         public T AddComponent<T>() where T : Component, new() => new T();
         public T GetComponent<T>() => default!;
+        public T[] GetComponentsInChildren<T>(bool includeInactive) => System.Array.Empty<T>();
     }
 
     public sealed class MeshFilter : Component
@@ -484,6 +497,7 @@ namespace UnityEngine
 
     public class Renderer : Component
     {
+        public Material[] sharedMaterials { get; set; } = System.Array.Empty<Material>();
         public bool enabled { get; set; }
         public Material sharedMaterial { get; set; } = new Material();
         public UnityEngine.Rendering.ShadowCastingMode shadowCastingMode { get; set; }

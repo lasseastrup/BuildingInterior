@@ -313,3 +313,30 @@ Limits:
 2. Drag *Night blend* from 0 to 1: windows light up one by one in the lamp colours.
 3. Zoom out through LOD1 and LOD2: each window keeps its room and its light.
 4. Remove the component: the glass goes back to plain dark glass.
+
+### 6.9 Artist-made windows and doors
+
+An artist can make a window or a street door as a mesh, and every building whose style picks it gets one in each opening, in place of the generator's own.
+
+1. Model it with the pivot at the bottom middle of the hole in the wall: +Y up, +Z out of the wall, in metres. Z 0 is the wall's outer face, and negative Z goes into the reveal; the wall is 0.25 m thick. Each submesh is one part. Name its material after what it is: *Glass*, *Frame*, *Sill* or *Trim*, *Door* or *Leaf*, *Handle* or *Metal*, *Wall*.
+2. *Assets › Create › Storey › Window or Door*, then set *Mesh*. The parts take their colours from the material names, and *Size* (the hole) comes from the mesh's bounds. Tick *Door* for a street door. *Faces back* turns round a mesh made facing −Z.
+3. Check the parts list. Each part takes one of the style's colours, so the building's palette colours it; the model's materials aren't used.
+   - **Glass** shows the window shader's rooms on shell and filled storeys (§6.8), and is see-through on walk-in ones.
+   - **Leaf** marks the door itself. It's left out on a walk-in ground floor, where the player walks through the doorway.
+4. In the Facade tab, pick it under **Window** (next to *Windows*) or **Street door** (with the other details). *Generated* goes back to the generator's own.
+
+The mesh is stretched to each opening, so the style's *Windows* type, *Window width* and *Bay spacing* still decide where openings are and how big. Turn off *Stretch* to keep the mesh's own size, centred on the opening's bottom; then set *Window width* to match. Heads, sills, frames, glazing bars, canopies and glazed doors aren't drawn where an artist's mesh is: the mesh is the whole window or door.
+
+LODs: LOD0 places the mesh. LOD1 places *LOD1 mesh* if there is one, and otherwise keeps its plain pane. LOD2 keeps its painted windows.
+
+The site lists the windows and doors its layout uses (*Openings*, kept by the editor when you save), so builds include them. The mesh is copied into the asset when set, and baked again when its model is reimported. If Unity says the mesh isn't readable, tick *Read/Write* on the model.
+
+Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`), `FacadeStyle.windowKind`/`doorKind` (layout keys `windowKind`, `doorKind`) (`OpeningKindTests`). Unity: `StoreyOpening`, `StoreySite.openings`.
+
+**Checks:**
+1. Make a window from a model with Glass and Frame materials. Its parts list says Glass and Frame, and its size matches the model.
+2. Pick it under Window on a shell building: every window is the model, stretched to the openings, with rooms behind the glass.
+3. On a walk-in building the glass is see-through.
+4. Make a door with a Leaf part and pick it under Street door. On a shell building the door shows; on a walk-in building the leaf is gone and you can walk in.
+5. Change the model in your DCC tool and reimport it: the buildings update.
+6. Enter Play mode, and make a build: the windows and doors are there.

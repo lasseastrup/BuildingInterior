@@ -29,6 +29,8 @@ namespace Triband.Storey.Unity
         public bool generateColliders = true;
         [Tooltip("Colliders in edit mode too, rebuilt with every edit (raycasts and physics previews in the editor). Off, edits cook nothing.")]
         public bool collidersInEditMode;
+        [Tooltip("The artist-made windows and doors the layout's styles use (the editor keeps this list), so builds include them.")]
+        public List<StoreyOpening> openings = new List<StoreyOpening>();
 
         SiteRenderer? site;
         Material?[] builtWith = new Material?[3];
@@ -36,6 +38,7 @@ namespace Triband.Storey.Unity
         StoreyDocument? preview;
         readonly HashSet<string> pending = new HashSet<string>(StringComparer.Ordinal);
         bool pendingAll;
+        int kindsSeen = -1;
 
         /// <summary>Set by the editor's Storey tools each frame they are active: the storey being edited, isolate. Null draws the plain layout.</summary>
         public SiteView? View { get; set; }
@@ -86,6 +89,9 @@ namespace Triband.Storey.Unity
                 shownJson = null; pendingAll = true;
             }
             site.Colliders = generateColliders && (Application.isPlaying || collidersInEditMode);
+            // an artist's window or door was added or changed: everything is built again with it
+            foreach (var o in openings) if (o != null && Generate.OpeningKinds.Get(o.Id) == null) o.Register();
+            if (Generate.OpeningKinds.Version != kindsSeen) { kindsSeen = Generate.OpeningKinds.Version; shownJson = null; pendingAll = true; }
             if (preview == null)
             {
                 if (shownJson != layout.Json) { site.Show(layout.Document); shownJson = layout.Json; }

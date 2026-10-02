@@ -411,6 +411,7 @@ namespace Triband.Storey.Editor
                 Presets(e, b, k0, st);
                 EditorGUILayout.LabelField("Windows", EditorStyles.boldLabel);
                 StyleEnum(e, k0, "Windows", st.windows, (s, x) => s.windows = x);
+                KindPopup(e, k0, "Window", st.windowKind, false);
                 FacadeDetails(e, b, k0, st);
                 EditorGUILayout.LabelField("Colours", EditorStyles.boldLabel);
                 Colour(e, b, k0, "Walls", "wall");
@@ -526,7 +527,8 @@ namespace Triband.Storey.Editor
             }
             if (k0 == 0)
             {
-                StyleEnum(e, k0, "Street doors", st.doorType, (s, x) => s.doorType = x);
+                KindPopup(e, k0, "Street door", st.doorKind, true);
+                if (Generate.OpeningKinds.Get(st.doorKind) == null) StyleEnum(e, k0, "Street doors", st.doorType, (s, x) => s.doorType = x);
                 StyleSlider(e, k0, "Plinth height", st.plinthH ?? 0.45, 0, 2, 0.05, (s, x) => s.plinthH = x);
                 using (new EditorGUILayout.HorizontalScope())
                 {
@@ -540,6 +542,27 @@ namespace Triband.Storey.Editor
                 }
             }
             StyleSlider(e, k0, "Brick patches", st.bricks ?? 0, 0, 1, 0.05, (s, x) => s.bricks = x > 0 ? x : (double?)null);
+        }
+
+        /// <summary>
+        /// The generator's window (or street door), or one an artist made (a Storey Opening asset: docs/EDITOR.md §6.9).
+        /// Picking one adds it to the site's list, so builds include it.
+        /// </summary>
+        void KindPopup(StoreyEdit e, int k0, string label, string? current, bool door)
+        {
+            var kinds = StoreyOpenings.All().Where(o => o.door == door).ToList();
+            var names = new List<string> { door ? "The style's own" : "Generated" };
+            names.AddRange(kinds.Select(o => o.name));
+            if (kinds.Count == 0) names.Add(door ? "(make one: Create ▸ Storey ▸ Window or Door)" : "(make one: Create ▸ Storey ▸ Window or Door)");
+            int at = current == null ? 0 : kinds.FindIndex(o => o.Id == current) + 1;
+            if (current != null && at == 0) { names.Add("Missing: " + current.Substring(0, Math.Min(8, current.Length))); at = names.Count - 1; }
+            int pick = EditorGUILayout.Popup(new GUIContent(label, door ? "Street doors: the style's own (Canopy or Glazed), or one an artist made" : "Windows: the generator's own, or one an artist made"), at, names.Select(n => new GUIContent(n)).ToArray());
+            if (pick == at) return;
+            if (pick == 0) { e.ApplyTo(label + ": generated", bb => { var s = Styles.Edited(bb, k0); if (door) s.doorKind = null; else s.windowKind = null; return true; }); return; }
+            if (pick - 1 >= kinds.Count) return;
+            var k = kinds[pick - 1]; string id = k.Id;
+            e.ApplyTo(label + ": " + k.name, bb => { var s = Styles.Edited(bb, k0); if (door) s.doorKind = id; else s.windowKind = id; return true; });
+            StoreyOpenings.Keep(e.Site, k);
         }
 
         void Presets(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)

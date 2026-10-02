@@ -8,6 +8,7 @@
 - An open layout with nothing unsaved follows its file when the file changes outside the editor.
 
 ### Added
+- **Window** and **Street door** pickers in the Facade tab, for artist-made `StoreyOpening` assets. The asset's inspector names the parts from the model's materials and bakes the mesh again on reimport (docs/EDITOR.md §6.9).
 - **Details** in the Facade tab: window heads, glazing bars, frames, the band, street doors, plinth height, the foundation and brick patches, plus the Frames, Foundation and Plinth colours (docs/EDITOR.md §6.7).
 - Building templates (`StoreyBuildingTemplate`): **Save as template…** in the building bar, **New ▸ From template** to place one (docs/EDITOR.md §6.6).
 - **Problems** under the building bar, and markers in the Scene view (`StoreyProblems`; docs/EDITOR.md §6.5).

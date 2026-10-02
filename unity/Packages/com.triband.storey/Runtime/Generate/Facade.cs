@@ -152,8 +152,12 @@ namespace Triband.Storey.Generate
             bool frames = st != null && st.frames, arch = st != null && st.head == HeadType.Arch, glazed = st != null && st.doorType == DoorType.Glazed;
             bool bars = st != null && (st.paneCols > 1 || st.paneRows > 1);
             var trim = frames ? C.frame : C.trim;
+            // an artist's window or door (OpeningKinds) stands in for all of the generator's dressing
+            var wk = OpeningKinds.Of(st, false); var dk = OpeningKinds.Of(st, true);
             foreach (var o in ops)
             {
+                if (o.door && dk != null && !o.bare) { OpeningKinds.Place(op, gl, F, dk, dk.lod0, o.u0, o.u1, y, y + o.y1, C, shell); continue; }
+                if (!o.door && wk != null) { OpeningKinds.Place(op, gl, F, wk, wk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell); continue; }
                 if (o.door)
                 {
                     op.OBox(F, o.u0 - 0.08, o.u0, y, y + o.y1 + 0.08, T, T + 0.06, trim, trim, Skip.In | Skip.Bot);
@@ -434,9 +438,17 @@ namespace Triband.Storey.Generate
             int first = gb.Verts;
             gb.Poly(q, new P3(F.w.x, 0, F.w.z), c);
             if (two) gb.Poly((P3[])q.Clone(), new P3(-F.w.x, 0, -F.w.z), c);
-            // where on the pane each corner is (Poly may have reversed them), across along the wall's own "across"
-            // (cross(up, outward normal), whichever way the outline runs) so the shader needs no frame; and the window's
-            // number, from its centre on the wall's face, as LOD2's shader works it out
+            PaneUV(gb, first, F, u0, u1, y0, y1);
+        }
+
+        /// <summary>
+        /// Where on its window (u0..u1, y0..y1 on the wall) each vertex from <paramref name="first"/> on is, for the window
+        /// shader: across along the wall's own "across" (cross(up, outward normal), whichever way the outline runs), so
+        /// the shader needs no frame; and the window's number, from its centre on the wall's face, as LOD2's shader works
+        /// it out.
+        /// </summary>
+        public static void PaneUV(MeshBuilder gb, int first, Frame F, double u0, double u1, double y0, double y1)
+        {
             bool flip = F.u.x * F.w.z - F.u.z * F.w.x < 0;   // F.u runs against cross(up, w) = (w.z, 0, −w.x)
             byte id = WindowId(F.At((u0 + u1) / 2, (y0 + y1) / 2, Dim.T_EXT));
             for (int i = first; i < gb.Verts; i++)

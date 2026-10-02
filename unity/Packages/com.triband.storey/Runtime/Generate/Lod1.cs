@@ -39,11 +39,16 @@ namespace Triband.Storey.Generate
                         bool party = pc.kind == Party.PieceKind.Party;
                         var ops = party ? new List<Opening>() : all.FindAll(o => o.u0 >= pc.lo && o.u1 <= pc.hi);
                         Facade.WallPanel(op, F, new Miter(pc.S, pc.E), 0, T, y, h, ops, party ? pc.r!.pInner : C.wall, C.wall, new Facade.PanelOpt { inner = false, revealFrom = T * 0.45, threshold = k == 0 });
+                        var stk = Derived.StyleAt(b, k);
+                        var wk = OpeningKinds.Of(stk, false); var dk = OpeningKinds.Of(stk, true);
                         foreach (var o in ops)
                         {
+                            // an artist's window or door with a LOD1 mesh takes the opening; without one, the plain pane
+                            var kk = o.door ? (o.bare ? null : dk) : wk;
+                            if (kk?.lod1 != null) { OpeningKinds.Place(op, null, F, kk, kk.lod1, o.u0, o.u1, o.door ? y : y + o.y0, y + o.y1, C, true); continue; }
                             bool glazedDoor = o.door && Derived.StyleAt(b, k).doorType == DoorType.Glazed;
                             Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, o.door && !glazedDoor ? C.door : C.glassDark, false);
-                            if (o.door && !o.bare && !glazedDoor) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
+                            if (o.door && !o.bare && !glazedDoor && kk == null) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
                         }
                         if (!party) L0.PieceStrips(op, k, F, m, pc, ops, y, h, C);
                     }
