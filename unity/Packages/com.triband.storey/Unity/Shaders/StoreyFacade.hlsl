@@ -3,8 +3,8 @@
 //
 // Each facade quad covers a run of storeys with one height and window type. fac = (u along the wall, height
 // above the run's base, window span start, window span end); fac2 = (bay width, kind); slot = the run's row in
-// _StoreyParams: six texels ((colour row, wall, trim and glass shades), (roof shade), two unused, window spec, run
-// data). Wall, trim, glass and roof come from the palette through the colour row (StoreyPalette.hlsl).
+// _StoreyParams: six texels ((colour row, wall, trim and glass shades), (roof shade), (band), one unused, window spec,
+// run data). Wall, trim, glass and roof come from the palette through the colour row (StoreyPalette.hlsl).
 #ifndef STOREY_FACADE_INCLUDED
 #define STOREY_FACADE_INCLUDED
 
@@ -40,7 +40,8 @@ float3 StoreyFacadeColor(float4 fac, float2 fac2, float slot)
             c = lerp(wall, glass, lerp(cover, mu * mv, smoothstep(3.0, 8.0, px)) * inU);   // sub-pixel windows fade to their average
         }
     }
-    if (fl < run.y - 0.5 && lv > h - 0.22) c = trim;
+    float4 bd = StoreyParam(slot, 2);   // the band: height (0: 0.22 m), a shade of the wall (y > 0.5, shade z) or the trim
+    if (fl < run.y - 0.5 && lv > h - (bd.x > 0.0 ? bd.x : 0.22)) c = bd.y > 0.5 ? wall * bd.z : trim;
     return c;
 }
 

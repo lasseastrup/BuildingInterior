@@ -13,6 +13,12 @@ namespace Triband.Storey.Generate
         Wall, Trim, Interior, Floor, Roof, Core, Glass,
         Door, Metal, Rail, Ceiling, LiftInterior, LiftButton,
         DetailMetal, Grille, DetailDark, Dish,
+        /// <summary>Window and door frames, glazing bars, and their heads and sills when the style has frames. Storey's own.</summary>
+        Frame,
+        /// <summary>The foundation along the foot of the ground floor. Storey's own.</summary>
+        Foundation,
+        /// <summary>The ground floor's plinth when the style gives it a colour of its own (otherwise a shade of the wall). Storey's own.</summary>
+        Plinth,
     }
 
     /// <summary>
@@ -57,7 +63,8 @@ namespace Triband.Storey.Generate
     {
         public string door = StyleColors.Door, metal = StyleColors.Metal, rail = StyleColors.Rail, ceiling = StyleColors.Ceiling,
             liftInterior = StyleColors.LiftInterior, liftButton = StyleColors.LiftButton, detailMetal = StyleColors.DetailMetal,
-            grille = StyleColors.Grille, detailDark = StyleColors.DetailDark, dish = StyleColors.Dish;
+            grille = StyleColors.Grille, detailDark = StyleColors.DetailDark, dish = StyleColors.Dish,
+            frame = StyleColors.Frame, foundation = StyleColors.Foundation, plinth = StyleColors.Plinth;
 
         /// <summary>The prototype's fixed colours.</summary>
         public static readonly StyleDefaults Prototype = new StyleDefaults();
@@ -70,7 +77,8 @@ namespace Triband.Storey.Generate
     public static class StyleColors
     {
         public const string Door = "#3B3129", Metal = "#A3ABAE", Rail = "#3D4448", Ceiling = "#F3F2EE", LiftInterior = "#8E9A9E",
-            LiftButton = "#FFB36B", DetailMetal = "#C9CDCB", Grille = "#6E7476", DetailDark = "#5B5F5E", Dish = "#DDE0DE";
+            LiftButton = "#FFB36B", DetailMetal = "#C9CDCB", Grille = "#6E7476", DetailDark = "#5B5F5E", Dish = "#DDE0DE",
+            Frame = "#33393B", Foundation = "#3C3F41", Plinth = "#7C7976";
 
         public static string Of(FacadeStyle st, ColorSlot slot, StyleDefaults? defaults = null)
         {
@@ -83,6 +91,8 @@ namespace Triband.Storey.Generate
                 ColorSlot.Ceiling => st.ceiling ?? d.ceiling, ColorSlot.LiftInterior => st.liftInterior ?? d.liftInterior,
                 ColorSlot.LiftButton => st.liftButton ?? d.liftButton, ColorSlot.DetailMetal => st.detailMetal ?? d.detailMetal,
                 ColorSlot.Grille => st.grille ?? d.grille, ColorSlot.DetailDark => st.detailDark ?? d.detailDark, ColorSlot.Dish => st.dish ?? d.dish,
+                ColorSlot.Frame => st.frame ?? d.frame, ColorSlot.Foundation => st.foundationColor ?? d.foundation,
+                ColorSlot.Plinth => st.plinth ?? d.plinth,
                 _ => throw new ArgumentOutOfRangeException(nameof(slot)),
             };
         }

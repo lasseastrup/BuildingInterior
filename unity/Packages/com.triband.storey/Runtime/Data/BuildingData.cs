@@ -194,6 +194,10 @@ namespace Triband.Storey
     }
 
     public enum WindowType { Punched, Tall, Ribbon, Curtain, None }
+    /// <summary>What tops a window or door: a flat head, or an arched hood over it. Storey's own.</summary>
+    public enum HeadType { Flat, Arch }
+    /// <summary>Street doors: an opening with a canopy, or glazed double doors (frame, transom, fanlight, handles). Storey's own.</summary>
+    public enum DoorType { Canopy, Glazed }
     public enum GroundType { Storefront, Match, Solid }
     /// <summary>The top tier's roof. Mansard is Storey's own: a steep lower slope up to a break, then a shallow hip.</summary>
     public enum RoofType { Flat, Hip, Gable, Shed, Mansard }
@@ -214,6 +218,10 @@ namespace Triband.Storey
         /// the indoor ones (rail, metal, ceiling, lift interior and button) come from the building's, as interior does.
         /// </summary>
         public string? door, rail, metal, ceiling, liftInterior, liftButton, detailMetal, grille, detailDark, dish;
+        /// <summary>Frames and glazing bars, and the foundation (Storey's own optional colours); null = the project default.</summary>
+        public string? frame, foundationColor;
+        /// <summary>The plinth's own colour; null = a shade of the wall, as the prototype has it.</summary>
+        public string? plinth;
         public WindowType windows = WindowType.Punched;
         public double winW = 1.2;
         public double bay = 2.6;
@@ -226,6 +234,26 @@ namespace Triband.Storey
         public double? pitch;
         /// <summary>Eave overhang in metres; null = not stored (the generator then uses 0.35 m). Zero is a real value: no overhang.</summary>
         public double? eave;
+        // ---- facade details, Storey's own; the defaults are the prototype's look ----
+
+        /// <summary>Window and door heads: flat (a thin head strip) or an arched hood.</summary>
+        public HeadType head = HeadType.Flat;
+        /// <summary>Glazing bars: columns and rows of panes per window; null = the prototype's single bar on wide windows.</summary>
+        public int? paneCols, paneRows;
+        /// <summary>Frames all round each window and door, in the frame colour (sills and heads too).</summary>
+        public bool frames;
+        /// <summary>The band under each storey's ceiling: height (null = 0.22 m), how far it stands out (null = 0.06 m), and whether it is a shade of the wall rather than the trim.</summary>
+        public double? bandH, bandDepth;
+        public bool bandWall;
+        /// <summary>Street doors.</summary>
+        public DoorType doorType = DoorType.Canopy;
+        /// <summary>The ground floor's plinth height; null = 0.45 m.</summary>
+        public double? plinthH;
+        /// <summary>A foundation along the foot of the ground floor: how deep it goes below ground (null = none), and how high it shows (null = 0.2 m).</summary>
+        public double? foundation, foundationH;
+        /// <summary>Brick patches scattered on the walls, 0 to 1 (null = none).</summary>
+        public double? bricks;
+
         /// <summary>A mansard's break: how high its steep lower slope rises, in metres; null = 2.4 m. Storey's own.</summary>
         public double? mansard;
         /// <summary>Dormers along every eave of a pitched roof, this far apart (metres, centre to centre); null = none. Storey's own.</summary>

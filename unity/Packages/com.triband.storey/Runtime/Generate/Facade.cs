@@ -11,6 +11,14 @@ namespace Triband.Storey.Generate
 
         public static WinSpec? WindowSpec(WindowType kind, double h, FacadeStyle st, bool storefront = false)
         {
+            var ws = RawSpec(kind, h, st, storefront);
+            // a band of the style's own height: windows (and their arched heads) stay under it
+            if (ws != null && st.bandH is double bh && st.bands) ws.y1 = Math.Min(ws.y1, h - bh - (st.head == HeadType.Arch ? 0.3 : 0.1));
+            return ws;
+        }
+
+        static WinSpec? RawSpec(WindowType kind, double h, FacadeStyle st, bool storefront)
+        {
             if (storefront) return new WinSpec { sp = st.bay, full = 0.4, y0 = 0.4, y1 = h - 0.75 };
             switch (kind)
             {
@@ -23,8 +31,14 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>The ground floor's window spec: the style's own, none, or a storefront.</summary>
-        public static WinSpec? GroundSpec(FacadeStyle st, double h) =>
-            st.ground == GroundType.Match ? WindowSpec(st.windows, h, st) : st.ground == GroundType.Solid ? null : WindowSpec(st.windows, h, st, true);
+        public static WinSpec? GroundSpec(FacadeStyle st, double h)
+        {
+            var ws = st.ground == GroundType.Match ? WindowSpec(st.windows, h, st) : st.ground == GroundType.Solid ? null : WindowSpec(st.windows, h, st, true);
+            // a plinth (or foundation) of the style's own height: the ground floor's windows start above it
+            if (ws != null && (st.plinthH.HasValue || st.foundation.HasValue))
+                ws.y0 = Math.Max(ws.y0, Math.Max(st.plinthH ?? 0.45, st.foundation.HasValue ? Math.Max(0.02, st.foundationH ?? 0.2) : 0) + 0.15);
+            return ws;
+        }
 
         public static (int n, double bay) BayLayout(FacadeStyle st, double uS, double uE)
         {
@@ -129,29 +143,172 @@ namespace Triband.Storey.Generate
         /// <summary>
         /// What dresses a facade's openings in LOD0: door frames and canopies, window sills, heads and mullions, and the
         /// panes (see-through glass in <paramref name="gl"/>; opaque panes and closed doors on a <paramref name="shell"/> storey).
+        /// The style's own details (<see cref="FacadeStyle.head"/>, panes, frames, glazed doors) change what is drawn; without
+        /// them it is the prototype's.
         /// </summary>
-        public static void Dress(MeshBuilder op, MeshBuilder gl, Frame F, List<Opening> ops, double y, Palette C, bool shell)
+        public static void Dress(MeshBuilder op, MeshBuilder gl, Frame F, List<Opening> ops, double y, Palette C, bool shell, FacadeStyle? st = null)
         {
             double T = Dim.T_EXT;
+            bool frames = st != null && st.frames, arch = st != null && st.head == HeadType.Arch, glazed = st != null && st.doorType == DoorType.Glazed;
+            bool bars = st != null && (st.paneCols > 1 || st.paneRows > 1);
+            var trim = frames ? C.frame : C.trim;
             foreach (var o in ops)
             {
                 if (o.door)
                 {
-                    op.OBox(F, o.u0 - 0.08, o.u0, y, y + o.y1 + 0.08, T, T + 0.06, C.trim, C.trim, Skip.In | Skip.Bot);
-                    op.OBox(F, o.u1, o.u1 + 0.08, y, y + o.y1 + 0.08, T, T + 0.06, C.trim, C.trim, Skip.In | Skip.Bot);
-                    if (!o.bare) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
-                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, T * 0.45, C.door, false);
+                    op.OBox(F, o.u0 - 0.08, o.u0, y, y + o.y1 + 0.08, T, T + 0.06, trim, trim, Skip.In | Skip.Bot);
+                    op.OBox(F, o.u1, o.u1 + 0.08, y, y + o.y1 + 0.08, T, T + 0.06, trim, trim, Skip.In | Skip.Bot);
+                    if (!o.bare && !glazed) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
+                    else if (arch && !o.bare) Hood(op, F, o.u0 - 0.08, o.u1 + 0.08, y + o.y1 + 0.08, trim);
+                    if (glazed && !o.bare) GlazedDoor(op, gl, F, o, y, C, shell);
+                    else if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, T * 0.45, C.door, false);
                 }
                 else
                 {
                     if (shell) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, C.glassDark, false);
                     else Facade.Pane(gl, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, C.glass, true);
                     double ex = o.full ? 0 : 0.06, eh = o.full ? 0 : 0.04;
-                    op.OBox(F, o.u0 - ex, o.u1 + ex, y + o.y0 - 0.07, y + o.y0, T, T + 0.07, C.trim, C.trim, Skip.In);
-                    op.OBox(F, o.u0 - eh, o.u1 + eh, y + o.y1, y + o.y1 + 0.06, T, T + 0.04, C.trim, C.trim, Skip.In);
-                    if (o.u1 - o.u0 > 1.7) { double mm = (o.u0 + o.u1) / 2; op.OBox(F, mm - 0.03, mm + 0.03, y + o.y0, y + o.y1, T * 0.3, T * 0.6, C.trim, C.trim, Skip.Top | Skip.Bot); }
+                    op.OBox(F, o.u0 - ex, o.u1 + ex, y + o.y0 - 0.07, y + o.y0, T, T + 0.07, trim, trim, Skip.In);
+                    if (arch && !o.full) Hood(op, F, o.u0 - 0.08, o.u1 + 0.08, y + o.y1, trim);
+                    else op.OBox(F, o.u0 - eh, o.u1 + eh, y + o.y1, y + o.y1 + 0.06, T, T + 0.04, trim, trim, Skip.In);
+                    double fw = frames ? FrameW : 0;
+                    if (frames) WindowFrame(op, F, o.u0, o.u1, y + o.y0, y + o.y1, fw, C.frame);
+                    if (bars) Bars(op, F, o.u0 + fw, o.u1 - fw, y + o.y0 + fw, y + o.y1 - fw, st!.paneCols ?? 1, st.paneRows ?? 1, C.frame);
+                    else if (o.u1 - o.u0 > 1.7) { double mm = (o.u0 + o.u1) / 2; op.OBox(F, mm - 0.03, mm + 0.03, y + o.y0, y + o.y1, T * 0.3, T * 0.6, C.trim, C.trim, Skip.Top | Skip.Bot); }
                 }
             }
+        }
+
+        /// <summary>A seed for a wall piece's brick patches, the same on every build.</summary>
+        public static uint Seed(string id, int k, int edge, double lo)
+        {
+            uint h = 2166136261;
+            foreach (char ch in id) h = (h ^ ch) * 16777619;
+            h = (h ^ (uint)k) * 16777619; h = (h ^ (uint)edge) * 16777619; h = (h ^ (uint)(int)Math.Round(lo * 100)) * 16777619;
+            return h == 0 ? 1 : h;
+        }
+
+        /// <summary>A brick's size, and the mortar between bricks.</summary>
+        public const double BrickW = 0.24, BrickH = 0.075, Mortar = 0.03;
+
+        /// <summary>
+        /// Brick patches on a wall piece (u from <paramref name="ua"/> to <paramref name="ub"/>, storey from y, h high): small
+        /// groups of one to three courses of bricks, laid on the wall's face, about one group per 2.5 m² at density 1. They
+        /// keep clear of the openings (and the heads above them), the band and the plinth. Placed by a seeded random, so a
+        /// rebuild puts them back where they were.
+        /// </summary>
+        public static void Bricks(MeshBuilder op, Frame F, double ua, double ub, double y, double h, double bottom, double band, List<Opening> ops, double density, uint seed, Swatch c)
+        {
+            double y0 = y + Math.Max(0.2, bottom + 0.15), y1 = y + h - (band > 0 ? band + 0.12 : 0.25), u0 = ua + 0.25, u1 = ub - 0.25;
+            if (u1 - u0 < 0.6 || y1 - y0 < 0.4) return;
+            uint s = seed;
+            double R() { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return (s & 0xFFFFFF) / (double)0x1000000; }
+            double want = Math.Min(1, density) * (u1 - u0) * (y1 - y0) / 2.5;
+            int n = (int)Math.Floor(want) + (R() < want - Math.Floor(want) ? 1 : 0);
+            double wv = Dim.T_EXT + 0.004; var nr = new P3(F.w.x, 0, F.w.z);
+            var placed = new List<(double u0, double v0, double u1, double v1)>();
+            for (int p = 0; p < n; p++)
+                for (int tries = 0; tries < 4; tries++)
+                {
+                    int rows = 1 + (int)(R() * 3), cols = 1 + (int)(R() * 3);
+                    double pw = cols * BrickW + (cols - 1) * Mortar + BrickW / 2, ph = rows * BrickH + (rows - 1) * Mortar;
+                    double pu = u0 + R() * Math.Max(0, u1 - u0 - pw), pv = y0 + R() * Math.Max(0, y1 - y0 - ph);
+                    bool clear = true;
+                    foreach (var o in ops)
+                        if (pu < o.u1 + 0.12 && pu + pw > o.u0 - 0.12 && pv < y + o.y1 + 0.45 && pv + ph > y + o.y0 - 0.15) { clear = false; break; }
+                    foreach (var q0 in placed) if (pu < q0.u1 + 0.1 && pu + pw > q0.u0 - 0.1 && pv < q0.v1 + 0.1 && pv + ph > q0.v0 - 0.1) { clear = false; break; }
+                    if (!clear) continue;
+                    placed.Add((pu, pv, pu + pw, pv + ph));
+                    for (int r = 0; r < rows; r++)
+                    {
+                        double off = (r & 1) == 1 ? BrickW / 2 : 0, bv = pv + r * (BrickH + Mortar);
+                        int nb = cols - ((r & 1) == 1 && cols > 1 && R() < 0.5 ? 1 : 0);
+                        for (int q = 0; q < nb; q++)
+                        {
+                            double bu = pu + off + q * (BrickW + Mortar);
+                            op.Poly(new[] { F.At(bu, bv, wv), F.At(bu + BrickW, bv, wv), F.At(bu + BrickW, bv + BrickH, wv), F.At(bu, bv + BrickH, wv) }, nr, c);
+                        }
+                    }
+                    break;
+                }
+        }
+
+        /// <summary>A frame member's width, and a glazing bar's.</summary>
+        public const double FrameW = 0.06, BarW = 0.035;
+
+        /// <summary>
+        /// An arched hood over an opening from <paramref name="ua"/> to <paramref name="ub"/>, springing at
+        /// <paramref name="ys"/>: a curved band 12 cm deep, standing 6 cm out from the wall, rising a sixth of its span.
+        /// </summary>
+        public static void Hood(MeshBuilder op, Frame F, double ua, double ub, double ys, Swatch c)
+        {
+            double T = Dim.T_EXT, w0 = T, w1 = T + 0.06, th = 0.12;
+            double half = (ub - ua) / 2, rise = Math.Max(0.06, Math.Min(0.35, (ub - ua) / 6)), um = (ua + ub) / 2;
+            double R = (half * half + rise * rise) / (2 * rise), cy = ys + rise - R;
+            double a0 = Math.Atan2(ys - cy, ua - um), a1 = Math.Atan2(ys - cy, ub - um);   // left end (near π) to the right (near 0)
+            const int n = 8;
+            P3 At(double a, double r, double w) => F.At(um + Math.Cos(a) * r, cy + Math.Sin(a) * r, w);
+            P3 Dir(double a) => new P3(F.u.x * Math.Cos(a), Math.Sin(a), F.u.z * Math.Cos(a));
+            var outN = new P3(F.w.x, 0, F.w.z);
+            for (int i = 0; i < n; i++)
+            {
+                double p = a0 + (a1 - a0) * i / n, q = a0 + (a1 - a0) * (i + 1) / n, m = (p + q) / 2;
+                op.Poly(new[] { At(p, R, w1), At(q, R, w1), At(q, R + th, w1), At(p, R + th, w1) }, outN, c);
+                op.Poly(new[] { At(p, R + th, w0), At(q, R + th, w0), At(q, R + th, w1), At(p, R + th, w1) }, Dir(m), c);
+                op.Poly(new[] { At(p, R, w0), At(p, R, w1), At(q, R, w1), At(q, R, w0) }, Dir(m) * -1, c);
+            }
+            // the ends: the band's cut faces, square to the arc
+            P3 Tan(double a) => new P3(-F.u.x * Math.Sin(a), Math.Cos(a), -F.u.z * Math.Sin(a));
+            op.Poly(new[] { At(a0, R, w0), At(a0, R + th, w0), At(a0, R + th, w1), At(a0, R, w1) }, Tan(a0), c);
+            op.Poly(new[] { At(a1, R, w0), At(a1, R, w1), At(a1, R + th, w1), At(a1, R + th, w0) }, Tan(a1) * -1, c);
+        }
+
+        /// <summary>A frame all round an opening, in its reveal, around the pane.</summary>
+        public static void WindowFrame(MeshBuilder op, Frame F, double u0, double u1, double ya, double yb, double fw, Swatch c)
+        {
+            double T = Dim.T_EXT, wa = T * 0.3, wb = T * 0.6;
+            op.OBox(F, u0, u0 + fw, ya, yb, wa, wb, c, null, Skip.UStart | Skip.Top | Skip.Bot);
+            op.OBox(F, u1 - fw, u1, ya, yb, wa, wb, c, null, Skip.UEnd | Skip.Top | Skip.Bot);
+            op.OBox(F, u0 + fw, u1 - fw, yb - fw, yb, wa, wb, c, null, Skip.Top | Skip.UStart | Skip.UEnd);
+            op.OBox(F, u0 + fw, u1 - fw, ya, ya + fw, wa, wb, c, null, Skip.Bot | Skip.UStart | Skip.UEnd);
+        }
+
+        /// <summary>Glazing bars dividing the pane inside (ua..ub, ya..yb) into columns × rows.</summary>
+        public static void Bars(MeshBuilder op, Frame F, double ua, double ub, double ya, double yb, int cols, int rows, Swatch c)
+        {
+            double T = Dim.T_EXT, wa = T * 0.36, wb = T * 0.54, h = BarW / 2;
+            cols = Math.Max(1, Math.Min(8, cols)); rows = Math.Max(1, Math.Min(8, rows));
+            var xs = new double[cols + 1];
+            for (int i = 0; i <= cols; i++) xs[i] = ua + (ub - ua) * i / cols;
+            for (int i = 1; i < cols; i++) op.OBox(F, xs[i] - h, xs[i] + h, ya, yb, wa, wb, c, null, Skip.Top | Skip.Bot);
+            for (int j = 1; j < rows; j++)
+            {
+                double yj = ya + (yb - ya) * j / rows;
+                for (int i = 0; i < cols; i++)
+                    op.OBox(F, i == 0 ? ua : xs[i] + h, i == cols - 1 ? ub : xs[i + 1] - h, yj - h, yj + h, wa, wb, c, null, Skip.UStart | Skip.UEnd);
+            }
+        }
+
+        /// <summary>
+        /// Glazed double doors in a door opening: a frame, a transom bar half a metre under the head with a fanlight above.
+        /// Closed (a <paramref name="shell"/> storey): two glazed leaves with a centre stile, bottom rails and pull handles.
+        /// Open (a walk-in storey, which the player walks through): the frame, transom and fanlight only.
+        /// </summary>
+        public static void GlazedDoor(MeshBuilder op, MeshBuilder? gl, Frame F, Opening o, double y, Palette C, bool shell)
+        {
+            double T = Dim.T_EXT, wa = T * 0.3, wb = T * 0.6, fw = 0.08, top = y + o.y1, yt = top - 0.5, um = (o.u0 + o.u1) / 2;
+            op.OBox(F, o.u0, o.u0 + fw, y, top, wa, wb, C.frame, null, Skip.UStart | Skip.Top | Skip.Bot);
+            op.OBox(F, o.u1 - fw, o.u1, y, top, wa, wb, C.frame, null, Skip.UEnd | Skip.Top | Skip.Bot);
+            op.OBox(F, o.u0 + fw, o.u1 - fw, top - fw, top, wa, wb, C.frame, null, Skip.Top | Skip.UStart | Skip.UEnd);
+            op.OBox(F, o.u0 + fw, o.u1 - fw, yt - 0.04, yt + 0.04, wa, wb, C.frame, null, Skip.UStart | Skip.UEnd);
+            if (shell || gl == null) Facade.Pane(op, F, o.u0 + fw, o.u1 - fw, yt + 0.04, top - fw, T * 0.45, C.glassDark, false);
+            else Facade.Pane(gl, F, o.u0 + fw, o.u1 - fw, yt + 0.04, top - fw, T * 0.45, C.glass, true);
+            if (!shell) return;
+            op.OBox(F, um - 0.04, um + 0.04, y, yt - 0.04, wa, wb, C.frame, null, Skip.Top | Skip.Bot);
+            op.OBox(F, o.u0 + fw, um - 0.04, y, y + 0.15, wa, wb, C.frame, null, Skip.Bot | Skip.UStart | Skip.UEnd);
+            op.OBox(F, um + 0.04, o.u1 - fw, y, y + 0.15, wa, wb, C.frame, null, Skip.Bot | Skip.UStart | Skip.UEnd);
+            Facade.Pane(op, F, o.u0 + fw, o.u1 - fw, y + 0.15, yt - 0.04, T * 0.45, C.glassDark, false);
+            foreach (double hu in new[] { um - 0.12, um + 0.1 }) op.OBox(F, hu, hu + 0.02, y + 0.9, y + 1.35, wb, wb + 0.05, C.metal, null, Skip.In);
         }
 
         /// <summary>Stretches between doors (walls to collide with).</summary>

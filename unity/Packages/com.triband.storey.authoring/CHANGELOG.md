@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Details** in the Facade tab: window heads, glazing bars, frames, the band, street doors, plinth height, the foundation and brick patches, plus the Frames, Foundation and Plinth colours (docs/EDITOR.md §6.7).
 - Building templates (`StoreyBuildingTemplate`): **Save as template…** in the building bar, **New ▸ From template** to place one (docs/EDITOR.md §6.6).
 - **Problems** under the building bar, and markers in the Scene view (`StoreyProblems`; docs/EDITOR.md §6.5).
 - The **Bridge** tool and the **Bridges** list in the Facade tab (docs/EDITOR.md §6.4).

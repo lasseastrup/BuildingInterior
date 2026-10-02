@@ -255,7 +255,14 @@ namespace Triband.Storey.Generate
                     var wc = Geo.WallCtx(e.a, e.u, e.w, e.L);
                     op.Ctx(wc, party ? 1 + 8 * (pc.r!.pIdx + 1) : 1); gl.Ctx(wc, 1);
                     Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : C.wall, C.inner, new Facade.PanelOpt { inner = !shell, threshold = k == 0, revealFrom = shell ? T * 0.45 : 0 });
-                    Facade.Dress(op, gl, F, ops, y, C, shell);
+                    var stk = Derived.StyleAt(b, k);
+                    Facade.Dress(op, gl, F, ops, y, C, shell, stk);
+                    if (!party && stk.bricks is double density && density > 0)
+                    {
+                        var (bs0, be0) = pm.Span(T, T);
+                        Facade.Bricks(op, F, Math.Max(bs0, pc.lo), Math.Min(be0, pc.hi), y, h, k == 0 ? Math.Max(stk.plinthH ?? 0.45, stk.foundation.HasValue ? FoundationH(stk) : 0) : 0,
+                            stk.bands && k < N - 1 ? Band(stk, C).h : 0, ops, density, Facade.Seed(b.id, k, i, pc.lo), C.brick);
+                    }
                     if (!party) { op.Ctx(wc, 1); PieceStrips(op, k, F, m, pc, ops, y, h, C); }
                     var (cs, ce) = pm.Span(T / 2, T / 2);
                     var ranges = shell || party ? new List<(double, double)> { (cs, ce) } : Facade.SolidRanges(cs, ce, ops);
@@ -273,23 +280,43 @@ namespace Triband.Storey.Generate
             (double, double) Clip((double, double) r) => (
                 pc.s > 0.02 ? Math.Max(r.Item1, pc.s) : c0 != null ? c0.Value.At(T) + 1e-4 : r.Item1,
                 pc.e < L - 0.02 ? Math.Min(r.Item2, pc.e) : c1 != null ? c1.Value.At(T) - 1e-4 : r.Item2);
-            if (Derived.StyleAt(b, k).bands && k < N - 1)
+            var st = Derived.StyleAt(b, k);
+            if (st.bands && k < N - 1)
             {
+                var (bh, bd, bc) = Band(st, C);
                 var under = new List<(double, double)>();
                 if (Derived.IsSetback(b, k + 1))
                     foreach (var (s0, e0) in Geo.ExposedRanges(Derived.OutlineAt(b, k), Derived.OutlineAt(b, k + 1), i, true))
                         under.Add((s0 < 0.06 ? -1e9 : s0, e0 > L - 0.06 ? 1e9 : e0));
-                var rs = Geo.MinusRanges(new List<(double, double)> { Clip(m.Span(T, T + 0.06)) }, under);
+                var rs = Geo.MinusRanges(new List<(double, double)> { Clip(m.Span(T, T + bd)) }, under);
                 rs.RemoveAll(r => r.Item2 - r.Item1 <= 0.02);
-                if (rs.Count > 0) Facade.StripPieces(op, F, m, rs, y + h - 0.22, y + h, T, T + 0.06, C.trim, C.trim, Skip.In);
+                if (rs.Count > 0) Facade.StripPieces(op, F, m, rs, y + h - bh, y + h, T, T + bd, bc, bc, Skip.In);
             }
             if (k == 0)
             {
-                var r = Clip(m.Span(T, T + 0.04));
-                var widened = ops.ConvertAll(o => { if (!o.door) return o; var d = o.Clone(); d.u0 -= 0.08; d.u1 += 0.08; return d; });
-                Facade.StripPieces(op, F, m, Facade.SolidRanges(r.Item1, r.Item2, widened), 0, 0.45, T, T + 0.04, C.plinth, C.plinth, Skip.In | Skip.Bot | Skip.UEnd | Skip.UStart);
+                // the foundation: from below the ground up to its height, standing out past the plinth, under the doors too
+                double fTop = st.foundation.HasValue ? FoundationH(st) : 0, pTop = st.plinthH ?? 0.45;
+                if (st.foundation is double depth)
+                {
+                    var rf = Clip(m.Span(T, T + 0.08));
+                    Facade.StripPieces(op, F, m, new List<(double, double)> { rf }, -Math.Max(0, depth), fTop, T, T + 0.08, C.foundation, C.foundation, Skip.In | Skip.Bot);
+                }
+                if (pTop > fTop + 0.01)
+                {
+                    var r = Clip(m.Span(T, T + 0.04));
+                    var widened = ops.ConvertAll(o => { if (!o.door) return o; var d = o.Clone(); d.u0 -= 0.08; d.u1 += 0.08; return d; });
+                    var pc0 = st.plinth != null ? new Swatch(C.style, ColorSlot.Plinth) : C.plinth;
+                    Facade.StripPieces(op, F, m, Facade.SolidRanges(r.Item1, r.Item2, widened), fTop, pTop, T, T + 0.04, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart);
+                }
             }
         }
+
+        /// <summary>The band under a storey's ceiling: height, how far it stands out (at least a centimetre, so it never lies on the wall), colour.</summary>
+        public static (double h, double depth, Swatch c) Band(FacadeStyle st, Palette C) =>
+            (Math.Max(0.05, st.bandH ?? 0.22), Math.Max(0.01, st.bandDepth ?? 0.06), st.bandWall ? C.wallBand : C.trim);
+
+        /// <summary>How high the foundation shows above the ground.</summary>
+        public static double FoundationH(FacadeStyle st) => Math.Max(0.02, st.foundationH ?? 0.2);
 
         // ---- interior -----------------------------------------------------------------------
 

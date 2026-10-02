@@ -257,3 +257,27 @@ Engine-free: `Buildings.AsTemplate`, `Buildings.FromTemplate` (`TemplateTests`).
 1. Select a building, then *Save as template…*: the asset appears and is pinged. Its inspector summarises it.
 2. In another scene's site: New ▸ From template ▸ it. The building appears near the view, named, and editable.
 3. Place it twice: "Name 2", "Name 3".
+
+### 6.7 Facade details
+
+**Details** in the Facade tab, from the artist's brick building. Each option is per style, so a setback can differ. A style with none of them builds exactly as before.
+
+- **Window heads:** *Flat* (the thin head strip) or *Arch*, an arched hood over each window and door. The hood is 12 cm deep, stands 6 cm out from the wall, and rises a sixth of its span.
+- **Glazing bars:** *Panes across* × *Panes up* (2 × 3 like the artist's) divides every window into panes.
+- **Frames:** a frame all round each window and door, in the new *Frames* colour. Sills and heads take that colour too.
+- **Band:** its height (*Band height*), how far it stands out (*Band stands out*, at least 1 cm), and *Band in a wall shade* instead of the trim colour. Windows and their arched heads stay under a band you've set.
+- **Street doors** (base): *Canopy*, as before, or *Glazed*: double doors with a frame, a transom bar and a fanlight above it, and no canopy. On a filled or shell storey the doors are closed: two glazed leaves with a centre stile, bottom rails and pull handles. On a walk-in storey the doorway stays open, because the player walks through it; the frame, transom and fanlight still show.
+- **Plinth height** (base), and the new optional *Plinth* colour (unset, it's a shade of the wall, as before). Ground-floor windows start above a plinth you've set.
+- **Foundation** (base): a band along the foot of the ground floor, under the doors too, in the new *Foundation* colour. *Below ground* sets how deep it goes (for terrain that isn't flat) and *Above ground* how much of it shows.
+- **Brick patches:** small groups of bricks laid on the walls, about one group per 2.5 m² at 1. They keep clear of openings, heads, the band and the plinth, and come back in the same places on every rebuild.
+
+LODs:
+- LOD0 has all of these.
+- LOD1, the lean shell, has the band, plinth and foundation, and its glazed doors are dark glass with no canopy.
+- LOD2's shader follows the band's height and colour.
+
+Layout keys: `head`, `panes`, `frames`, `bandH`, `bandDepth`, `bandWall`, `doorType`, `plinthH`, `foundation`, `foundationH`, `bricks`, plus the colours `frame`, `foundationColor` and `plinth` (`FacadeDetailTests`).
+
+**Checks:**
+1. Arch heads, 2 × 3 panes, Frames, Band 0.65 m in a wall shade, Glazed doors, Plinth 0.8 m with a grey Plinth colour, Foundation, Brick patches 0.6: the building looks like the artist's.
+2. Set Foundation *Below ground* to 1 m and lower the ground (or lift the site): the foundation shows down to it.

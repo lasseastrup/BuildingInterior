@@ -204,6 +204,9 @@ namespace Triband.Storey
                 grille = c.OptColor(o, "grille", path),
                 detailDark = c.OptColor(o, "detailDark", path),
                 dish = c.OptColor(o, "dish", path),
+                frame = c.OptColor(o, "frame", path),
+                foundationColor = c.OptColor(o, "foundationColor", path),
+                plinth = c.OptColor(o, "plinth", path),
                 windows = c.Enum<WindowType>(o, "windows", WindowType.Punched, path),
                 winW = c.Num(o, "winW", 1.2, path), bay = c.Num(o, "bay", 2.6, path),
                 ground = c.Enum<GroundType>(o, "ground", GroundType.Storefront, path),
@@ -211,7 +214,17 @@ namespace Triband.Storey
                 roofType = c.Enum<RoofType>(o, "roofType", RoofType.Flat, path),
                 pitch = c.Opt(o, "pitch", path), eave = c.Opt(o, "eave", path),
                 mansard = c.Opt(o, "mansard", path), dormers = c.Opt(o, "dormers", path),
+                head = c.Enum<HeadType>(o, "head", HeadType.Flat, path), frames = c.Bool(o, "frames", false, path),
+                bandH = c.Opt(o, "bandH", path), bandDepth = c.Opt(o, "bandDepth", path), bandWall = c.Bool(o, "bandWall", false, path),
+                doorType = c.Enum<DoorType>(o, "doorType", DoorType.Canopy, path), plinthH = c.Opt(o, "plinthH", path),
+                foundation = c.Opt(o, "foundation", path), foundationH = c.Opt(o, "foundationH", path), bricks = c.Opt(o, "bricks", path),
             };
+            if (o.TryGetValue("panes", out var pn) && pn != null)
+            {
+                var pl = pn as List<object?> ?? throw new FormatException(path + ".panes: expected [columns, rows]");
+                if (pl.Count != 2) throw new FormatException(path + ".panes: expected [columns, rows]");
+                s.paneCols = Math.Max(1, (int)Convert.ToDouble(pl[0], System.Globalization.CultureInfo.InvariantCulture)); s.paneRows = Math.Max(1, (int)Convert.ToDouble(pl[1], System.Globalization.CultureInfo.InvariantCulture));
+            }
             if (o.TryGetValue("details", out var dr) && dr != null)
             {
                 var dob = c.Obj(dr, path + ".details");
@@ -219,7 +232,8 @@ namespace Triband.Storey
                 c.Check(dob, path + ".details", "ac", "vents");
             }
             c.Check(o, path, "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "details",
-                "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish");
+                "head", "panes", "frames", "bandH", "bandDepth", "bandWall", "doorType", "plinthH", "foundation", "foundationH", "bricks",
+                "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth");
             return s;
         }
 
@@ -332,6 +346,17 @@ namespace Triband.Storey
             if (s.eave.HasValue) o["eave"] = s.eave.Value;
             if (s.mansard.HasValue) o["mansard"] = s.mansard.Value;
             if (s.dormers.HasValue) o["dormers"] = s.dormers.Value;
+            if (s.head != HeadType.Flat) o["head"] = Lower(s.head);
+            if (s.paneCols.HasValue || s.paneRows.HasValue) o["panes"] = new List<object?> { (double)(s.paneCols ?? 1), (double)(s.paneRows ?? 1) };
+            if (s.frames) o["frames"] = true;
+            if (s.bandH.HasValue) o["bandH"] = s.bandH.Value;
+            if (s.bandDepth.HasValue) o["bandDepth"] = s.bandDepth.Value;
+            if (s.bandWall) o["bandWall"] = true;
+            if (s.doorType != DoorType.Canopy) o["doorType"] = Lower(s.doorType);
+            if (s.plinthH.HasValue) o["plinthH"] = s.plinthH.Value;
+            if (s.foundation.HasValue) o["foundation"] = s.foundation.Value;
+            if (s.foundationH.HasValue) o["foundationH"] = s.foundationH.Value;
+            if (s.bricks.HasValue) o["bricks"] = s.bricks.Value;
             if (s.door != null) o["door"] = s.door;
             if (s.rail != null) o["rail"] = s.rail;
             if (s.metal != null) o["metal"] = s.metal;
@@ -342,6 +367,9 @@ namespace Triband.Storey
             if (s.grille != null) o["grille"] = s.grille;
             if (s.detailDark != null) o["detailDark"] = s.detailDark;
             if (s.dish != null) o["dish"] = s.dish;
+            if (s.frame != null) o["frame"] = s.frame;
+            if (s.foundationColor != null) o["foundationColor"] = s.foundationColor;
+            if (s.plinth != null) o["plinth"] = s.plinth;
             if (s.details != null)
             {
                 var d = new Dictionary<string, object?>();

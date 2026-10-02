@@ -41,8 +41,9 @@ namespace Triband.Storey.Generate
                         Facade.WallPanel(op, F, new Miter(pc.S, pc.E), 0, T, y, h, ops, party ? pc.r!.pInner : C.wall, C.wall, new Facade.PanelOpt { inner = false, revealFrom = T * 0.45, threshold = k == 0 });
                         foreach (var o in ops)
                         {
-                            Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, o.door ? C.door : C.glassDark, false);
-                            if (o.door && !o.bare) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
+                            bool glazedDoor = o.door && Derived.StyleAt(b, k).doorType == DoorType.Glazed;
+                            Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, o.door && !glazedDoor ? C.door : C.glassDark, false);
+                            if (o.door && !o.bare && !glazedDoor) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
                         }
                         if (!party) L0.PieceStrips(op, k, F, m, pc, ops, y, h, C);
                     }

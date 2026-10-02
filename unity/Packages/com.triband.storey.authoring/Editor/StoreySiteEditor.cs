@@ -401,6 +401,7 @@ namespace Triband.Storey.Editor
                 Presets(e, b, k0, st);
                 EditorGUILayout.LabelField("Windows", EditorStyles.boldLabel);
                 StyleEnum(e, k0, "Windows", st.windows, (s, x) => s.windows = x);
+                FacadeDetails(e, b, k0, st);
                 EditorGUILayout.LabelField("Colours", EditorStyles.boldLabel);
                 Colour(e, b, k0, "Walls", "wall");
                 Colour(e, b, k0, "Trim", "trim");
@@ -439,7 +440,7 @@ namespace Triband.Storey.Editor
                     if (drives && st.roofType == RoofType.Flat) StyleToggle(e, k0, "Roof parapet", st.parapet, (s, x) => s.parapet = x);
                     Colour(e, b, k0, "Glass", "glass");
                     Colour(e, b, k0, "Stairs and lifts", "core");
-                    foreach (var f in new[] { ("Doors", "door"), ("Rails", "rail"), ("Metal", "metal"), ("Ceilings", "ceiling"), ("Lift inside", "liftInterior"), ("Lift button", "liftButton"), ("Detail metal", "detailMetal"), ("Grilles", "grille"), ("Detail dark", "detailDark"), ("Dishes", "dish") })
+                    foreach (var f in new[] { ("Doors", "door"), ("Rails", "rail"), ("Metal", "metal"), ("Ceilings", "ceiling"), ("Lift inside", "liftInterior"), ("Lift button", "liftButton"), ("Detail metal", "detailMetal"), ("Grilles", "grille"), ("Detail dark", "detailDark"), ("Dishes", "dish"), ("Frames", "frame"), ("Foundation", "foundationColor"), ("Plinth", "plinth") })
                         Colour(e, b, k0, f.Item1, f.Item2, optional: true);
                     DefaultsNotice();
                 }
@@ -486,6 +487,49 @@ namespace Triband.Storey.Editor
                     EditorGUILayout.HelpBox($"A bridge from {Floor(b, br.k)} no longer meets {site.ById(br.to)?.name ?? "the building it went to"}.", MessageType.Warning);
                     if (GUILayout.Button("Remove", GUILayout.Width(64))) { e.Apply("Bridge removed", d => BridgeEdits.Remove(d.buildings.First(x => x.id == bid), id)); return; }
                 }
+        }
+
+        /// <summary>
+        /// The style's own facade details (docs/EDITOR.md §6.7): window heads, glazing bars, frames, the band, and on the
+        /// base the doors, plinth, foundation; brick patches on any.
+        /// </summary>
+        void FacadeDetails(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
+        {
+            EditorGUILayout.LabelField("Details", EditorStyles.boldLabel);
+            StyleEnum(e, k0, "Window heads", st.head, (s, x) => s.head = x);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool panes = EditorGUILayout.Toggle(new GUIContent("Glazing bars", "Divide every window into panes"), st.paneCols.HasValue || st.paneRows.HasValue);
+                if (panes != (st.paneCols.HasValue || st.paneRows.HasValue)) e.ApplyTo(panes ? "Glazing bars" : "No glazing bars", bb => { var s = Styles.Edited(bb, k0); s.paneCols = panes ? 2 : (int?)null; s.paneRows = panes ? 3 : (int?)null; return true; });
+            }
+            if (st.paneCols.HasValue || st.paneRows.HasValue)
+            {
+                StyleSlider(e, k0, "   Panes across", st.paneCols ?? 1, 1, 6, 1, (s, x) => s.paneCols = (int)x);
+                StyleSlider(e, k0, "   Panes up", st.paneRows ?? 1, 1, 6, 1, (s, x) => s.paneRows = (int)x);
+            }
+            StyleToggle(e, k0, "Frames", st.frames, (s, x) => s.frames = x);
+            if (st.bands)
+            {
+                StyleSlider(e, k0, "Band height", st.bandH ?? 0.22, 0.05, 1.5, 0.01, (s, x) => s.bandH = x);
+                StyleSlider(e, k0, "Band stands out", st.bandDepth ?? 0.06, 0.01, 0.2, 0.01, (s, x) => s.bandDepth = x);
+                StyleToggle(e, k0, "Band in a wall shade", st.bandWall, (s, x) => s.bandWall = x);
+            }
+            if (k0 == 0)
+            {
+                StyleEnum(e, k0, "Street doors", st.doorType, (s, x) => s.doorType = x);
+                StyleSlider(e, k0, "Plinth height", st.plinthH ?? 0.45, 0, 2, 0.05, (s, x) => s.plinthH = x);
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    bool fd = EditorGUILayout.Toggle(new GUIContent("Foundation", "A foundation along the foot of the ground floor"), st.foundation.HasValue);
+                    if (fd != st.foundation.HasValue) e.ApplyTo(fd ? "Foundation" : "No foundation", bb => { Styles.Edited(bb, k0).foundation = fd ? 0.5 : (double?)null; return true; });
+                }
+                if (st.foundation is double depth)
+                {
+                    StyleSlider(e, k0, "   Below ground", depth, 0, 5, 0.05, (s, x) => s.foundation = x);
+                    StyleSlider(e, k0, "   Above ground", st.foundationH ?? 0.2, 0.02, 1.5, 0.01, (s, x) => s.foundationH = x);
+                }
+            }
+            StyleSlider(e, k0, "Brick patches", st.bricks ?? 0, 0, 1, 0.05, (s, x) => s.bricks = x > 0 ? x : (double?)null);
         }
 
         void Presets(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
@@ -690,7 +734,7 @@ namespace Triband.Storey.Editor
         {
             if (StoreyColorField.FillDefaults == null) return;
             var d = StoreyColorField.Defaults?.Invoke() ?? new StyleDefaults();
-            if (!new[] { d.door, d.rail, d.metal, d.ceiling, d.liftInterior, d.liftButton, d.detailMetal, d.grille, d.detailDark, d.dish }.Any(x => x != null && x.StartsWith("#"))) return;
+            if (!new[] { d.door, d.rail, d.metal, d.ceiling, d.liftInterior, d.liftButton, d.detailMetal, d.grille, d.detailDark, d.dish, d.frame, d.foundation, d.plinth }.Any(x => x != null && x.StartsWith("#"))) return;
             EditorGUILayout.HelpBox("Some default colours aren't set for this project, so they show the nearest palette colour to the prototype's. Store those palette colours as the project's defaults (in Storey Color Settings) to pick them yourself.", MessageType.None);
             if (GUILayout.Button("Store the defaults in Storey Color Settings"))
             {
@@ -704,7 +748,7 @@ namespace Triband.Storey.Editor
             "wall" => ColorSlot.Wall, "trim" => ColorSlot.Trim, "interior" => ColorSlot.Interior, "floor" => ColorSlot.Floor, "roof" => ColorSlot.Roof,
             "core" => ColorSlot.Core, "glass" => ColorSlot.Glass, "door" => ColorSlot.Door, "rail" => ColorSlot.Rail, "metal" => ColorSlot.Metal,
             "ceiling" => ColorSlot.Ceiling, "liftInterior" => ColorSlot.LiftInterior, "liftButton" => ColorSlot.LiftButton, "detailMetal" => ColorSlot.DetailMetal,
-            "grille" => ColorSlot.Grille, "detailDark" => ColorSlot.DetailDark, _ => ColorSlot.Dish,
+            "grille" => ColorSlot.Grille, "detailDark" => ColorSlot.DetailDark, "frame" => ColorSlot.Frame, "foundationColor" => ColorSlot.Foundation, "plinth" => ColorSlot.Plinth, _ => ColorSlot.Dish,
         };
 
         static void Slider(StoreyEdit e, string label, double value, double min, double max, double step, Action<BuildingData, double> set)

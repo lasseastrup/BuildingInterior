@@ -28,6 +28,11 @@ namespace Triband.Storey.ColorPipeline
         [ColorReference] public SerializableGUID grille;
         [ColorReference] public SerializableGUID detailDark;
         [ColorReference] public SerializableGUID dish;
+        [Tooltip("Window and door frames and glazing bars.")]
+        [ColorReference] public SerializableGUID frame;
+        [ColorReference] public SerializableGUID foundation;
+        [Tooltip("A plinth with a colour of its own (styles that don't set one shade the wall).")]
+        [ColorReference] public SerializableGUID plinth;
 
         [Header("Suggested colours per field (the prototype's swatch rows)")]
         [ColorReference] public SerializableGUID[] walls = new SerializableGUID[0];
@@ -54,6 +59,7 @@ namespace Triband.Storey.ColorPipeline
             door = F(door, d.door); rail = F(rail, d.rail); metal = F(metal, d.metal); ceiling = F(ceiling, d.ceiling);
             liftInterior = F(liftInterior, d.liftInterior); liftButton = F(liftButton, d.liftButton);
             detailMetal = F(detailMetal, d.detailMetal); grille = F(grille, d.grille); detailDark = F(detailDark, d.detailDark); dish = F(dish, d.dish);
+            frame = F(frame, d.frame); foundation = F(foundation, d.foundation); plinth = F(plinth, d.plinth);
             return n;
         }
 
@@ -64,6 +70,7 @@ namespace Triband.Storey.ColorPipeline
             d.door = Or(door, d.door); d.rail = Or(rail, d.rail); d.metal = Or(metal, d.metal); d.ceiling = Or(ceiling, d.ceiling);
             d.liftInterior = Or(liftInterior, d.liftInterior); d.liftButton = Or(liftButton, d.liftButton);
             d.detailMetal = Or(detailMetal, d.detailMetal); d.grille = Or(grille, d.grille); d.detailDark = Or(detailDark, d.detailDark); d.dish = Or(dish, d.dish);
+            d.frame = Or(frame, d.frame); d.foundation = Or(foundation, d.foundation); d.plinth = Or(plinth, d.plinth);
             return d;
         }
     }

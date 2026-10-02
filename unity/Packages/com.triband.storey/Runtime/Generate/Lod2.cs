@@ -13,6 +13,8 @@ namespace Triband.Storey.Generate
         public double[] spec = { -1, 0, 1, 0 };
         /// <summary>Storey height, storeys with a band, run height (1e9 = not the top), parapet 0 none / 1 wall / 2 curb.</summary>
         public double[] run = { 3, 0, 1e9, 0 };
+        /// <summary>The band: height (0 = the prototype's 0.22 m), a shade of the wall (1) or the trim (0), that shade. GPU texel 2. Storey's own.</summary>
+        public double[] band = { 0, 0, 0, 0 };
         /// <summary>The 24 floats as the table stores them (six texels: wall, trim, glass, roof, spec, run), colours resolved to linear RGB.</summary>
         public double[] Texels(ColorResolver colors)
         {
@@ -30,7 +32,7 @@ namespace Triband.Storey.Generate
             if (wall.slot != ColorSlot.Wall || trim.slot != ColorSlot.Trim || glass.slot != ColorSlot.Glass || roof.slot != ColorSlot.Roof
                 || !trim.style.Equals(wall.style) || !glass.style.Equals(wall.style) || !roof.style.Equals(wall.style))
                 throw new InvalidOperationException("a parameter row's colours must be the wall, trim, glass and roof of one style");
-            return new[] { colorRow, wall.tone, trim.tone, glass.tone, roof.tone, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, spec[0], spec[1], spec[2], spec[3], run[0], run[1], run[2], run[3] };
+            return new[] { colorRow, wall.tone, trim.tone, glass.tone, roof.tone, 0, 0, 0, band[0], band[1], band[2], band[3], 0, 0, 0, 0, spec[0], spec[1], spec[2], spec[3], run[0], run[1], run[2], run[3] };
         }
     }
 
@@ -153,6 +155,7 @@ namespace Triband.Storey.Generate
                     var r = runs[ri]; double H = Derived.FloorBase(b, r.k1) - Derived.FloorBase(b, r.k0); bool topRun = last && ri == runs.Count - 1;
                     var ws = r.g ? Facade.GroundSpec(st, r.h) : Facade.WindowSpec(st.windows, r.h, st);
                     r.slot = Row(C, SpecOf(ws), new[] { r.h, st.bands ? Math.Max(0, Math.Min(r.k1, N - 1) - r.k0) : 0, topRun && !pitched ? H : 1e9, topRun ? (st.parapet ? 1 : 2) : 0 });
+                    if (st.bandH.HasValue || st.bandWall) M.Rows[r.slot].band = new[] { Lod0.Shared.Band(st, C).h, st.bandWall ? 1 : 0, C.wallBand.tone, 0 };
                     r.top = topRun && !pitched; runs[ri] = r;
                 }
                 for (int i = 0; i < n; i++)

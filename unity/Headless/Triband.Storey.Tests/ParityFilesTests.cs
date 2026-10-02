@@ -40,7 +40,8 @@ namespace Triband.Storey.Tests
             Assert.Empty(r.Unknown);
             var d = r.Document;
             Assert.Empty(ColorMapping.Literals(d));
-            Assert.All(StyleColorFields.Styles(d), st => Assert.All(StyleColorFields.All, f => Assert.True(ColorRef.IsPaletteId(f.get(st)), f.name)));
+            // every colour the prototype has (Storey's own optional colours, frames and foundation, can be left to the project defaults)
+            Assert.All(StyleColorFields.Styles(d), st => Assert.All(StyleColorFields.All.Where(f => f.name != "frame" && f.name != "foundationColor" && f.name != "plinth"), f => Assert.True(ColorRef.IsPaletteId(f.get(st)), f.name)));
             Assert.Equal(PaletteSnapshot.UsedIds(d), new SortedSet<string>(d.palette.Keys, StringComparer.Ordinal));
 
             var demo = PrototypeJson.Read(Fixtures.Text("demo.json")).Document;

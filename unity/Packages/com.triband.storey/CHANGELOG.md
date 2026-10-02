@@ -15,6 +15,14 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- Facade details (docs/EDITOR.md §6.7), new on `FacadeStyle`:
+  - `head` (arched hoods), `paneCols`/`paneRows` (glazing bars) and `frames`;
+  - `bandH`, `bandDepth` and `bandWall`;
+  - `doorType` (glazed double doors), `plinthH`, `foundation`/`foundationH` and `bricks`.
+- Colour slots `Frame`, `Foundation` and `Plinth` (20 of the row's 23).
+- `Facade.Hood`, `WindowFrame`, `Bars`, `GlazedDoor` and `Bricks`.
+- The LOD2 parameter row's third texel carries the band (`ParamRow.band`).
+- Windows stay under a band and above a plinth the style sets. Prototype styles build as before.
 - `Buildings.AsTemplate` and `Buildings.FromTemplate` for building templates (docs/EDITOR.md §6.6).
 - `Validate.Problems`: the problem list (docs/EDITOR.md §6.5). It walks every storey on the walk model's walls from the ways in, to find floors and rooms nobody can reach. It also finds doors onto nothing, cores, courtyards and bridges that no longer fit, and overlapping buildings. `StoreySite.BuiltLod0` hands it the meshes already shown.
 - Bridges between buildings (`BuildingData.bridges`, `BridgeData`, `Bridges`, `BridgeEdits`; docs/EDITOR.md §6.4). A bridge goes straight out from one building's wall to the facing wall of another, with a door at each end. It's enclosed (glass and a roof) or open (rails), and ramps between floors at different heights. Every LOD, the walk model (`Lod0Result.Extra` holds its sides) and the colliders include it. `EditSession` rebuilds both ends. Deleting a building removes the bridges to it, and `Opening.bare` drops the canopy over a bridge's doors.

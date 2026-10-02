@@ -13,7 +13,7 @@
 TEXTURE2D(_GlobalColorPaletteTex);          // ColorMappingManager's atlas (512 x 1024 RGBAHalf, linear), or Storey's hex palette
 uint _ColorAtlasWidth;                      // 512 in 2.1.11
 #endif
-StructuredBuffer<uint4> _StoreyColors;      // per colour row, 3 x uint4: 24 x uint16 (17 style slots, spare, remap row)
+StructuredBuffer<uint4> _StoreyColors;      // per colour row, 3 x uint4: 24 x uint16 (20 style slots, spare, remap row)
 StructuredBuffer<uint>  _StoreyDetailColors; // per facade-detail colour (slot - 24): palette index
 
 #define STOREY_REMAP_ENTRY 23

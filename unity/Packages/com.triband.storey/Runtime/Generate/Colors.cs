@@ -37,6 +37,8 @@ namespace Triband.Storey.Generate
         public readonly Swatch wall, trim, inner, core, coreIn, liftIn, roof, step, glass, glassDark, door, metal, rail, doorTrim, plinth, floor, ceil;
         /// <summary>Colours the prototype wrote as literals at their call sites: slab sides, soffits and awning undersides, the lift button, facade details.</summary>
         public readonly Swatch slabSide, trimShade, liftButton, detailMetal, grille, detailDark, dish;
+        /// <summary>Storey's own: frames and glazing bars, the foundation, the wall's band shade and its brick patches.</summary>
+        public readonly Swatch frame, foundation, wallBand, brick;
 
         public Palette(StyleRef s)
         {
@@ -49,6 +51,7 @@ namespace Triband.Storey.Generate
             plinth = W(ColorSlot.Wall, 0.72); floor = W(ColorSlot.Floor); ceil = W(ColorSlot.Ceiling);
             slabSide = W(ColorSlot.Core, 0.85); trimShade = W(ColorSlot.Trim, 0.8); liftButton = W(ColorSlot.LiftButton);
             detailMetal = W(ColorSlot.DetailMetal); grille = W(ColorSlot.Grille); detailDark = W(ColorSlot.DetailDark); dish = W(ColorSlot.Dish);
+            frame = W(ColorSlot.Frame); foundation = W(ColorSlot.Foundation); wallBand = W(ColorSlot.Wall, 0.72); brick = W(ColorSlot.Wall, 0.8);
         }
     }
 }

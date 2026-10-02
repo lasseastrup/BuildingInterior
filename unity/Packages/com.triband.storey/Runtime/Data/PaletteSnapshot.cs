@@ -20,6 +20,8 @@ namespace Triband.Storey
             ("liftButton", s => s.liftButton, (s, v) => s.liftButton = v), ("detailMetal", s => s.detailMetal, (s, v) => s.detailMetal = v),
             ("grille", s => s.grille, (s, v) => s.grille = v), ("detailDark", s => s.detailDark, (s, v) => s.detailDark = v),
             ("dish", s => s.dish, (s, v) => s.dish = v),
+            ("frame", s => s.frame, (s, v) => s.frame = v), ("foundationColor", s => s.foundationColor, (s, v) => s.foundationColor = v),
+            ("plinth", s => s.plinth, (s, v) => s.plinth = v),
         };
 
         /// <summary>Every style of a layout: each building's and each setback's own.</summary>
