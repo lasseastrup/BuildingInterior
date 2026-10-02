@@ -72,7 +72,7 @@ namespace Triband.Storey.Editor
                 var np = Handles.Slider2D(id, at, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(at), Handles.DotHandleCap, Vector2.zero, false);
                 if (EditorGUI.EndChangeCheck())
                 {
-                    Start(e, Drag.Corner, i, id, "Move corner");
+                    BeginDragOf(e, Drag.Corner, i, id, "Move corner");
                     MoveCorner(e, b, k0, i, np, alt);
                 }
             }
@@ -89,7 +89,7 @@ namespace Triband.Storey.Editor
                 var np = Handles.Slider2D(id, mid, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(mid, 0.06f), Handles.RectangleHandleCap, Vector2.zero, false);
                 if (EditorGUI.EndChangeCheck())
                 {
-                    Start(e, Drag.Insert, i, id, "Add corner");
+                    BeginDragOf(e, Drag.Insert, i, id, "Add corner");
                     int ii = i; int ni = -1;
                     e.ApplyTo("Add corner", bb => { ni = Outlines.InsertVertex(bb, ii, k0); return true; });
                     dragIndex = ni;
@@ -113,7 +113,7 @@ namespace Triband.Storey.Editor
                 var np = Handles.Slider(id, mid, n, Size(mid, 0.1f), Handles.CubeHandleCap, 0f);
                 if (EditorGUI.EndChangeCheck())
                 {
-                    if (drag != Drag.Push) { Start(e, Drag.Push, i, id, "Push wall"); dragBase = Tiers.Copy(fp); dragStart = mid; }
+                    if (drag != Drag.Push) { BeginDragOf(e, Drag.Push, i, id, "Push wall"); dragBase = Tiers.Copy(fp); dragStart = mid; }
                     double d = Vector3.Dot(np - dragStart, n);
                     var nf = System.Math.Abs(d) < 0.005 ? dragBase! : Outlines.PushEdge(dragBase!, i, d);
                     Set(e, k0, nf);
@@ -132,7 +132,7 @@ namespace Triband.Storey.Editor
                 var np = Handles.Slider2D(id, centre, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(centre, 0.15f), Handles.CircleHandleCap, Vector2.zero, false);
                 if (EditorGUI.EndChangeCheck())
                 {
-                    if (drag != Drag.Move) { Start(e, Drag.Move, 0, id, "Move building"); moveOffset = new Vec2(b.pos.x - np.x, b.pos.z - np.z); }
+                    if (drag != Drag.Move) { BeginDragOf(e, Drag.Move, 0, id, "Move building"); moveOffset = new Vec2(b.pos.x - np.x, b.pos.z - np.z); }
                     double nx = Tiers.Cm(np.x + moveOffset.x), nz = Tiers.Cm(np.z + moveOffset.z);
                     if (!alt) { var s = Outlines.SnapMove(b, nx, nz, e.Document.buildings); nx = s.x; nz = s.z; }
                     if (nx != b.pos.x || nz != b.pos.z) e.ApplyTo("Move building", bb => { bb.pos = new Vec2(nx, nz); return true; });
@@ -155,7 +155,7 @@ namespace Triband.Storey.Editor
             }
         }
 
-        void Start(StoreyEdit e, Drag kind, int index, int control, string undoName)
+        void BeginDragOf(StoreyEdit e, Drag kind, int index, int control, string undoName)
         {
             if (drag != Drag.None) return;
             drag = kind; dragIndex = index; dragControl = control; refusal = null;

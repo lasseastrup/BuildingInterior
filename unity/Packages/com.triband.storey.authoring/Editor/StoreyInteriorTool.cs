@@ -123,7 +123,7 @@ namespace Triband.Storey.Editor
                 {
                     if (drag == Drag.None)
                     {
-                        Start(e, Drag.Core, id, s.type == CoreType.Stairs ? "Move stairs" : "Move lift");
+                        BeginDragOf(e, Drag.Core, id, s.type == CoreType.Stairs ? "Move stairs" : "Move lift");
                         v.selectedCore = s.id; v.selectedWall = -1; Inspectors();
                         var g = L(b, np); grabOffset = new Vec2(s.x - g.x, s.z - g.z);
                     }
@@ -155,7 +155,7 @@ namespace Triband.Storey.Editor
                 var np = Handles.Slider2D(id, mine ? dragAt : at, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(at, 0.06f), Handles.DotHandleCap, Vector2.zero, false);
                 if (EditorGUI.EndChangeCheck())
                 {
-                    if (drag == Drag.None) { Start(e, Drag.Joint, id, "Move wall point"); mine = true; }
+                    if (drag == Drag.None) { BeginDragOf(e, Drag.Joint, id, "Move wall point"); mine = true; }
                     if (mine)
                     {
                         dragAt = np; var to = L(b, np);
@@ -176,7 +176,7 @@ namespace Triband.Storey.Editor
                 var np = Handles.Slider2D(id, mine ? dragAt : mid, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(mid, 0.05f), Handles.RectangleHandleCap, Vector2.zero, false);
                 if (EditorGUI.EndChangeCheck())
                 {
-                    if (drag == Drag.None) { Start(e, Drag.Split, id, "Split wall"); mine = true; }
+                    if (drag == Drag.None) { BeginDragOf(e, Drag.Split, id, "Split wall"); mine = true; }
                     if (mine)
                     {
                         dragAt = np; var to = L(b, np); int wall = wi;
@@ -194,7 +194,7 @@ namespace Triband.Storey.Editor
             }
         }
 
-        void Start(StoreyEdit e, Drag kind, int id, string undoName)
+        void BeginDragOf(StoreyEdit e, Drag kind, int id, string undoName)
         {
             drag = kind; dragId = id;
             e.BeginDrag(undoName);

@@ -37,8 +37,22 @@ namespace Triband.Storey.Editor
         /// <summary>Enter the Storey context with the tool for <paramref name="tab"/>.</summary>
         public static void Show(StoreyTab tab)
         {
-            if (ToolManager.activeContextType != typeof(StoreyToolContext)) ToolManager.SetActiveContext<StoreyToolContext>();
-            ShowTool(tab);
+            if (ToolManager.activeContextType == typeof(StoreyToolContext)) { ShowTool(tab); return; }
+            if (TryEnter()) { ShowTool(tab); return; }
+            // Unity makes the selection's contexts when the inspector is rebuilt, which has not happened yet after a script
+            // reload: rebuild it (not inside this inspector's own GUI, which it would tear down) and try again
+            EditorApplication.delayCall += () =>
+            {
+                ActiveEditorTracker.sharedTracker.ForceRebuild();
+                if (TryEnter()) ShowTool(tab);
+                else Debug.LogWarning("Storey: select the Storey Site in the Hierarchy to edit it (the Storey tool context needs it selected).");
+            };
+        }
+
+        static bool TryEnter()
+        {
+            try { ToolManager.SetActiveContext<StoreyToolContext>(); return true; }
+            catch (InvalidOperationException) { return false; }   // Unity has no Storey context for the selection (yet)
         }
 
         static void ShowTool(StoreyTab tab)

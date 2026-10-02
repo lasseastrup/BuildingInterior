@@ -34,6 +34,12 @@ namespace UnityEditor
         public static Object LoadMainAssetAtPath(string assetPath) => new Object();
     }
 
+    public sealed class ActiveEditorTracker
+    {
+        public static ActiveEditorTracker sharedTracker => new ActiveEditorTracker();
+        public void ForceRebuild() { }
+    }
+
     public static class Selection
     {
         public static Object activeObject { get; set; } = new Object();

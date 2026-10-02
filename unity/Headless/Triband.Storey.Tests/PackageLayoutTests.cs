@@ -515,6 +515,22 @@ namespace Triband.Storey.Tests
             Assert.Equal(3, tools);
         }
 
+        /// <summary>
+        /// Editor tools, contexts and the edit session are ScriptableObjects: a method of theirs named like a Unity message
+        /// (Start, Update, …) is taken for it, and Unity refuses one with parameters ("Start() can not take parameters").
+        /// </summary>
+        [Fact]
+        public void NoEditorMethodIsNamedLikeAUnityMessage()
+        {
+            var dir = Path.Combine(Layout.UnityRoot, "Packages", "com.triband.storey.authoring", "Editor");
+            foreach (var f in Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories))
+            {
+                string src = Code(File.ReadAllText(f));
+                var m = Regex.Match(src, @"\b(Awake|Start|Update|LateUpdate|FixedUpdate|Reset|OnValidate|OnEnable|OnDisable|OnDestroy)\s*\(\s*[A-Za-z]");
+                Assert.False(m.Success, $"{Path.GetFileName(f)}: {m.Value}");
+            }
+        }
+
         private static string Code(string text)
         {
             var code = new System.Text.StringBuilder(text.Length);
