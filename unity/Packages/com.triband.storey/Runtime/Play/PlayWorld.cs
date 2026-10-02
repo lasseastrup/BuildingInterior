@@ -203,6 +203,26 @@ namespace Triband.Storey.Play
             return (px, pz);
         }
 
+        /// <summary>
+        /// Where to start on storey k of building b, as the prototype's "Play here" does: in front of the first stairs or
+        /// lift serving it, or the storey's middle. Building-local.
+        /// </summary>
+        public static Vec2 SpawnOn(BuildingData b, int k)
+        {
+            k = Math.Min(k, b.floors.Count);
+            var fp = Derived.OutlineAt(b, k);
+            var s = b.shafts.FirstOrDefault(x => Cores.Levels(b, x).Contains(k));
+            if (s != null)
+            {
+                double a = s.rot * Math.PI / 180, d = s.type == CoreType.Lift ? -2.2 : s.type == CoreType.Flight ? -(Dim.FLIGHT_D / 2 + 0.8) : -3.4;
+                var p = new Vec2(s.x - Math.Sin(a) * d, s.z + Math.Cos(a) * d);
+                if (Geo.Pip(fp, p.x, p.z)) return p;
+            }
+            double cx = 0, cz = 0;
+            foreach (var q in fp) { cx += q.x / fp.Count; cz += q.z / fp.Count; }
+            return new Vec2(cx, cz);
+        }
+
         /// <summary>The lift whose car a point is in, on a storey it serves, if any.</summary>
         public (BuildingData b, CoreData s, int floor)? LiftAt(double x, double y, double z)
         {

@@ -62,7 +62,6 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
 - Dragging a wall point or a "+" moves the walls live. Each frame redoes the move from where the drag began, so the result is the prototype's single move on release: a point passing over another doesn't merge with it on the way.
 - While dragging, the edited building rebuilds all its LODs once per frame, not LOD0 only.
 - Facade details are the five built-in kinds. `FacadeDetailDefinition` assets (SPEC §4.4) need the generator to place imported models (docs/COLOURS.md §3.9) and come with that work.
-- Play from the Interior tab ("drop the character on this floor") waits for the play kit (workstream 5).
 
 **Checks in the editor**, after §4:
 
@@ -95,5 +94,6 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Click stairs or a lift without dragging: it is selected (anywhere on it, not only its handle). Drag one past an outside wall or into another core: it stops there but keeps sliding along it with the pointer.
    - No key does anything Storey-specific.
    - Storey height, and the Storey Floors overlay: count, copy up, duplicate, delete.
+   - **Play from this floor** starts Play mode on the active storey (docs/PLAY.md §4).
 5. **The exit test (Plan §8):** a styled 3-floor building in under 2 minutes. Then 10 floors with roof access in under 5: type 10 in the overlay, place stairs on the ground floor, check *reaches the roof* on the roof.
 

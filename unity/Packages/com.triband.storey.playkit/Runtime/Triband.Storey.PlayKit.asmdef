@@ -4,7 +4,8 @@
   "references": [
     "Triband.Storey",
     "Triband.Storey.Unity",
-    "Unity.Mathematics"
+    "Unity.Mathematics",
+    "Unity.InputSystem"
   ],
   "autoReferenced": true,
   "noEngineReferences": false

@@ -26,7 +26,9 @@ float4 _StoreyActive;   // x: active building index (-1 none), y: ceiling clip h
 float4 _StoreyCap;      // section cap colour
 float4 _StoreyIso;      // x: isolate amount, y: isolated building index
 float _StoreyOccMode;   // 0 off, 1 Sink/Slice, 2 Cutout, 3 Fade
-float4 _StoreyPlayer;   // xy: player screen position (pixels), z: player depth (0..1), w: hole radius (pixels)
+// Heights are world heights; the cutaway's camera and focus are given in the site's own x and z (the wall data in the
+// vertices is), which for an unrotated, unscaled site is world minus its position
+float4 _StoreyPlayer;   // xyz: the player's chest (world), w: Cutout's hole radius (metres)
 float _StoreyLodTint;
 
 struct StoreyVarying
@@ -175,14 +177,24 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
             }
         }
         else if (v.origY < hd.w) dark = hd.y;                              // Cutout / Fade keep a solid dark base
-        else if (hd.y > 0.001 && fragDepth < _StoreyPlayer.z)              // only what lies in front of the player
+        else if (hd.y > 0.001)
         {
-            if (_StoreyOccMode < 2.5)
+            // the player and this fragment projected by the same camera: eye depth and pixels from the screen's centre,
+            // whatever the platform's depth direction or the render target's flip
+            float4 pc = mul(UNITY_MATRIX_VP, float4(_StoreyPlayer.xyz, 1.0));
+            float4 fc = mul(UNITY_MATRIX_VP, float4(v.worldPos, 1.0));
+            if (fc.w < pc.w)                                                // only what lies in front of the player
             {
-                float f = (1.0 - smoothstep(_StoreyPlayer.w * 0.6, _StoreyPlayer.w, length(screenPos - _StoreyPlayer.xy))) * hd.y;
-                if (f > StoreyBayer(screenPos)) clip(-1);
+                if (_StoreyOccMode < 2.5)
+                {
+                    float2 half_ = 0.5 * _ScreenParams.xy;
+                    float r = _StoreyPlayer.w * UNITY_MATRIX_P[1][1] / max(pc.w, 1e-3) * half_.y;   // the hole's radius in pixels at the player's depth
+                    float d = length(fc.xy / fc.w * half_ - pc.xy / pc.w * half_);
+                    float f = (1.0 - smoothstep(r * 0.6, r, d)) * hd.y;
+                    if (f > StoreyBayer(screenPos)) clip(-1);
+                }
+                else if (StoreyBayer(screenPos + float2(2.0, 1.0)) < hd.y * 0.8) clip(-1);   // fades to a light ghost
             }
-            else if (StoreyBayer(screenPos + float2(2.0, 1.0)) < hd.y * 0.8) clip(-1);   // fades to a light ghost
         }
     }
 #endif

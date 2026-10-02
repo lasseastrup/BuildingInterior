@@ -15,6 +15,7 @@ namespace UnityEditor
 
     public static class EditorUtility
     {
+        public static bool DisplayDialog(string title, string message, string ok, string cancel) => false;
         public static string OpenFilePanel(string title, string directory, string extension) => "";
         public static string SaveFilePanelInProject(string title, string defaultName, string extension, string message) => "";
         public static bool DisplayDialog(string title, string message, string ok) => true;
@@ -74,6 +75,7 @@ namespace UnityEditor
     {
         public static event System.Func<bool> wantsToQuit;
         public static void QueuePlayerLoopUpdate() { }
+        public static void EnterPlaymode() { }
         public delegate void CallbackFunction();
         public static CallbackFunction delayCall;
     }

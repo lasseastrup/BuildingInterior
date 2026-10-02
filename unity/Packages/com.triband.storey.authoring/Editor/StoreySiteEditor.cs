@@ -339,6 +339,7 @@ namespace Triband.Storey.Editor
                 }
                 return;
             }
+            PlayHere(e, b, k);
             int tool = GUILayout.Toolbar((int)v.interiorTool, InteriorTools);
             if (tool != (int)v.interiorTool) { v.interiorTool = (InteriorTool)tool; SceneView.RepaintAll(); }
             EditorGUILayout.HelpBox(ToolHint(v.interiorTool), MessageType.None);
@@ -376,6 +377,26 @@ namespace Triband.Storey.Editor
             }
             v.showMore = EditorGUILayout.Foldout(v.showMore, "Interior colours", true);
             if (v.showMore) { Colour(e, b, 0, "Walls", "interior", baseStyle: true); Colour(e, b, 0, "Floors", "floor", baseStyle: true); }
+        }
+
+        /// <summary>
+        /// Play from this floor (docs/PLAY.md, slice 5.4): Play mode starts on this storey, in front of its stairs or lift.
+        /// The play kit picks the request up, and makes itself if the scene has none. Play mode shows the saved layout, so
+        /// unsaved edits are saved first.
+        /// </summary>
+        void PlayHere(StoreyEdit e, BuildingData b, int k)
+        {
+            if (!GUILayout.Button(new GUIContent("Play from this floor", "Enter Play mode on this storey, in front of its stairs or lift"))) return;
+            var site = e.Site; if (site == null) return;
+            if (e.Dirty)
+            {
+                if (!EditorUtility.DisplayDialog("Play from this floor", "Play mode shows the saved layout. Save the changes first?", "Save and play", "Cancel")) return;
+                e.Save();
+            }
+            var p = Play.PlayWorld.SpawnOn(b, k);
+            var feet = site.transform.position + new Vector3((float)(p.x + b.pos.x), (float)Derived.FloorBase(b, Math.Min(k, b.floors.Count)), (float)(p.z + b.pos.z));
+            PlayFrom.Request(site.name, feet, 0);
+            EditorApplication.EnterPlaymode();
         }
 
         void CoreInspector(StoreyEdit e, BuildingData b, CoreData s)

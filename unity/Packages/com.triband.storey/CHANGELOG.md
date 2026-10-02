@@ -4,7 +4,15 @@ All notable changes to this package are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+- `StoreyGlobals.SetOcclusion` takes the player's chest (world space) and the hole radius in metres. The shader projects the player itself, so Cutout and Fade hold on reversed-depth platforms and flipped render targets.
+- A building's row in the building table is its index in the layout, so party walls find their neighbour in the shader.
+
+### Fixed
+- The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
+
 ### Added
+- `StoreyOcclusion` and `StoreyOcclusionSettings` (docs/PLAY.md, slice 5.3; stub-compiled, not yet run in an editor). In Play mode the component clips the floors above the player and slides the walls in the way down. It sinks, slices, cuts out or fades buildings in the way, and shows Sink's footprints (`SinkFootprint`). It takes the player and camera from any controller. `PlayFrom` holds the editor's *Play from this floor* request.
 - Play and occlusion, engine-free (docs/PLAY.md, slices 5.1 and 5.2). `Play/PlayWorld` locates the player and gives the surface underfoot, including both kinds of stairs, and collision against LOD0's wall segments. `Walker` handles walking, running, gravity and lifts, and `FollowCamera` the follow camera. `Occlusion/OcclusionCore` computes the view, the sliding cutaway, and buildings in the way, with the three rays, the door rule, fade and hold, slots, Slice, Sink's plan and rows, and camera assist. They are checked against the prototype's `play.json` (4,160 surface, 1,382 collision and 592 ray cases, and 16 scripted walks frame by frame).
 - `Shafts.Slide`, the editor's core drag: where `Drag` refuses (the pointer is past a wall or on another core), the core goes as far as it fits along each of its own axes, so it slides along what stops it.
 - Straight flights (`CoreType.Flight`, `"flight"` in a layout): stairs over the same floor range as switchback stairs, with one straight flight per storey stacked above the last, a walkway beside it back to the next flight, and no walls. Each flight has risers of about 18 cm, and the slab is open over the flight lane's run only. Rails run along the opening, the roof's included: there is no bulkhead, and the parapet runs on past them. `Shafts.SetKind` switches stairs between the two kinds where the other fits. Storey's own: the prototype cannot read a layout that has one. Layouts without them read and write as before.

@@ -125,6 +125,7 @@ namespace Triband.Storey.Unity
             var s = State[idx]; State[idx] = new Vector4(s.x, s.y, s.z, slotOrMinusOne + 1); stateDirty = true;
         }
         public void MarkOccDirty() => occDirty = true;
+        public void MarkStateDirty() => stateDirty = true;
         public void MarkWallDirty() => wallDirty = true;
 
         /// <summary>Upload what changed and bind the buffers globally. Call once per frame before rendering.</summary>

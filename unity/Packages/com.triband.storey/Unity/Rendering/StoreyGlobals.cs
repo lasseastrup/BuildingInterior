@@ -42,11 +42,14 @@ namespace Triband.Storey.Unity
         /// <summary>Isolate a building: every other one fades to a screen-door ghost (0 = off, 1 = fully hidden).</summary>
         public static void SetIsolate(float amount, int buildingIndex) => Shader.SetGlobalVector(StoreyShaderIds.Iso, new Vector4(amount, buildingIndex, 0, 0));
 
-        /// <summary>Buildings-in-the-way mode, and the player's screen position, depth and hole radius for Cutout.</summary>
-        public static void SetOcclusion(OcclusionMode mode, Vector2 playerScreen, float playerDepth, float holeRadiusPx)
+        /// <summary>
+        /// Buildings-in-the-way mode, the player's chest in world space (Cutout and Fade only touch what lies in front
+        /// of it; the shader projects it with the camera it draws with) and Cutout's hole radius in metres.
+        /// </summary>
+        public static void SetOcclusion(OcclusionMode mode, Vector3 playerChest, float holeRadius)
         {
             Shader.SetGlobalFloat(StoreyShaderIds.OccMode, (float)mode);
-            Shader.SetGlobalVector(StoreyShaderIds.Player, new Vector4(playerScreen.x, playerScreen.y, playerDepth, holeRadiusPx));
+            Shader.SetGlobalVector(StoreyShaderIds.Player, new Vector4(playerChest.x, playerChest.y, playerChest.z, holeRadius));
         }
 
         /// <summary>Debug tint by LOD (0 off, 1 on).</summary>

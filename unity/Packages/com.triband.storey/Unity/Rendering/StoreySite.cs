@@ -12,6 +12,7 @@ namespace Triband.Storey.Unity
     /// the buildings an edit touched are built again. The meshes are never saved with the scene.
     /// </summary>
     [ExecuteAlways]
+    [DefaultExecutionOrder(1000)]   // after the cameras and characters have moved this frame: occlusion reads them
     [AddComponentMenu("Storey/Storey Site")]
     public sealed class StoreySite : MonoBehaviour
     {
@@ -34,6 +35,9 @@ namespace Triband.Storey.Unity
 
         /// <summary>Set by the editor's Storey tools each frame they are active: the storey being edited, isolate. Null draws the plain layout.</summary>
         public SiteView? View { get; set; }
+
+        /// <summary>The occlusion system driving this site in Play mode (it registers itself), or null.</summary>
+        public StoreyOcclusion? Occlusion { get; internal set; }
 
         /// <summary>The layout as shown: the unsaved edit while there is one, otherwise the asset's.</summary>
         public StoreyDocument? Shown => preview ?? (layout != null ? layout.Document : null);
@@ -79,6 +83,7 @@ namespace Triband.Storey.Unity
             else if (pending.Count > 0) site.Rebuild(preview, pending);
             pendingAll = false; pending.Clear();
             site.Lod = displayedLod;
+            site.Occlusion = Application.isPlaying && Occlusion != null && Occlusion.isActiveAndEnabled ? Occlusion.Apply : null;
             site.Frame(lodTint, View);
         }
     }

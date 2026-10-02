@@ -29,6 +29,8 @@
     -->
     <!-- Unused stub parameters, never-assigned fields and hidden members are the point. -->
     <NoWarn>CS0067;CS0169;CS0414;CS8618;CS0660;CS0661;CS0108;CS0649</NoWarn>
+    <!-- As Unity defines it when the project's active input handling includes the Input System (the play kit reads it). -->
+    <DefineConstants>$(DefineConstants);ENABLE_INPUT_SYSTEM</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

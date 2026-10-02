@@ -28,6 +28,7 @@ namespace Triband.Storey.Unity
         sealed class Built
         {
             public int idx, wallBase = -1, wallCount;
+            public Lod0Result? l0;
             public readonly List<int> rows = new List<int>();
             public readonly List<Mesh> meshes = new List<Mesh>();
             public GameObject? root;
@@ -44,6 +45,30 @@ namespace Triband.Storey.Unity
 
         /// <summary>The building table's index of a building, for the shader globals (isolate, active building); -1 when not shown.</summary>
         public int TableIndexOf(string id) => built.TryGetValue(id, out var b) ? b.idx : -1;
+
+        /// <summary>The layout as built (null before <see cref="Show"/>). A new one after every change.</summary>
+        public Site? Site => site;
+
+        /// <summary>A building's LOD0 as built: its collision segments and its wall list (for the cutaway).</summary>
+        public Lod0Result? Lod0Of(string id) => built.TryGetValue(id, out var b) ? b.l0 : null;
+
+        /// <summary>The first global wall id of a building's LOD0 walls (wall i is this + i), or -1.</summary>
+        public int WallBaseOf(string id) => built.TryGetValue(id, out var b) ? b.wallBase : -1;
+
+        /// <summary>The building table, for the occlusion system.</summary>
+        internal BuildingTable Table => table;
+
+        /// <summary>
+        /// Set while something else drives the view (the occlusion system in Play mode): <see cref="Frame"/> then calls
+        /// it instead of writing the view globals itself.
+        /// </summary>
+        internal Action<SiteRenderer>? Occlusion { get; set; }
+
+        /// <summary>
+        /// Upload a mesh the generator did not make as part of a building (Sink's footprints), coloured through the same
+        /// rows, tagged with <paramref name="tag"/>. The caller owns the mesh.
+        /// </summary>
+        internal Mesh UploadExtra(MeshBuilder gb, string name, int tag) { gb.RetagForUpload(tag); var m = MeshUpload.Upload(gb, name, RowOf); m.hideFlags = flags; return m; }
 
         /// <summary>Build everything again.</summary>
         public void Show(StoreyDocument doc)
@@ -83,6 +108,15 @@ namespace Triband.Storey.Unity
                 shownLod = lod;
             }
             StoreyGlobals.SetLodTint(lodTint);
+            if (Occlusion != null)
+            {
+                Occlusion(this);
+                StoreyGlobals.SetIsolate(0, -1);
+                StoreyGlobals.SetCap(new Color(0.23f, 0.25f, 0.24f));
+                palette.Bind();
+                table.Upload();
+                return;
+            }
             var v = view ?? SiteView.Neutral;
             int active = v.activeId != null ? TableIndexOf(v.activeId) : -1;
             StoreyGlobals.SetActive(active, active >= 0 ? v.clipY : 1e9f);
@@ -90,7 +124,7 @@ namespace Triband.Storey.Unity
             else StoreyGlobals.SetCut(false, 1, 0, 0, active >= 0 ? v.clipY : 1e9f);
             int iso = v.isolateId != null ? TableIndexOf(v.isolateId) : -1;
             StoreyGlobals.SetIsolate(iso >= 0 ? 1 : 0, iso);
-            StoreyGlobals.SetOcclusion(StoreyGlobals.OcclusionMode.Off, Vector2.zero, 1, 100);
+            StoreyGlobals.SetOcclusion(StoreyGlobals.OcclusionMode.Off, Vector3.zero, 2.4f);
             StoreyGlobals.SetCap(new Color(0.23f, 0.25f, 0.24f));
             palette.Bind();
             table.Upload();
@@ -108,12 +142,14 @@ namespace Triband.Storey.Unity
 
         void Build(BuildingData b)
         {
-            var bt = new Built { idx = table.AllocIndex() };
+            // the table row is the building's index in the layout: party walls carry their neighbour's layout index, and
+            // the shader looks that up in the same table
+            var bt = new Built { idx = site!.IndexOf(b) };
             var root = new GameObject(b.name) { hideFlags = flags };
             root.transform.SetParent(parent, false);
             bt.root = root;
 
-            var l0 = Lod0.Build(site!, b);
+            var l0 = Lod0.Build(site!, b); bt.l0 = l0;
             bt.wallCount = l0.Op.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
             Add(bt, "LOD0", MeshUpload.Upload(Tagged(l0.Op, bt.idx), b.name + " LOD0", RowOf, bt.wallBase), opaque, true);
             Add(bt, "LOD0 glass", MeshUpload.Upload(Tagged(l0.Glass, bt.idx), b.name + " glass", RowOf, bt.wallBase), glass, false);
@@ -131,7 +167,7 @@ namespace Triband.Storey.Unity
 
         int RowOf(StyleRef s) => book!.RowOf(s);
 
-        /// <summary>The generator tags meshes with the site index; the table hands out its own, so retag before upload.</summary>
+        /// <summary>The building's tag for upload: its table row (its layout index) plus the LOD.</summary>
         static MeshBuilder Tagged(MeshBuilder gb, int tag) { gb.RetagForUpload(tag); return gb; }
 
         void Add(Built bt, string name, Mesh mesh, Material mat, bool shadows)
@@ -149,7 +185,7 @@ namespace Triband.Storey.Unity
 
         void Release(Built b)
         {
-            table.ReleaseIndex(b.idx);
+            table.State[b.idx] = new Vector4(3, 3, 1, 0); table.MarkStateDirty();
             if (b.wallBase >= 0) table.ReleaseWalls(b.wallBase, b.wallCount);
             foreach (var r in b.rows) table.ReleaseRow(r);
             if (b.root != null) Kill(b.root);

@@ -22,6 +22,33 @@ namespace UnityEngine
         public HideFlags hideFlags { get; set; }
         public static void Destroy(Object obj) { }
         public static void DestroyImmediate(Object obj) { }
+        public static T Instantiate<T>(T original, Transform parent) where T : Object => original;
+        public static T FindAnyObjectByType<T>() where T : Object => null;
+        public static T[] FindObjectsByType<T>(FindObjectsSortMode sortMode) where T : Object => new T[0];
+    }
+
+    public enum FindObjectsSortMode { None = 0, InstanceID = 1 }
+
+    public static class Screen { public static int width => 0; public static int height => 0; }
+
+    public static class Mathf
+    {
+        public const float PI = 3.14159274f, Deg2Rad = PI / 180f, Rad2Deg = 180f / PI;
+        public static float Max(float a, float b) => a;
+        public static int Max(int a, int b) => a;
+        public static float Min(float a, float b) => a;
+        public static int Min(int a, int b) => a;
+        public static float Clamp(float value, float min, float max) => value;
+        public static float Atan2(float y, float x) => 0;
+    }
+
+    public static class PlayerPrefs
+    {
+        public static void SetString(string key, string value) { }
+        public static string GetString(string key) => "";
+        public static bool HasKey(string key) => false;
+        public static void DeleteKey(string key) { }
+        public static void Save() { }
     }
 
     [System.Flags]
@@ -30,9 +57,12 @@ namespace UnityEngine
     public sealed class ExecuteAlways : System.Attribute { }
 
 
+    public static class Time { public static float deltaTime => 0; }
+
     public static class Application
     {
         public static bool isPlaying => false;
+        public static bool isMobilePlatform => false;
     }
 
     public class ScriptableObject : Object
@@ -102,7 +132,14 @@ namespace UnityEngine
         public Vector2(float x, float y) { this.x = x; this.y = y; }
         public static Vector2 zero => default;
         public float sqrMagnitude => 0;
+        public float magnitude => 0;
         public Vector2 normalized => this;
+        public void Normalize() { }
+        public static Vector2 ClampMagnitude(Vector2 vector, float maxLength) => vector;
+        public static Vector2 operator +(Vector2 a, Vector2 b) => a;
+        public static Vector2 operator -(Vector2 a, Vector2 b) => a;
+        public static Vector2 operator *(Vector2 a, float d) => a;
+        public static Vector2 operator /(Vector2 a, float d) => a;
         public static implicit operator Vector4(Vector2 v) => new Vector4(v.x, v.y, 0, 0);
     }
 
@@ -140,6 +177,7 @@ namespace UnityEngine
     public struct Quaternion
     {
         public static Quaternion identity => default;
+        public static Quaternion Euler(float x, float y, float z) => default;
         public static Quaternion LookRotation(Vector3 forward, Vector3 upwards) => default;
         public static bool operator ==(Quaternion a, Quaternion b) => true;
         public static bool operator !=(Quaternion a, Quaternion b) => false;
@@ -167,7 +205,7 @@ namespace UnityEngine
         public float x, yMax, width;
     }
 
-    public class Camera : Behaviour { }
+    public class Camera : Behaviour { public static Camera main => null; }
 
     public sealed class GUIContent
     {
@@ -178,8 +216,16 @@ namespace UnityEngine
 
     public class GUIStyle
     {
+        public GUIStyle() { }
+        public GUIStyle(GUIStyle other) { }
         public static GUIStyle none => new GUIStyle();
+        public int fontSize { get; set; }
+        public TextAnchor alignment { get; set; }
     }
+
+    public enum TextAnchor { UpperLeft = 0, UpperCenter = 1, UpperRight = 2, MiddleLeft = 3, MiddleCenter = 4, MiddleRight = 5, LowerLeft = 6, LowerCenter = 7, LowerRight = 8 }
+
+    public sealed class GUISkin : Object { public GUIStyle box => new GUIStyle(); }
 
     public sealed class GUILayoutOption { }
 
@@ -212,6 +258,10 @@ namespace UnityEngine
         public static void Label(Rect position, string text, GUIStyle style) { }
         public static bool Button(Rect position, GUIContent content, GUIStyle style) => false;
         public static bool Button(Rect position, string text) => false;
+        public static void Box(Rect position, string text) { }
+        public static void Box(Rect position, string text, GUIStyle style) { }
+        public static bool enabled { get; set; }
+        public static GUISkin skin => new GUISkin();
     }
 
     public static class GUILayoutUtility
@@ -254,8 +304,9 @@ namespace UnityEngine
         public void Encapsulate(Vector3 point) { }
     }
 
-    public static class Shader
+    public class Shader : Object
     {
+        public static Shader Find(string name) => null;
         public static int PropertyToID(string name) => 0;
         public static void SetGlobalBuffer(int nameID, GraphicsBuffer value) { }
         public static void SetGlobalVector(int nameID, Vector4 value) { }
@@ -335,22 +386,38 @@ namespace UnityEngine.Rendering
 
 namespace UnityEngine
 {
+    public sealed class DefaultExecutionOrder : System.Attribute { public DefaultExecutionOrder(int order) { } }
+    public sealed class RequireComponent : System.Attribute { public RequireComponent(System.Type requiredComponent) { } }
+    public enum RuntimeInitializeLoadType { AfterSceneLoad = 0, BeforeSceneLoad = 1 }
+    public sealed class RuntimeInitializeOnLoadMethodAttribute : System.Attribute { public RuntimeInitializeOnLoadMethodAttribute(RuntimeInitializeLoadType loadType) { } }
+
     public sealed class AddComponentMenuAttribute : System.Attribute { public AddComponentMenuAttribute(string menuName) { } }
 
     public class Component : Object
     {
         public Transform transform { get; } = new Transform();
         public GameObject gameObject { get; } = new GameObject("");
+        public T GetComponent<T>() => default!;
+        public T GetComponentInChildren<T>() => default!;
     }
 
-    public class Behaviour : Component { }
+    public class Collider : Component { }
+
+    public enum PrimitiveType { Sphere = 0, Capsule = 1, Cylinder = 2, Cube = 3, Plane = 4, Quad = 5 }
+
+    public class Behaviour : Component { public bool isActiveAndEnabled => false; public bool enabled { get; set; } }
 
     public class MonoBehaviour : Behaviour { }
 
     public sealed class Transform : Component
     {
-        public Vector3 position => default;
-        public Quaternion rotation => default;
+        public Vector3 position { get => default; set { } }
+        public Quaternion rotation { get => default; set { } }
+        public Vector3 eulerAngles => default;
+        public Vector3 forward => default;
+        public Vector3 localPosition { get => default; set { } }
+        public Vector3 localScale { get => default; set { } }
+        public void LookAt(Vector3 worldPosition) { }
         public Vector3 lossyScale => default;
         public Matrix4x4 localToWorldMatrix => default;
         public Matrix4x4 worldToLocalMatrix => default;
@@ -359,7 +426,10 @@ namespace UnityEngine
 
     public sealed class GameObject : Object
     {
+        public void SetActive(bool value) { }
         public GameObject(string name) { }
+        public static GameObject CreatePrimitive(PrimitiveType type) => new GameObject("");
+        public string tag { get; set; } = "";
         public Transform transform { get; } = new Transform();
         public T AddComponent<T>() where T : Component, new() => new T();
         public T GetComponent<T>() => default!;
@@ -370,16 +440,24 @@ namespace UnityEngine
         public Mesh sharedMesh { get; set; } = new Mesh();
     }
 
-    public sealed class Material : Object { }
-
-    public sealed class Renderer : Component { }
-
-    public sealed class MeshRenderer : Component
+    public sealed class Material : Object
     {
+        public Material() { }
+        public Material(Shader shader) { }
+        public Material(Material source) { }
+        public Shader shader => null;
+        public void SetColor(string name, Color value) { }
+    }
+
+    public class Renderer : Component
+    {
+        public bool enabled { get; set; }
         public Material sharedMaterial { get; set; } = new Material();
         public UnityEngine.Rendering.ShadowCastingMode shadowCastingMode { get; set; }
         public UnityEngine.Rendering.LightProbeUsage lightProbeUsage { get; set; }
     }
+
+    public sealed class MeshRenderer : Renderer { }
 }
 
 namespace UnityEngine.Rendering

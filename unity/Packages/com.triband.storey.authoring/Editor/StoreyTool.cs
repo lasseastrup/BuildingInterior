@@ -45,7 +45,7 @@ namespace Triband.Storey.Editor
                 else Hint("Click a building to select it.");
                 DefaultClick(e, e.Selected, sv);
             }
-            site.View = ViewFor(e, e.Selected, sv, site.transform.position.y);
+            site.View = ViewFor(e, e.Selected, sv, site.transform.position);
             if (Event.current.type == EventType.MouseMove) sv.Repaint();
         }
 
@@ -82,7 +82,7 @@ namespace Triband.Storey.Editor
             if (v.tier != 0 && !Derived.IsSetback(b, v.tier)) v.tier = 0;
         }
 
-        SiteView? ViewFor(StoreyEdit e, BuildingData? b, SceneView sv, float lift)
+        SiteView? ViewFor(StoreyEdit e, BuildingData? b, SceneView sv, Vector3 origin)
         {
             var v = SiteView.Neutral;
             if (b == null) return v;
@@ -91,8 +91,10 @@ namespace Triband.Storey.Editor
             {
                 var (clip, lo, hi) = Picking.StoreyView(b, e.View.floor);
                 // the shader compares world heights: a site raised or lowered moves its storeys (rotation and scale are not supported here)
+                float lift = origin.y;
                 v.activeId = b.id; v.clipY = (float)clip + lift; v.cut = true; v.stubHeight = 1.0f; v.cutBase = (float)lo + lift; v.cutTop = (float)hi + lift;
-                var cam = sv.camera.transform.position; var focus = sv.pivot;
+                // the cutaway compares with the walls' data, which is in the site's x and z: a moved site moves them
+                var cam = sv.camera.transform.position - new Vector3(origin.x, 0, origin.z); var focus = sv.pivot - new Vector3(origin.x, 0, origin.z);
                 v.camera = cam; v.focus = focus;
                 var dxz = new Vector2(cam.x - focus.x, cam.z - focus.z);
                 v.cameraDir = dxz.sqrMagnitude > 1e-8f ? dxz.normalized : new Vector2(0, 1);
