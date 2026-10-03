@@ -21,6 +21,8 @@ namespace Triband.Storey.Validate
         public string message = "";
         /// <summary>A short code for tests and filters: "unreached", "no-door", "door-nowhere", …</summary>
         public string code = "";
+        /// <summary>The other building, for a problem between two ("overlap"); "" otherwise.</summary>
+        public string otherId = "";
         public override string ToString() => $"{severity} {building} {(k >= 0 ? "k" + k : "")}: {message}";
     }
 
@@ -37,14 +39,90 @@ namespace Triband.Storey.Validate
         /// <summary>The grid's cell, the clearance kept from a wall (about the player's radius), and the smallest area worth reporting.</summary>
         public const double Cell = 0.25, Clear = 0.25, MinArea = 2.0;
 
-        public static List<Problem> Check(Site site, PlayWorld? world = null)
+        public static List<Problem> Check(Site site, PlayWorld? world = null) => Check(site, world, null);
+
+        /// <summary>
+        /// The problems of the buildings in <paramref name="only"/> (all when null), and the overlaps they are part of.
+        /// Give it a <see cref="Scope"/>: an edit's buildings with the neighbours and bridges that can change with them.
+        /// <see cref="Merge"/> puts the result into the last full list.
+        /// </summary>
+        public static List<Problem> Check(Site site, PlayWorld? world, ICollection<string>? only)
         {
             world ??= new PlayWorld(site);
+            bool In(BuildingData b) => only == null || only.Contains(b.id);
             var o = new List<Problem>();
-            foreach (var b in site.Buildings) Static(site, b, o);
-            Overlaps(site, o);
-            Reach(site, world, o);
+            foreach (var b in site.Buildings) if (In(b)) Static(site, b, o);
+            Overlaps(site, o, In);
+            Reach(site, world, o, In);
             return o;
+        }
+
+        /// <summary>
+        /// What a check after an edit must cover: the buildings that changed (by id; added, edited or removed), every
+        /// building within a couple of metres of where they are or were (party walls, doors onto a neighbour's roof),
+        /// and every building joined to those by bridges, however many in turn (one can only be reached through another).
+        /// </summary>
+        public static HashSet<string> Scope(Site site, Site? before, IEnumerable<string> changed)
+        {
+            var scope = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var id in changed)
+            {
+                scope.Add(id);
+                foreach (var s in new[] { site, before })
+                {
+                    var b = s?.ById(id); if (b == null) continue;
+                    var bb = Site.BoundsOf(b);
+                    double cx = (bb.x0 + bb.x1) / 2, cz = (bb.z0 + bb.z1) / 2, r = Math.Sqrt((bb.x1 - bb.x0) * (bb.x1 - bb.x0) + (bb.z1 - bb.z0) * (bb.z1 - bb.z0)) / 2 + 2;
+                    foreach (var n in site.Near(cx, cz, r))
+                    {
+                        var nb = Site.BoundsOf(n);
+                        if (nb.x0 <= bb.x1 + 2 && nb.x1 >= bb.x0 - 2 && nb.z0 <= bb.z1 + 2 && nb.z1 >= bb.z0 - 2) scope.Add(n.id);
+                    }
+                }
+            }
+            // the bridges, until nothing more joins
+            for (bool grew = true; grew; )
+            {
+                grew = false;
+                foreach (var b in site.Buildings)
+                    foreach (var br in b.bridges)
+                        if (scope.Contains(b.id) != scope.Contains(br.to) && site.ById(br.to) != null) { scope.Add(b.id); scope.Add(br.to); grew = true; }
+            }
+            return scope;
+        }
+
+        /// <summary>Each building's text, by id: what <see cref="Changed"/> compares.</summary>
+        public static Dictionary<string, string> Prints(StoreyDocument d)
+        {
+            var o = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var b in d.buildings) o[b.id] = PrototypeJson.Write(b);
+            return o;
+        }
+
+        /// <summary>The buildings added, removed or changed between two layouts' <see cref="Prints"/>.</summary>
+        public static List<string> Changed(Dictionary<string, string> before, Dictionary<string, string> after)
+        {
+            var o = new List<string>();
+            foreach (var kv in after) if (!before.TryGetValue(kv.Key, out var t) || t != kv.Value) o.Add(kv.Key);
+            foreach (var id in before.Keys) if (!after.ContainsKey(id)) o.Add(id);
+            return o;
+        }
+
+        /// <summary>
+        /// The last full list with a scoped check's result in place of what it covered: problems of buildings in the
+        /// scope, overlaps with one, and anything of a building that is gone are replaced. In layout order.
+        /// </summary>
+        public static List<Problem> Merge(Site site, List<Problem> last, List<Problem> fresh, ICollection<string> scope)
+        {
+            var o = new List<Problem>();
+            foreach (var p in last)
+            {
+                if (scope.Contains(p.buildingId) || (p.otherId.Length > 0 && scope.Contains(p.otherId)) || site.ById(p.buildingId) == null) continue;
+                o.Add(p);
+            }
+            o.AddRange(fresh);
+            int Ix(Problem p) { var b = site.ById(p.buildingId); return b != null ? site.IndexOf(b) : int.MaxValue; }
+            return o.Select((p, i) => (p, i)).OrderBy(t => Ix(t.p)).ThenBy(t => t.i).Select(t => t.p).ToList();
         }
 
         static string Floor(BuildingData b, int k) => k >= b.floors.Count ? "the roof" : k == 0 ? "the ground floor" : "floor " + k;
@@ -101,19 +179,23 @@ namespace Triband.Storey.Validate
 
         static string Kind(CoreData s) => s.type == CoreType.Lift ? "The lift" : "The stairs";
 
-        static void Overlaps(Site site, List<Problem> o)
+        static void Overlaps(Site site, List<Problem> o, Func<BuildingData, bool> In)
         {
             var bs = site.Buildings;
+            var box = bs.Select(Site.BoundsOf).ToArray();
             for (int i = 0; i < bs.Count; i++)
                 for (int j = i + 1; j < bs.Count; j++)
                 {
                     var a = bs[i]; var c = bs[j];
+                    if (!In(a) && !In(c)) continue;
+                    // only footprints whose boxes overlap can share area: the clip is for those
+                    if (box[i].x0 >= box[j].x1 || box[j].x0 >= box[i].x1 || box[i].z0 >= box[j].z1 || box[j].z0 >= box[i].z1) continue;
                     var A = Courtyards.World(a, a.footprint); var C = Courtyards.World(c, c.footprint);
                     double area = Tiers.SharedArea(A, C);
                     if (area > 0.5)
                     {
                         var m = Centre(A);
-                        o.Add(new Problem { severity = Severity.Error, buildingId = a.id, building = a.name, k = 0, code = "overlap", message = $"Overlaps {c.name} by {area:0} m²", x = m.x, y = 1, z = m.z });
+                        o.Add(new Problem { severity = Severity.Error, buildingId = a.id, building = a.name, k = 0, code = "overlap", otherId = c.id, message = $"Overlaps {c.name} by {area:0} m²", x = m.x, y = 1, z = m.z });
                     }
                 }
         }
@@ -205,7 +287,7 @@ namespace Triband.Storey.Validate
             return new Vec2(s.x + qx * Math.Cos(a) - qz * Math.Sin(a), s.z + qx * Math.Sin(a) + qz * Math.Cos(a));
         }
 
-        static void Reach(Site site, PlayWorld world, List<Problem> o)
+        static void Reach(Site site, PlayWorld world, List<Problem> o, Func<BuildingData, bool> In)
         {
             // nodes: (building, storey, region); the outside is node 0
             var grids = new Dictionary<(string, int), Grid>();
@@ -229,7 +311,7 @@ namespace Triband.Storey.Validate
             var ways = new Dictionary<string, bool>(StringComparer.Ordinal);
             foreach (var b in site.Buildings)
             {
-                if (!b.interior) continue;
+                if (!b.interior || !In(b)) continue;
                 bool way = false;
                 foreach (var e in b.entrances)
                 {
@@ -263,6 +345,7 @@ namespace Triband.Storey.Validate
             foreach (var a in site.Buildings)
                 foreach (var br in a.bridges)
                 {
+                    if (!In(a)) continue;   // a scope holds both ends of every bridge (Scope)
                     var s = Bridges.Span(site, a, br); if (s == null) continue;
                     var pa = new Vec2(s.PA.x - s.u.x * (Dim.T_EXT + 0.6) - a.pos.x, s.PA.z - s.u.z * (Dim.T_EXT + 0.6) - a.pos.z);
                     var pb = new Vec2(s.PB.x - s.nB.x * (Dim.T_EXT + 0.6) - s.B.pos.x, s.PB.z - s.nB.z * (Dim.T_EXT + 0.6) - s.B.pos.z);
@@ -275,7 +358,7 @@ namespace Triband.Storey.Validate
 
             foreach (var b in site.Buildings)
             {
-                if (!b.interior) continue;
+                if (!b.interior || !In(b)) continue;
                 if (!ways[b.id]) { var c = Centre(b.footprint); o.Add(P(b, 0, Severity.Error, "no-door", "No way in: add a street door (Facade ▸ Entrance) or a bridge", c.x, c.z)); continue; }
                 for (int k = 0; k < b.floors.Count; k++)
                 {

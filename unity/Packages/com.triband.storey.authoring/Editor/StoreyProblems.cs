@@ -12,33 +12,38 @@ namespace Triband.Storey.Editor
 {
     /// <summary>
     /// The problem list in the editor (docs/EDITOR.md §6.5): <see cref="Problems"/> run on the layout being edited, on a
-    /// worker thread so the editor never waits. On the inspector's Check button, and by itself once an edit has settled
-    /// (never during a drag, at most once per 0.4 s) for layouts small enough to check quickly: the test city's 3,000
-    /// buildings take about 20 s. Marked in the Scene view.
+    /// worker thread so the editor never waits. The first check covers the whole layout; after that only the buildings
+    /// changed since the last check, with their neighbours and bridges (<see cref="Problems.Scope"/>), are checked again
+    /// and merged into the list. On the inspector's Check button, and by itself once an edit has settled (Auto; never
+    /// during a drag, at most once per 0.4 s). Marked in the Scene view.
     /// </summary>
     internal static class StoreyProblems
     {
         const double Settle = 0.4;
-        /// <summary>Layouts with more buildings than this are only checked on the button.</summary>
-        public const int AutoMost = 150;
         static StoreyEdit? of;
         static string? checkedText, seenText, runningText;
         static double seenAt, startedAt;
         static List<Problem> last = new List<Problem>();
-        static Task<List<Problem>>? running;
+        // the last checked layout, building by building, and as a site: what the next check compares with
+        static Dictionary<string, string>? lastPrints;
+        static Site? lastSite;
+        static Task<(List<Problem> list, Dictionary<string, string> prints, Site site, int checkedCount)>? running;
         static bool waiting;
 
-        /// <summary>Check as the layout is edited (small layouts only, <see cref="AutoMost"/>). Per user, kept between sessions.</summary>
+        /// <summary>Check again by itself after each edit. Per user, kept between sessions.</summary>
         public static bool Auto { get => EditorPrefs.GetBool("Storey.problems.auto", true); set => EditorPrefs.SetBool("Storey.problems.auto", value); }
 
         /// <summary>Whether this layout is checked as it is edited.</summary>
-        public static bool AutoFor(StoreyEdit e) => Auto && e.Document.buildings.Count <= AutoMost;
+        public static bool AutoFor(StoreyEdit e) => Auto;
+
+        /// <summary>How many buildings the last check looked at (all of them the first time).</summary>
+        public static int LastChecked { get; private set; }
 
         /// <summary>The problems found by the last check of the layout being edited (empty before one). Starts one when checking as you edit.</summary>
         public static List<Problem> For(StoreyEdit e)
         {
             double now = EditorApplication.timeSinceStartup;
-            if (!ReferenceEquals(of, e)) { of = e; checkedText = null; last = new List<Problem>(); running = null; runningText = null; }
+            if (!ReferenceEquals(of, e)) Forget(e);
             if (AutoFor(e) && e.Text != checkedText && e.Text != runningText && !e.Dragging)
             {
                 if (e.Text != seenText) { seenText = e.Text; seenAt = now; }
@@ -54,6 +59,8 @@ namespace Triband.Storey.Editor
             return last;
         }
 
+        static void Forget(StoreyEdit e) { of = e; checkedText = null; last = new List<Problem>(); lastPrints = null; lastSite = null; running = null; runningText = null; }
+
         /// <summary>The layout has been checked at least once since it was opened.</summary>
         public static bool Checked(StoreyEdit e) => ReferenceEquals(of, e) && checkedText != null;
 
@@ -68,13 +75,21 @@ namespace Triband.Storey.Editor
         public static void CheckNow(StoreyEdit e)
         {
             if (running != null && runningText == e.Text) return;
-            of = e;
+            if (!ReferenceEquals(of, e)) Forget(e);
             // its own copy of the layout, read from the text: the edit can carry on while it runs
             string text = e.Text; runningText = text; startedAt = EditorApplication.timeSinceStartup;
-            var mine = Task.Run(() =>
+            var prevList = last; var prevPrints = checkedText != null ? lastPrints : null; var prevSite = lastSite;
+            var mine = Task.Run<(List<Problem> list, Dictionary<string, string> prints, Site site, int checkedCount)>(() =>
             {
-                var site = new Site(PrototypeJson.Read(text).Document.buildings);
-                return Problems.Check(site, new PlayWorld(site));
+                var doc = PrototypeJson.Read(text).Document;
+                var site = new Site(doc.buildings); var prints = Problems.Prints(doc);
+                if (prevPrints == null || prevSite == null) return (Problems.Check(site, new PlayWorld(site)), prints, site, doc.buildings.Count);
+                // only what changed since the last check, with what can change with it
+                var changed = Problems.Changed(prevPrints, prints);
+                if (changed.Count == 0) return (prevList, prints, site, 0);
+                var scope = Problems.Scope(site, prevSite, changed);
+                var fresh = Problems.Check(site, new PlayWorld(site), scope);
+                return (Problems.Merge(site, prevList, fresh, scope), prints, site, scope.Count);
             });
             running = mine;
             double shown = 0;
@@ -89,7 +104,10 @@ namespace Triband.Storey.Editor
                 EditorApplication.update -= Poll;
                 if (!ReferenceEquals(running, mine)) return;   // a newer check took its place
                 running = null; runningText = null;
-                if (mine.Status == TaskStatus.RanToCompletion) { if (ReferenceEquals(of, e)) { last = mine.Result; checkedText = text; } }
+                if (mine.Status == TaskStatus.RanToCompletion)
+                {
+                    if (ReferenceEquals(of, e)) { var r = mine.Result; last = r.list; lastPrints = r.prints; lastSite = r.site; LastChecked = r.checkedCount; checkedText = text; }
+                }
                 else if (mine.Exception != null) Debug.LogException(mine.Exception.InnerException ?? mine.Exception);
                 UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
             }

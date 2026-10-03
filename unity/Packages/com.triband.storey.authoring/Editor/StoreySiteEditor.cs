@@ -221,7 +221,7 @@ namespace Triband.Storey.Editor
         {
             var v = e.View; var ps = StoreyProblems.For(e);
             int errors = ps.Count(p => p.severity == Validate.Severity.Error);
-            bool stale = StoreyProblems.Stale(e), auto = StoreyProblems.AutoFor(e);
+            bool stale = StoreyProblems.Stale(e);
             using (new EditorGUILayout.HorizontalScope())
             {
                 string status =
@@ -239,13 +239,11 @@ namespace Triband.Storey.Editor
                     if (show != v.showProblems) { v.showProblems = show; SceneView.RepaintAll(); }
                 }
                 using (new EditorGUI.DisabledScope(StoreyProblems.Running || (!stale && StoreyProblems.Checked(e))))
-                    if (GUILayout.Button(new GUIContent("Check", "Check the layout for problems now, in the background (a 3,000-building layout takes about 20 s)"), EditorStyles.miniButton, GUILayout.Width(52)))
+                    if (GUILayout.Button(new GUIContent("Check", "Check for problems now, in the background: the whole layout the first time (a 3,000-building layout takes about 7 s), then only what changed since"), EditorStyles.miniButton, GUILayout.Width(52)))
                         StoreyProblems.CheckNow(e);
-                bool want = GUILayout.Toggle(StoreyProblems.Auto, new GUIContent("Auto", $"Check again by itself after each edit, for layouts of up to {StoreyProblems.AutoMost} buildings; bigger ones only on Check"), EditorStyles.miniButton, GUILayout.Width(40));
+                bool want = GUILayout.Toggle(StoreyProblems.Auto, new GUIContent("Auto", "Check again by itself after each edit: only the buildings it changed, with their neighbours and bridges"), EditorStyles.miniButton, GUILayout.Width(40));
                 if (want != StoreyProblems.Auto) StoreyProblems.Auto = want;
             }
-            if (StoreyProblems.Auto && !auto && stale && !StoreyProblems.Running)
-                EditorGUILayout.LabelField($"More than {StoreyProblems.AutoMost} buildings: press Check to look for problems.", StoreyInspectorUI.Caption);
             if (!v.showProblems || ps.Count == 0) return;
             const int Most = 25;
             foreach (var p in ps.Take(Most))

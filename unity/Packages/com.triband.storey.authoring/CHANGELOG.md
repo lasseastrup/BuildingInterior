@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Added
-- Problems: a **Check** button and an **Auto** toggle. The check runs on a worker thread, on a copy of the layout. Auto, which re-checks after each edit, only applies to layouts of up to 150 buildings; the 3,000-building test city takes about 20 s, and used to freeze the editor after every edit (docs/EDITOR.md §6.5).
+- Problems: a **Check** button and an **Auto** toggle. The check runs on a worker thread, on a copy of the layout. After the first check, only the buildings changed since the last one (with their neighbours and bridges) are checked again. On the 3,000-building test city an edit's check takes about 0.3 s; before, a 22 s check froze the editor after every edit (docs/EDITOR.md §6.5).
 - **Test city** in the site inspector: 300, 1,000 or 3,000 generated buildings, or Remove (docs/CITY.md §1).
 - The automatic LOD picks for the Scene view's camera, and the editor updates when that camera moves. The LOD stats are shown in the Scene view for a selected site (`StoreyLodEditor`).
 

@@ -22,6 +22,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- `Problems.Check` with a scope, `Problems.Scope`, `Changed`, `Prints` and `Merge`: check only what an edit touched. `Problem.otherId`. The overlap test skips footprints whose bounding boxes don't overlap: the 3,000-building city's full check goes from 22 s to 7 s.
 - City scale (docs/CITY.md):
   - `TestCity`, the prototype's test city, building for building.
   - `LodManager` and `LodSettings`, the automatic LOD.

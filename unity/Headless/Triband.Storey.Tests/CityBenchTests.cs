@@ -75,6 +75,27 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void CheckingTheCityForProblems()
+        {
+            var (site, bs) = City(3000);
+            var sw = Stopwatch.StartNew();
+            var prints = Validate.Problems.Prints(new StoreyDocument { buildings = bs });
+            double printMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
+            var all = Validate.Problems.Check(site, new Play.PlayWorld(site));
+            double full = sw.Elapsed.TotalMilliseconds;
+            // an edit: the first walk-in building's stairs taken out
+            var b = bs.First(x => x.interior && x.shafts.Count > 0); b.shafts.Clear();
+            sw.Restart();
+            var after = Validate.Problems.Prints(new StoreyDocument { buildings = bs });
+            var site2 = new Site(bs);
+            var scope = Validate.Problems.Scope(site2, site, Validate.Problems.Changed(prints, after));
+            var merged = Validate.Problems.Merge(site2, all, Validate.Problems.Check(site2, new Play.PlayWorld(site2), scope), scope);
+            double scoped = sw.Elapsed.TotalMilliseconds;
+            log.WriteLine($"problems, {bs.Count} buildings: whole layout {full:0} ms; after an edit {scoped:0} ms ({scope.Count} buildings checked, {printMs:0} ms of it comparing)");
+            Assert.True(scoped < full / 4, "an edit's check is a fraction of the whole");
+        }
+
+        [Fact]
         public void PickingTheLodsForTheCityIsCheap()
         {
             var (site, bs) = City(3000);
