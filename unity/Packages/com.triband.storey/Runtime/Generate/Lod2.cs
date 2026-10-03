@@ -51,6 +51,11 @@ namespace Triband.Storey.Generate
         public readonly List<int> I = new List<int>();
         public readonly List<ParamRow> Rows = new List<ParamRow>();
         public int Tag;
+        /// <summary>
+        /// Per vertex, when several buildings share the mesh (a merged cell, <see cref="Lod.Cells"/>): each vertex's
+        /// building tag, in place of <see cref="Tag"/>. Its <see cref="Slot"/>s are then the table's rows already.
+        /// </summary>
+        public List<int>? Tags;
         public int Tris => I.Count / 3;
         public int Verts => P.Count;
     }

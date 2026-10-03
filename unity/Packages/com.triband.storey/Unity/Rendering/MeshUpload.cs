@@ -111,7 +111,7 @@ namespace Triband.Storey.Unity
         public static Vector4 WallData(double[] w) => new Vector4((float)w[0], (float)w[1], (float)w[2], (float)w[3]);
 
         /// <summary>The LOD2 massing mesh. <paramref name="rowBase"/> maps the mesh's local parameter rows onto table rows.</summary>
-        public static Mesh Upload(Lod2Mesh m, string name, int[] rowMap)
+        public static Mesh Upload(Lod2Mesh m, string name, int[]? rowMap)
         {
             int nv = m.Verts;
             var mesh = new Mesh { name = name, indexFormat = nv > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
@@ -132,10 +132,10 @@ namespace Triband.Storey.Unity
                 var pos = new Vector3((float)p.x, (float)p.y, (float)p.z);
                 verts[i] = new MassVertex
                 {
-                    position = pos, nx = (sbyte)n.x, ny = (sbyte)n.y, nz = (sbyte)n.z, tag = m.Tag,
+                    position = pos, nx = (sbyte)n.x, ny = (sbyte)n.y, nz = (sbyte)n.z, tag = m.Tags != null ? m.Tags[i] : m.Tag,
                     fac = new Vector4((float)m.Fac[i * 4], (float)m.Fac[i * 4 + 1], (float)m.Fac[i * 4 + 2], (float)m.Fac[i * 4 + 3]),
                     fac2 = new Vector2((float)m.Fac2[i * 2], (float)m.Fac2[i * 2 + 1]),
-                    slot = rowMap[m.Slot[i]],
+                    slot = rowMap != null ? rowMap[m.Slot[i]] : m.Slot[i],   // a merged cell's slots are the table's rows already
                 };
                 if (first) { bounds = new Bounds(pos, Vector3.zero); first = false; } else bounds.Encapsulate(pos);
             }
