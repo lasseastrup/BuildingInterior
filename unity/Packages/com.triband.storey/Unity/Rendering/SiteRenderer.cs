@@ -399,7 +399,8 @@ namespace Triband.Storey.Unity
             bool opt = Application.isPlaying;   // edit mode rebuilds on every drag: skip the cache reorder there
             if (which == 1)
             {
-                Add(bt, 1, "LOD1", MeshUpload.Upload((MeshBuilder)made, name + " LOD1", RowOf, -1, opt, windows: true), opaque, true);
+                var m1 = (MeshBuilder)made;
+                if (m1.Tris > 0) Add(bt, 1, "LOD1", MeshUpload.Upload(m1, name + " LOD1", RowOf, -1, opt, windows: true), opaque, true);
                 return;
             }
             var l0 = (Lod0Result)made; bt.l0 = l0;
@@ -409,8 +410,9 @@ namespace Triband.Storey.Unity
                 for (int i = 0; i < bt.wallCount; i++) table.WallData[bt.wallBase + i] = MeshUpload.WallData(l0.Op.Walls[i].W);
                 table.MarkWallDataDirty();
             }
-            Add(bt, 0, "LOD0", MeshUpload.Upload(l0.Op, name + " LOD0", RowOf, bt.wallBase, opt, windows: true), opaque, true);
-            Add(bt, 0, "LOD0 glass", MeshUpload.Upload(l0.Glass, name + " glass", RowOf, bt.wallBase, opt), glass, false);
+            // a shell building's LOD0 has no see-through glass: no mesh for it
+            if (l0.Op.Tris > 0) Add(bt, 0, "LOD0", MeshUpload.Upload(l0.Op, name + " LOD0", RowOf, bt.wallBase, opt, windows: true), opaque, true);
+            if (l0.Glass.Tris > 0) Add(bt, 0, "LOD0 glass", MeshUpload.Upload(l0.Glass, name + " glass", RowOf, bt.wallBase, opt), glass, false);
             // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
             if (lods != null && colliders && bt.collision == null) colliderPending.Add(bt.id);
         }
@@ -512,7 +514,7 @@ namespace Triband.Storey.Unity
                 pieces += c.renderers.Count;
             }
             int r0 = 0, r1 = 0;
-            foreach (var bt in built.Values) { if (bt.objs[0].Count > 0) r0++; if (bt.objs[1].Count > 0) r1++; }
+            foreach (var e in l.Entries.Values) { if (e.Has0) r0++; if (e.Has1) r1++; }
             lodBusy = fading || queued > 0 || jobs.Count > 0;
             stats.buildings = built.Count; stats.resident0 = r0; stats.resident1 = r1;
             stats.cells = cells.Count; stats.cellMeshes = pieces; stats.cellsShown = shown;

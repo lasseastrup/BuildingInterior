@@ -102,7 +102,8 @@ namespace Triband.Storey.Unity
             }
             SetIndices(mesh, gb.I, nv, flags);
             mesh.bounds = bounds;
-            if (optimize) mesh.Optimize();
+            // Mesh.Optimize crashes the player natively on an empty mesh (a shell's LOD0 glass): only ever a real one
+            if (optimize && nv > 0 && gb.I.Count > 0) mesh.Optimize();
             mesh.UploadMeshData(true);
             return mesh;
         }
@@ -150,6 +151,10 @@ namespace Triband.Storey.Unity
         static void SetIndices(Mesh mesh, System.Collections.Generic.List<int> I, int nv, MeshUpdateFlags flags)
         {
             int ni = I.Count;
+            // the upload skips Unity's index check (DontValidateIndices), and a bad index crashes natively in Mesh.Optimize
+            // and on the GPU: check here, where it is a managed exception naming the mesh
+            if (ni % 3 != 0) throw new InvalidOperationException($"{mesh.name}: {ni} indices is not whole triangles");
+            for (int i = 0; i < ni; i++) if ((uint)I[i] >= (uint)nv) throw new InvalidOperationException($"{mesh.name}: index {I[i]} of {nv} vertices");
             if (nv > 65535)
             {
                 mesh.SetIndexBufferParams(ni, IndexFormat.UInt32);
