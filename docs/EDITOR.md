@@ -249,7 +249,11 @@ What it finds:
 - **Bridges** that no longer meet, or that lead into or out of a storey with nothing inside.
 - **Buildings that overlap.**
 
-It runs once an edit has settled (never during a drag), using the meshes the site already shows. The demo street takes about 30 ms, the 78-building variants corpus about 250 ms.
+It runs on a worker thread, on its own copy of the layout, so the editor never waits for it.
+- **Check** runs it now. The list says when it's older than the layout ("edited since").
+- **Auto** (on by default, remembered per user) runs it again after each edit has settled, never during a drag. Auto only applies to layouts of up to 150 buildings; bigger ones are checked only on **Check**.
+
+Timings: the demo street takes about 30 ms, the 78-building variants corpus about 250 ms, and the 3,000-building test city about 20 s.
 
 Engine-free: `Validate.Problems` (`ProblemTests`). On the demo street it finds two real problems:
 - Row House: a wall 10 cm in front of the stairs shuts them in above the ground floor.
@@ -258,6 +262,7 @@ Engine-free: `Validate.Problems` (`ProblemTests`). On the demo street it finds t
 **Checks:**
 1. Open the demo street: Problems lists Row House floors 1 to 3 and Linden Court's rooms. Click one: the Scene view goes there.
 2. Remove a building's stairs: its upper floors are listed. Undo: the list clears.
+4. Make a test city of 3,000: nothing is checked by itself, and the editor stays responsive. Press Check: "Checking … s" counts up, and the list appears after about 20 s.
 3. Draw a wall across a room with no door: "Part of … can't be reached".
 
 ### 6.6 Building templates

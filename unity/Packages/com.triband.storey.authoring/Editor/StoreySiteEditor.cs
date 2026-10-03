@@ -221,18 +221,32 @@ namespace Triband.Storey.Editor
         {
             var v = e.View; var ps = StoreyProblems.For(e);
             int errors = ps.Count(p => p.severity == Validate.Severity.Error);
-            if (ps.Count == 0)
+            bool stale = StoreyProblems.Stale(e), auto = StoreyProblems.AutoFor(e);
+            using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField(new GUIContent(StoreyProblems.Stale(e) ? "✓ No problems found yet …" : "✓ No problems: every storey can be reached", "Storey checks the layout as you edit: rooms and storeys nobody can reach, stairs that are walled in"), StoreyInspectorUI.Caption);
-                return;
+                string status =
+                    StoreyProblems.Running ? $"Checking for problems … {StoreyProblems.RunningFor:0} s" :
+                    !StoreyProblems.Checked(e) ? "Problems: not checked yet" :
+                    ps.Count == 0 ? (stale ? "✓ No problems at the last check (edited since)" : "✓ No problems: every storey can be reached") :
+                    $"⚠ {ps.Count} problem{(ps.Count == 1 ? "" : "s")}{(errors > 0 ? $", {errors} serious" : "")}{(stale ? " (edited since)" : "")}";
+                const string tip = "Rooms and storeys nobody can reach, stairs that are walled in, overlapping buildings";
+                if (ps.Count == 0 || StoreyProblems.Running && !StoreyProblems.Checked(e)) EditorGUILayout.LabelField(new GUIContent(status, tip), StoreyInspectorUI.Caption);
+                else
+                {
+                    var keepC = GUI.contentColor; if (errors > 0) GUI.contentColor = Color.Lerp(Color.white, StoreyProblems.ColorOf(ps.First(p => p.severity == Validate.Severity.Error)), 0.6f);
+                    bool show = EditorGUILayout.Foldout(v.showProblems, new GUIContent(status, "Click one to go to it"), true);
+                    GUI.contentColor = keepC;
+                    if (show != v.showProblems) { v.showProblems = show; SceneView.RepaintAll(); }
+                }
+                using (new EditorGUI.DisabledScope(StoreyProblems.Running || (!stale && StoreyProblems.Checked(e))))
+                    if (GUILayout.Button(new GUIContent("Check", "Check the layout for problems now, in the background (a 3,000-building layout takes about 20 s)"), EditorStyles.miniButton, GUILayout.Width(52)))
+                        StoreyProblems.Start(e);
+                bool want = GUILayout.Toggle(StoreyProblems.Auto, new GUIContent("Auto", $"Check again by itself after each edit, for layouts of up to {StoreyProblems.AutoMost} buildings; bigger ones only on Check"), EditorStyles.miniButton, GUILayout.Width(40));
+                if (want != StoreyProblems.Auto) StoreyProblems.Auto = want;
             }
-            string title = $"⚠ {ps.Count} problem{(ps.Count == 1 ? "" : "s")}{(errors > 0 ? $", {errors} serious" : "")}";
-            if (StoreyProblems.Stale(e)) title += " …";
-            var keepC = GUI.contentColor; if (errors > 0) GUI.contentColor = Color.Lerp(Color.white, StoreyProblems.ColorOf(ps.First(p => p.severity == Validate.Severity.Error)), 0.6f);
-            bool show = EditorGUILayout.Foldout(v.showProblems, new GUIContent(title, "Click one to go to it"), true);
-            GUI.contentColor = keepC;
-            if (show != v.showProblems) { v.showProblems = show; SceneView.RepaintAll(); }
-            if (!show || ps.Count == 0) return;
+            if (StoreyProblems.Auto && !auto && stale && !StoreyProblems.Running)
+                EditorGUILayout.LabelField($"More than {StoreyProblems.AutoMost} buildings: press Check to look for problems.", StoreyInspectorUI.Caption);
+            if (!v.showProblems || ps.Count == 0) return;
             const int Most = 25;
             foreach (var p in ps.Take(Most))
             {

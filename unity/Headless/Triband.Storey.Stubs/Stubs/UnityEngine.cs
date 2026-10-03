@@ -80,6 +80,7 @@ namespace UnityEngine
         public static void Log(object message) { }
         public static void LogWarning(object message) { }
         public static void LogError(object message) { }
+        public static void LogException(System.Exception exception) { }
     }
 
     public class PropertyAttribute : System.Attribute

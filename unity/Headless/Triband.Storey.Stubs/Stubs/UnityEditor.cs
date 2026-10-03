@@ -117,6 +117,12 @@ namespace UnityEditor
         public void ShowNotification(GUIContent notification, double fadeoutWait) { }
     }
 
+    public static class EditorPrefs
+    {
+        public static bool GetBool(string key, bool defaultValue = false) => defaultValue;
+        public static void SetBool(string key, bool value) { }
+    }
+
     public static class SessionState
     {
         public static bool GetBool(string key, bool defaultValue) => defaultValue;
