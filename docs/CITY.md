@@ -73,6 +73,8 @@ Headless numbers (`CityBenchTests`, `LodManagerTests`). They are CPU only, witho
 | One LOD1 | about 6–8 ms |
 | One LOD0 | about 23–34 ms on average, 100–150 ms at worst (tall walk-in buildings) |
 | LOD0 and LOD1 on 3 worker threads | about 9 ms a building, off the main thread |
+| Committing one edit (finding what changed, the layout's text) | about 140 ms (was 350) |
+| One step of a drag | about 0.1 s (was 1.4 s: the whole layout was read again each step) |
 
 The time for one LOD0 is several frames' budget. That's why the generating is on worker threads, so the main thread pays only for the upload. How long the upload takes in Unity is not measured yet. If it shows up as a hitch, the next step is to build the vertex buffers on the workers too, with `Mesh.AllocateWritableMeshData`.
 

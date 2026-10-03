@@ -138,7 +138,7 @@ namespace Triband.Storey.Editor
 
             // while a point or a "+" is dragged the walls are redone from the drag's start each frame: the handles stay
             // where the drag began (the same controls, keys and walls) and only the dragged one follows the pointer
-            var hb = (drag == Drag.Joint || drag == Drag.Split ? e.DragStart?.buildings.FirstOrDefault(x => x.id == b.id) : null) ?? b;
+            var hb = (drag == Drag.Joint || drag == Drag.Split ? e.DragStartBuilding(b.id) : null) ?? b;
             var walls = hb.floors[k].walls;
 
             foreach (var n in Walls.Nodes(walls))

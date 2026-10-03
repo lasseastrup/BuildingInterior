@@ -26,22 +26,31 @@ namespace Triband.Storey.Edit
         public StoreyDocument Document { get; private set; }
         public string Text { get; private set; }
         List<(string id, string json, (double x0, double z0, double x1, double z1) bounds, HashSet<string> linked)> shown;
+        string shownMeta = "";   // the layout's own fields (the palette, the spawn), without the buildings
 
         public EditSession(string text)
         {
             Document = PrototypeJson.Read(text).Document;
             Text = PrototypeJson.Write(Document);
-            shown = Snapshot(Document);
+            shown = Snapshot(Document); shownMeta = Meta(Document);
         }
 
-        static List<(string, string, (double, double, double, double), HashSet<string>)> Snapshot(StoreyDocument d) =>
-            d.buildings.Select(b => (b.id, PrototypeJson.Write(b), Site.BoundsOf(b), Linked(d, b))).ToList();
+        static string Meta(StoreyDocument d) => PrototypeJson.Write(new StoreyDocument { v = d.v, seq = d.seq, spawn = d.spawn, palette = d.palette });
+
+        static List<(string, string, (double, double, double, double), HashSet<string>)> Snapshot(StoreyDocument d)
+        {
+            // who bridges to whom, once for the layout (not once per building: that was the square of the count)
+            var into = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            foreach (var a in d.buildings)
+                foreach (var br in a.bridges) { if (!into.TryGetValue(br.to, out var l)) into[br.to] = l = new List<string>(); l.Add(a.id); }
+            return d.buildings.Select(b => (b.id, PrototypeJson.Write(b), Site.BoundsOf(b), Linked(b, into))).ToList();
+        }
 
         /// <summary>The buildings a bridge joins to b, either way: each builds a door for it, and b's builds it.</summary>
-        static HashSet<string> Linked(StoreyDocument d, BuildingData b)
+        static HashSet<string> Linked(BuildingData b, Dictionary<string, List<string>> into)
         {
             var o = new HashSet<string>(b.bridges.Select(x => x.to), StringComparer.Ordinal);
-            foreach (var a in d.buildings) if (a.bridges.Any(x => x.to == b.id)) o.Add(a.id);
+            if (into.TryGetValue(b.id, out var l)) o.UnionWith(l);
             return o;
         }
 
@@ -49,7 +58,28 @@ namespace Triband.Storey.Edit
         public SessionChange Commit() => Diff(Document);
 
         /// <summary>Throw away changes made to <see cref="Document"/> since the last commit (an edit the operation refused).</summary>
-        public void Discard() => Document = PrototypeJson.Read(Text).Document;
+        public void Discard()
+        {
+            // only the buildings the operation changed go back: reading the whole layout takes half a second at 3,000
+            var d = Document;
+            bool same = d.buildings.Count == shown.Count && Meta(d) == shownMeta;
+            for (int i = 0; same && i < shown.Count; i++) same = d.buildings[i].id == shown[i].id;
+            if (!same) { Document = PrototypeJson.Read(Text).Document; return; }
+            for (int i = 0; i < shown.Count; i++)
+                if (PrototypeJson.Write(d.buildings[i]) != shown[i].json) d.buildings[i] = PrototypeJson.ReadBuilding(shown[i].json);
+        }
+
+        /// <summary>
+        /// Put one building back as <paramref name="json"/> held it (a drag going back to where it began), without
+        /// reading the whole layout. The next <see cref="Commit"/> says what changed. False when the building is gone.
+        /// </summary>
+        public bool Restore(string id, string json)
+        {
+            int i = Document.buildings.FindIndex(b => b.id == id);
+            if (i < 0) return false;
+            Document.buildings[i] = PrototypeJson.ReadBuilding(json);
+            return true;
+        }
 
         /// <summary>After an undo or redo, or a revert: show this text instead.</summary>
         public SessionChange Load(string text)
@@ -78,7 +108,7 @@ namespace Triband.Storey.Edit
             }
             Document = next;
             Text = PrototypeJson.Write(next);
-            shown = now;
+            shown = now; shownMeta = Meta(next);
             return c;
         }
 

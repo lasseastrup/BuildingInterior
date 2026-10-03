@@ -87,3 +87,47 @@ namespace Triband.Storey.Tests
         }
     }
 }
+
+namespace Triband.Storey.Tests
+{
+    /// <summary>The edit session's shortcuts for big layouts: a drag step puts back one building, a refused edit only what it changed.</summary>
+    public class EditSessionShortcutTests
+    {
+        static Edit.EditSession City() { var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document; Edit.TestCity.Generate(d, 200); return new Edit.EditSession(PrototypeJson.Write(d)); }
+
+        [Fact]
+        public void RestoringTheDraggedBuildingIsTheDragStart()
+        {
+            var s = City(); string start = s.Text;
+            var b = s.Document.buildings[3]; string json = PrototypeJson.Write(b);
+            b.pos = new Vec2(b.pos.x + 3, b.pos.z); s.Commit();
+            Assert.NotEqual(start, s.Text);
+            Assert.True(s.Restore(b.id, json));
+            var c = s.Commit();
+            Assert.Equal(start, s.Text);
+            Assert.Contains(b.id, c.rebuild);
+            Assert.False(s.Restore("no-such-building", json));
+        }
+
+        [Fact]
+        public void DiscardPutsBackOnlyWhatChanged()
+        {
+            var s = City(); string start = s.Text;
+            var other = s.Document.buildings[7];
+            s.Document.buildings[2].floorHeight += 1; s.Document.buildings[5].floors.RemoveAt(0);
+            s.Discard();
+            Assert.Same(other, s.Document.buildings[7]);   // untouched buildings are kept, not read again
+            Assert.Equal(start, PrototypeJson.Write(s.Document));
+            Assert.True(s.Commit().None);
+        }
+
+        [Fact]
+        public void DiscardReadsEverythingWhenBuildingsCameOrWent()
+        {
+            var s = City(); string start = s.Text;
+            s.Document.buildings.RemoveAt(4); s.Document.palette["00000000000000000000000000000009"] = new PaletteEntry { name = "x", hex = "#123456" };
+            s.Discard();
+            Assert.Equal(start, PrototypeJson.Write(s.Document));
+        }
+    }
+}

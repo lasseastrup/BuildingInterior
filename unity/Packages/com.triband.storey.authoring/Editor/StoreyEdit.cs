@@ -63,6 +63,9 @@ namespace Triband.Storey.Editor
         int group = -1;
         string? dragText;
         StoreyDocument? dragStart;
+        // the selected building as the drag began: a drag step puts back only it, not the whole layout
+        (string id, string json)? dragBuilding;
+        BuildingData? dragStartBuilding;
 
         /// <summary>Start a drag: every edit until <see cref="EndDrag"/> becomes one undo step.</summary>
         public void BeginDrag(string undoName)
@@ -71,14 +74,24 @@ namespace Triband.Storey.Editor
             Undo.SetCurrentGroupName(undoName);
             group = Undo.GetCurrentGroup();
             dragText = text;
-            dragStart = null;
+            dragStart = null; dragStartBuilding = null;
+            var sel = Selected;
+            dragBuilding = sel != null ? (sel.id, PrototypeJson.Write(sel)) : ((string, string)?)null;
         }
 
         public void EndDrag()
         {
             if (group >= 0) Undo.CollapseUndoOperations(group);
             group = -1;
-            dragText = null; dragStart = null;
+            dragText = null; dragStart = null; dragBuilding = null; dragStartBuilding = null;
+        }
+
+        /// <summary>A building as it was when the drag began (the selected one is read alone; others from the whole layout), or null.</summary>
+        public BuildingData? DragStartBuilding(string id)
+        {
+            if (dragText == null) return null;
+            if (dragBuilding is (string bid, string json) && bid == id) return dragStartBuilding ??= PrototypeJson.ReadBuilding(json);
+            return DragStart?.buildings.FirstOrDefault(x => x.id == id);
         }
 
         /// <summary>The layout as it was when the drag began (for handles that must stay put while it changes), or null.</summary>
@@ -95,13 +108,15 @@ namespace Triband.Storey.Editor
             if (dragText == null) return ApplyTo(undoName, op);
             string bid = View.selectedId;
             Undo.RecordObject(this, undoName);
-            var back = Core.Load(dragText);
+            // back to where the drag began: only the dragged building, when it is the selected one (reading the whole
+            // layout took a second a step on a 3,000-building city)
+            SessionChange? back = null;
+            if (!(dragBuilding is (string did, string djson) && did == bid && Core.Restore(did, djson))) back = Core.Load(dragText);
             var b = Core.Document.buildings.FirstOrDefault(x => x.id == bid);
             bool ok = b != null && op(b);
             if (!ok) Core.Discard();
             var change = Core.Commit();
-            change.structural |= back.structural;
-            change.rebuild.UnionWith(back.rebuild);
+            if (back != null) { change.structural |= back.structural; change.rebuild.UnionWith(back.rebuild); }
             if (change.None) return ok;
             text = Core.Text;
             EditorUtility.SetDirty(this);
