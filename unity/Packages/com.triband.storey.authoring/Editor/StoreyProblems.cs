@@ -42,7 +42,7 @@ namespace Triband.Storey.Editor
             if (AutoFor(e) && e.Text != checkedText && e.Text != runningText && !e.Dragging)
             {
                 if (e.Text != seenText) { seenText = e.Text; seenAt = now; }
-                if (checkedText == null || now - seenAt >= Settle) Start(e);
+                if (checkedText == null || now - seenAt >= Settle) CheckNow(e);
                 else if (!waiting)
                 {
                     // look again once it has settled
@@ -65,7 +65,7 @@ namespace Triband.Storey.Editor
         public static double RunningFor => EditorApplication.timeSinceStartup - startedAt;
 
         /// <summary>Check the layout as it is now, on a worker thread (a check already running for the same layout carries on).</summary>
-        public static void Start(StoreyEdit e)
+        public static void CheckNow(StoreyEdit e)
         {
             if (running != null && runningText == e.Text) return;
             of = e;

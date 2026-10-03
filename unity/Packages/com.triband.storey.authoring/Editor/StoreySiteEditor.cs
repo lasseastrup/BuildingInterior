@@ -240,7 +240,7 @@ namespace Triband.Storey.Editor
                 }
                 using (new EditorGUI.DisabledScope(StoreyProblems.Running || (!stale && StoreyProblems.Checked(e))))
                     if (GUILayout.Button(new GUIContent("Check", "Check the layout for problems now, in the background (a 3,000-building layout takes about 20 s)"), EditorStyles.miniButton, GUILayout.Width(52)))
-                        StoreyProblems.Start(e);
+                        StoreyProblems.CheckNow(e);
                 bool want = GUILayout.Toggle(StoreyProblems.Auto, new GUIContent("Auto", $"Check again by itself after each edit, for layouts of up to {StoreyProblems.AutoMost} buildings; bigger ones only on Check"), EditorStyles.miniButton, GUILayout.Width(40));
                 if (want != StoreyProblems.Auto) StoreyProblems.Auto = want;
             }
