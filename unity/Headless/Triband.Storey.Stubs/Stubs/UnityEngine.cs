@@ -222,7 +222,14 @@ namespace UnityEngine
         public bool Contains(Vector2 p) => false;
     }
 
-    public class Camera : Behaviour { public static Camera main => null; public static Camera current => null; }
+    public class Camera : Behaviour
+    {
+        public static Camera main => null; public static Camera current => null;
+        public float fieldOfView { get => 60; set { } }
+        public bool orthographic { get => false; set { } }
+        public float orthographicSize { get => 5; set { } }
+        public int pixelHeight => 0;
+    }
 
     public sealed class GUIContent
     {
@@ -285,6 +292,7 @@ namespace UnityEngine
     {
         public static Color color { get => default; set { } }
         public static Color contentColor { get => default; set { } }
+        public static void Label(Rect position, string text) { }
         public static void Label(Rect position, string text, GUIStyle style) { }
         public static bool Button(Rect position, GUIContent content, GUIStyle style) => false;
         public static bool Button(Rect position, string text) => false;

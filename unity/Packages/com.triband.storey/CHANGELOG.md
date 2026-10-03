@@ -5,6 +5,7 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Changed
+- `StoreyQualitySettings`' level-of-detail fields are now the automatic LOD's numbers (`lod0PixelsPerMetre`, `lod1PixelsPerMetre`, `lod2PixelsPerMetre`, `hysteresis`, `fadeSeconds`, `farDistance`, `lod0Residency`, `lod1Residency`, `buildBudgetMs`), with defaults from the prototype. `ToLodSettings`, `ApplyTo`.
 - Cut corners are kept as one corner: `CornerData` (the building's and a setback's `corners`), and `CornerCuts` (`Sharp`, `Around`, `Cut`, `Clear`, `CutAll`, `ClearAll`). The outline still holds the cut's points. `CornerShape` moved to the `Triband.Storey` namespace.
 - LOD0 vertices are 28 bytes instead of 44. They carry only the cutaway kind and wall id; each wall's start and normal sit once in the building table (`_StoreyWallData`), and the shader reads them by id. On the demo street LOD0 goes from 4.6 to 3.1 MB.
 - `MeshUpload.Upload` welds exact duplicate vertices (`MeshBuilder.Weld`, about 1% of LOD0's; every triangle is unchanged), and calls `Mesh.Optimize` when asked. `SiteRenderer` asks in Play mode, not for the editor's previews.
@@ -20,6 +21,13 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- City scale (docs/CITY.md):
+  - `TestCity`, the prototype's test city, building for building.
+  - `LodManager` and `LodSettings`, the automatic LOD.
+  - `Cells`, LOD2 massings merged into 128 m cells. `Lod2Mesh.Tags` holds per-vertex tags for merged meshes.
+  - `SiteRenderer` takes `LodSettings` for the automatic LOD, with `Eye`, `Forced` and `Stats`.
+  - `StoreySite.lodMode` (Automatic by default), `lodCamera`, `quality`, `showLodStats`, `keepDetail`, `LodStats`, `EditorCamera` and `All`.
+  - `SiteView.focusId`.
 - `FacadeStyle.foundationOut` (layout key `foundationOut`; null = 0.08 m): how far the foundation stands out from the wall. `Lod0.FoundationOut`.
 - `FacadeStyle.sills` and `heads` (layout keys `sills`, `heads`; on by default): a window's sill and its head (flat or arched) can be left out.
 - Artist-made windows and street doors (docs/EDITOR.md §6.9). Engine-free: `OpeningKind` and `OpeningKinds`, plus `FacadeStyle.windowKind` and `doorKind`. Unity: the `StoreyOpening` asset (*Create › Storey › Window or Door*) and `StoreySite.openings`. `MeshBuilder.Mesh` takes raw triangles; `Facade.PaneUV` is split out of `Facade.Pane`.

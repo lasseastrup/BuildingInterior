@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Triband.Storey.Generate;
+using Triband.Storey.Lod;
 using Triband.Storey.Play;
 using Unity.Collections;
 using Unity.Jobs;
@@ -11,9 +12,14 @@ using UnityEngine;
 namespace Triband.Storey.Unity
 {
     /// <summary>
-    /// Draws a layout: every LOD of every building generated, uploaded and shown through one building table, with one
-    /// colour row per style. Rebuilds single buildings after an edit (docs/EDITOR.md §2), keeping the other buildings'
-    /// meshes and colour rows. Shared by the parity harness and <see cref="StoreySite"/>; works in edit mode.
+    /// Draws a layout through one building table, with one colour row per style. Rebuilds single buildings after an edit
+    /// (docs/EDITOR.md §2), keeping the other buildings' meshes and colour rows. Shared by the parity harness and
+    /// <see cref="StoreySite"/>; works in edit mode.
+    ///
+    /// Two ways to pick the LOD. Fixed (the parity harness): every LOD of every building is built and all show
+    /// <see cref="Lod"/>. Automatic (docs/CITY.md §2, §3): every building's massing is built and merged into 128 m cells,
+    /// and LOD0 and LOD1 are built as the camera nears (<see cref="Eye"/>), a few milliseconds a frame, and dropped again
+    /// past the resident caps; <see cref="Forced"/> buildings always have LOD0.
     /// </summary>
     public sealed class SiteRenderer : IDisposable
     {
@@ -30,19 +36,103 @@ namespace Triband.Storey.Unity
 
         sealed class Built
         {
+            public string id = "";
             public int idx, wallBase = -1, wallCount;
             public Lod0Result? l0;
             public readonly List<int> rows = new List<int>();
-            public readonly List<Mesh> meshes = new List<Mesh>();
+            // per LOD: the meshes and the objects drawing them
+            public readonly List<Mesh>[] meshes = { new List<Mesh>(), new List<Mesh>(), new List<Mesh>() };
+            public readonly List<GameObject>[] objs = { new List<GameObject>(), new List<GameObject>(), new List<GameObject>() };
             public GameObject? root;
             public Mesh? collision;
+            // automatic LOD: the massing (drawn in its cell) with its rows' places in the table, and the cell
+            public Lod2Mesh? l2;
+            public int[]? rowMap;
+            public (int x, int z) cell;
         }
 
         /// <param name="flags">Edit mode passes <c>DontSave</c>: the meshes are a preview of the layout, never part of the scene file.</param>
-        public SiteRenderer(Transform parent, Material opaque, Material glass, Material massing, HideFlags flags = HideFlags.None)
+        /// <param name="auto">The automatic LOD's settings; null for the fixed LOD (every LOD built, <see cref="Lod"/> shown).</param>
+        public SiteRenderer(Transform parent, Material opaque, Material glass, Material massing, HideFlags flags = HideFlags.None, LodSettings? auto = null)
         {
             this.parent = parent; this.opaque = opaque; this.glass = glass; this.massing = massing; this.flags = flags;
+            if (auto != null) lods = new LodManager(auto);
         }
+
+        // ---- the automatic LOD (docs/CITY.md §2, §3) ----
+        readonly LodManager? lods;
+        readonly Dictionary<int, Built> byIdx = new Dictionary<int, Built>();
+        readonly Dictionary<(int x, int z), Cell> cells = new Dictionary<(int, int), Cell>();
+        readonly HashSet<(int x, int z)> dirtyCells = new HashSet<(int, int)>();
+        readonly HashSet<int> forcedIdx = new HashSet<int>();
+        readonly Dictionary<string, int> carry = new Dictionary<string, int>(StringComparer.Ordinal);
+        GameObject? cellRoot;
+        float lastLod = -1;
+        bool lodBusy;
+        LodStats stats;
+
+        sealed class Cell
+        {
+            public readonly SortedDictionary<int, Built> members = new SortedDictionary<int, Built>();
+            public readonly List<Mesh> meshes = new List<Mesh>();
+            public readonly List<MeshRenderer> renderers = new List<MeshRenderer>();
+            public bool shown = true;
+        }
+
+        /// <summary>The camera the automatic LOD picks for: where it is (world space) and how many pixels a metre covers a metre away.</summary>
+        public struct LodEye
+        {
+            public Vector3 position;
+            public float pixelsPerMetre;
+
+            /// <summary>A camera's eye. An orthographic one is treated as a perspective one far behind it, so detail goes by its zoom.</summary>
+            public static LodEye Of(Camera c)
+            {
+                if (!c.orthographic)
+                    return new LodEye { position = c.transform.position, pixelsPerMetre = (float)LodManager.PixelsPerMetre(c.pixelHeight, c.fieldOfView) };
+                const float back = 200;
+                return new LodEye { position = c.transform.position - c.transform.forward * back, pixelsPerMetre = c.pixelHeight / (2 * Mathf.Max(0.01f, c.orthographicSize)) * back };
+            }
+        }
+
+        /// <summary>The automatic LOD's numbers this frame, for a stats overlay.</summary>
+        public struct LodStats
+        {
+            /// <summary>Buildings, and how many show LOD0, LOD1, LOD2, and none (beyond the far distance).</summary>
+            public int buildings, lod0, lod1, lod2, culled;
+            /// <summary>Buildings holding LOD0 and LOD1 meshes (shown or not).</summary>
+            public int resident0, resident1;
+            /// <summary>Cells, the meshes they're split into, and the cells drawn.</summary>
+            public int cells, cellMeshes, cellsShown;
+            /// <summary>Detail LODs wanted and not built yet, and how many were built this frame.</summary>
+            public int queued, builtThisFrame;
+            /// <summary>Milliseconds the LOD work took this frame (picking, building, cells).</summary>
+            public double ms;
+
+            public override string ToString() =>
+                $"{buildings:N0} buildings: LOD0 {lod0}, LOD1 {lod1}, LOD2 {lod2}, not drawn {culled}\n" +
+                $"Resident: LOD0 {resident0}, LOD1 {resident1}\n" +
+                $"Cells: {cellsShown} of {cells} drawn ({cellMeshes} meshes)\n" +
+                $"Built this frame {builtThisFrame}, waiting {queued}; LOD {ms:0.00} ms";
+        }
+
+        /// <summary>Whether the LOD is automatic (made with settings).</summary>
+        public bool AutoLod => lods != null;
+
+        /// <summary>The automatic LOD's settings (null when fixed); changes apply from the next frame.</summary>
+        public LodSettings? LodSettings => lods?.Settings;
+
+        /// <summary>The automatic LOD's camera this frame. Null keeps every building at the LOD it shows.</summary>
+        public LodEye? Eye { get; set; }
+
+        /// <summary>
+        /// Buildings that always have LOD0 under the automatic LOD (being edited, walked in, in the way of the camera):
+        /// built at once when they need it, never shown as their massing. The caller fills it each frame.
+        /// </summary>
+        public readonly HashSet<string> Forced = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>The automatic LOD's numbers from the last frame.</summary>
+        public LodStats Stats => stats;
 
         /// <summary>Which LOD every building shows: 0 full, 1 shell, 2 massing.</summary>
         public int Lod { get => lod; set => lod = Math.Max(0, Math.Min(2, value)); }
@@ -102,12 +192,17 @@ namespace Triband.Storey.Unity
         /// <summary>Build everything again.</summary>
         public void Show(StoreyDocument doc)
         {
+            // automatic LOD: the detail each building showed is built again at once, so a structural edit (a building
+            // added or removed) doesn't fade the buildings in view through their massings
+            carry.Clear();
+            if (lods != null) foreach (var bt in built.Values) { var e = lods.Get(bt.idx); if (e != null && e.Shown < 2) carry[bt.id] = e.Shown; }
             Clear();
             site = new Site(doc.buildings);
             book?.Dispose();
             book = new ColorRowBook(new ColorResolver(site), palette, table);
             foreach (var kv in remaps) book.SetRemap(kv.Key, kv.Value.original, kv.Value.overwrite);
             foreach (var b in doc.buildings) Build(b);
+            carry.Clear();
         }
 
         /// <summary>
@@ -132,7 +227,8 @@ namespace Triband.Storey.Unity
         public void Frame(bool lodTint, SiteView? view = null)
         {
             if (colliderPending.Count > 0) BuildColliders();
-            if (shownLod != lod)
+            if (lods != null) UpdateLods();
+            else if (shownLod != lod)
             {
                 foreach (var b in built.Values) table.SetLod(b.idx, lod, lod, 1);
                 shownLod = lod;
@@ -165,8 +261,12 @@ namespace Triband.Storey.Unity
         readonly Dictionary<int, float> editSlide = new Dictionary<int, float>();
         float lastEdit = -1;
 
-        /// <summary>Walls are sliding in the editor's cutaway: the editor keeps redrawing until they settle.</summary>
-        public bool Animating { get; private set; }
+        /// <summary>
+        /// Walls are sliding in the editor's cutaway, or the automatic LOD is fading or has detail still to build: the
+        /// editor keeps redrawing until they settle.
+        /// </summary>
+        public bool Animating => wallsMoving || lodBusy;
+        bool wallsMoving;
 
         /// <summary>
         /// The editor's cutaway (the Interior tab): every wall has an id, so the shader drops a wall by its slide value,
@@ -209,7 +309,7 @@ namespace Triband.Storey.Unity
                 table.Wall[id] = n;
                 if (n <= 0 && to == 0) editSlide.Remove(id); else editSlide[id] = n;
             }
-            Animating = moving;
+            wallsMoving = moving;
             if (changed) table.MarkWallDirty();
         }
 
@@ -227,11 +327,57 @@ namespace Triband.Storey.Unity
         {
             // the table row is the building's index in the layout: party walls carry their neighbour's layout index, and
             // the shader looks that up in the same table
-            var bt = new Built { idx = site!.IndexOf(b) };
+            var bt = new Built { id = b.id, idx = site!.IndexOf(b) };
             var root = new GameObject(b.name) { hideFlags = flags };
             root.transform.SetParent(parent, false);
             bt.root = root;
+            built[b.id] = bt; byIdx[bt.idx] = bt;
 
+            var l2 = Lod2.Build(site!, b);
+            var rowMap = new int[l2.Rows.Count];
+            for (int r = 0; r < l2.Rows.Count; r++) { rowMap[r] = table.WriteRow(l2.Rows[r], RowOf(l2.Rows[r].wall.style)); bt.rows.Add(rowMap[r]); }
+            l2.Tag = bt.idx + 2 * Lod1.LOD_TAG;
+
+            if (lods == null)
+            {
+                BuildDetail(bt, b, 0); BuildDetail(bt, b, 1);
+                Add(bt, 2, "LOD2", MeshUpload.Upload(l2, b.name + " LOD2", rowMap), massing, true);
+                table.SetLod(bt.idx, lod, lod, 1);
+                if (colliders) colliderPending.Add(b.id);
+                return;
+            }
+
+            // automatic: the massing goes into its cell, and the detail the building showed (an edit) is built again at
+            // once, so it doesn't fade through its massing
+            bt.l2 = l2; bt.rowMap = rowMap;
+            double x0 = double.MaxValue, z0 = x0, x1 = double.MinValue, z1 = x1, y1 = 0;
+            foreach (var p in l2.P) { x0 = Math.Min(x0, p.x); z0 = Math.Min(z0, p.z); x1 = Math.Max(x1, p.x); z1 = Math.Max(z1, p.z); y1 = Math.Max(y1, p.y); }
+            if (l2.Verts == 0) { x0 = x1 = b.pos.x; z0 = z1 = b.pos.z; }
+            bool fresh = lods.Get(bt.idx) == null, forced = Forced.Contains(b.id);
+            var e = lods.Set(bt.idx, x0, z0, x1, z1, y1 + 1);
+            if (fresh)
+            {
+                // shown at once, without a fade: the massing when the layout loads, or the detail it had before a Show
+                int was = forced ? 0 : carry.TryGetValue(b.id, out var w) ? w : 2;
+                e.Want = e.Shown = e.From = was; e.T = 1;
+            }
+            bt.cell = Cells.KeyOf((x0 + x1) / 2, (z0 + z1) / 2);
+            if (!cells.TryGetValue(bt.cell, out var c)) cells[bt.cell] = c = new Cell();
+            c.members[bt.idx] = bt; dirtyCells.Add(bt.cell);
+            if (e.Visible(1)) { BuildDetail(bt, b, 1); lods.SetBuilt(bt.idx, 1, true); }
+            if (e.Visible(0) || forced) { BuildDetail(bt, b, 0); lods.SetBuilt(bt.idx, 0, true); }
+            table.SetLod(bt.idx, e.Shown, e.From, (float)e.T);
+        }
+
+        /// <summary>A building's LOD0 (with its glass and its walls in the table) or LOD1.</summary>
+        void BuildDetail(Built bt, BuildingData b, int which)
+        {
+            bool opt = Application.isPlaying;   // edit mode rebuilds on every drag: skip the cache reorder there
+            if (which == 1)
+            {
+                Add(bt, 1, "LOD1", MeshUpload.Upload(Tagged(Lod1.Build(site!, b), bt.idx + Lod1.LOD_TAG), b.name + " LOD1", RowOf, -1, opt, windows: true), opaque, true);
+                return;
+            }
             var l0 = Lod0.Build(site!, b); bt.l0 = l0;
             bt.wallCount = l0.Op.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
             if (bt.wallBase >= 0)
@@ -239,20 +385,104 @@ namespace Triband.Storey.Unity
                 for (int i = 0; i < bt.wallCount; i++) table.WallData[bt.wallBase + i] = MeshUpload.WallData(l0.Op.Walls[i].W);
                 table.MarkWallDataDirty();
             }
-            bool opt = Application.isPlaying;   // edit mode rebuilds on every drag: skip the cache reorder there
-            Add(bt, "LOD0", MeshUpload.Upload(Tagged(l0.Op, bt.idx), b.name + " LOD0", RowOf, bt.wallBase, opt, windows: true), opaque, true);
-            Add(bt, "LOD0 glass", MeshUpload.Upload(Tagged(l0.Glass, bt.idx), b.name + " glass", RowOf, bt.wallBase, opt), glass, false);
-            Add(bt, "LOD1", MeshUpload.Upload(Tagged(Lod1.Build(site!, b), bt.idx + Lod1.LOD_TAG), b.name + " LOD1", RowOf, -1, opt, windows: true), opaque, true);
+            Add(bt, 0, "LOD0", MeshUpload.Upload(Tagged(l0.Op, bt.idx), b.name + " LOD0", RowOf, bt.wallBase, opt, windows: true), opaque, true);
+            Add(bt, 0, "LOD0 glass", MeshUpload.Upload(Tagged(l0.Glass, bt.idx), b.name + " glass", RowOf, bt.wallBase, opt), glass, false);
+            // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
+            if (lods != null && colliders && bt.collision == null) colliderPending.Add(bt.id);
+        }
 
-            var l2 = Lod2.Build(site!, b);
-            var rowMap = new int[l2.Rows.Count];
-            for (int r = 0; r < l2.Rows.Count; r++) { rowMap[r] = table.WriteRow(l2.Rows[r], RowOf(l2.Rows[r].wall.style)); bt.rows.Add(rowMap[r]); }
-            l2.Tag = bt.idx + 2 * Lod1.LOD_TAG;
-            Add(bt, "LOD2", MeshUpload.Upload(l2, b.name + " LOD2", rowMap), massing, true);
+        /// <summary>Drop a building's LOD0 (and its walls) or LOD1; its collider stays.</summary>
+        void DropDetail(Built bt, int which)
+        {
+            foreach (var go in bt.objs[which]) Kill(go);
+            foreach (var m in bt.meshes[which]) Kill(m);
+            bt.objs[which].Clear(); bt.meshes[which].Clear();
+            if (which != 0) return;
+            if (bt.wallBase >= 0) table.ReleaseWalls(bt.wallBase, bt.wallCount);
+            bt.wallBase = -1; bt.wallCount = 0; bt.l0 = null;
+        }
 
-            table.SetLod(bt.idx, lod, lod, 1);
-            built[b.id] = bt;
-            if (colliders) colliderPending.Add(b.id);
+        /// <summary>
+        /// The automatic LOD's frame: forced buildings' LOD0 built at once, then each building's LOD picked from the
+        /// camera, meshes dropped past the caps, detail built most-pixels-first within the budget, the changed buildings'
+        /// state written, and the cells built again where a building changed and shown where any shows its massing.
+        /// </summary>
+        void UpdateLods()
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            float now = Time.realtimeSinceStartup, dt = lastLod < 0 ? 0 : Mathf.Min(0.1f, now - lastLod); lastLod = now;
+            var l = lods!; int made = 0, queued = 0; bool fading = false;
+            forcedIdx.Clear();
+            foreach (var id in Forced)
+            {
+                if (!built.TryGetValue(id, out var bt)) continue;
+                forcedIdx.Add(bt.idx);
+                var e = l.Get(bt.idx); var b = site?.ById(id);
+                if (e != null && !e.Has0 && b != null) { BuildDetail(bt, b, 0); l.SetBuilt(bt.idx, 0, true); made++; }
+            }
+            if (Eye is LodEye eye)
+            {
+                var o = parent.position;   // the layout is in the site's space: unrotated, unscaled
+                var f = l.Update(eye.position.x - o.x, eye.position.y - o.y, eye.position.z - o.z, eye.pixelsPerMetre, dt, forcedIdx);
+                foreach (var (idx, which) in f.Drop) if (byIdx.TryGetValue(idx, out var bt)) DropDetail(bt, which);
+                foreach (var (idx, which, _) in f.Build)
+                {
+                    if (made > 0 && sw.Elapsed.TotalMilliseconds > l.Settings.BudgetMs) { queued++; continue; }
+                    if (!byIdx.TryGetValue(idx, out var bt)) continue;
+                    var b = site?.ById(bt.id); if (b == null) continue;
+                    BuildDetail(bt, b, which); l.SetBuilt(idx, which, true); made++;
+                }
+                foreach (int idx in f.Changed)
+                {
+                    var e = l.Get(idx)!; table.SetLod(idx, e.Shown, e.From, (float)e.T);
+                    if (e.T < 1) fading = true;
+                }
+                stats.lod0 = f.Count[0]; stats.lod1 = f.Count[1]; stats.lod2 = f.Count[2]; stats.culled = f.Count[3];
+            }
+            foreach (var key in dirtyCells) BuildCell(key);
+            dirtyCells.Clear();
+            int shown = 0, pieces = 0;
+            foreach (var c in cells.Values)
+            {
+                bool on = false;
+                foreach (var kv in c.members) { var e = l.Get(kv.Key); if (e == null || e.Visible(2)) { on = true; break; } }
+                if (on != c.shown) { c.shown = on; foreach (var r in c.renderers) r.enabled = on; }
+                if (on) shown++;
+                pieces += c.renderers.Count;
+            }
+            int r0 = 0, r1 = 0;
+            foreach (var bt in built.Values) { if (bt.objs[0].Count > 0) r0++; if (bt.objs[1].Count > 0) r1++; }
+            lodBusy = fading || queued > 0;
+            stats.buildings = built.Count; stats.resident0 = r0; stats.resident1 = r1;
+            stats.cells = cells.Count; stats.cellMeshes = pieces; stats.cellsShown = shown;
+            stats.queued = queued; stats.builtThisFrame = made; stats.ms = sw.Elapsed.TotalMilliseconds;
+        }
+
+        /// <summary>A cell's massings merged again (a member was built, rebuilt or removed).</summary>
+        void BuildCell((int x, int z) key)
+        {
+            if (!cells.TryGetValue(key, out var c)) return;
+            foreach (var r in c.renderers) if (r != null) Kill(r.gameObject);
+            foreach (var m in c.meshes) Kill(m);
+            c.renderers.Clear(); c.meshes.Clear();
+            if (c.members.Count == 0) { cells.Remove(key); return; }
+            if (cellRoot == null) { cellRoot = new GameObject("Cells") { hideFlags = flags }; cellRoot.transform.SetParent(parent, false); }
+            var pieces = Cells.Merge(c.members.Values.Select(bt => new Cells.Member(bt.l2!, bt.idx + 2 * Lod1.LOD_TAG, bt.rowMap!)));
+            for (int i = 0; i < pieces.Count; i++)
+            {
+                string name = $"Cell {key.x},{key.z}" + (pieces.Count > 1 ? $" ({i + 1})" : "");
+                var mesh = MeshUpload.Upload(pieces[i], name, null); mesh.hideFlags = flags;
+                c.meshes.Add(mesh);
+                var go = new GameObject(name) { hideFlags = flags };
+                go.transform.SetParent(cellRoot.transform, false);
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var mr = go.AddComponent<MeshRenderer>();
+                mr.sharedMaterial = massing;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+                mr.enabled = c.shown;
+                c.renderers.Add(mr);
+            }
         }
 
         int RowOf(StyleRef s) => book!.RowOf(s);
@@ -260,11 +490,12 @@ namespace Triband.Storey.Unity
         /// <summary>The building's tag for upload: its table row (its layout index) plus the LOD.</summary>
         static MeshBuilder Tagged(MeshBuilder gb, int tag) { gb.RetagForUpload(tag); return gb; }
 
-        void Add(Built bt, string name, Mesh mesh, Material mat, bool shadows)
+        void Add(Built bt, int which, string name, Mesh mesh, Material mat, bool shadows)
         {
             mesh.hideFlags = flags;
-            bt.meshes.Add(mesh);
+            bt.meshes[which].Add(mesh);
             var go = new GameObject(name) { hideFlags = flags };
+            bt.objs[which].Add(go);
             go.transform.SetParent(bt.root!.transform, false);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             var mr = go.AddComponent<MeshRenderer>();
@@ -280,7 +511,9 @@ namespace Triband.Storey.Unity
             foreach (var r in b.rows) table.ReleaseRow(r);
             if (b.root != null) Kill(b.root);
             if (b.collision != null) Kill(b.collision);
-            foreach (var m in b.meshes) Kill(m);   // edit mode rebuilds often: meshes are not left behind
+            foreach (var list in b.meshes) foreach (var m in list) Kill(m);   // edit mode rebuilds often: meshes are not left behind
+            byIdx.Remove(b.idx);
+            if (b.l2 != null && cells.TryGetValue(b.cell, out var c)) { c.members.Remove(b.idx); dirtyCells.Add(b.cell); }
         }
 
         /// <summary>
@@ -374,7 +607,10 @@ namespace Triband.Storey.Unity
         void Clear()
         {
             foreach (var b in built.Values) Release(b);
-            built.Clear();
+            built.Clear(); byIdx.Clear();
+            foreach (var key in new List<(int, int)>(cells.Keys)) { cells[key].members.Clear(); BuildCell(key); }
+            cells.Clear(); dirtyCells.Clear();
+            lods?.Clear();
             book?.Clear();
             shownLod = -1;
         }
@@ -382,6 +618,7 @@ namespace Triband.Storey.Unity
         public void Dispose()
         {
             Clear();
+            if (cellRoot != null) Kill(cellRoot);
             book?.Dispose(); book = null;
             (palette as IDisposable)?.Dispose();   // Color Pipeline's palette listens for invalidations
             table.Dispose();
@@ -410,6 +647,8 @@ namespace Triband.Storey.Unity
         public float stubHeight, cutBase, cutTop;
         public Vector3 camera, focus;
         public Vector2 cameraDir;
+        /// <summary>The building selected in the editor: it keeps LOD0 under the automatic LOD. Null for none.</summary>
+        public string? focusId;
         /// <summary>Every other building hidden. Null for none.</summary>
         public string? isolateId;
         /// <summary>How far the others have faded (0..1), for an eased isolate.</summary>

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- **Test city** in the site inspector: 300, 1,000 or 3,000 generated buildings, or Remove (docs/CITY.md §1).
+- The automatic LOD picks for the Scene view's camera, and the editor updates when that camera moves. The LOD stats are shown in the Scene view for a selected site (`StoreyLodEditor`).
+
 ### Changed
 - **Walls** in the Interior tab: *Down* (the new default: every wall of the storey low, steady as the camera orbits), *Cutaway* (the old camera-following drop) or *Up*. `SiteView.walls`, `CutWalls`.
 - The site inspector, laid out for reading at a glance (docs/EDITOR.md §6.10):

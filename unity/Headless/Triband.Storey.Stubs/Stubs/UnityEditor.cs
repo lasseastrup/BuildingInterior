@@ -103,6 +103,7 @@ namespace UnityEditor
     {
         public static void RepaintAll() { }
         public static SceneView lastActiveSceneView => null;
+        public static event System.Action<SceneView> duringSceneGui { add { } remove { } }
         public Camera camera => null;
         public Vector3 pivot { get => default; set { } }
         public Quaternion rotation { get => default; set { } }
@@ -112,6 +113,7 @@ namespace UnityEditor
     public class EditorWindow : ScriptableObject
     {
         public void Repaint() { }
+        public Rect position { get => default; set { } }
         public void ShowNotification(GUIContent notification, double fadeoutWait) { }
     }
 

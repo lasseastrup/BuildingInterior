@@ -19,17 +19,32 @@ namespace Triband.Storey.Unity
     public sealed class StoreyQualitySettings : ScriptableObject
     {
         [Header("Level of detail")]
-        [Tooltip("On-screen feature size, in pixels per metre, below which a building drops from LOD0 to LOD1.")]
-        [Min(1f)] public float lod1PixelsPerMetre = 40f;
+        [Tooltip("Pixels one metre must cover, at a building's nearest point, for it to show LOD0 (full detail). Feature scale, not screen size: furniture and frames only matter up close, however big the building.")]
+        [Min(0.1f)] public float lod0PixelsPerMetre = 16f;
 
-        [Tooltip("On-screen feature size, in pixels per metre, below which a building drops from LOD1 to LOD2.")]
-        [Min(1f)] public float lod2PixelsPerMetre = 12f;
+        [Tooltip("Pixels per metre for LOD1 (the shell, with windows).")]
+        [Min(0.01f)] public float lod1PixelsPerMetre = 4f;
 
-        [Tooltip("How many buildings may hold LOD0 geometry at once. The LOD manager evicts least recently used ones beyond this.")]
-        [Min(1)] public int lod0Residency = 24;
+        [Tooltip("Pixels per metre for LOD2 (the massing, in merged cells); below this a building isn't drawn.")]
+        [Min(0.001f)] public float lod2PixelsPerMetre = 0.3f;
+
+        [Tooltip("How much further a building must go before it switches back, so it doesn't flicker at the boundary (0.12: 12%).")]
+        [Range(0, 0.5f)] public float hysteresis = 0.12f;
+
+        [Tooltip("The dithered cross-fade between two LODs, in seconds.")]
+        [Range(0, 2)] public float fadeSeconds = 0.35f;
+
+        [Tooltip("Beyond this many metres a building is not drawn.")]
+        [Min(10)] public float farDistance = 1500f;
+
+        [Tooltip("How many buildings may hold LOD0 geometry at once. The least recently shown go first beyond this.")]
+        [Min(1)] public int lod0Residency = 16;
 
         [Tooltip("How many buildings may hold LOD1 geometry at once.")]
-        [Min(1)] public int lod1Residency = 160;
+        [Min(1)] public int lod1Residency = 260;
+
+        [Tooltip("Milliseconds a frame may spend building LOD0 and LOD1 meshes (one is always built when any is wanted).")]
+        [Range(0.5f, 33)] public float buildBudgetMs = 6f;
 
         [Header("Occlusion")]
         [Tooltip("Compile the occlusion discard into the LOD2 and cell materials. Off on the minimum tier: alpha clipping costs early-Z on tile-based GPUs.")]
@@ -41,5 +56,16 @@ namespace Triband.Storey.Unity
 
         [Tooltip("Target frame rate the package's budgets are measured against.")]
         [Range(30, 120)] public int targetFrameRate = 60;
+
+        /// <summary>The automatic LOD's settings from these.</summary>
+        public Lod.LodSettings ToLodSettings() { var s = new Lod.LodSettings(); ApplyTo(s); return s; }
+
+        /// <summary>Write these into the automatic LOD's settings (a site's, live).</summary>
+        public void ApplyTo(Lod.LodSettings s)
+        {
+            s.PX = new double[] { lod0PixelsPerMetre, lod1PixelsPerMetre, lod2PixelsPerMetre };
+            s.Hysteresis = hysteresis; s.Fade = Mathf.Max(0.01f, fadeSeconds); s.Far = farDistance;
+            s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.BudgetMs = buildBudgetMs;
+        }
     }
 }

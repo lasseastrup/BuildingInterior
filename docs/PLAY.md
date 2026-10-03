@@ -77,7 +77,7 @@ The play kit depends on the Input System package. With the project's *Active Inp
 
 **Not yet:**
 - The lift car is not drawn.
-- Occluders are not forced to LOD0 when Displayed LOD is higher (the LOD manager, workstream 7, does that).
+- With the site's LOD mode *Fixed*, occluders are not forced to LOD0 when Displayed LOD is higher. With *Automatic*, the default, they are (docs/CITY.md §2).
 - The silhouette shader must be referenced by a material (the character's *Silhouette* slot) to be in a player build.
 
 ## 5. Mesh colliders

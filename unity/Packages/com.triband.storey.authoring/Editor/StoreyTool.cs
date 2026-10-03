@@ -265,6 +265,7 @@ namespace Triband.Storey.Editor
         {
             var v = SiteView.Neutral;
             if (b == null) { clipFor = ""; easing = false; return v; }
+            v.focusId = b.id;   // the selected building keeps full detail however far the camera is
             WatchGrowth(e, b);
             EaseIsolate(e, b, ref v);
             var grow = RevealClip();

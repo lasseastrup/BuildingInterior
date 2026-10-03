@@ -73,6 +73,29 @@ namespace Triband.Storey.Editor
             }
             GUILayout.Space(12);
             SiteSettings();
+            TestCitySection(e);
+        }
+
+        /// <summary>
+        /// The prototype's stress-test city (docs/CITY.md §1): a few thousand generated buildings round the hand-made
+        /// ones, to see the automatic LOD and the cells at scale. Saved with the layout, like any edit; Remove takes them out.
+        /// </summary>
+        void TestCitySection(StoreyEdit e)
+        {
+            int gen = e.Document.buildings.Count(x => x.gen);
+            if (!StoreyInspectorUI.Fold("city", gen > 0 ? $"Test city ({gen:N0} buildings)" : "Test city", false, "Generated blocks of buildings round this layout's, for a performance test")) return;
+            EditorGUILayout.LabelField("The prototype's test city, building for building: blocks round the hand-made buildings, taller towards the middle. Turn on Show LOD stats in Site settings to see the LOD manager's numbers.", StoreyInspectorUI.Caption);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                foreach (int n in new[] { 300, 1000, 3000 })
+                    if (GUILayout.Button(new GUIContent($"{n:N0}", $"Replace the generated buildings with {n:N0}")))
+                        e.Apply($"Made a test city of {n:N0}", d => { TestCity.Generate(d, n); return true; });
+                using (new EditorGUI.DisabledScope(gen == 0))
+                    if (GUILayout.Button(new GUIContent("Remove", "Take the generated buildings out; the hand-made ones stay")))
+                        e.Apply("Removed the test city", d => TestCity.Clear(d) > 0);
+            }
+            if (gen > 0 && ((StoreySite)target).lodMode == StoreySite.LodMode.Fixed)
+                EditorGUILayout.HelpBox("The site's LOD is Fixed: every building builds every LOD. Set it to Automatic in Site settings for a city this size.", MessageType.Warning);
         }
 
         /// <summary>The site's own settings, which an artist rarely changes: materials, the LOD shown, colliders, the openings kept.</summary>
