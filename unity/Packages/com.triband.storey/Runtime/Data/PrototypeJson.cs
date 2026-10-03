@@ -244,7 +244,7 @@ namespace Triband.Storey
                 sills = c.Bool(o, "sills", true, path), heads = c.Bool(o, "heads", true, path),
                 bandH = c.Opt(o, "bandH", path), bandDepth = c.Opt(o, "bandDepth", path), bandWall = c.Bool(o, "bandWall", false, path),
                 doorType = c.Enum<DoorType>(o, "doorType", DoorType.Canopy, path), plinthH = c.Opt(o, "plinthH", path),
-                foundation = c.Opt(o, "foundation", path), foundationH = c.Opt(o, "foundationH", path), bricks = c.Opt(o, "bricks", path),
+                foundation = c.Opt(o, "foundation", path), foundationH = c.Opt(o, "foundationH", path), foundationOut = c.Opt(o, "foundationOut", path), bricks = c.Opt(o, "bricks", path),
                 windowKind = c.OptStr(o, "windowKind", path), doorKind = c.OptStr(o, "doorKind", path),
             };
             if (o.TryGetValue("panes", out var pn) && pn != null)
@@ -260,7 +260,7 @@ namespace Triband.Storey
                 c.Check(dob, path + ".details", "ac", "vents");
             }
             c.Check(o, path, "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "details",
-                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "doorType", "plinthH", "foundation", "foundationH", "bricks", "windowKind", "doorKind",
+                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "doorType", "plinthH", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind",
                 "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth");
             return s;
         }
@@ -387,6 +387,7 @@ namespace Triband.Storey
             if (s.plinthH.HasValue) o["plinthH"] = s.plinthH.Value;
             if (s.foundation.HasValue) o["foundation"] = s.foundation.Value;
             if (s.foundationH.HasValue) o["foundationH"] = s.foundationH.Value;
+            if (s.foundationOut.HasValue) o["foundationOut"] = s.foundationOut.Value;
             if (s.bricks.HasValue) o["bricks"] = s.bricks.Value;
             if (!string.IsNullOrEmpty(s.windowKind)) o["windowKind"] = s.windowKind;
             if (!string.IsNullOrEmpty(s.doorKind)) o["doorKind"] = s.doorKind;

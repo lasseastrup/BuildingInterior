@@ -281,6 +281,8 @@ namespace Triband.Storey
         public double? plinthH;
         /// <summary>A foundation along the foot of the ground floor: how deep it goes below ground (null = none), and how high it shows (null = 0.2 m).</summary>
         public double? foundation, foundationH;
+        /// <summary>How far the foundation stands out from the wall, in metres; null = 0.08 m.</summary>
+        public double? foundationOut;
         /// <summary>Brick patches scattered on the walls, 0 to 1 (null = none).</summary>
         public double? bricks;
 

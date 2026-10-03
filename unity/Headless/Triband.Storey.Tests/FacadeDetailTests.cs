@@ -140,5 +140,21 @@ namespace Triband.Storey.Tests
             Assert.False(back.sills); Assert.False(back.heads);
             Assert.DoesNotContain("sills", PrototypeJson.WriteStyle(plain));
         }
+
+        [Theory]
+        [InlineData(0.08)]
+        [InlineData(0.4)]
+        public void TheFoundationStandsOutAsSet(double outBy)
+        {
+            var st = Artist(); st.foundationOut = outBy;
+            var (_, b, site) = Block(st);
+            var op = Lod0.Build(site, b).Op;
+            // its furthest point is out by that much past the wall's outer face, beyond the 14 × 10 footprint
+            double far = Enumerable.Range(0, op.Verts).Where(i => op.C[i].slot == ColorSlot.Foundation).Max(i => Math.Max(-op.P[i].z, op.P[i].z - 10));
+            Assert.Equal(Dim.T_EXT + outBy, far, 3);
+            var rep = CoplanarCheck.Run(op);
+            Assert.True(rep.Overlaps.Count == 0, string.Join("\n", rep.Overlaps.Take(10)));
+            Assert.Equal(outBy, PrototypeJson.ReadStyle(PrototypeJson.WriteStyle(st)).foundationOut);
+        }
     }
 }

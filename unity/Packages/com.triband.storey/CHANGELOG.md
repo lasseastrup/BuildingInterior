@@ -16,6 +16,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- `FacadeStyle.foundationOut` (layout key `foundationOut`; null = 0.08 m): how far the foundation stands out from the wall. `Lod0.FoundationOut`.
 - `FacadeStyle.sills` and `heads` (layout keys `sills`, `heads`; on by default): a window's sill and its head (flat or arched) can be left out.
 - Artist-made windows and street doors (docs/EDITOR.md §6.9). Engine-free: `OpeningKind` and `OpeningKinds`, plus `FacadeStyle.windowKind` and `doorKind`. Unity: the `StoreyOpening` asset (*Create › Storey › Window or Door*) and `StoreySite.openings`. `MeshBuilder.Mesh` takes raw triangles; `Facade.PaneUV` is split out of `Facade.Pane`.
 - Windows with rooms behind them (docs/EDITOR.md §6.8), after the project's Window shader graph. Add the `StoreyWindows` component and give it a room atlas.

@@ -298,8 +298,9 @@ namespace Triband.Storey.Generate
                 double fTop = st.foundation.HasValue ? FoundationH(st) : 0, pTop = st.plinthH ?? 0.45;
                 if (st.foundation is double depth)
                 {
-                    var rf = Clip(m.Span(T, T + 0.08));
-                    Facade.StripPieces(op, F, m, new List<(double, double)> { rf }, -Math.Max(0, depth), fTop, T, T + 0.08, C.foundation, C.foundation, Skip.In | Skip.Bot);
+                    double fo = FoundationOut(st);
+                    var rf = Clip(m.Span(T, T + fo));
+                    Facade.StripPieces(op, F, m, new List<(double, double)> { rf }, -Math.Max(0, depth), fTop, T, T + fo, C.foundation, C.foundation, Skip.In | Skip.Bot);
                 }
                 if (pTop > fTop + 0.01)
                 {
@@ -317,6 +318,9 @@ namespace Triband.Storey.Generate
 
         /// <summary>How high the foundation shows above the ground.</summary>
         public static double FoundationH(FacadeStyle st) => Math.Max(0.02, st.foundationH ?? 0.2);
+
+        /// <summary>How far the foundation stands out from the wall: at least a centimetre, so it never lies on the wall.</summary>
+        public static double FoundationOut(FacadeStyle st) => Math.Max(0.01, Math.Min(1.5, st.foundationOut ?? 0.08));
 
         // ---- interior -----------------------------------------------------------------------
 

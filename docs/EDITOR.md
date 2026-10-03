@@ -288,7 +288,7 @@ Engine-free: `Buildings.AsTemplate`, `Buildings.FromTemplate` (`TemplateTests`).
 - **Band:** its height (*Band height*), how far it stands out (*Band stands out*, at least 1 cm), and *Band in a wall shade* instead of the trim colour. Windows and their arched heads stay under a band you've set.
 - **Street doors** (base): *Canopy*, as before, or *Glazed*: double doors with a frame, a transom bar and a fanlight above it, and no canopy. On a filled or shell storey the doors are closed: two glazed leaves with a centre stile, bottom rails and pull handles. On a walk-in storey the doorway stays open, because the player walks through it; the frame, transom and fanlight still show.
 - **Plinth height** (base), and the new optional *Plinth* colour (unset, it's a shade of the wall, as before). Ground-floor windows start above a plinth you've set.
-- **Foundation** (base): a band along the foot of the ground floor, under the doors too, in the new *Foundation* colour. *Below ground* sets how deep it goes (for terrain that isn't flat) and *Above ground* how much of it shows.
+- **Foundation** (base): a band along the foot of the ground floor, under the doors too, in the new *Foundation* colour. *Below ground* sets how deep it goes (for terrain that isn't flat), *Above ground* how much of it shows, and *Stands out* how far it reaches out from the wall (0.01 to 1 m; 8 cm by default).
 - **Brick patches:** small groups of bricks laid on the walls, about one group per 2.5 m² at 1. They keep clear of openings, heads, the band and the plinth, and come back in the same places on every rebuild.
 
 LODs:
@@ -296,7 +296,7 @@ LODs:
 - LOD1, the lean shell, has the band, plinth and foundation, and its glazed doors are dark glass with no canopy.
 - LOD2's shader follows the band's height and colour.
 
-Layout keys: `head`, `panes`, `frames`, `bandH`, `bandDepth`, `bandWall`, `doorType`, `plinthH`, `foundation`, `foundationH`, `bricks`, plus the colours `frame`, `foundationColor` and `plinth` (`FacadeDetailTests`).
+Layout keys: `head`, `panes`, `frames`, `bandH`, `bandDepth`, `bandWall`, `doorType`, `plinthH`, `foundation`, `foundationH`, `foundationOut`, `bricks`, plus the colours `frame`, `foundationColor` and `plinth` (`FacadeDetailTests`).
 
 **Checks:**
 1. Arch heads, 2 × 3 panes, Frames, Band 0.65 m in a wall shade, Glazed doors, Plinth 0.8 m with a grey Plinth colour, Foundation, Brick patches 0.6: the building looks like the artist's.

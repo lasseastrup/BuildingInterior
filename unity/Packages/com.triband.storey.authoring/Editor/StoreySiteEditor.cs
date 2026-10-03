@@ -592,6 +592,7 @@ namespace Triband.Storey.Editor
                 {
                     StyleSlider(e, k0, "   Below ground", depth, 0, 5, 0.05, (s, x) => s.foundation = x);
                     StyleSlider(e, k0, "   Above ground", st.foundationH ?? 0.2, 0.02, 1.5, 0.01, (s, x) => s.foundationH = x);
+                    StyleSlider(e, k0, "   Stands out", st.foundationOut ?? 0.08, 0.01, 1, 0.01, (s, x) => s.foundationOut = x);
                 }
             }
             StyleSlider(e, k0, "Brick patches", st.bricks ?? 0, 0, 1, 0.05, (s, x) => s.bricks = x > 0 ? x : (double?)null);
