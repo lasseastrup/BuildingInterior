@@ -113,8 +113,10 @@ namespace Triband.Storey.Editor
             if (v.tier != 0 && !Derived.IsSetback(b, v.tier)) v.tier = 0;
         }
 
-        // the floor clip as shown: it eases to the active storey's ceiling, so a change of floor grows the storeys up or
-        // sinks them down instead of cutting at once
+        // the floor clip as shown: going up, it eases to the active storey's ceiling, so the storeys grow up instead of
+        // cutting at once. Going down (a lower floor, a storey made shorter) it drops at once: easing down would leave the
+        // clip above the new ceiling for a moment, and that ceiling would cover the storey. The new storey's walls still
+        // slide down to the stub, so the change is not abrupt.
         static string clipFor = ""; static double shownClip, lastTime; static bool easing;
 
         static double EasedClip(BuildingData b, double target)
@@ -122,6 +124,7 @@ namespace Triband.Storey.Editor
             double now = EditorApplication.timeSinceStartup, dt = Math.Min(0.05, Math.Max(0, now - lastTime)); lastTime = now;
             double finite = target > 1e8 ? Derived.RoofY(b) + 8 : target;   // the roof: everything shows, so ease to above it
             if (clipFor != b.id) { clipFor = b.id; shownClip = finite; }      // another building: no animation
+            if (finite < shownClip) shownClip = finite;                         // down: at once (above)
             shownClip += (finite - shownClip) * (1 - Math.Exp(-dt * 12));
             easing = Math.Abs(finite - shownClip) > 0.004;
             if (!easing) shownClip = finite;

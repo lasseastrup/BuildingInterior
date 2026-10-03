@@ -104,7 +104,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Click stairs or a lift without dragging: it is selected (anywhere on it, not only its handle). Drag one past an outside wall or into another core: it stops there but keeps sliding along it with the pointer.
    - No key does anything Storey-specific.
    - Storey height, and the Storey Floors overlay: count, copy up, duplicate, delete.
-   - **Switching floors animates.** Going up, the storeys grow up to the new ceiling; going down, they sink. The new floor's walls (in Cutaway, those in front of the camera) then slide down to the stub, and the old floor's slide back up (0.22 s, as in play). Selecting another building, or opening the Interior tab, shows its floor at once.
+   - **Switching floors animates.** Going up, the storeys grow up to the new ceiling. Going down, or making a storey shorter, the storeys above go at once, so the ceiling never covers the storey for a moment. The new floor's walls (in Cutaway, those in front of the camera) then slide down to the stub, and the old floor's slide back up (0.22 s, as in play). Selecting another building, or opening the Interior tab, shows its floor at once.
    - **Camera follows** (next to the floor list, on by default): the Scene view's camera eases up or down with the floor.
 6. **Feedback while editing:**
    - The building under the pointer is outlined faintly.
