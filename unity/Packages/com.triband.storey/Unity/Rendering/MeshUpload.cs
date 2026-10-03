@@ -53,7 +53,7 @@ namespace Triband.Storey.Unity
         /// block (LOD0 only; the mesh's 1-based local ids are offset onto it; -1 = no ids). <paramref name="rowOf"/>
         /// gives the colour row of each style the swatches name (party walls name a neighbour's).
         /// </summary>
-        /// <param name="optimize">Reorder for the GPU's vertex cache (<c>Mesh.Optimize</c>): worth it for meshes that stay; the editor's previews, rebuilt on every drag, skip it.</param>
+        /// <param name="optimize">Unused (it called <c>Mesh.Optimize</c>, which crashed the editor); kept so callers compile.</param>
         /// <param name="windows">Opaque panes carry their place on the pane for the window shader (the opaque meshes; not the see-through glass).</param>
         public static Mesh Upload(MeshBuilder gb, string name, Func<StyleRef, int> rowOf, int wallBase = -1, bool optimize = false, bool windows = false)
         {
@@ -102,8 +102,8 @@ namespace Triband.Storey.Unity
             }
             SetIndices(mesh, gb.I, nv, flags);
             mesh.bounds = bounds;
-            // Mesh.Optimize crashes the player natively on an empty mesh (a shell's LOD0 glass): only ever a real one
-            if (optimize && nv > 0 && gb.I.Count > 0) mesh.Optimize();
+            // no Mesh.Optimize: it crashed the editor natively in its vertex-cache pass on valid LOD0 meshes, and the generator's
+            // own order is within a few percent of a vertex-cache optimiser's (measured with Forsyth's: 1.88 → 1.80 misses a triangle)
             mesh.UploadMeshData(true);
             return mesh;
         }

@@ -25,6 +25,13 @@ namespace Triband.Storey.Tests
             if (!m.Lean) { Assert.Equal(nv, m.K.Count); Assert.Equal(nv, m.WI.Count); }
         }
 
+        static int Degenerate(MeshBuilder m)
+        {
+            int n = 0;
+            for (int t = 0; t + 2 < m.I.Count; t += 3) { int a = m.I[t], b = m.I[t + 1], c = m.I[t + 2]; if (a == b || b == c || a == c) n++; }
+            return n;
+        }
+
         [Fact]
         public void EveryDetailMeshOfTheTestCityIsSound()
         {
@@ -41,6 +48,18 @@ namespace Triband.Storey.Tests
                 }
             }
             log.WriteLine($"{empty} empty meshes among {d.buildings.Count * 3}");
+            int before = 0, after = 0, meshes = 0;
+            foreach (var b in d.buildings)
+            {
+                var l0 = Lod0.Build(site, b);
+                foreach (var m in new[] { l0.Op, l0.Glass, Lod1.Build(site, b) })
+                {
+                    int x = Degenerate(m); m.Weld(); int y = Degenerate(m);
+                    before += x; after += y; if (y > 0) meshes++;
+                }
+            }
+            log.WriteLine($"triangles repeating a vertex: {before} before welding, {after} after, in {meshes} meshes");
+            Assert.Equal(0, after);
         }
     }
 }

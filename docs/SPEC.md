@@ -191,7 +191,7 @@ Z-fighting comes from two faces that share a plane, face the same way, and overl
 | **Slabs are one triangulated polygon per side** with shared vertices, holes for stairs, and side faces only around the holes. The ground slab under a shell building and the ceiling under a roof-only LOD are not generated. | Per-triangle vertex copies; faces sitting on the ground. |
 | **Glass is a single pane** (two-sided for walk-in buildings, one-sided and opaque elsewhere). | The 6-face glass boxes. |
 | **Compact vertex format:** float3 position, SNorm8 normal, UNorm8 colour, float building tag; occlusion data only on LOD0. 16-bit indices whenever a mesh has ≤ 65,535 vertices. | Roughly half the vertex memory. 32-bit indices aren't supported on some older mobile GPUs (for example Mali-400), so city cells should stay under the 16-bit limit. |
-| **Unity:** after writing each mesh, call `Mesh.Optimize()` (index then vertex reorder for the GPU caches; runtime API for procedural meshes), and set `indexFormat` explicitly. | Vertex cache misses. |
+| **Unity:** set `indexFormat` explicitly. Don't call `Mesh.Optimize()`: in Unity 6.3 it crashed the editor natively in its vertex-cache pass on valid LOD0 meshes, and the generator's triangle order is within a few percent of a vertex-cache optimiser's (Forsyth's: 1.88 against 1.80 misses a triangle). | Vertex cache misses. |
 
 Measured in the prototype (same buildings, same generator settings):
 
