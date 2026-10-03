@@ -167,6 +167,7 @@ Only dormers that fit on their eave's slope are built, clear of hips, valleys an
 Layouts with a mansard or dormers are Storey's own: the prototype doesn't read them (`"roofType": "mansard"`, `"mansard"`, `"dormers"`).
 
 Engine-free: `Roofs.Make`, `RoofType.Mansard`, `FacadeStyle.mansard` and `FacadeStyle.dormers` (`RoofFeatureTests`).
+- Dormer windows follow the style as the facade's windows do: sills, heads (flat or arched), frames, glazing bars, the artist's window, and rooms behind the glass (the window shader). LOD1 shows a plain pane with rooms.
 
 **Checks:**
 1. Set a building's roof to Mansard: steep sides, a shallow top. Change *Steep part*.

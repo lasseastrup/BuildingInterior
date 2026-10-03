@@ -369,7 +369,7 @@ namespace Triband.Storey.Generate
 
         public void Roof(MeshBuilder op, List<Seg>? sg, TierCtx g, Palette C)
         {
-            if (Roofs.Draw(op, Roofs.Parts(site, b), C)) return;   // hip, gable or shed (no roof access, no parapet)
+            if (Roofs.Draw(op, Roofs.Parts(site, b), C, Derived.StyleAt(b, N))) return;   // hip, gable or shed (no roof access, no parapet)
             double y = Derived.RoofY(b), T = Dim.T_EXT; int n = g.Wp.Count, k0 = Derived.TierStart(b, N);
             bool parapet = Derived.StyleAt(b, N).parapet;
             for (int i = 0; i < n; i++)

@@ -141,5 +141,27 @@ namespace Triband.Storey.Tests
             double hb = Derived.RoofY(b) - 0.35 * Math.Tan(30 * Math.PI / 180);
             Assert.Contains(R.Parts, p => p.Kind == RoofKind.Trim && Math.Abs(p.Pts.Max(q => q.y) - hb) < 1e-9);
         }
+
+        [Fact]
+        public void DormerWindowsAreDressedAsTheFacadesAre()
+        {
+            int Frames(BuildingData b, Site site) { var op = Lod0.Build(site, b).Op; return Enumerable.Range(0, op.Verts).Count(i => op.C[i].slot == ColorSlot.Frame); }
+            var (_, b0, s0) = Block(RoofType.Gable, 3.5);
+            int plain = Frames(b0, s0);
+            var (_, b, site) = Block(RoofType.Gable, 3.5);
+            b.style.frames = true; b.style.paneCols = 2; b.style.paneRows = 2;
+            var (_, bf, sf) = Block(RoofType.Gable);
+            bf.style.frames = true; bf.style.paneCols = 2; bf.style.paneRows = 2;
+            // the dormers' windows take frames and bars too: more than the facade's alone
+            Assert.True(Frames(b, site) > Frames(bf, sf) && Frames(bf, sf) > plain);
+            var r = Lod0.Build(site, b);
+            var rep = CoplanarCheck.Run(r.Op);
+            Assert.True(rep.Overlaps.Count == 0, string.Join("\n", rep.Overlaps.Take(10)));
+            // and their glass carries the window shader's coordinates, in LOD0 and LOD1, above the walls
+            double top = Derived.FloorBase(b, b.floors.Count);
+            Assert.Contains(r.Op.PaneUV.Keys, i => r.Op.P[i].y > top);
+            var l1 = Lod1.Build(site, b);
+            Assert.Contains(l1.PaneUV.Keys, i => l1.P[i].y > top);
+        }
     }
 }

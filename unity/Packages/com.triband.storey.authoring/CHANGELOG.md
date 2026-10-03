@@ -49,6 +49,7 @@
 - No keyboard shortcuts: the tool modes, Isolate, floor stepping, turning and removing are buttons (**Turn 90°** for placing stairs and lifts, **Finish wall** for a wall chain).
 
 ### Fixed
+- No more console log for every colour matched to the palette while editing (the matching itself is unchanged).
 - Making a storey shorter in the Interior tab still flashed its ceiling for a frame. The rebuilt storey was drawn with the floor clip from the frame before. The site now asks the tool for its view when it builds (`StoreySite.ViewSource`), so the clip and the meshes come from the same layout.
 - In the Interior tab, going down a floor or making a storey shorter no longer shows the ceiling over the storey for a moment. The clip drops to the new ceiling at once; going up still grows.
 - Delete in the Scene view removed the whole Storey Site. With a Storey tool active it now removes the selected wall, stairs, lift, corner or courtyard instead.

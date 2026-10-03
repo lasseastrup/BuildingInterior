@@ -167,7 +167,7 @@ namespace Triband.Storey.Editor
             Undo.RecordObject(this, undoName);
             if (!op(Core.Document)) { Core.Discard(); return false; }
             // presets, new buildings and imports carry CSS colours: every edit ends inside the palette
-            if (StoreyColorField.Conform != null) Report(StoreyColorField.Conform(Core.Document));
+            if (StoreyColorField.Conform != null) StoreyColorField.Conform(Core.Document);
             var change = Core.Commit();
             if (change.None) return true;
             text = Core.Text;
@@ -175,12 +175,6 @@ namespace Triband.Storey.Editor
             site!.Preview(Core.Document, text, change);
             Poke();
             return true;
-        }
-
-        static void Report(List<ConformedColor> changed)
-        {
-            foreach (var c in changed)
-                Debug.Log($"Storey: {c.from} → {c.name} ({PaletteMatch.Similarity(c.distance):P0} similar), {c.uses} use{(c.uses == 1 ? "" : "s")}");
         }
 
         /// <summary>After undo or redo: show the text Unity restored.</summary>

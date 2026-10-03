@@ -14,6 +14,13 @@ namespace Triband.Storey.Generate
         public RoofKind Kind;
         /// <summary>Part of a dormer: LOD2's massing leaves these out.</summary>
         public bool Dormer;
+        /// <summary>
+        /// A dormer's window as a wall opening (its frame: the dormer front at w = T_EXT), so it is dressed as the
+        /// facade's windows are (<see cref="Facade.Dress"/>: sills, heads, frames, bars, the artist's window, rooms behind
+        /// the glass). Null for plain glass.
+        /// </summary>
+        public Frame? WinF;
+        public Opening? WinO;
     }
 
     public enum RoofKind { Roof, Trim, Soffit, Wall, Window }
@@ -300,11 +307,15 @@ namespace Triband.Storey.Generate
                 double c = L / 2 + (i - (cnt - 1) / 2.0) * every;
                 if (!Fits(c)) continue;
                 var front = new RoofPart { Kind = RoofKind.Wall, N = outN, Dormer = true, Pts = { At(c - hw, n0, ys), At(c + hw, n0, ys), At(c + hw, n0, yt), At(c, n0, yr), At(c - hw, n0, yt) } };
-                double wx = hw - 0.22, w0 = ys + 0.3, w1 = yt - 0.12, rv = 0.08;
+                // the reveal as deep as a facade window's, so its frame and pane sit as theirs do (Facade.Dress)
+                double wx = hw - 0.22, w0 = ys + 0.3, w1 = yt - 0.12, rv = Dim.T_EXT * 0.7;
                 var hole = new List<P3> { At(c - wx, n0, w0), At(c - wx, n0, w1), At(c + wx, n0, w1), At(c + wx, n0, w0) };
                 front.Holes.Add(hole);
                 parts.Add(front);
-                parts.Add(new RoofPart { Kind = RoofKind.Window, N = outN, Dormer = true, Pts = { At(c - wx, n0 + rv, w0), At(c + wx, n0 + rv, w0), At(c + wx, n0 + rv, w1), At(c - wx, n0 + rv, w1) } });
+                // the window: a frame whose wall face (w = T_EXT) is the dormer's front, as a facade wall's
+                var wf = new Frame(new Vec2(o.x + nin[0] * (n0 + Dim.T_EXT), o.z + nin[1] * (n0 + Dim.T_EXT)), new Vec2(d[0], d[1]), new Vec2(-nin[0], -nin[1]));
+                parts.Add(new RoofPart { Kind = RoofKind.Window, N = outN, Dormer = true, WinF = wf, WinO = new Opening { u0 = c - wx, u1 = c + wx, y0 = w0, y1 = w1 },
+                    Pts = { At(c - wx, n0 + rv, w0), At(c + wx, n0 + rv, w0), At(c + wx, n0 + rv, w1), At(c - wx, n0 + rv, w1) } });
                 // the window's reveals, from the front wall back to the pane
                 parts.Add(new RoofPart { Kind = RoofKind.Trim, N = new P3(0, 1, 0), Dormer = true, Pts = { At(c - wx, n0, w0), At(c + wx, n0, w0), At(c + wx, n0 + rv, w0), At(c - wx, n0 + rv, w0) } });
                 parts.Add(new RoofPart { Kind = RoofKind.Trim, N = new P3(0, -1, 0), Dormer = true, Pts = { At(c - wx, n0, w1), At(c + wx, n0, w1), At(c + wx, n0 + rv, w1), At(c - wx, n0 + rv, w1) } });
@@ -480,13 +491,23 @@ namespace Triband.Storey.Generate
             return Make(b, RoofType.Hip, tr.pitch, e, raw, party, Derived.FloorBase(b, k), cut);
         }
 
-        /// <summary>Emit roof parts into a mesh. Returns false when there are none.</summary>
-        public static bool Draw(MeshBuilder op, RoofParts? R, Palette C)
+        /// <summary>
+        /// Emit roof parts into a mesh. Returns false when there are none. A dormer's window is dressed by the style
+        /// <paramref name="st"/> as the facade's are (LOD0), or a plain pane with the window shader's coordinates (LOD1).
+        /// </summary>
+        public static bool Draw(MeshBuilder op, RoofParts? R, Palette C, FacadeStyle? st = null)
         {
             if (R == null) return false;
             op.Ctx(null, 0);
             foreach (var p in R.Parts)
             {
+                if (p.Kind == RoofKind.Window && p.WinF is Frame wf && p.WinO is Opening wo)
+                {
+                    if (op.Lean) Facade.Pane(op, wf, wo.u0, wo.u1, wo.y0, wo.y1, Dim.T_EXT * 0.45, C.glassDark, false);
+                    else Facade.Dress(op, null!, wf, new List<Opening> { wo }, 0, C, true, st);
+                    op.Ctx(null, 0);
+                    continue;
+                }
                 var col = p.Kind == RoofKind.Roof ? C.roof : p.Kind == RoofKind.Trim ? C.trim : p.Kind == RoofKind.Soffit ? C.trimShade : p.Kind == RoofKind.Window ? C.glassDark : C.wall;
                 var pts = new List<P3>(p.Pts); foreach (var h in p.Holes) pts.AddRange(h);
                 op.PolyTris(pts, Triangulate.Planar(p.Pts, p.Holes, p.N), p.N, col);

@@ -22,7 +22,6 @@ namespace Triband.Storey.ColorPipeline
         /// <summary>Atlas rows in 2.1.11 (<c>ColorMappingManager.k_MaxNumberOfRemaps</c>, private).</summary>
         public const int MaxRemapRows = 1024;
         static readonly int AtlasWidthId = Shader.PropertyToID("_ColorAtlasWidth");
-        readonly HashSet<string> warned = new HashSet<string>(StringComparer.Ordinal);
 
         public event Action? Invalidated;
         public StyleDefaults Defaults { get; }
@@ -62,14 +61,12 @@ namespace Triband.Storey.ColorPipeline
                 var id = Guid(colorRef);
                 // GetIndexOfColor alone answers 0 for an unknown id, so a deleted entry would turn silently into entry 0
                 if (palette.TryGetColor(id, out _)) return palette.GetIndexOfColor(id);
-                Warn(colorRef, $"Storey: palette colour {colorRef} is not in the Color Pipeline palette (deleted?); showing palette colour 0.");
-                return 0;
+                return 0;   // a deleted entry: palette colour 0, quietly
             }
             if (!ColorUtility.TryParseHtmlString(colorRef, out _)) throw new FormatException($"\"{colorRef}\" is not a colour reference");
             // the editor conforms layouts as they are edited; a layout never opened since shows what conforming would pick
             var near = PaletteMatch.Nearest(colorRef, Entries(palette));
             if (near == null) return 0;
-            Warn(colorRef, $"Storey: {colorRef} is not a palette colour; showing the nearest, {near.Value.entry.name}. Open the layout for editing to match it for good.");
             return palette.GetIndexOfColor(Guid(near.Value.entry.id));
         }
 
@@ -122,6 +119,5 @@ namespace Triband.Storey.ColorPipeline
         /// <summary>Color Pipeline's id to a palette id.</summary>
         public static string IdOf(SerializableGUID g) { var (a, b) = g.ToParts(); return ColorRef.PaletteId(a, b); }
 
-        void Warn(string key, string message) { if (warned.Add(key)) Debug.LogWarning(message); }
     }
 }

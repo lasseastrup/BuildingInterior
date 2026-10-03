@@ -12,6 +12,8 @@ All notable changes to this package are documented here. The format follows [Kee
 - A building's row in the building table is its index in the layout, so party walls find their neighbour in the shader.
 
 ### Fixed
+- Dormer windows ignored the style's window rules. They're now dressed as the facade's windows are (`Facade.Dress`: sills, heads, frames, bars, the artist's window, the window shader's rooms), through `RoofPart.WinF`/`WinO`.
+- The Color Pipeline palette no longer logs a warning for a colour missing from the palette, or for one shown as its nearest match.
 - The editor's cutaway in the Interior tab. Every wall has an id, so the shader drops walls by their slide values, which only the occlusion system set (in Play mode). The site's renderer now drops the walls between the Scene view camera and the focus itself.
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
