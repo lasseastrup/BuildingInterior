@@ -29,6 +29,27 @@ namespace Triband.Storey.Editor
 
         protected virtual void Release(StoreyEdit e, BuildingData b, Vec3d origin, Vec3d dir, SceneView sv) { }
 
+        /// <summary>
+        /// Delete (or Backspace) in the Scene view: remove what the tool has selected (a wall, stairs, a corner…). True when
+        /// something went; false shows a hint. Never the site's GameObject (the Hierarchy still deletes that).
+        /// </summary>
+        protected virtual bool DeleteSelected(StoreyEdit e, BuildingData b, SceneView sv) => false;
+
+        /// <summary>What the hint says Delete works on in this tool.</summary>
+        protected virtual string DeleteHint => "Nothing selected to delete";
+
+        /// <summary>Take the Scene view's Delete before Unity does: it would delete the whole site.</summary>
+        void DeleteKey(StoreyEdit e, BuildingData? b, SceneView sv)
+        {
+            var ev = Event.current;
+            if (ev.type != EventType.ValidateCommand && ev.type != EventType.ExecuteCommand) return;
+            if (ev.commandName != "Delete" && ev.commandName != "SoftDelete") return;
+            if (ev.type == EventType.ExecuteCommand && (b == null || !DeleteSelected(e, b, sv)))
+                Notify(sv, DeleteHint + " (Delete here never deletes the site: use the Hierarchy for that)");
+            ev.Use();
+            Inspectors();
+        }
+
         public override void OnToolGUI(EditorWindow window)
         {
             if (window is not SceneView sv) return;
@@ -40,6 +61,7 @@ namespace Triband.Storey.Editor
             if (b != null) ClampView(e, b);
             // the layout lives in the site's local space: the meshes are the site's children, so the handles and rays are too
             toLocal = site.transform.worldToLocalMatrix;
+            DeleteKey(e, b, sv);
             using (new Handles.DrawingScope(site.transform.localToWorldMatrix))
             {
                 Hover(e, sv);

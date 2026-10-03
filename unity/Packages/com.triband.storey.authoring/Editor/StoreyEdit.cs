@@ -21,6 +21,7 @@ namespace Triband.Storey.Editor
     internal sealed class StoreyEdit : ScriptableObject
     {
         [SerializeField] StoreySite? site;
+        [SerializeField] int siteId;   // the site's instance id: an undone delete brings the site back as a new object with the same id
         [SerializeField] string path = "";
         [SerializeField] string text = "";
         [SerializeField] SavedText? file;   // what the file holds: kept out of undo, so undoing past a save still shows unsaved
@@ -111,7 +112,7 @@ namespace Triband.Storey.Editor
         EditSession Core => core ??= new EditSession(text);
 
         /// <summary>The edit open on a site, if any.</summary>
-        public static StoreyEdit? Of(StoreySite s) => open.FirstOrDefault(e => e != null && e.site == s);
+        public static StoreyEdit? Of(StoreySite s) => open.FirstOrDefault(e => e != null && (e.site == s || (e.siteId != 0 && e.siteId == s.GetInstanceID())));
 
         /// <summary>Start editing a site's layout (or return the edit already open).</summary>
         public static StoreyEdit Begin(StoreySite s)
@@ -122,7 +123,7 @@ namespace Triband.Storey.Editor
             e = CreateInstance<StoreyEdit>();
             e.hideFlags = HideFlags.DontSave;
             e.name = "Storey edit: " + s.layout.name;
-            e.site = s; e.path = AssetDatabase.GetAssetPath(s.layout);
+            e.site = s; e.siteId = s.GetInstanceID(); e.path = AssetDatabase.GetAssetPath(s.layout);
             e.core = new EditSession(s.layout.Json);
             e.text = e.core.Text;
             e.file = CreateInstance<SavedText>(); e.file.hideFlags = HideFlags.DontSave; e.file.text = e.text;
@@ -138,6 +139,14 @@ namespace Triband.Storey.Editor
             if (site == null || string.IsNullOrEmpty(text)) return;
             core = null;
             Attach();
+        }
+
+        /// <summary>The site came back (an undo of its delete): show the edit's layout on it again.</summary>
+        internal void Reattach(StoreySite s)
+        {
+            site = s; siteId = s.GetInstanceID();
+            site.Preview(Core.Document, text, null);
+            Poke();
         }
 
         void Attach()
@@ -183,14 +192,19 @@ namespace Triband.Storey.Editor
             Poke();
         }
 
-        /// <summary>Write the layout to its file and reimport it.</summary>
-        public void Save()
+        /// <summary>
+        /// Write the layout to its file and reimport it. <paramref name="importLater"/>: the import waits for the next
+        /// editor update (the site is being destroyed, or the scripts reloaded, and importing now is unsafe).
+        /// </summary>
+        public void Save(bool importLater = false)
         {
             if (!Dirty) return;
-            if (site != null) StoreyOpenings.Sync(site, Document);   // the artist's windows and doors the layout uses
+            if (site != null && !importLater) StoreyOpenings.Sync(site, Document);   // the artist's windows and doors the layout uses
             File.WriteAllText(path, text);
             file!.text = text;
-            AssetDatabase.ImportAsset(path);
+            string p = path;
+            if (importLater) EditorApplication.delayCall += () => AssetDatabase.ImportAsset(p);
+            else AssetDatabase.ImportAsset(p);
         }
 
         /// <summary>
@@ -230,6 +244,9 @@ namespace Triband.Storey.Editor
             Undo.undoRedoPerformed += () => { foreach (var e in open.ToList()) if (e != null) e.Restored(); };
             EditorSceneManager.sceneSaved += _ => { foreach (var e in open.ToList()) if (e != null) e.Save(); };   // Ctrl+S saves the layouts too
             EditorApplication.playModeStateChanged += s => { if (s == PlayModeStateChange.ExitingEditMode) SaveAll(); };
+            // the site deleted (or disabled): its edit is written to the file before it goes; back (an undo): shown again
+            StoreySite.Disabling += s => { if (Of(s) is StoreyEdit e) e.Save(importLater: true); };
+            StoreySite.Enabled += s => { if (Of(s) is StoreyEdit e) e.Reattach(s); };
             EditorApplication.wantsToQuit += () => { SaveAll(); return true; };
         }
 

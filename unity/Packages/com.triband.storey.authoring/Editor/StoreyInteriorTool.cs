@@ -206,6 +206,24 @@ namespace Triband.Storey.Editor
 
         // ---- clicks ----
 
+        protected override string DeleteHint => "Select a wall, stairs or a lift first";
+
+        protected override bool DeleteSelected(StoreyEdit e, BuildingData b, SceneView sv)
+        {
+            var v = e.View; int k = v.floor;
+            if (v.selectedCore.Length > 0)
+            {
+                string id = v.selectedCore; v.selectedCore = "";
+                return e.ApplyTo("Removed", bb => bb.shafts.RemoveAll(x => x.id == id) > 0);
+            }
+            if (k >= 0 && k < b.floors.Count && v.selectedWall >= 0 && v.selectedWall < b.floors[k].walls.Count)
+            {
+                int wi = v.selectedWall; v.selectedWall = -1;
+                return e.ApplyTo("Wall removed", bb => { bb.floors[k].walls.RemoveAt(wi); return true; });
+            }
+            return false;
+        }
+
         protected override bool Click(StoreyEdit e, BuildingData b, Vec3d origin, Vec3d dir, SceneView sv)
         {
             var v = e.View; int k = v.floor;

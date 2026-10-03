@@ -38,6 +38,12 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
 3. **Ctrl+Z / Ctrl+Y** step through the edits, each named in *Edit ▸ Undo History*.
 4. The layout saves itself to the `.storey` file: when you deselect the site, save the scene (Ctrl+S), enter Play mode or quit. There are no Save, Revert or Stop editing buttons; undo goes back as far as you need. Storey writes the file in its own JSON layout, so the first save reformats a file that came from the prototype; the content is the same.
 5. Change the `.storey` file outside the editor (a version control update) while the site has nothing unsaved: the site shows the new file at once.
+6. **Delete** (or Backspace) in the Scene view, with a Storey tool active, removes what the tool has selected and never the site's GameObject:
+   - Interior: a wall, stairs or a lift.
+   - Shape: a corner or a courtyard.
+
+   With nothing selected it says so. Delete the site from the Hierarchy.
+7. Delete the site's GameObject anyway (from the Hierarchy), then undo: the site comes back with the layout as it was. The edit is written to the file before the site goes, and shown on it again when it returns.
 6. Enter and leave Play mode, and edit a script to force a domain reload, while editing: the edit and its undo history survive.
 
 ## 5. Slices 6.4–6.7: what is written, and checking it in the editor

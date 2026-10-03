@@ -71,9 +71,16 @@ namespace Triband.Storey.Unity
             else foreach (var id in change.rebuild) pending.Add(id);
         }
 
-        void OnEnable() => Refresh();
+        /// <summary>
+        /// A site going away (deleted, disabled, its scene closed) or coming back (an undo of the delete). The editor saves
+        /// an open edit of its layout before it goes, and shows the edit again when it is back, so an undo brings back
+        /// the layout as it was, not the file as last saved.
+        /// </summary>
+        public static event Action<StoreySite>? Disabling, Enabled;
 
-        void OnDisable() { site?.Dispose(); site = null; shownJson = null; }
+        void OnEnable() { Enabled?.Invoke(this); Refresh(); }
+
+        void OnDisable() { Disabling?.Invoke(this); site?.Dispose(); site = null; shownJson = null; preview = null; }
 
         void LateUpdate() => Refresh();
 

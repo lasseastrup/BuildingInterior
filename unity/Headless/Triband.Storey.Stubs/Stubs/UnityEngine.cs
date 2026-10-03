@@ -309,7 +309,7 @@ namespace UnityEngine
         public static Vector2 GUIToScreenPoint(Vector2 guiPoint) => guiPoint;
     }
 
-    public enum EventType { MouseDown = 0, MouseUp = 1, MouseMove = 2, MouseDrag = 3, KeyDown = 4, Repaint = 7, Layout = 8, Used = 12, MouseLeaveWindow = 21 }
+    public enum EventType { MouseDown = 0, MouseUp = 1, MouseMove = 2, MouseDrag = 3, KeyDown = 4, Repaint = 7, Layout = 8, Used = 12, ValidateCommand = 13, ExecuteCommand = 14, MouseLeaveWindow = 21 }
 
     public enum KeyCode { Backspace = 8, Escape = 27, LeftBracket = 91, RightBracket = 93, D = 100, I = 105, L = 108, R = 114, S = 115, V = 118, W = 119, X = 120, Delete = 127 }
 
@@ -318,6 +318,7 @@ namespace UnityEngine
         public static Event current => new Event();
         public EventType type => default;
         public EventType rawType => default;
+        public string commandName => "";
         public int button => 0;
         public int clickCount => 0;
         public bool alt => false;

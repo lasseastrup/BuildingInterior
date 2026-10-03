@@ -34,6 +34,26 @@ namespace Triband.Storey.Editor
         static readonly int VoidCornerHint = "StoreyVoidCorner".GetHashCode(), VoidInsertHint = "StoreyVoidInsert".GetHashCode(), VoidMoveHint = "StoreyVoidMove".GetHashCode();
         Vec2 voidGrab;
 
+        protected override string DeleteHint => "Select a corner or a courtyard first";
+
+        protected override bool DeleteSelected(StoreyEdit e, BuildingData b, SceneView sv)
+        {
+            var v = e.View; int k0 = v.tier;
+            if (v.selectedVoid.Length > 0 && Voids.Of(b, v.selectedVoid) != null)
+            {
+                string id = v.selectedVoid; v.selectedVoid = "";
+                return e.ApplyTo("Courtyard removed", bb => Voids.Remove(bb, id));
+            }
+            if (v.selectedCorner >= 0)
+            {
+                int i = v.selectedCorner; v.selectedCorner = -1;
+                if (e.ApplyTo("Corner removed", bb => CornerCuts.Around(bb, k0, (x, _) => Outlines.RemoveVertex(x, i, k0)))) return true;
+                Notify(sv, "An outline needs at least three corners");
+                return true;
+            }
+            return false;
+        }
+
         protected override void ToolGUI(StoreyEdit e, BuildingData b, SceneView sv)
         {
             int k0 = e.View.tier;
