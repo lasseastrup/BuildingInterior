@@ -28,6 +28,7 @@ All notable changes to this package are documented here. The format follows [Kee
   - `SiteRenderer` takes `LodSettings` for the automatic LOD, with `Eye`, `Forced` and `Stats`.
   - `StoreySite.lodMode` (Automatic by default), `lodCamera`, `quality`, `showLodStats`, `keepDetail`, `LodStats`, `EditorCamera` and `All`.
   - `SiteView.focusId`.
+  - LOD0 and LOD1 are generated on worker threads (`LodSettings.Threads`, `StoreyQualitySettings.buildOnWorkerThreads`); the main thread only uploads them. The generator's memos (`Site`) and caches (`Colors`, `OpeningKinds`) are thread-safe. `MeshBuilder.Welded`.
 - `FacadeStyle.foundationOut` (layout key `foundationOut`; null = 0.08 m): how far the foundation stands out from the wall. `Lod0.FoundationOut`.
 - `FacadeStyle.sills` and `heads` (layout keys `sills`, `heads`; on by default): a window's sill and its head (flat or arched) can be left out.
 - Artist-made windows and street doors (docs/EDITOR.md §6.9). Engine-free: `OpeningKind` and `OpeningKinds`, plus `FacadeStyle.windowKind` and `doorKind`. Unity: the `StoreyOpening` asset (*Create › Storey › Window or Door*) and `StoreySite.openings`. `MeshBuilder.Mesh` takes raw triangles; `Facade.PaneUV` is split out of `Facade.Pane`.

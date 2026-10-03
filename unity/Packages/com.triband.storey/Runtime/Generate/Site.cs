@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace Triband.Storey.Generate
@@ -15,8 +16,9 @@ namespace Triband.Storey.Generate
         readonly Dictionary<string, int> index = new Dictionary<string, int>(StringComparer.Ordinal);
         readonly Dictionary<string, BuildingData> byId = new Dictionary<string, BuildingData>(StringComparer.Ordinal);
         readonly Dictionary<(int, int), List<BuildingData>> grid = new Dictionary<(int, int), List<BuildingData>>();
-        internal readonly Dictionary<string, Dictionary<string, List<Party.Range>>> partyMemo = new Dictionary<string, Dictionary<string, List<Party.Range>>>(StringComparer.Ordinal);
-        internal readonly Dictionary<string, BridgeSpan?> bridgeMemo = new Dictionary<string, BridgeSpan?>(StringComparer.Ordinal);
+        // the memos are filled as buildings are generated, which may be on several threads at once (docs/CITY.md §2)
+        internal readonly ConcurrentDictionary<string, ConcurrentDictionary<string, List<Party.Range>>> partyMemo = new ConcurrentDictionary<string, ConcurrentDictionary<string, List<Party.Range>>>(StringComparer.Ordinal);
+        internal readonly ConcurrentDictionary<string, BridgeSpan?> bridgeMemo = new ConcurrentDictionary<string, BridgeSpan?>(StringComparer.Ordinal);
         readonly HashSet<string> bridged = new HashSet<string>(StringComparer.Ordinal);
         const double BGRID = 32;
 
@@ -117,7 +119,7 @@ namespace Triband.Storey.Generate
         /// <summary>Party ranges along tier k0's edge i, sorted by start.</summary>
         public static List<Range> Ranges(Site site, BuildingData b, int k0, int i)
         {
-            if (!site.partyMemo.TryGetValue(b.id, out var m)) site.partyMemo[b.id] = m = new Dictionary<string, List<Range>>(StringComparer.Ordinal);
+            var m = site.partyMemo.GetOrAdd(b.id, _ => new ConcurrentDictionary<string, List<Range>>(StringComparer.Ordinal));
             string key = k0 + ":" + i;
             if (m.TryGetValue(key, out var hit)) return hit;
 

@@ -40,7 +40,7 @@ namespace Triband.Storey.Editor
             var sel = Selection.activeGameObject != null ? Selection.activeGameObject.GetComponent<StoreySite>() : null;
             if (sel == null || !sel.showLodStats || sel.LodStats is not SiteRenderer.LodStats st) return;
             Handles.BeginGUI();
-            var r = new Rect(10, sv.position.height - 120, 330, 76);
+            var r = new Rect(10, sv.position.height - 120, 400, 76);
             GUI.Box(r, "");
             GUI.Label(new Rect(r.x + 8, r.y + 4, r.width - 10, r.height - 4), st.ToString(), EditorStyles.miniLabel);
             Handles.EndGUI();

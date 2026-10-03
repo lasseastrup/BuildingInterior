@@ -44,13 +44,13 @@ namespace Triband.Storey.Generate
     /// </summary>
     public static class OpeningKinds
     {
-        static readonly Dictionary<string, OpeningKind> all = new Dictionary<string, OpeningKind>(StringComparer.Ordinal);
+        static readonly System.Collections.Concurrent.ConcurrentDictionary<string, OpeningKind> all = new System.Collections.Concurrent.ConcurrentDictionary<string, OpeningKind>(StringComparer.Ordinal);   // read from the build threads too
 
         /// <summary>Goes up with every change, so sites know to build again.</summary>
         public static int Version { get; private set; }
 
         public static void Register(OpeningKind k) { if (k.id.Length == 0) return; all[k.id] = k; Version++; }
-        public static void Remove(string id) { if (all.Remove(id)) Version++; }
+        public static void Remove(string id) { if (all.TryRemove(id, out _)) Version++; }
         public static OpeningKind? Get(string? id) => id != null && all.TryGetValue(id, out var k) ? k : null;
         public static IEnumerable<OpeningKind> All => all.Values;
 

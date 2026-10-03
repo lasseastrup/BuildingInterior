@@ -46,6 +46,9 @@ namespace Triband.Storey.Unity
         [Tooltip("Milliseconds a frame may spend building LOD0 and LOD1 meshes (one is always built when any is wanted).")]
         [Range(0.5f, 33)] public float buildBudgetMs = 6f;
 
+        [Tooltip("Generate LOD0 and LOD1 on worker threads, one fewer than the cores; only the upload is on the main thread. Off builds on the main thread (WebGL always does).")]
+        public bool buildOnWorkerThreads = true;
+
         [Header("Occlusion")]
         [Tooltip("Compile the occlusion discard into the LOD2 and cell materials. Off on the minimum tier: alpha clipping costs early-Z on tile-based GPUs.")]
         public bool occlusionOnFarMaterials = true;
@@ -65,7 +68,7 @@ namespace Triband.Storey.Unity
         {
             s.PX = new double[] { lod0PixelsPerMetre, lod1PixelsPerMetre, lod2PixelsPerMetre };
             s.Hysteresis = hysteresis; s.Fade = Mathf.Max(0.01f, fadeSeconds); s.Far = farDistance;
-            s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.BudgetMs = buildBudgetMs;
+            s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.BudgetMs = buildBudgetMs; s.Threads = buildOnWorkerThreads ? -1 : 0;
         }
     }
 }

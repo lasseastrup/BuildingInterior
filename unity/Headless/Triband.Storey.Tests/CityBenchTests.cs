@@ -63,6 +63,11 @@ namespace Triband.Storey.Tests
                 sw.Restart(); Lod1.Build(site, b); t1 += sw.Elapsed.TotalMilliseconds;
             }
             log.WriteLine($"{sample.Count} buildings: LOD0 {t0 / sample.Count:0.00} ms each (worst {worst:0.0}), LOD1 {t1 / sample.Count:0.00} ms each");
+            // on worker threads, as the renderer does: the wall-clock time for the lot
+            int threads = Math.Max(1, Environment.ProcessorCount - 1);
+            var fresh = new Site(bs); var all = Stopwatch.StartNew();
+            System.Threading.Tasks.Parallel.ForEach(sample, new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = threads }, b => { Lod0.Build(fresh, b); Lod1.Build(fresh, b); });
+            log.WriteLine($"the same on {threads} threads: {all.Elapsed.TotalMilliseconds / sample.Count:0.00} ms a building (LOD0 and LOD1), off the main thread");
             // today LOD0 is several frames' budget and LOD1 about one: the budget lets one through a frame regardless, so
             // a LOD0 build is a hitch (docs/CITY.md §4: building on worker threads is the next step). These bounds catch a regression.
             Assert.True(t1 / sample.Count < 20, "a LOD1 in under 20 ms");

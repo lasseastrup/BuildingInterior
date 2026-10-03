@@ -8,7 +8,7 @@ namespace Triband.Storey.Generate
     /// <summary>Colours as the prototype computes them: CSS hex, converted from sRGB to linear.</summary>
     public static class Colors
     {
-        static readonly Dictionary<string, Rgb> cache = new Dictionary<string, Rgb>(StringComparer.Ordinal);
+        static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Rgb> cache = new System.Collections.Concurrent.ConcurrentDictionary<string, Rgb>(StringComparer.Ordinal);   // read from the build threads too
 
         static double ToLinear(double c) => c < 0.04045 ? c * 0.0773993808 : Math.Pow(c * 0.9478672986 + 0.0521327014, 2.4);
 

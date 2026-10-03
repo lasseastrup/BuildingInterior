@@ -75,6 +75,7 @@ namespace Triband.Storey.Generate
         /// </summary>
         public int Weld()
         {
+            Welded = true;
             int n = P.Count;
             var map = new int[n]; var keep = new List<int>(n);
             var seen = new Dictionary<VertexKey, int>(n);
@@ -103,6 +104,9 @@ namespace Triband.Storey.Generate
             }
             return gone;
         }
+
+        /// <summary>Set by <see cref="Weld"/> (a build thread welds before the upload; the upload then skips it). Add nothing after.</summary>
+        public bool Welded { get; private set; }
 
         /// <summary>A vertex's identity for <see cref="Weld"/>. The wall id stands for the wall data: one id, one wall.</summary>
         readonly struct VertexKey : IEquatable<VertexKey>

@@ -22,8 +22,13 @@ namespace Triband.Storey.Lod
         public double Far = 1500;
         /// <summary>How many LOD0 and LOD1 meshes stay resident in all (shown or not); the least recently shown go first.</summary>
         public int MaxLod0 = 16, MaxLod1 = 260;
-        /// <summary>Milliseconds a frame may spend building LOD0 and LOD1 meshes (at least one is built when any is wanted).</summary>
+        /// <summary>
+        /// Milliseconds a frame may spend building LOD0 and LOD1 meshes (at least one is built when any is wanted). With
+        /// worker threads, only the upload counts: the meshes are generated off the main thread.
+        /// </summary>
         public double BudgetMs = 6;
+        /// <summary>Worker threads generating detail at once: 0 builds on the main thread, -1 one fewer than the cores (at least one).</summary>
+        public int Threads = -1;
     }
 
     /// <summary>

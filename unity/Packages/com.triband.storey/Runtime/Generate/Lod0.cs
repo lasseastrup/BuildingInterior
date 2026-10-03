@@ -31,7 +31,7 @@ namespace Triband.Storey.Generate
             r.Glass.Walls = r.Op.Walls;   // glass shares the wall ids of the walls it sits in
             r.Glass.WallBase = r.Op.WallBase;
             if (solids) r.Op.Solids = new List<Solid>();
-            site.partyMemo.Remove(b.id);
+            site.partyMemo.TryRemove(b.id, out _);
             foreach (var _ in self.Steps(r)) { }
             return r;
         }

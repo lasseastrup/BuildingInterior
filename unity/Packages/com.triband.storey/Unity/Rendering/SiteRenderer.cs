@@ -66,6 +66,15 @@ namespace Triband.Storey.Unity
         readonly HashSet<(int x, int z)> dirtyCells = new HashSet<(int, int)>();
         readonly HashSet<int> forcedIdx = new HashSet<int>();
         readonly Dictionary<string, int> carry = new Dictionary<string, int>(StringComparer.Ordinal);
+        // detail being generated on worker threads: one at a time per building, uploaded when done
+        readonly List<Job> jobs = new List<Job>();
+        readonly HashSet<int> busy = new HashSet<int>();
+
+        sealed class Job
+        {
+            public Built bt = null!; public Site site = null!; public string name = ""; public int which;
+            public System.Threading.Tasks.Task<object> task = null!;
+        }
         GameObject? cellRoot;
         float lastLod = -1;
         bool lodBusy;
@@ -104,8 +113,8 @@ namespace Triband.Storey.Unity
             public int resident0, resident1;
             /// <summary>Cells, the meshes they're split into, and the cells drawn.</summary>
             public int cells, cellMeshes, cellsShown;
-            /// <summary>Detail LODs wanted and not built yet, and how many were built this frame.</summary>
-            public int queued, builtThisFrame;
+            /// <summary>Detail LODs wanted and not started yet, being generated on worker threads, and uploaded this frame.</summary>
+            public int queued, generating, builtThisFrame;
             /// <summary>Milliseconds the LOD work took this frame (picking, building, cells).</summary>
             public double ms;
 
@@ -113,7 +122,7 @@ namespace Triband.Storey.Unity
                 $"{buildings:N0} buildings: LOD0 {lod0}, LOD1 {lod1}, LOD2 {lod2}, not drawn {culled}\n" +
                 $"Resident: LOD0 {resident0}, LOD1 {resident1}\n" +
                 $"Cells: {cellsShown} of {cells} drawn ({cellMeshes} meshes)\n" +
-                $"Built this frame {builtThisFrame}, waiting {queued}; LOD {ms:0.00} ms";
+                $"Built this frame {builtThisFrame}, generating {generating}, waiting {queued}; LOD {ms:0.00} ms";
         }
 
         /// <summary>Whether the LOD is automatic (made with settings).</summary>
@@ -369,26 +378,66 @@ namespace Triband.Storey.Unity
             table.SetLod(bt.idx, e.Shown, e.From, (float)e.T);
         }
 
-        /// <summary>A building's LOD0 (with its glass and its walls in the table) or LOD1.</summary>
-        void BuildDetail(Built bt, BuildingData b, int which)
+        /// <summary>A building's LOD0 (with its glass and its walls in the table) or LOD1, generated and uploaded now.</summary>
+        void BuildDetail(Built bt, BuildingData b, int which) => FinishDetail(bt, b.name, which, Generate(site!, b, bt.idx, which));
+
+        /// <summary>
+        /// The engine-free half of a detail build: generated, tagged and welded. Safe on a worker thread (the generator's
+        /// memos are per site and thread-safe; ParallelBuildTests).
+        /// </summary>
+        static object Generate(Site site, BuildingData b, int idx, int which)
+        {
+            if (which == 1) { var m = Lod1.Build(site, b); m.RetagForUpload(idx + Lod1.LOD_TAG); m.Weld(); return m; }
+            var l0 = Lod0.Build(site, b);
+            l0.Op.RetagForUpload(idx); l0.Op.Weld(); l0.Glass.RetagForUpload(idx); l0.Glass.Weld();
+            return l0;
+        }
+
+        /// <summary>The main thread's half: the walls into the table, the meshes uploaded and drawn.</summary>
+        void FinishDetail(Built bt, string name, int which, object made)
         {
             bool opt = Application.isPlaying;   // edit mode rebuilds on every drag: skip the cache reorder there
             if (which == 1)
             {
-                Add(bt, 1, "LOD1", MeshUpload.Upload(Tagged(Lod1.Build(site!, b), bt.idx + Lod1.LOD_TAG), b.name + " LOD1", RowOf, -1, opt, windows: true), opaque, true);
+                Add(bt, 1, "LOD1", MeshUpload.Upload((MeshBuilder)made, name + " LOD1", RowOf, -1, opt, windows: true), opaque, true);
                 return;
             }
-            var l0 = Lod0.Build(site!, b); bt.l0 = l0;
+            var l0 = (Lod0Result)made; bt.l0 = l0;
             bt.wallCount = l0.Op.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
             if (bt.wallBase >= 0)
             {
                 for (int i = 0; i < bt.wallCount; i++) table.WallData[bt.wallBase + i] = MeshUpload.WallData(l0.Op.Walls[i].W);
                 table.MarkWallDataDirty();
             }
-            Add(bt, 0, "LOD0", MeshUpload.Upload(Tagged(l0.Op, bt.idx), b.name + " LOD0", RowOf, bt.wallBase, opt, windows: true), opaque, true);
-            Add(bt, 0, "LOD0 glass", MeshUpload.Upload(Tagged(l0.Glass, bt.idx), b.name + " glass", RowOf, bt.wallBase, opt), glass, false);
+            Add(bt, 0, "LOD0", MeshUpload.Upload(l0.Op, name + " LOD0", RowOf, bt.wallBase, opt, windows: true), opaque, true);
+            Add(bt, 0, "LOD0 glass", MeshUpload.Upload(l0.Glass, name + " glass", RowOf, bt.wallBase, opt), glass, false);
             // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
             if (lods != null && colliders && bt.collision == null) colliderPending.Add(bt.id);
+        }
+
+        int Threads => lods == null ? 0 : lods.Settings.Threads >= 0 ? lods.Settings.Threads : Math.Max(1, Environment.ProcessorCount - 1);
+
+        /// <summary>
+        /// Detail finished on the worker threads, uploaded within the budget (the rest wait for the next frame). A result
+        /// for a layout or a building since rebuilt, or one no longer wanted, is thrown away.
+        /// </summary>
+        int TakeJobs(System.Diagnostics.Stopwatch sw, int made)
+        {
+            var l = lods!;
+            for (int i = 0; i < jobs.Count; i++)
+            {
+                var j = jobs[i]; if (!j.task.IsCompleted) continue;
+                bool ok = j.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && ReferenceEquals(j.site, site)
+                    && built.TryGetValue(j.bt.id, out var cur) && ReferenceEquals(cur, j.bt);
+                var e = ok ? l.Get(j.bt.idx) : null;
+                if (e == null || (j.which == 0 ? e.Has0 : e.Has1) || e.Want > j.which) ok = false;
+                if (ok && made > 0 && sw.Elapsed.TotalMilliseconds > l.Settings.BudgetMs) continue;   // next frame
+                jobs.RemoveAt(i--); busy.Remove(j.bt.idx);
+                if (j.task.IsFaulted) _ = j.task.Exception;   // observed: a build of a layout edited under it may throw, and is dropped
+                if (!ok) continue;
+                FinishDetail(j.bt, j.name, j.which, j.task.Result); l.SetBuilt(j.bt.idx, j.which, true); made++;
+            }
+            return made;
         }
 
         /// <summary>Drop a building's LOD0 (and its walls) or LOD1; its collider stays.</summary>
@@ -420,6 +469,8 @@ namespace Triband.Storey.Unity
                 var e = l.Get(bt.idx); var b = site?.ById(id);
                 if (e != null && !e.Has0 && b != null) { BuildDetail(bt, b, 0); l.SetBuilt(bt.idx, 0, true); made++; }
             }
+            int threads = Threads;
+            if (jobs.Count > 0) made = TakeJobs(sw, made);
             if (Eye is LodEye eye)
             {
                 var o = parent.position;   // the layout is in the site's space: unrotated, unscaled
@@ -427,9 +478,19 @@ namespace Triband.Storey.Unity
                 foreach (var (idx, which) in f.Drop) if (byIdx.TryGetValue(idx, out var bt)) DropDetail(bt, which);
                 foreach (var (idx, which, _) in f.Build)
                 {
-                    if (made > 0 && sw.Elapsed.TotalMilliseconds > l.Settings.BudgetMs) { queued++; continue; }
+                    if (busy.Contains(idx)) continue;   // being generated
                     if (!byIdx.TryGetValue(idx, out var bt)) continue;
                     var b = site?.ById(bt.id); if (b == null) continue;
+                    if (threads > 0)
+                    {
+                        // most pixels first, as many at once as there are threads; the upload comes in a later frame
+                        if (jobs.Count >= threads) { queued++; continue; }
+                        var s0 = site!; int ix = bt.idx, w = which;
+                        jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, task = System.Threading.Tasks.Task.Run(() => Generate(s0, b, ix, w)) });
+                        busy.Add(idx);
+                        continue;
+                    }
+                    if (made > 0 && sw.Elapsed.TotalMilliseconds > l.Settings.BudgetMs) { queued++; continue; }
                     BuildDetail(bt, b, which); l.SetBuilt(idx, which, true); made++;
                 }
                 foreach (int idx in f.Changed)
@@ -452,10 +513,10 @@ namespace Triband.Storey.Unity
             }
             int r0 = 0, r1 = 0;
             foreach (var bt in built.Values) { if (bt.objs[0].Count > 0) r0++; if (bt.objs[1].Count > 0) r1++; }
-            lodBusy = fading || queued > 0;
+            lodBusy = fading || queued > 0 || jobs.Count > 0;
             stats.buildings = built.Count; stats.resident0 = r0; stats.resident1 = r1;
             stats.cells = cells.Count; stats.cellMeshes = pieces; stats.cellsShown = shown;
-            stats.queued = queued; stats.builtThisFrame = made; stats.ms = sw.Elapsed.TotalMilliseconds;
+            stats.queued = queued; stats.generating = jobs.Count; stats.builtThisFrame = made; stats.ms = sw.Elapsed.TotalMilliseconds;
         }
 
         /// <summary>A cell's massings merged again (a member was built, rebuilt or removed).</summary>
@@ -486,9 +547,6 @@ namespace Triband.Storey.Unity
         }
 
         int RowOf(StyleRef s) => book!.RowOf(s);
-
-        /// <summary>The building's tag for upload: its table row (its layout index) plus the LOD.</summary>
-        static MeshBuilder Tagged(MeshBuilder gb, int tag) { gb.RetagForUpload(tag); return gb; }
 
         void Add(Built bt, int which, string name, Mesh mesh, Material mat, bool shadows)
         {
@@ -611,6 +669,7 @@ namespace Triband.Storey.Unity
             foreach (var key in new List<(int, int)>(cells.Keys)) { cells[key].members.Clear(); BuildCell(key); }
             cells.Clear(); dirtyCells.Clear();
             lods?.Clear();
+            jobs.Clear(); busy.Clear();   // what they make is for the old layout: let them finish unread
             book?.Clear();
             shownLod = -1;
         }

@@ -57,7 +57,7 @@ namespace Triband.Storey.Unity
         /// <param name="windows">Opaque panes carry their place on the pane for the window shader (the opaque meshes; not the see-through glass).</param>
         public static Mesh Upload(MeshBuilder gb, string name, Func<StyleRef, int> rowOf, int wallBase = -1, bool optimize = false, bool windows = false)
         {
-            gb.Weld();
+            if (!gb.Welded) gb.Weld();
             int nv = gb.Verts;
             var mesh = new Mesh { name = name, indexFormat = nv > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
             var layout = gb.Lean

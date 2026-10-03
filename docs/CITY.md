@@ -35,7 +35,10 @@ A Storey Site's **LOD mode** is *Automatic* by default; *Fixed* shows one LOD ev
   - Only the massings are built when a layout loads.
   - A building that wants LOD0 or LOD1 asks for it, and the ones covering the most pixels go first.
   - It shows the best LOD it already has meanwhile.
-  - Building stops after 6 ms a frame, but at least one is always built when any is waiting.
+  - The meshes are generated on worker threads, one fewer than the cores, and one building at a time each. The main thread only uploads them, for up to 6 ms a frame (at least one when any is ready).
+  - A result for a layout or building that has changed since is thrown away, as is one no longer wanted.
+  - With **Build on worker threads** off, and always on WebGL, building happens on the main thread and stops after 6 ms a frame (at least one is always built).
+  - The generator's memos and caches are thread-safe. `ParallelBuildTests` checks that building on 8 threads gives exactly the meshes that building one after another does.
 - **Residency.** At most 16 LOD0 and 260 LOD1 meshes are kept. Past that, the least recently shown ones are dropped. A building's collider comes with its first LOD0 and stays after that LOD0 is dropped.
 - **Forced buildings** always have LOD0. It is built at once when needed, never shown as a massing:
   - in the editor, the selected building and the one being edited (`SiteView.focusId`, `activeId`);
@@ -67,10 +70,11 @@ Headless numbers (`CityBenchTests`, `LodManagerTests`). They are CPU only, witho
 | Loading 3,000 buildings: every massing | 0.21 ms a building, 0.63 s in all |
 | Merging the 307 cells | 43 ms |
 | Picking every building's LOD | 0.4–0.9 ms a frame |
-| One LOD1 | about 6 ms |
-| One LOD0 | about 23 ms on average, about 100 ms at worst (tall walk-in buildings) |
+| One LOD1 | about 6–8 ms |
+| One LOD0 | about 23–34 ms on average, 100–150 ms at worst (tall walk-in buildings) |
+| LOD0 and LOD1 on 3 worker threads | about 9 ms a building, off the main thread |
 
-LOD0 costs several frames' budget, and the budget always lets one build through, so **each LOD0 build is a hitch**. LOD1 costs about one frame's budget. The next step is to build on worker threads: the generator is engine-free, so only the upload needs the main thread.
+The time for one LOD0 is several frames' budget. That's why the generating is on worker threads, so the main thread pays only for the upload. How long the upload takes in Unity is not measured yet. If it shows up as a hitch, the next step is to build the vertex buffers on the workers too, with `Mesh.AllocateWritableMeshData`.
 
 ## 5. Trying it in Unity
 
@@ -83,7 +87,7 @@ LOD0 costs several frames' budget, and the budget always lets one build through,
 
 ## 6. Not yet
 
-- Building detail on worker threads (§4).
+- Measuring the upload in Unity, and moving the vertex buffers onto the workers if it hitches (§4).
 - Districts: streaming parts of the city in and out (Addressables). The whole layout is still loaded at once.
 - Cells baked at import. They are merged when the layout loads, which takes tens of milliseconds for the test city.
 - Memory accounting against the budgets in the package plan §6.6.

@@ -61,8 +61,11 @@ namespace UnityEngine
 
     public static class Time { public static float deltaTime => 0; public static float realtimeSinceStartup => 0; }
 
+    public enum RuntimePlatform { OSXEditor = 0, WindowsEditor = 7, IPhonePlayer = 8, Android = 11, LinuxEditor = 16, WebGLPlayer = 17 }
+
     public static class Application
     {
+        public static RuntimePlatform platform => RuntimePlatform.LinuxEditor;
         public static bool isPlaying => false;
         public static bool isMobilePlatform => false;
     }
