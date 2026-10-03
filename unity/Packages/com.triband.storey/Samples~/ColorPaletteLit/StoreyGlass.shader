@@ -41,7 +41,7 @@ Shader "Flamingo/Storey/Glass"
             #pragma multi_compile _ TRIBAND_SHADOWS_ON
             #pragma multi_compile _ DOTS_INSTANCING_ON
             #include "Packages/com.triband.storey/Unity/Shaders/StoreyLit.hlsl"
-            #include "StoreyColorPaletteLit.hlsl"
+            #include_with_pragmas "StoreyColorPaletteLit.hlsl"
             #include "Packages/com.triband.storey/Unity/Shaders/StoreyFragment.hlsl"
             ENDHLSL
         }

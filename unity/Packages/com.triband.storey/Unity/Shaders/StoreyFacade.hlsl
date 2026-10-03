@@ -8,6 +8,8 @@
 #ifndef STOREY_FACADE_INCLUDED
 #define STOREY_FACADE_INCLUDED
 
+#include "StoreyWindowId.hlsl"
+
 StructuredBuffer<float4> _StoreyParams;
 #define STOREY_PARAM_TEXELS 6
 

@@ -20,16 +20,7 @@ float4 _StoreyWindowLight;      // at night: the room × a lamp colour between t
 float4 _StoreyWindowLight2;
 float4 _StoreyWindowNight;      // x: night blend (0 day .. 1 night); y: the share of windows that light at full night
 
-// A window's number, 0 to 255, from its centre on the wall's face in site space: Facade.WindowId's integer hash, so
-// LOD2 works out the number the geometry LODs carry. The 25 cm cells' edges sit at odd 12.5 cm, never on the
-// centimetre grid the centres are on, so float rounding never tips a centre into the next cell.
-float StoreyWindowId(float3 c)
-{
-    uint3 i = (uint3)(int3)floor(c * 4.0 + 0.5);
-    uint h = (i.x * 73856093u) ^ (i.y * 19349663u) ^ (i.z * 83492791u);
-    h ^= h >> 16; h *= 0x7feb352du; h ^= h >> 15; h *= 0x846ca68bu; h ^= h >> 16;
-    return (float)(h & 255u);
-}
+#include "StoreyWindowId.hlsl"
 
 // The room atlas's UV for a point (uv, 0 to 1) on a pane, seen along viewTS (towards the camera, in the pane's
 // tangent space: x across, y up, z out of the wall). The same inputs as the project's WindowInteriorParallax_float

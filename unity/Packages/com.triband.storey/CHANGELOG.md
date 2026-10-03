@@ -12,6 +12,8 @@ All notable changes to this package are documented here. The format follows [Kee
 - A building's row in the building table is its index in the layout, so party walls find their neighbour in the shader.
 
 ### Fixed
+- The Massing shader's depth and shadow passes failed to compile ("undeclared identifier 'StoreyWindowId'"). `StoreyFacade.hlsl` now includes the new `StoreyWindowId.hlsl` itself.
+- Color Palette Lit sample: its three shaders include `StoreyColorPaletteLit.hlsl` with `#include_with_pragmas`, so that file's own `#include_with_pragmas` lines are honoured. This removes the "Treating '#include_with_pragmas' directive as '#include'" and "'multi_compile_fog': unknown pragma ignored" warnings. Re-import the sample to get it.
 - Dormer windows ignored the style's window rules. They're now dressed as the facade's windows are (`Facade.Dress`: sills, heads, frames, bars, the artist's window, the window shader's rooms), through `RoofPart.WinF`/`WinO`.
 - The Color Pipeline palette no longer logs a warning for a colour missing from the palette, or for one shown as its nearest match.
 - The editor's cutaway in the Interior tab. Every wall has an id, so the shader drops walls by their slide values, which only the occlusion system set (in Play mode). The site's renderer now drops the walls between the Scene view camera and the focus itself.
