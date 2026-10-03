@@ -41,7 +41,15 @@ namespace Triband.Storey.Unity
         int kindsSeen = -1;
 
         /// <summary>Set by the editor's Storey tools each frame they are active: the storey being edited, isolate. Null draws the plain layout.</summary>
-        public SiteView? View { get; set; }
+        public SiteView? View { get => view; set { view = value; if (value == null) ViewSource = null; } }
+        SiteView? view;
+
+        /// <summary>
+        /// Where the editor's view comes from at the moment the site is built and drawn. The tools set it so the floor clip
+        /// is worked out from the layout just built: a view kept from the frame before would clip a storey made shorter
+        /// at its old ceiling for a frame, and its ceiling would flash.
+        /// </summary>
+        public Func<SiteView?>? ViewSource { get; set; }
 
         /// <summary>Something is still easing in the editor's view (the cutaway's walls): keep redrawing.</summary>
         public bool Animating => site != null && site.Animating;
@@ -108,7 +116,7 @@ namespace Triband.Storey.Unity
             pendingAll = false; pending.Clear();
             site.Lod = displayedLod;
             site.Occlusion = Application.isPlaying && Occlusion != null && Occlusion.isActiveAndEnabled ? Occlusion.Apply : null;
-            site.Frame(lodTint, View);
+            site.Frame(lodTint, ViewSource != null ? (view = ViewSource()) : view);
         }
     }
 }

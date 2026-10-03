@@ -72,13 +72,22 @@ namespace Triband.Storey.Editor
                 StoreyProblems.Draw(e);
                 StoreyJuice.Draw();
             }
+            var shown = site.View;
             site.View = ViewFor(e, e.Selected, sv, site.transform.position);
+            // and again when the site builds and draws, from the layout it has just built (StoreySite.ViewSource)
+            var origin = site.transform.position;
+            site.ViewSource = () => ViewFor(e, e.Selected, sv, origin);
+            if (!Same(shown, site.View)) EditorApplication.QueuePlayerLoopUpdate();
             FollowFloor(e, e.Selected, sv);
             // keep drawing while anything eases (floor clip, walls, a building growing in, the camera, isolate, the effects):
             // edit mode only updates when asked
             if (easing || site.Animating || revealing || pivotTo != null || isoEasing || StoreyJuice.Active) { EditorApplication.QueuePlayerLoopUpdate(); sv.Repaint(); }
             else if (Event.current.type == EventType.MouseMove) sv.Repaint();
         }
+
+        static bool Same(SiteView? a, SiteView? b) =>
+            a.HasValue == b.HasValue && (!a.HasValue || (a.Value.activeId == b!.Value.activeId && a.Value.clipY == b.Value.clipY && a.Value.cut == b.Value.cut
+                && a.Value.walls == b.Value.walls && a.Value.cutBase == b.Value.cutBase && a.Value.cutTop == b.Value.cutTop && a.Value.isolateId == b.Value.isolateId && a.Value.isolateAmount == b.Value.isolateAmount));
 
         public override void OnWillBeDeactivated()
         {
