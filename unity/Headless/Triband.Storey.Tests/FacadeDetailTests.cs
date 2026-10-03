@@ -120,5 +120,25 @@ namespace Triband.Storey.Tests
             var p = PrototypeJson.WriteStyle(Styles.Preset("brick"));
             foreach (var key in new[] { "head", "panes", "frames", "bandH", "doorType", "plinthH", "foundation", "bricks", "frame", "plinth" }) Assert.DoesNotContain($"\"{key}\"", p);
         }
+
+        [Fact]
+        public void SillsAndHeadsCanGo()
+        {
+            var plain = Styles.Preset("brick").Clone(); plain.ground = GroundType.Match;
+            var (_, b0, s0) = Block(plain); int all = Lod0.Build(s0, b0).Op.Tris;
+            var bare = plain.Clone(); bare.sills = false; bare.heads = false;
+            var (_, b1, s1) = Block(bare); var op = Lod0.Build(s1, b1).Op;
+            Assert.True(op.Tris < all, "the sills and heads are gone");
+            var rep = CoplanarCheck.Run(op);
+            Assert.True(rep.Overlaps.Count == 0, string.Join("\n", rep.Overlaps.Take(10)));
+            // heads off takes the arched hood too
+            var arch = plain.Clone(); arch.head = HeadType.Arch; var noHead = arch.Clone(); noHead.heads = false;
+            var (_, ba, sa) = Block(arch); var (_, bn, sn) = Block(noHead);
+            Assert.True(Lod0.Build(sn, bn).Op.Tris < Lod0.Build(sa, ba).Op.Tris);
+            // the file keeps them, and leaves them out when on
+            var back = PrototypeJson.ReadStyle(PrototypeJson.WriteStyle(bare));
+            Assert.False(back.sills); Assert.False(back.heads);
+            Assert.DoesNotContain("sills", PrototypeJson.WriteStyle(plain));
+        }
     }
 }

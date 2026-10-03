@@ -546,7 +546,10 @@ namespace Triband.Storey.Editor
             bool artist = Generate.OpeningKinds.Of(st, false) != null;
             using (new EditorGUI.DisabledScope(artist))
             {
-                StyleEnum(e, k0, "Window heads", st.head, (s, x) => s.head = x);
+                StyleToggle(e, k0, "Sills", st.sills, (s, x) => s.sills = x);
+                StyleToggle(e, k0, "Heads", st.heads, (s, x) => s.heads = x);
+                using (new EditorGUI.DisabledScope(!st.heads))
+                    StyleEnum(e, k0, "   Head shape", st.head, (s, x) => s.head = x);
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     bool panes = EditorGUILayout.Toggle(new GUIContent("Glazing bars", "Divide every window into panes"), st.paneCols.HasValue || st.paneRows.HasValue);

@@ -264,6 +264,8 @@ namespace Triband.Storey
 
         /// <summary>Window and door heads: flat (a thin head strip) or an arched hood.</summary>
         public HeadType head = HeadType.Flat;
+        /// <summary>A sill under each window, and a head (flat or arched, <see cref="head"/>) over it; off, the window is a plain hole with its glass.</summary>
+        public bool sills = true, heads = true;
         /// <summary>Glazing bars: columns and rows of panes per window; null = the prototype's single bar on wide windows.</summary>
         public int? paneCols, paneRows;
         /// <summary>Frames all round each window and door, in the frame colour (sills and heads too).</summary>

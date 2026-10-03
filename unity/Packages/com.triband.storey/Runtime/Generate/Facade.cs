@@ -151,6 +151,7 @@ namespace Triband.Storey.Generate
             double T = Dim.T_EXT;
             bool frames = st != null && st.frames, arch = st != null && st.head == HeadType.Arch, glazed = st != null && st.doorType == DoorType.Glazed;
             bool bars = st != null && (st.paneCols > 1 || st.paneRows > 1);
+            bool sills = st == null || st.sills, heads = st == null || st.heads;
             var trim = frames ? C.frame : C.trim;
             // an artist's window or door (OpeningKinds) stands in for all of the generator's dressing
             var wk = OpeningKinds.Of(st, false); var dk = OpeningKinds.Of(st, true);
@@ -163,7 +164,7 @@ namespace Triband.Storey.Generate
                     op.OBox(F, o.u0 - 0.08, o.u0, y, y + o.y1 + 0.08, T, T + 0.06, trim, trim, Skip.In | Skip.Bot);
                     op.OBox(F, o.u1, o.u1 + 0.08, y, y + o.y1 + 0.08, T, T + 0.06, trim, trim, Skip.In | Skip.Bot);
                     if (!o.bare && !glazed) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
-                    else if (arch && !o.bare) Hood(op, F, o.u0 - 0.08 - HoodOver, o.u1 + 0.08 + HoodOver, y + o.y1 + 0.08, trim);
+                    else if (arch && heads && !o.bare) Hood(op, F, o.u0 - 0.08 - HoodOver, o.u1 + 0.08 + HoodOver, y + o.y1 + 0.08, trim);
                     if (glazed && !o.bare) GlazedDoor(op, gl, F, o, y, C, shell);
                     else if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, T * 0.45, C.door, false);
                 }
@@ -172,9 +173,9 @@ namespace Triband.Storey.Generate
                     if (shell) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, C.glassDark, false);
                     else Facade.Pane(gl, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, C.glass, true);
                     double ex = o.full ? 0 : 0.06, eh = o.full ? 0 : 0.04;
-                    op.OBox(F, o.u0 - ex, o.u1 + ex, y + o.y0 - 0.07, y + o.y0, T, T + 0.07, trim, trim, Skip.In);
-                    if (arch && !o.full) Hood(op, F, o.u0 - HoodOver, o.u1 + HoodOver, y + o.y1, trim);
-                    else op.OBox(F, o.u0 - eh, o.u1 + eh, y + o.y1, y + o.y1 + 0.06, T, T + 0.04, trim, trim, Skip.In);
+                    if (sills) op.OBox(F, o.u0 - ex, o.u1 + ex, y + o.y0 - 0.07, y + o.y0, T, T + 0.07, trim, trim, Skip.In);
+                    if (heads && arch && !o.full) Hood(op, F, o.u0 - HoodOver, o.u1 + HoodOver, y + o.y1, trim);
+                    else if (heads) op.OBox(F, o.u0 - eh, o.u1 + eh, y + o.y1, y + o.y1 + 0.06, T, T + 0.04, trim, trim, Skip.In);
                     double fw = frames ? FrameW : 0;
                     if (frames) WindowFrame(op, F, o.u0, o.u1, y + o.y0, y + o.y1, fw, C.frame);
                     if (bars) Bars(op, F, o.u0 + fw, o.u1 - fw, y + o.y0 + fw, y + o.y1 - fw, st!.paneCols ?? 1, st.paneRows ?? 1, C.frame);
