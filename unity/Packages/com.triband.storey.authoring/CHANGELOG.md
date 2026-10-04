@@ -10,6 +10,8 @@
 - The automatic LOD picks for the Scene view's camera, and the editor updates when that camera moves. The LOD stats are shown in the Scene view for a selected site (`StoreyLodEditor`).
 
 ### Changed
+- The test city moved from the site's inspector to **Tools ▸ Storey ▸ Test City** (Make 300, 1,000 or 3,000 Buildings, which asks first, and Remove Test City), acting on the selected site.
+- The Interior tab's tools (Select, Wall, Door, Erase, Stairs, Lift) are buttons with drawn icons, the name under each and what it does in the tooltip.
 - **Log Edit Timings** is kept for the editor session only: it is off again after a restart.
 - The Interior tab's wall tool refuses a wall wholly outside the storey, such as one over a setback's terrace, and shows it red while drawing. Nothing of such a wall was built. A wall partly outside is still cut to the storey, as before.
 - Defaults in the Interior tab: **Walls** starts at *Up*, and **Camera follows** is off.

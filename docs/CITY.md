@@ -13,7 +13,7 @@ How Storey draws a few thousand buildings: a test city to measure with, the auto
   - To make that file: `cd prototype/tools && npm run city`.
 - Generated buildings are marked `gen`. Making a city again replaces them. `TestCity.Clear` removes them.
 
-In the editor: in the Storey Site inspector, open **Test city** and pick 300, 1,000 or 3,000. **Remove** takes them out. The city is an edit like any other, so it is saved with the layout and can be undone.
+In the editor: select a Storey Site, then **Tools ▸ Storey ▸ Test City ▸ Make 300 / 1,000 / 3,000 Buildings**. It asks before adding them. **Remove Test City** takes them out. It's in a menu rather than the site's inspector so nobody adds thousands of buildings by accident. The city is an edit like any other, so it is saved with the layout and can be undone.
 
 ## 2. The automatic LOD
 
@@ -83,7 +83,7 @@ The time for one LOD0 is several frames' budget. That's why the generating is on
 ## 5. Trying it in Unity
 
 1. Select a Storey Site. In **Site settings**, check that LOD mode is *Automatic* and turn on **Show LOD stats**.
-2. Open **Test city** and pick 3,000.
+2. **Tools ▸ Storey ▸ Test City ▸ Make 3,000 Buildings**.
 3. Orbit and zoom in the Scene view.
    - The stats in the corner show how many buildings are at each LOD, how many meshes are resident, how many cells are drawn, and the LOD time.
    - Turn on **LOD tint** to see the LODs in colour.

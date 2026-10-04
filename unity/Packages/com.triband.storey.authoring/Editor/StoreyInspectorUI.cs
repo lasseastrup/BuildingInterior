@@ -76,6 +76,34 @@ namespace Triband.Storey.Editor
             return picked;
         }
 
+        static GUIStyle? toolLabel;
+        static GUIStyle ToolLabel => toolLabel ??= new GUIStyle(EditorStyles.miniLabel) { alignment = TextAnchor.MiddleCenter };
+
+        /// <summary>A row of tools, each an icon over its name (the hint is the tooltip). Returns the one picked.</summary>
+        public static int ToolBar(int current, (string label, string hint, Action<Rect, Color> icon)[] tools)
+        {
+            var row = GUILayoutUtility.GetRect(0, 44, GUILayout.ExpandWidth(true));
+            int picked = current; float w = row.width / tools.Length;
+            for (int i = 0; i < tools.Length; i++)
+            {
+                var r = new Rect(row.x + i * w, row.y, w - (i < tools.Length - 1 ? 2 : 0), row.height);
+                bool on = i == current;
+                if (GUI.Button(r, new GUIContent("", tools[i].hint), GUI.skin.button) && !on) picked = i;
+                if (Event.current.type != EventType.Repaint) continue;
+                if (on)
+                {
+                    EditorGUI.DrawRect(new Rect(r.x + 1, r.y + 1, r.width - 2, r.height - 2), new Color(Accent.r, Accent.g, Accent.b, 0.22f));
+                    EditorGUI.DrawRect(new Rect(r.x + 1, r.yMax - 3, r.width - 2, 2), Accent);
+                }
+                var col = on ? Accent : Ink;
+                tools[i].icon(new Rect(r.x + r.width / 2 - 10, r.y + 4, 20, 20), col);
+                var keep = ToolLabel.normal.textColor; ToolLabel.normal.textColor = col;
+                ToolLabel.Draw(new Rect(r.x, r.y + 25, r.width, 16), tools[i].label, false, false, false, false);
+                ToolLabel.normal.textColor = keep;
+            }
+            return picked;
+        }
+
         /// <summary>The selected mode's line, under the bar, when the buttons are too narrow to hold it.</summary>
         public static void ModeHintLine(string hint) => EditorGUILayout.LabelField(hint, Caption);
 
@@ -108,6 +136,51 @@ namespace Triband.Storey.Editor
             foreach (var y in new[] { 0.22f, 0.45f })
                 foreach (var x in new[] { 0.3f, 0.56f }) EditorGUI.DrawRect(new Rect(r.x + x * r.width, r.y + y * r.height, 0.14f * r.width, 0.14f * r.height), c);
             EditorGUI.DrawRect(new Rect(r.x + 0.42f * r.width, r.y + 0.68f * r.height, 0.16f * r.width, 0.24f * r.height), c);
+        }
+
+        // ---- the Interior tab's tools ----
+
+        /// <summary>Select: a pointer.</summary>
+        public static void SelectIcon(Rect r, Color c)
+        {
+            Lines(r, c, 2f, (0.3f, 0.1f), (0.3f, 0.85f), (0.48f, 0.66f), (0.62f, 0.95f), (0.72f, 0.9f), (0.58f, 0.62f), (0.82f, 0.6f), (0.3f, 0.1f));
+        }
+
+        /// <summary>Wall: a thick wall between two points.</summary>
+        public static void WallIcon(Rect r, Color c)
+        {
+            Lines(r, c, 4f, (0.15f, 0.75f), (0.85f, 0.25f));
+            Dot(r, c, 0.15f, 0.75f, 0.2f); Dot(r, c, 0.85f, 0.25f, 0.2f);
+        }
+
+        /// <summary>Door: a wall with a gap and the door swinging open in it.</summary>
+        public static void DoorIcon(Rect r, Color c)
+        {
+            Lines(r, c, 3f, (0.05f, 0.8f), (0.3f, 0.8f)); Lines(r, c, 3f, (0.75f, 0.8f), (0.95f, 0.8f));
+            Lines(r, c, 2f, (0.3f, 0.8f), (0.3f, 0.35f));
+            var arc = new (float, float)[9];
+            for (int i = 0; i < 9; i++) { double a = Math.PI / 2 * i / 8; arc[i] = (0.3f + 0.45f * (float)Math.Sin(a), 0.8f - 0.45f * (float)Math.Cos(a)); }
+            Lines(r, c, 1.2f, arc);
+        }
+
+        /// <summary>Erase: a cross.</summary>
+        public static void EraseIcon(Rect r, Color c)
+        {
+            Lines(r, c, 3f, (0.2f, 0.2f), (0.8f, 0.8f)); Lines(r, c, 3f, (0.8f, 0.2f), (0.2f, 0.8f));
+        }
+
+        /// <summary>Stairs: steps going up.</summary>
+        public static void StairsIcon(Rect r, Color c)
+        {
+            Lines(r, c, 2.5f, (0.08f, 0.9f), (0.08f, 0.72f), (0.3f, 0.72f), (0.3f, 0.52f), (0.52f, 0.52f), (0.52f, 0.32f), (0.74f, 0.32f), (0.74f, 0.12f), (0.95f, 0.12f));
+        }
+
+        /// <summary>Lift: a shaft with up and down arrows.</summary>
+        public static void LiftIcon(Rect r, Color c)
+        {
+            Lines(r, c, 2f, (0.18f, 0.08f), (0.82f, 0.08f), (0.82f, 0.92f), (0.18f, 0.92f), (0.18f, 0.08f));
+            Lines(r, c, 2f, (0.35f, 0.4f), (0.5f, 0.22f), (0.65f, 0.4f));
+            Lines(r, c, 2f, (0.35f, 0.6f), (0.5f, 0.78f), (0.65f, 0.6f));
         }
 
         /// <summary>Interior: a floor plan, rooms and a doorway.</summary>
