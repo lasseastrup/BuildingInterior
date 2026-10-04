@@ -145,8 +145,22 @@ namespace Triband.Storey.Generate
             if (!step) Surf(outer, floorHoles, y, up, k == N ? C.roof : C.floor);
             else
             {
-                if (!shell) Surf(V2(above!), floorHoles, y, up, C.floor);
-                foreach (var poly in Geo.TerracePolys(below!, above!)) Surf(V2(poly[0]), poly.GetRange(1, poly.Count - 1).ConvertAll(V2), y, up, C.roof);
+                // a stair opening out on the terrace (straight flights coming up onto it): the deck is cut round it, and the
+                // floor above the setback leaves it out. Only then: other slabs triangulate exactly as before
+                var top = V2(above!); var onDeck = new List<List<Vec2>>();
+                foreach (var h in holes) { double cx = 0, cz = 0; foreach (var p in h) { cx += p.x; cz += p.z; } if (!Geo.Pip(top, cx / h.Count, cz / h.Count)) onDeck.Add(h); }
+                if (!shell) Surf(top, onDeck.Count == 0 ? floorHoles : floorHoles.FindAll(h => !onDeck.Contains(h)), y, up, C.floor);
+                if (onDeck.Count == 0)
+                    foreach (var poly in Geo.TerracePolys(below!, above!)) Surf(V2(poly[0]), poly.GetRange(1, poly.Count - 1).ConvertAll(V2), y, up, C.roof);
+                else
+                {
+                    var deck = new Clipper2Lib.PathsD();
+                    foreach (var poly in Geo.TerracePolys(below!, above!)) foreach (var ring in poly) deck.Add(Path(V2(ring)));
+                    var cutOut = new Clipper2Lib.PathsD(); foreach (var h in onDeck) cutOut.Add(Path(h));
+                    var tree = new Clipper2Lib.PolyTreeD();
+                    Clipper2Lib.Clipper.BooleanOp(Clipper2Lib.ClipType.Difference, deck, cutOut, tree, Clipper2Lib.FillRule.EvenOdd, 6);
+                    foreach (var (ring, inner) in Rings(tree)) Surf(ring, inner, y, up, C.roof);
+                }
             }
             if (k > 0 && !topOnly) Surf(outer, holes, yb, down, C.ceil);
             if (step) foreach (var poly in Geo.TerracePolys(above!, below!)) Surf(V2(poly[0]), poly.GetRange(1, poly.Count - 1).ConvertAll(V2), yb, down, C.ceil);   // soffit under an overhang
@@ -162,6 +176,23 @@ namespace Triband.Storey.Generate
                     op.Poly(new[] { new P3(a.x, yb, a.z), new P3(c.x, yb, c.z), new P3(c.x, y, c.z), new P3(a.x, y, a.z) }, new P3(nx, 0, nz), side);
                 }
             }
+        }
+
+        static Clipper2Lib.PathD Path(List<Vec2> pts) { var o = new Clipper2Lib.PathD(pts.Count); foreach (var p in pts) o.Add(new Clipper2Lib.PointD(p.x, p.z)); return o; }
+
+        /// <summary>A clipped region's polygons, each its outer ring and its holes.</summary>
+        static List<(List<Vec2> ring, List<List<Vec2>> holes)> Rings(Clipper2Lib.PolyPathD node)
+        {
+            var o = new List<(List<Vec2>, List<List<Vec2>>)>();
+            static List<Vec2> V(Clipper2Lib.PathD p) { var r = new List<Vec2>(p.Count); foreach (var q in p) r.Add(new Vec2(q.x, q.y)); return r; }
+            for (int i = 0; i < node.Count; i++)
+            {
+                var outer = (Clipper2Lib.PolyPathD)node[i]; if (outer.Polygon == null || outer.Polygon.Count < 3) continue;
+                var hs = new List<List<Vec2>>();
+                for (int j = 0; j < outer.Count; j++) { var h = (Clipper2Lib.PolyPathD)outer[j]; if (h.Polygon != null && h.Polygon.Count >= 3) hs.Add(V(h.Polygon)); o.AddRange(Rings(h)); }
+                o.Add((V(outer.Polygon), hs));
+            }
+            return o;
         }
 
         // ---- terraces and overhangs ------------------------------------------------------

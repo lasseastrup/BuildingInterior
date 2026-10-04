@@ -28,9 +28,9 @@ namespace Triband.Storey.Editor
         [SerializeField] internal CoreType stairKind = CoreType.Stairs;
         [SerializeField] internal bool isolate;
         /// <summary>The Scene view camera follows the active floor up and down (the Interior tab).</summary>
-        [SerializeField] internal bool followFloor = true;
+        [SerializeField] internal bool followFloor;
         /// <summary>The active storey's walls in the Interior tab: down (steady), cut away towards the camera, or up.</summary>
-        [SerializeField] internal CutWalls walls = CutWalls.Down;
+        [SerializeField] internal CutWalls walls = CutWalls.Up;
         [SerializeField] internal string selectedCore = "";
         [SerializeField] internal int selectedWall = -1;
         [SerializeField] internal bool showMore;

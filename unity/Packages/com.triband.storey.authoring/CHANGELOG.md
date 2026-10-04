@@ -10,6 +10,7 @@
 - The automatic LOD picks for the Scene view's camera, and the editor updates when that camera moves. The LOD stats are shown in the Scene view for a selected site (`StoreyLodEditor`).
 
 ### Changed
+- Defaults in the Interior tab: **Walls** starts at *Up*, and **Camera follows** is off.
 - **Walls** in the Interior tab: *Down* (the new default: every wall of the storey low, steady as the camera orbits), *Cutaway* (the old camera-following drop) or *Up*. `SiteView.walls`, `CutWalls`.
 - The site inspector, laid out for reading at a glance (docs/EDITOR.md §6.10):
   - large Shape, Facade and Interior buttons with icons;

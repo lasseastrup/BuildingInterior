@@ -105,9 +105,9 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
 4. **Interior:**
    - The floors above the active one are hidden.
    - **Walls** (Interior tab) sets this storey's walls, after The Sims' wall modes:
-     - *Down* (the default): every wall drops to a 1 m stub, and nothing moves as the camera goes round.
+     - *Down*: every wall drops to a 1 m stub, and nothing moves as the camera goes round.
      - *Cutaway*: only the walls between the camera and the focus drop, and they follow the camera.
-     - *Up*: every wall at full height.
+     - *Up* (the default): every wall at full height.
    - Draw walls by clicking a chain, or by dragging one. Rings mark points, diamonds mark walls, and dotted guides show alignment.
    - Doors, Erase, Stairs and Lift (**Turn 90°** in the inspector turns the next one), with green or red ghosts.
    - **Finish wall** in the Scene view ends a chain.
@@ -121,7 +121,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - No key does anything Storey-specific.
    - Storey height, and the Storey Floors overlay: count, copy up, duplicate, delete.
    - **Switching floors animates.** Going up, the storeys grow up to the new ceiling. Going down, or making a storey shorter, the storeys above go at once, so the ceiling never covers the storey for a moment. The new floor's walls (in Cutaway, those in front of the camera) then slide down to the stub, and the old floor's slide back up (0.22 s, as in play). Selecting another building, or opening the Interior tab, shows its floor at once.
-   - **Camera follows** (next to the floor list, on by default): the Scene view's camera eases up or down with the floor.
+   - **Camera follows** (next to the floor list, off by default): the Scene view's camera eases up or down with the floor.
 6. **Feedback while editing:**
    - The building under the pointer is outlined faintly.
    - What you select (a building, a core, a wall) glows for a moment.

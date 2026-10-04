@@ -28,6 +28,31 @@ namespace Triband.Storey.Tests
             Shafts.Place(b, k, new Vec2(x, z), CoreType.Flight, rot, Shafts.NewId(d))!;
 
         [Fact]
+        public void AFlightUpOntoATerraceOpensTheDeck()
+        {
+            // three storeys; the top one set back to the front 2 m, so a flight up to it comes out on the terrace
+            var (d, b) = Block();
+            var s = Place(d, b, 0);
+            Shafts.SetTop(s, 2);
+            b.floors[2].shape = new List<Vec2> { new Vec2(0, 0), new Vec2(12, 0), new Vec2(12, 2), new Vec2(0, 2) };
+            Assert.True(Derived.IsSetback(b, 2));
+            Assert.True(Cores.StairHoleAt(b, s, 2));
+            var site = new Site(d.buildings); var l0 = Lod0.Build(site, b);
+            // the middle of the flight lane, at the terrace's level: no upward face of the deck covers it
+            var f = Cores.FrameOf(b, s); double hw = Dim.FLIGHT_W / 2;
+            var mid = f.At2(-hw + Dim.FLIGHT_LANE / 2, 0); double y = Derived.FloorBase(b, 2);
+            var m = l0.Op; int covering = 0;
+            for (int t = 0; t < m.I.Count; t += 3)
+            {
+                P3 A = m.P[m.I[t]], B = m.P[m.I[t + 1]], C = m.P[m.I[t + 2]];
+                if (System.Math.Abs(A.y - y) > 1e-6 || System.Math.Abs(B.y - y) > 1e-6 || System.Math.Abs(C.y - y) > 1e-6) continue;
+                if ((B.x - A.x) * (C.z - A.z) - (B.z - A.z) * (C.x - A.x) == 0) continue;
+                if (Geo.Pip(new List<Vec2> { new Vec2(A.x, A.z), new Vec2(B.x, B.z), new Vec2(C.x, C.z) }, mid.x, mid.z)) covering++;
+            }
+            Assert.Equal(0, covering);
+        }
+
+        [Fact]
         public void FlightsServeTheSameFloorsAsSwitchbackStairs()
         {
             var (d, b) = Block();
