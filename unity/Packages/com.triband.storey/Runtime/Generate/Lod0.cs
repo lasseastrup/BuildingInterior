@@ -101,7 +101,7 @@ namespace Triband.Storey.Generate
             double y = Derived.FloorBase(b, k), ox = b.pos.x, oz = b.pos.z;
             var below = k > 0 ? Derived.OutlineAt(b, k - 1) : null; var above = k < N ? Derived.OutlineAt(b, k) : null;
             bool step = below != null && above != null && !ReferenceEquals(below, above);
-            var holes = new List<List<Vec2>>();
+            var holes = new List<List<Vec2>>(); var flightHoles = new List<List<Vec2>>();
             if (!shell && !topOnly)
                 foreach (var s in b.shafts)
                     if (Cores.StairHoleAt(b, s, k))
@@ -111,7 +111,8 @@ namespace Triband.Storey.Generate
                         {
                             // over the flight lane's run only: the landings and the walkway are this floor
                             double hw = Dim.FLIGHT_W / 2, xm = -hw + Dim.FLIGHT_LANE, z0 = -Dim.FLIGHT_D / 2 + Dim.FLIGHT_LANDING, z1 = Dim.FLIGHT_D / 2 - Dim.FLIGHT_LANDING;
-                            holes.Add(new List<Vec2> { f.At2(-hw, z0), f.At2(xm, z0), f.At2(xm, z1), f.At2(-hw, z1) });
+                            var fh = new List<Vec2> { f.At2(-hw, z0), f.At2(xm, z0), f.At2(xm, z1), f.At2(-hw, z1) };
+                            holes.Add(fh); flightHoles.Add(fh);
                         }
                         else holes.Add(new List<Vec2> { f.At2(-1.3, -1.6), f.At2(1.3, -1.6), f.At2(1.3, 2.6), f.At2(-1.3, 2.6) });
                     }
@@ -164,12 +165,27 @@ namespace Triband.Storey.Generate
             }
             if (k > 0 && !topOnly) Surf(outer, holes, yb, down, C.ceil);
             if (step) foreach (var poly in Geo.TerracePolys(above!, below!)) Surf(V2(poly[0]), poly.GetRange(1, poly.Count - 1).ConvertAll(V2), yb, down, C.ceil);   // soffit under an overhang
+            // a straight flight's opening along the building's outline: that side is the wall's inner face already (the
+            // walls run down through the slab), and drawn again it would flicker with it. (Only Storey's own straight
+            // flights: the prototype draws the side for switchback stairs and atria, which match it face for face)
+            var rims = new List<List<Vec2>> { outer }; if (step) rims.Add(V2(above!));
+            bool OnRim(Vec2 a, Vec2 c)
+            {
+                foreach (var r in rims)
+                    for (int j = 0; j < r.Count; j++)
+                    {
+                        var p = r[j]; var q = r[(j + 1) % r.Count];
+                        if (Geo.SegDist(a.x, a.z, p.x, p.z, q.x, q.z).d < 1e-4 && Geo.SegDist(c.x, c.z, p.x, p.z, q.x, q.z).d < 1e-4) return true;
+                    }
+                return false;
+            }
             foreach (var h in edged)
             {
                 double cx = 0, cz = 0; foreach (var p in h) { cx += p.x; cz += p.z; } cx /= h.Count; cz /= h.Count;
                 for (int i = 0; i < h.Count; i++)
                 {
                     var a = h[i]; var c = h[(i + 1) % h.Count];
+                    if (flightHoles.Contains(h) && OnRim(a, c)) continue;
                     double dx = c.x - a.x, dz = c.z - a.z, L = Geo.Hypot(dx, dz); if (L == 0) L = 1;
                     double nx = dz / L, nz = -dx / L, mx = (a.x + c.x) / 2 - cx, mz = (a.z + c.z) / 2 - cz;
                     if ((nx * mx + nz * mz > 0) == true) { nx = -nx; nz = -nz; }   // inward
@@ -514,7 +530,8 @@ namespace Triband.Storey.Generate
                     {
                         // risers of about 18 cm, whatever the storey's height, over a fixed run
                         double fh = Derived.FloorH(b, k); int n = Math.Max(8, (int)Math.Round(fh / 0.18)); double run = (z1 - z0) / n;
-                        for (int i = 0; i < n; i++) { double za = z0 + i * run, t = y + (i + 1) * fh / n; Bx(-hw, xm, t - 0.2, t, za, za + run, C.step); }
+                        // against a wall, a step's side would lie in the wall's inner face and flicker with it: left out
+                        for (int i = 0; i < n; i++) { double za = z0 + i * run, t = y + (i + 1) * fh / n; Bx(-hw, xm, t - 0.2, t, za, za + run, C.step, null, fL ? Skip.UStart : Skip.None); }
                     }
                 }
                 else

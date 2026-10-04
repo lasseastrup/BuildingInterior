@@ -123,6 +123,7 @@ namespace Triband.Storey.Tests
             yield return new object[] { "middle", new[] { (0, 6.0, 4.5, 0.0) } };
             yield return new object[] { "side wall, flight lane", new[] { (0, Dim.FLIGHT_W / 2, 4.5, 0.0) } };
             yield return new object[] { "side wall, walkway", new[] { (0, 12 - Dim.FLIGHT_W / 2, 4.5, 0.0) } };
+            yield return new object[] { "side wall, flight lane", new[] { (0, Dim.FLIGHT_W / 2, 4.5, 0.0) } };
             yield return new object[] { "top floor to the roof", new[] { (2, 6.0, 4.5, 0.0) } };
             yield return new object[] { "two", new[] { (0, 3.0, 4.5, 0.0), (1, 9.0, 4.5, 180.0) } };
         }
@@ -150,6 +151,18 @@ namespace Triband.Storey.Tests
                 var report = CoplanarCheck.Run(mesh);
                 Assert.True(report.Overlaps.Count == 0, $"{name}: {report.Overlaps.Count} visible coplanar overlaps:\n  " + string.Join("\n  ", report.Overlaps.Take(10)));
             }
+        }
+
+        [Fact]
+        public void AgainstAWallTheOpeningLeavesTheWallFaceAlone()
+        {
+            // the flight lane's side against the building's wall: the slab opening's side would lie in the wall's inner
+            // face (the walls run down through the slab). Checked without the solids, which count a face against a wall
+            // as buried and so miss it
+            var (d, b) = Block();
+            Assert.NotNull(Place(d, b, 0, Dim.FLIGHT_W / 2, 4.5, 0));
+            var report = CoplanarCheck.Run(Lod0.Build(new Site(d.buildings), b).Op);
+            Assert.DoesNotContain(report.Overlaps, o => o.ToString().Contains("normal (1, 0, 0)") || o.ToString().Contains("normal (-1, 0, 0)"));
         }
 
         [Fact]
