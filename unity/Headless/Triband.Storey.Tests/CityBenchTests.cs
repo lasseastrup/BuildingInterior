@@ -45,6 +45,8 @@ namespace Triband.Storey.Tests
             double massings = sw.Elapsed.TotalMilliseconds; sw.Restart();
             int pieces = 0; foreach (var c in cells.Values) pieces += Cells.Merge(c).Count;
             double merge = sw.Elapsed.TotalMilliseconds;
+            log.WriteLine($"{row} massing parameter rows for {bs.Count} buildings (the table held 512 before it could grow)");
+            Assert.True(row > 512, "the test city needs more rows than the old fixed table");
             log.WriteLine($"{bs.Count} massings {massings:0} ms ({massings / bs.Count:0.00} ms each), {verts:N0} vertices; {cells.Count} cells in {pieces} meshes merged in {merge:0} ms");
             Assert.True(massings / bs.Count < 5, "a massing in under 5 ms");
             Assert.True(merge < 3000, "the cells in under 3 s");

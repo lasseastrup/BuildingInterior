@@ -61,6 +61,8 @@ Every building's LOD2 massing goes into a 128 m square of the ground (`Cells`, b
 - **Size.** A cell's mesh is split to stay under 65,535 vertices (16-bit indices), never through a building.
 - **The test city** of 3,000 falls into 307 cells (the prototype has 316). Each fits in one mesh, 263,000 vertices in all.
 
+**Table sizes.** Each massing needs a parameter row per run of storeys in the building table: the test city needs about 9,000. The parameter and colour-row tables double when they fill. Building indices are still capped at 8,192 a layout.
+
 ## 4. What it costs
 
 Headless numbers (`CityBenchTests`, `LodManagerTests`). They are CPU only, without the GPU upload, measured on the CI container:

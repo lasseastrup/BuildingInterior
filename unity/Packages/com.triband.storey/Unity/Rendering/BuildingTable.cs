@@ -18,8 +18,13 @@ namespace Triband.Storey.Unity
         public const int MaxBuildings = 8192;
         public const int OccSlots = 16, OccWidth = 64;
         public const int WallIds = 65536;
-        public const int ParamRows = 512, ParamTexels = 6;
-        public const int MaxColorRows = 8192;
+        /// <summary>
+        /// The parameter (LOD2 massing) and colour-row tables start this big and double when full. They used to be fixed,
+        /// and a big layout (the 3,000-building test city) wrote every row past the last into the last one, so many
+        /// buildings' massings showed another building's colours and windows.
+        /// </summary>
+        public const int ParamRowsStart = 1024, ParamTexels = 6;
+        public const int ColorRowsStart = 1024;
 
         /// <summary>Per building: displayed LOD, previous LOD, cross-fade 0..1, occluder slot + 1 (0 = none).</summary>
         public readonly Vector4[] State = new Vector4[MaxBuildings];
@@ -30,13 +35,14 @@ namespace Triband.Storey.Unity
         /// <summary>Per wall id: the wall's start (x, z) and its normal scaled by 1 + its length, for the cutaway (written once, at upload).</summary>
         public readonly Vector4[] WallData = new Vector4[WallIds];
         /// <summary>LOD2 parameter rows: wall, trim, glass, roof colours, window spec, run data.</summary>
-        public readonly Vector4[] Params = new Vector4[ParamRows * ParamTexels];
+        public Vector4[] Params { get; private set; } = new Vector4[ParamRowsStart * ParamTexels];
         /// <summary>Colour rows: per style, the palette index of each slot and the remap row, 24 16-bit entries in 12 words.</summary>
-        public readonly uint[] Colors = new uint[MaxColorRows * Generate.ColorRows.Words];
+        public uint[] Colors { get; private set; } = new uint[ColorRowsStart * Generate.ColorRows.Words];
         /// <summary>Palette indices of facade-detail model colours (slots 24 and up). Empty until detail models exist.</summary>
         public readonly uint[] DetailColors = new uint[1];
 
-        readonly GraphicsBuffer state, occ, wall, wallData, prms, colors, details;
+        readonly GraphicsBuffer state, occ, wall, wallData, details;
+        GraphicsBuffer prms, colors;   // these two grow (ParamRowsStart)
         bool stateDirty = true, occDirty = true, wallDirty = true, wallDataDirty = true, paramsDirty = true, colorsDirty = true, detailsDirty = true;
 
         // free lists, as the prototype keeps them
@@ -55,8 +61,8 @@ namespace Triband.Storey.Unity
             occ = new GraphicsBuffer(GraphicsBuffer.Target.Structured, OccSlots * OccWidth, 16);
             wall = new GraphicsBuffer(GraphicsBuffer.Target.Structured, WallIds, 4);
             wallData = new GraphicsBuffer(GraphicsBuffer.Target.Structured, WallIds, 16);
-            prms = new GraphicsBuffer(GraphicsBuffer.Target.Structured, ParamRows * ParamTexels, 16);
-            colors = new GraphicsBuffer(GraphicsBuffer.Target.Structured, MaxColorRows * Generate.ColorRows.Uint4s, 16);
+            prms = new GraphicsBuffer(GraphicsBuffer.Target.Structured, ParamRowsStart * ParamTexels, 16);
+            colors = new GraphicsBuffer(GraphicsBuffer.Target.Structured, ColorRowsStart * Generate.ColorRows.Uint4s, 16);
             details = new GraphicsBuffer(GraphicsBuffer.Target.Structured, DetailColors.Length, 4);
         }
 
@@ -98,7 +104,13 @@ namespace Triband.Storey.Unity
         /// <summary>A parameter row, written from a generator row; rows are freed with <see cref="ReleaseRow"/>.</summary>
         public int WriteRow(Generate.ParamRow row, int colorRow)
         {
-            int x = freeRow.Count > 0 ? freeRow.Pop() : Math.Min(nextRow++, ParamRows - 1);
+            int x = freeRow.Count > 0 ? freeRow.Pop() : nextRow++;
+            if ((x + 1) * ParamTexels > Params.Length)
+            {
+                // full: twice the size, a new buffer of it next upload
+                var grown = new Vector4[Params.Length * 2]; Array.Copy(Params, grown, Params.Length); Params = grown;
+                prms.Dispose(); prms = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Params.Length, 16);
+            }
             var t = row.GpuTexels(colorRow); int o = x * ParamTexels;
             for (int i = 0; i < ParamTexels; i++) Params[o + i] = new Vector4((float)t[i * 4], (float)t[i * 4 + 1], (float)t[i * 4 + 2], (float)t[i * 4 + 3]);
             paramsDirty = true;
@@ -107,7 +119,17 @@ namespace Triband.Storey.Unity
         public void ReleaseRow(int row) => freeRow.Push(row);
 
         /// <summary>A colour row, filled with <see cref="WriteColorRow"/>; freed with <see cref="ReleaseColorRow"/>.</summary>
-        public int AllocColorRow() => freeColorRow.Count > 0 ? freeColorRow.Pop() : Math.Min(nextColorRow++, MaxColorRows - 1);
+        public int AllocColorRow()
+        {
+            int x = freeColorRow.Count > 0 ? freeColorRow.Pop() : nextColorRow++;
+            if ((x + 1) * Generate.ColorRows.Words > Colors.Length)
+            {
+                var grown = new uint[Colors.Length * 2]; Array.Copy(Colors, grown, Colors.Length); Colors = grown;
+                colors.Dispose(); colors = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Colors.Length * 4 / 16, 16);
+                colorsDirty = true;
+            }
+            return x;
+        }
         public void ReleaseColorRow(int row) => freeColorRow.Push(row);
 
         /// <summary>A style's palette indices (in <see cref="Generate.ColorSlot"/> order) and its remap's atlas row (0 = none).</summary>
