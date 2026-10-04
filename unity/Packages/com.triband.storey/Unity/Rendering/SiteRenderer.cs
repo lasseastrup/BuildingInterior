@@ -612,7 +612,9 @@ namespace Triband.Storey.Unity
             if (todo.Count == 0) return;
             var ids = new int[todo.Count];
             for (int i = 0; i < ids.Length; i++) ids[i] = todo[i].mesh.GetInstanceID();
+#pragma warning disable CS0618   // BakeMesh(int, …): Unity 6.3 prefers an EntityId; the int form still works there and before
             if (ids.Length == 1) Physics.BakeMesh(ids[0], false, Cooking);
+#pragma warning restore CS0618
             else
             {
                 var na = new NativeArray<int>(ids, Allocator.TempJob);
@@ -632,7 +634,9 @@ namespace Triband.Storey.Unity
         struct BakeJob : IJobParallelFor
         {
             [ReadOnly] public NativeArray<int> meshes;
+#pragma warning disable CS0618   // as above
             public void Execute(int i) => Physics.BakeMesh(meshes[i], false, Cooking);
+#pragma warning restore CS0618
         }
 
         void RemoveCollider(Built b)

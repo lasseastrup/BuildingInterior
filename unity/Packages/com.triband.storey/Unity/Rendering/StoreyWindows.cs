@@ -22,7 +22,7 @@ namespace Triband.Storey.Unity
         [Tooltip("By day the room is lit by the main light's colour times this (the Window shader graph's Color).")]
         public Color tint = Color.white;
         [Tooltip("At night a lit window's room is multiplied by a colour between these two (ColorLight, ColorLight2).")]
-        public Color light = new Color(1f, 0.85f, 0.55f);
+        public new Color light = new Color(1f, 0.85f, 0.55f);   // new: hides Component.light, long obsolete
         public Color light2 = new Color(1f, 0.65f, 0.35f);
         [Tooltip("The glare over the glass (the Window shader graph's second texture), and how strong it is (0.03 there).")]
         public Texture2D? glare;

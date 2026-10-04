@@ -4,6 +4,7 @@
 // The port keeps the original's structure and names so it can be diffed against upstream.
 // Behaviour is the same: a fast ear-clipping triangulator for polygons with holes, tolerant of
 // degenerate input, returning triangle vertex indices into the flat coordinate array.
+#nullable enable annotations   // the port marks nullable references; annotations only, no warnings
 
 using System;
 using System.Collections.Generic;

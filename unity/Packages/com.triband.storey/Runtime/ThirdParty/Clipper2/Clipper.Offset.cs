@@ -7,6 +7,7 @@
 * License   :  https://www.boost.org/LICENSE_1_0.txt                           *
 *******************************************************************************/
 
+#nullable enable annotations   // the library marks nullable references; annotations only, no warnings
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;

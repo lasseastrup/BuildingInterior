@@ -29,7 +29,7 @@ The stages:
   - the cells merged.
 - **The editor:** the automatic LOD, the colliders, the inspector's draw and the Storey tool in the Scene view.
 
-**Tools ▸ Storey ▸ Log Edit Timings** prints one Console line per edit once it has settled. The line gives the stages, slowest first, and counts such as buildings rebuilt, full rebuilds and cells merged. It also gives the slowest editor frame since the edit. If that frame is far above Storey's stages, the time went somewhere else: another inspector or window, the Scene view, or the garbage collector.
+**Tools ▸ Storey ▸ Log Edit Timings** (off by default, and off again after an editor restart) prints one Console line per edit once it has settled. The line gives the stages, slowest first, and counts such as buildings rebuilt, full rebuilds and cells merged. It also gives the slowest editor frame since the edit. If that frame is far above Storey's stages, the time went somewhere else: another inspector or window, the Scene view, or the garbage collector.
 
 ## 3. Order of work
 

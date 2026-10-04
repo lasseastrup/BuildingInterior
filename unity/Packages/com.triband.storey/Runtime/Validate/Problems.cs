@@ -141,6 +141,16 @@ namespace Triband.Storey.Validate
         static void Static(Site site, BuildingData b, List<Problem> o)
         {
             int N = b.floors.Count;
+            // walls wholly outside their storey (over a setback's terrace, or left behind when the outline shrank): nothing of
+            // them is built. One partly outside is cut to the storey, as the prototype does
+            if (b.interior)
+                for (int k = 0; k < N; k++)
+                {
+                    if (Derived.Filled(b, k)) continue;
+                    foreach (var w in b.floors[k].walls)
+                        if (!Walls.Inside(b, k, w.a, w.b))
+                            o.Add(P(b, k, Severity.Warning, "wall-outside", $"A wall on {Floor(b, k)} stands outside the storey, so it isn't built: remove it", (w.a.x + w.b.x) / 2, (w.a.z + w.b.z) / 2));
+                }
             foreach (var e in b.entrances)
             {
                 var fp = Derived.OutlineAt(b, e.k);

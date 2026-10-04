@@ -13,6 +13,10 @@ All notable changes to this package are documented here. The format follows [Kee
 - A building's row in the building table is its index in the layout, so party walls find their neighbour in the shader.
 
 ### Fixed
+- Compiler warnings in Unity:
+  - `Physics.BakeMesh(int, …)` obsolete in Unity 6.3: the warning is suppressed there, since the call still works.
+  - `StoreyWindows.light` hid `Component.light`: now marked `new`.
+  - Nullable annotations in Earcut and Clipper outside a `#nullable` context: those files now enable annotations only.
 - A straight flight against the building's wall flickered at every storey's slab. The side of the slab's opening lay in the wall's inner face, because the walls run down through the slab. That side is no longer drawn for a straight flight's opening along the outline, and the steps leave out their side against the wall. (Switchback stairs and atria keep the prototype's faces.)
 - Straight flights that came up onto a setback's terrace ran up under a closed deck. The terrace deck is now cut round a stair opening on it, and the floor above the setback leaves it out. The walk model and the collision mesh already had the opening.
 - Gable and shed roofs on buildings with rounded or chamfered corners looked broken: each of a cut corner's short edges became an eave or a hip of its own. Their planes are now planned on the sharp outline (`CornerCuts.SharpMap`, `Roofs.Make`'s `sharp`) and fitted to the cut one. A cut corner's edges take the part of the side they turn nearer to, so the eave runs round the corner and the gable wall follows it. Hip and mansard roofs still round with the corners. Where two nearly parallel edges stand out by different amounts, the roof's edge no longer spikes out.
@@ -27,6 +31,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- `Walls.Inside` and the problem list's "wall-outside": a wall wholly outside its storey (over a terrace) builds nothing, so it is flagged.
 - `StoreyTimings`: Profiler samples and per-stage times for an edit's work (docs/EDITOR.md §2.1).
 - `EditSession.Restore`: put one building back without reading the whole layout (a drag step). `EditSession.Discard` only reads back the buildings an operation changed, and the commit finds bridge links in one pass, not one per building. On the 3,000-building city: a commit goes from about 350 to 140 ms, a drag step from about 1.4 s to 0.1 s.
 - `Problems.Check` with a scope, `Problems.Scope`, `Changed`, `Prints` and `Merge`: check only what an edit touched. `Problem.otherId`. The overlap test skips footprints whose bounding boxes don't overlap: the 3,000-building city's full check goes from 22 s to 7 s.

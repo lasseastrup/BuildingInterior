@@ -19,7 +19,8 @@ namespace Triband.Storey.Editor
 
         static StoreyTimingLog()
         {
-            StoreyTimings.Enabled = EditorPrefs.GetBool(Pref, false);
+            // per editor session: once turned on it doesn't stay on after a restart
+            StoreyTimings.Enabled = SessionState.GetBool(Pref, false);
             EditorApplication.update += Update;
         }
 
@@ -27,7 +28,7 @@ namespace Triband.Storey.Editor
         static void Toggle()
         {
             StoreyTimings.Enabled = !StoreyTimings.Enabled;
-            EditorPrefs.SetBool(Pref, StoreyTimings.Enabled);
+            SessionState.SetBool(Pref, StoreyTimings.Enabled);
             StoreyTimings.Take();
             Debug.Log(StoreyTimings.Enabled ? "Storey: logging each edit's timings to the Console." : "Storey: edit timings off.");
         }

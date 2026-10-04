@@ -10,6 +10,8 @@
 - The automatic LOD picks for the Scene view's camera, and the editor updates when that camera moves. The LOD stats are shown in the Scene view for a selected site (`StoreyLodEditor`).
 
 ### Changed
+- **Log Edit Timings** is kept for the editor session only: it is off again after a restart.
+- The Interior tab's wall tool refuses a wall wholly outside the storey, such as one over a setback's terrace, and shows it red while drawing. Nothing of such a wall was built. A wall partly outside is still cut to the storey, as before.
 - Defaults in the Interior tab: **Walls** starts at *Up*, and **Camera follows** is off.
 - **Walls** in the Interior tab: *Down* (the new default: every wall of the storey low, steady as the camera orbits), *Cutaway* (the old camera-following drop) or *Up*. `SiteView.walls`, `CutWalls`.
 - The site inspector, laid out for reading at a glance (docs/EDITOR.md §6.10):

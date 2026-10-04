@@ -175,6 +175,25 @@ namespace Triband.Storey.Edit
         }
 
         /// <summary>A wall from s to q on storey k, joined to the walls its ends land on.</summary>
+        /// <summary>
+        /// Some of a wall from s to q stands inside storey k, so something of it is built: the generator keeps a wall's
+        /// part inside the storey. Wholly outside it (over a setback's terrace, which is the storey below's roof, not this
+        /// storey's floor) nothing would be.
+        /// </summary>
+        public static bool Inside(BuildingData b, int k, Vec2 s, Vec2 q)
+        {
+            var fp = Derived.OutlineAt(b, k);
+            for (int i = 0; i <= 16; i++)
+            {
+                double t = i / 16.0;
+                if (Generate.Geo.Pip(fp, s.x + (q.x - s.x) * t, s.z + (q.z - s.z) * t)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>What the editor says when a wall would stand wholly outside the storey (<see cref="Inside"/>).</summary>
+        public const string OutsideWhy = "Walls go inside this storey. That's outside it (a terrace is the storey below's roof).";
+
         public static void Add(BuildingData b, int k, Vec2 s, Vec2 q)
         {
             var f = b.floors[k];

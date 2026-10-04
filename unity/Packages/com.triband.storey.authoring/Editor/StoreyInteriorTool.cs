@@ -72,7 +72,8 @@ namespace Triband.Storey.Editor
                         Marker(b, q, yy);
                         if (chain)
                         {
-                            Handles.color = Accent; Handles.DrawAAPolyLine(4f, W(b, chainStart, yy), W(b, q.Point, yy));
+                            // red where it would leave the storey (over a terrace): it isn't added there
+                            Handles.color = Walls.Inside(b, k, chainStart, q.Point) ? Accent : Bad; Handles.DrawAAPolyLine(4f, W(b, chainStart, yy), W(b, q.Point, yy));
                             Label(W(b, q.Point, yy), $"{Tiers.Hypot(q.x - chainStart.x, q.z - chainStart.z):0.00} m");
                         }
                     }
@@ -291,6 +292,7 @@ namespace Triband.Storey.Editor
             var hit = Picking.OnPlane(b, origin, dir, Derived.FloorBase(b, k)); if (hit == null) return;
             var q = Walls.Snap(b, k, hit.Value, new SnapOptions { from = chainStart, free = Event.current.alt }).Point;
             var s = chainStart; double len = Tiers.Hypot(q.x - s.x, q.z - s.z);
+            if (len >= 0.3 && !Walls.Inside(b, k, s, q)) { Notify(sv, Walls.OutsideWhy); if (fresh) chain = false; return; }
             if (fresh) { if (len > 0.5) { e.ApplyTo("Wall added", bb => { Walls.Add(bb, k, s, q); return true; }); chain = false; } }   // a drag draws one wall
             else if (len < 0.3) chain = false;                                                                                      // a click on the last point ends the chain
             else { e.ApplyTo("Wall added", bb => { Walls.Add(bb, k, s, q); return true; }); chainStart = q; }
