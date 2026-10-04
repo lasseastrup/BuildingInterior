@@ -224,7 +224,8 @@ namespace Triband.Storey.Unity
             if (book == null || site == null || doc.buildings.Count != built.Count || doc.buildings.Any(b => !built.ContainsKey(b.id))) { StoreyTimings.Count("full rebuilds: the layout's buildings changed"); Show(doc); return; }
             using var _t = StoreyTimings.Time("site: rebuild of the edited buildings");
             using (StoreyTimings.Time("site: index the layout")) site = new Site(doc.buildings);
-            using (StoreyTimings.Time("site: rewrite every colour row")) book.Retarget(new ColorResolver(site));
+            // only the rebuilt buildings' colour rows change, and they are written again as those are built
+            book.Retarget(new ColorResolver(site), rewrite: false);
             foreach (var id in ids)
             {
                 var b = site.ById(id); if (b == null) continue;

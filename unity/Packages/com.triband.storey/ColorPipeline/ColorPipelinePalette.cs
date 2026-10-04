@@ -35,7 +35,14 @@ namespace Triband.Storey.ColorPipeline
             ColorMappingManager.OnMappingsInvalidated += Raise;
         }
 
-        void Raise() => Invalidated?.Invoke();
+        void Raise() { memo.Clear(); Invalidated?.Invoke(); }
+
+        // colour reference -> palette index. Color Pipeline finds an id by walking the palette, twice a lookup, and a
+        // colour row asks for every slot of every style: thousands of walks an edit. A remembered id is checked against
+        // the palette before it is used (an entry moved or deleted is looked up again); a CSS colour's nearest entry is
+        // kept until the palette changes size or Color Pipeline invalidates its mappings.
+        readonly Dictionary<string, int> memo = new Dictionary<string, int>(StringComparer.Ordinal);
+        ColorPaletteDefinition? memoFor; int memoCount = -1;
         public void Dispose() => ColorMappingManager.OnMappingsInvalidated -= Raise;
 
         /// <summary>Color Pipeline binds <c>_GlobalColorPaletteTex</c> and <c>_ColorAtlasWidth</c>; nothing to do.</summary>
@@ -55,19 +62,22 @@ namespace Triband.Storey.ColorPipeline
 
         public int IndexOf(string colorRef)
         {
-            var palette = Palette;
+            var palette = Palette; var list = palette.Colors;
+            if (!ReferenceEquals(palette, memoFor) || list.Count != memoCount) { memo.Clear(); memoFor = palette; memoCount = list.Count; }
             if (ColorRef.IsPaletteId(colorRef))
             {
                 var id = Guid(colorRef);
-                // GetIndexOfColor alone answers 0 for an unknown id, so a deleted entry would turn silently into entry 0
-                if (palette.TryGetColor(id, out _)) return palette.GetIndexOfColor(id);
+                if (memo.TryGetValue(colorRef, out int at) && at < list.Count && list[at].ID == id) return at;
+                for (int i = 0; i < list.Count; i++) if (list[i].ID == id) { memo[colorRef] = i; return i; }
                 return 0;   // a deleted entry: palette colour 0, quietly
             }
+            if (memo.TryGetValue(colorRef, out int hit)) return hit;
             if (!ColorUtility.TryParseHtmlString(colorRef, out _)) throw new FormatException($"\"{colorRef}\" is not a colour reference");
             // the editor conforms layouts as they are edited; a layout never opened since shows what conforming would pick
             var near = PaletteMatch.Nearest(colorRef, Entries(palette));
-            if (near == null) return 0;
-            return palette.GetIndexOfColor(Guid(near.Value.entry.id));
+            int idx = near == null ? 0 : palette.GetIndexOfColor(Guid(near.Value.entry.id));
+            memo[colorRef] = idx;
+            return idx;
         }
 
         /// <summary>

@@ -157,6 +157,28 @@ namespace Triband.Storey.Tests
             Assert.Equal(palette.IndexOf(Teal), sink.Rows[a].idx[(int)ColorSlot.Wall]);
         }
 
+        /// <summary>
+        /// An edit retargets without rewriting: the edited building's rows are freed and written afresh as it is rebuilt,
+        /// and every other row is left alone (rewriting them all cost 0.9 s an edit at 300 buildings with Color Pipeline).
+        /// </summary>
+        [Fact]
+        public void AnEditRewritesOnlyTheRebuiltBuildingsRows()
+        {
+            var (book, palette, sink, _) = Make();
+            int a = book.RowOf(new StyleRef(0, 0)), b = book.RowOf(new StyleRef(1, 0));
+            int writes = sink.Writes;
+            var doc = PrototypeJson.Read(Fixtures.Text("demo.json")).Document;
+            doc.buildings[0].style.wall = Teal;
+            var edited = new ColorResolver(new Site(doc.buildings));
+            book.Retarget(edited, rewrite: false);
+            Assert.Equal(writes, sink.Writes);   // nothing rewritten
+            book.ReleaseBuilding(0);
+            int a2 = book.RowOf(new StyleRef(0, 0));   // the rebuild asks for its row again
+            Assert.Equal(writes + 1, sink.Writes);
+            Assert.Equal(palette.IndexOf(Teal), sink.Rows[a2].idx[(int)ColorSlot.Wall]);
+            Assert.Equal(Expected(edited, new StyleRef(1, 0), palette), sink.Rows[b].idx);   // the other building is as it was
+        }
+
         [Fact]
         public void ReleasingABuildingFreesOnlyItsRows()
         {

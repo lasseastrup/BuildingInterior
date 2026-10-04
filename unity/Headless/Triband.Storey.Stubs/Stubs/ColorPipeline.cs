@@ -10,6 +10,11 @@ namespace Triband.Core.Utils
         public bool valid => false;
         public (ulong, ulong) ToParts() => (0, 0);
         public override string ToString() => "";
+        // ColorPaletteDefinition.GetColor and GetIndexOfColor compare ids with these
+        public static bool operator ==(SerializableGUID a, SerializableGUID b) => false;
+        public static bool operator !=(SerializableGUID a, SerializableGUID b) => true;
+        public override bool Equals(object obj) => false;
+        public override int GetHashCode() => 0;
     }
 }
 

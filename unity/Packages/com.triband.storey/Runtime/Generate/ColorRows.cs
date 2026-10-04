@@ -224,10 +224,13 @@ namespace Triband.Storey.Generate
         void Write(StyleRef s, int row) => sink.WriteColorRow(row, ColorRows.Indices(colors.StyleOf(s), palette), RemapRowOf(s.building));
 
         /// <summary>
-        /// Resolve styles from another site (the layout was edited or undone; building indices unchanged) and write every
-        /// row again, keeping each row's number so meshes that are not rebuilt stay right.
+        /// Resolve styles from another site (the layout was edited or undone; building indices unchanged). With
+        /// <paramref name="rewrite"/>, every row is written again, keeping its number so meshes that are not rebuilt stay
+        /// right. An edit passes false: only the buildings it rebuilds change, and their rows are freed
+        /// (<see cref="ReleaseBuilding"/>) and written afresh as they are built. Rewriting all of them cost 0.9 s an edit on
+        /// a 300-building layout with Color Pipeline.
         /// </summary>
-        public void Retarget(ColorResolver resolver) { colors = resolver; Rewrite(); }
+        public void Retarget(ColorResolver resolver, bool rewrite = true) { colors = resolver; if (rewrite) Rewrite(); }
 
         /// <summary>Free one building's rows before its meshes are built again (its tiers may have changed).</summary>
         public void ReleaseBuilding(int building)
