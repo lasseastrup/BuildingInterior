@@ -48,7 +48,7 @@ namespace Triband.Storey.Generate
         {
             var st = Derived.StyleAt(b, b.floors.Count); if (st.roofType == RoofType.Flat) return null;
             int N = b.floors.Count, k0 = Derived.TierStart(b, N); var raw = Derived.OutlineAt(b, N);
-            var R = Make(b, st.roofType, st.pitch, st.eave, raw, PartyKinds(site, b, k0, raw), Derived.RoofY(b), null, st.mansard, st.dormers);
+            var R = Make(b, st.roofType, st.pitch, st.eave, raw, PartyKinds(site, b, k0, raw), Derived.RoofY(b), null, st.mansard, st.dormers, Edit.CornerCuts.SharpMap(b, k0));
             if (b.voids.Count > 0) R.Parts = Courtyards.CutRoof(b, R.Parts, Derived.RoofY(b));   // courtyards open through the roof
             return R;
         }
@@ -71,7 +71,13 @@ namespace Triband.Storey.Generate
         /// Roof parts of <paramref name="raw"/> (building-local) sitting on wall tops at <paramref name="top"/>;
         /// <paramref name="cut"/> is a world-space multipolygon the roof is cut away from (rings as x,z pairs).
         /// </summary>
-        public static RoofParts Make(BuildingData b, RoofType type, double? pitch, double? eave, List<Vec2> raw, string[] party, double top, PathsD? cut, double? mansard = null, double? dormers = null)
+        /// <param name="sharp">
+        /// For an outline with cut corners: each of <paramref name="raw"/>'s points' place in the sharp outline, and the
+        /// sharp outline (<see cref="Edit.CornerCuts.SharpMap"/>). The roof's planes (eaves, ridge, gable ends, a shed's
+        /// slope) are then planned on the sharp outline and fitted to the cut one: a rounded corner's short edges would
+        /// otherwise each become an eave or a gable of their own.
+        /// </param>
+        public static RoofParts Make(BuildingData b, RoofType type, double? pitch, double? eave, List<Vec2> raw, string[] party, double top, PathsD? cut, double? mansard = null, double? dormers = null, (int[] map, List<Vec2> sharp)? sharp = null)
         {
             int n = raw.Count; double T = Dim.T_EXT; bool mans = type == RoofType.Mansard;
             // a mansard's pitch is its shallow upper roof's; its eaves have the steep lower slope, with a short eave
@@ -89,32 +95,66 @@ namespace Triband.Storey.Generate
                 var d = new[] { (q.x - p.x) / L, (q.z - p.z) / L };
                 E[j] = (p, d, new[] { -d[1], d[0] }, L);
             }
-            List<Vec2> OffsetPoly(double[] off)
+            static List<Vec2> OffsetOf(int count, (Vec2 p, double[] d, double[] nin, double L)[] Ed, double[] off)
             {
-                var o = new List<Vec2>(n);
-                for (int j = 0; j < n; j++)
+                var o = new List<Vec2>(count);
+                for (int j = 0; j < count; j++)
                 {
-                    int i = (j - 1 + n) % n; var A = E[i]; var B = E[j];
+                    int i = (j - 1 + count) % count; var A = Ed[i]; var B = Ed[j];
                     double pax = A.p.x - A.nin[0] * off[i], paz = A.p.z - A.nin[1] * off[i], pbx = B.p.x - B.nin[0] * off[j], pbz = B.p.z - B.nin[1] * off[j];
                     double den = A.d[0] * B.d[1] - A.d[1] * B.d[0];
                     if (Math.Abs(den) < 1e-9) { o.Add(new Vec2(pbx, pbz)); continue; }
                     double t = ((pbx - pax) * B.d[1] - (pbz - paz) * B.d[0]) / den;
-                    o.Add(new Vec2(pax + A.d[0] * t, paz + A.d[1] * t));
+                    double mx = pax + A.d[0] * t, mz = paz + A.d[1] * t;
+                    // two nearly parallel edges set back by different amounts meet far off: a spike. Halfway between
+                    // their ends instead (only ever at a cut corner's short edges)
+                    double ex = A.p.x + A.d[0] * A.L - A.nin[0] * off[i], ez = A.p.z + A.d[1] * A.L - A.nin[1] * off[i];
+                    if (Math.Abs(off[i] - off[j]) > 1e-9 && Geo.Hypot(mx - B.p.x, mz - B.p.z) > Math.Max(2.0, 4 * Math.Max(Math.Abs(off[i]), Math.Abs(off[j]))))
+                    { mx = (ex + pbx) / 2; mz = (ez + pbz) / 2; }
+                    o.Add(new Vec2(mx, mz));
                 }
                 return o;
             }
+            List<Vec2> OffsetPoly(double[] off) => OffsetOf(n, E, off);
             var kinds = new EdgeKind[n];
             for (int j = 0; j < n; j++) kinds[j] = party[em[j]] == "skip" ? EdgeKind.Skip : party[em[j]] == "own" ? EdgeKind.Own : EdgeKind.Eave;
+
+            // the polygon the roof's planes are planned on: the outline itself, or for a gable or shed roof with cut
+            // corners the sharp one (src: each edge's sharp edge, or -1 for a cut's own edge, with its corner in cornerOf)
+            int m = n; var EP = E; var kindsP = kinds;
+            int[]? src = null, cornerOf = null;
+            if (sharp is (int[] smap, List<Vec2> sraw) && sraw.Count >= 3 && sraw.Count < n && (type == RoofType.Gable || type == RoofType.Shed))
+            {
+                m = sraw.Count;
+                int SI(int r) => ccw ? r : m - 1 - r;   // a sharp point's place in the roof's (counter-clockwise) order
+                var fpS = new List<Vec2>(m); for (int j = 0; j < m; j++) { var q = sraw[ccw ? j : m - 1 - j]; fpS.Add(new Vec2(q.x + ox, q.z + oz)); }
+                EP = new (Vec2 p, double[] d, double[] nin, double L)[m];
+                for (int j = 0; j < m; j++)
+                {
+                    var p = fpS[j]; var q = fpS[(j + 1) % m]; double L = Geo.Hypot(q.x - p.x, q.z - p.z); if (L == 0) L = 1;
+                    var d = new[] { (q.x - p.x) / L, (q.z - p.z) / L };
+                    EP[j] = (p, d, new[] { -d[1], d[0] }, L);
+                }
+                src = new int[n]; cornerOf = new int[n]; kindsP = new EdgeKind[m];
+                for (int j = 0; j < m; j++) kindsP[j] = EdgeKind.Eave;
+                for (int j = 0; j < n; j++)
+                {
+                    int a = SI(smap[ccw ? j : n - 1 - j]), c = SI(smap[ccw ? (j + 1) % n : (2 * n - 2 - j) % n]);
+                    if (a == c) { src[j] = -1; cornerOf[j] = a; continue; }
+                    src[j] = a; cornerOf[j] = -1;
+                    if (kinds[j] != EdgeKind.Eave) kindsP[a] = kinds[j];   // a party wall along the sharp edge
+                }
+            }
             int low = -1;
             if (type == RoofType.Shed)
             {
-                double bl = -1; for (int j = 0; j < n; j++) if (kinds[j] == EdgeKind.Eave && E[j].L > bl) { bl = E[j].L; low = j; }
+                double bl = -1; for (int j = 0; j < m; j++) if (kindsP[j] == EdgeKind.Eave && EP[j].L > bl) { bl = EP[j].L; low = j; }
                 if (low < 0) low = 0;
-                for (int j = 0; j < n; j++) if (kinds[j] == EdgeKind.Eave && Math.Abs(E[j].d[0] * E[low].d[0] + E[j].d[1] * E[low].d[1]) < 0.9) kinds[j] = EdgeKind.Rake;
+                for (int j = 0; j < m; j++) if (kindsP[j] == EdgeKind.Eave && Math.Abs(EP[j].d[0] * EP[low].d[0] + EP[j].d[1] * EP[low].d[1]) < 0.9) kindsP[j] = EdgeKind.Rake;
             }
-            var offFull = new double[n]; for (int j = 0; j < n; j++) offFull[j] = T + e;
-            var full = OffsetPoly(offFull);
-            double HOf(int j, double x, double z) => hb + eaveSlope * ((x - full[j].x) * E[j].nin[0] + (z - full[j].z) * E[j].nin[1]);
+            var offFull = new double[m]; for (int j = 0; j < m; j++) offFull[j] = T + e;
+            var full = OffsetOf(m, EP, offFull);
+            double HOf(int j, double x, double z) => hb + eaveSlope * ((x - full[j].x) * EP[j].nin[0] + (z - full[j].z) * EP[j].nin[1]);
 
             var faces = new List<(int j, List<double[]> pts)>();
             if (type == RoofType.Shed) { var pts = new List<double[]>(); foreach (var p in full) pts.Add(new[] { p.x, p.z }); faces.Add((low, pts)); }
@@ -129,17 +169,29 @@ namespace Triband.Storey.Generate
                     var gone = new HashSet<int>();
                     for (int fi = 0; fi < faces.Count; fi++)
                     {
-                        var f = faces[fi]; if (f.pts.Count != 3 || kinds[f.j] != EdgeKind.Eave) continue;
+                        var f = faces[fi]; if (f.pts.Count != 3 || kindsP[f.j] != EdgeKind.Eave) continue;
                         var tip = f.pts[2]; if (!cnt.TryGetValue(K(tip), out var c) || c != 3) continue;
-                        var a = E[(f.j - 1 + n) % n].nin; var cc = E[(f.j + 1) % n].nin; var g = new[] { a[0] - cc[0], a[1] - cc[1] }; var dir = new[] { -g[1], g[0] }; var Gn = E[f.j].nin;
-                        double gpx = E[f.j].p.x - Gn[0] * T, gpz = E[f.j].p.z - Gn[1] * T, den = dir[0] * Gn[0] + dir[1] * Gn[1]; if (Math.Abs(den) < 1e-6) continue;
+                        var a = EP[(f.j - 1 + m) % m].nin; var cc = EP[(f.j + 1) % m].nin; var g = new[] { a[0] - cc[0], a[1] - cc[1] }; var dir = new[] { -g[1], g[0] }; var Gn = EP[f.j].nin;
+                        double gpx = EP[f.j].p.x - Gn[0] * T, gpz = EP[f.j].p.z - Gn[1] * T, den = dir[0] * Gn[0] + dir[1] * Gn[1]; if (Math.Abs(den) < 1e-6) continue;
                         double t = ((gpx - tip[0]) * Gn[0] + (gpz - tip[1]) * Gn[1]) / den; var nt = new[] { tip[0] + dir[0] * t, tip[1] + dir[1] * t };
                         string kt = K(tip);
                         for (int hi = 0; hi < faces.Count; hi++) { if (hi == fi) continue; var h = faces[hi]; for (int q = 0; q < h.pts.Count; q++) if (K(h.pts[q]) == kt) h.pts[q] = nt; }
-                        kinds[f.j] = EdgeKind.Gable; gone.Add(fi);
+                        kindsP[f.j] = EdgeKind.Gable; gone.Add(fi);
                     }
                     var kept = new List<(int, List<double[]>)>(); for (int fi = 0; fi < faces.Count; fi++) if (!gone.Contains(fi)) kept.Add(faces[fi]);
                     faces = kept;
+                }
+            }
+            if (src != null)
+            {
+                // the outline's edges take their sharp edge's part; a cut's own edges that of the side they turn nearer to
+                for (int j = 0; j < n; j++)
+                {
+                    if (src[j] >= 0) { kinds[j] = kindsP[src[j]]; continue; }
+                    int c = cornerOf![j], before = (c - 1 + m) % m;
+                    double near0 = Math.Abs(E[j].d[0] * EP[before].d[0] + E[j].d[1] * EP[before].d[1]), near1 = Math.Abs(E[j].d[0] * EP[c].d[0] + E[j].d[1] * EP[c].d[1]);
+                    var k = near0 >= near1 ? kindsP[before] : kindsP[c];
+                    kinds[j] = k == EdgeKind.Gable ? EdgeKind.Rake : k;
                 }
             }
             var off = new double[n]; for (int j = 0; j < n; j++) off[j] = kinds[j] == EdgeKind.Eave ? T + e : kinds[j] == EdgeKind.Skip ? -T : T;
@@ -164,7 +216,7 @@ namespace Triband.Storey.Generate
                 var tree = new PolyTreeD();
                 Clipper.BooleanOp(ClipType.Intersection, new PathsD { subj }, region, tree, FillRule.NonZero, 6);
                 var polys = new List<List<List<Vec2>>>(); Collect(tree, polys);
-                var g = E[f.j].nin; var v = new P3(-eaveSlope * g[0], 1, -eaveSlope * g[1]); var nrm = v.Normalized;
+                var g = EP[f.j].nin; var v = new P3(-eaveSlope * g[0], 1, -eaveSlope * g[1]); var nrm = v.Normalized;
                 if (!bands.TryGetValue(f.j, out var bl)) bands[f.j] = bl = new List<List<Vec2>>();
                 foreach (var pl in polys) if (pl[0].Count >= 3) bl.Add(pl[0]);
                 foreach (var pl in polys)
@@ -182,8 +234,8 @@ namespace Triband.Storey.Generate
                     var R = new List<Vec2>(ring.Count); foreach (var q in ring) R.Add(new Vec2(q.x, q.y));
                     if (R.Count < 3) continue;
                     if (Geo.Area2(R) < 0) R.Reverse();
-                    int m = R.Count;
-                    var ud = new double[m][]; for (int j = 0; j < m; j++) { var p = R[j]; var q = R[(j + 1) % m]; double L = Geo.Hypot(q.x - p.x, q.z - p.z); if (L == 0) L = 1; ud[j] = new[] { -(q.z - p.z) / L, (q.x - p.x) / L }; }
+                    int rm = R.Count;
+                    var ud = new double[rm][]; for (int j = 0; j < rm; j++) { var p = R[j]; var q = R[(j + 1) % rm]; double L = Geo.Hypot(q.x - p.x, q.z - p.z); if (L == 0) L = 1; ud[j] = new[] { -(q.z - p.z) / L, (q.x - p.x) / L }; }
                     double HU(int j, double x, double z) => hBreak + slope * ((x - R[j].x) * ud[j][0] + (z - R[j].z) * ud[j][1]);
                     foreach (var f in Skeleton.Compute(R).Faces)
                     {
@@ -194,10 +246,23 @@ namespace Triband.Storey.Generate
                     }
                 }
             if (dormers is double every && every > 0)
-                for (int j = 0; j < n; j++)
-                    if (kinds[j] == EdgeKind.Eave && bands.TryGetValue(j, out var band) && band.Count > 0)
-                        Dormers(parts, full[j], E[j].d, E[j].nin, E[j].L, eaveSlope, hb, e, mans ? hBreak : double.PositiveInfinity, Math.Max(every, 2.2), band);
+                for (int j = 0; j < m; j++)
+                    if (kindsP[j] == EdgeKind.Eave && bands.TryGetValue(j, out var band) && band.Count > 0)
+                        Dormers(parts, full[j], EP[j].d, EP[j].nin, EP[j].L, eaveSlope, hb, e, mans ? hBreak : double.PositiveInfinity, Math.Max(every, 2.2), band);
             double EaveH(int j) => type == RoofType.Shed ? HOf(low, Q[j].x, Q[j].z) : hb;
+            // the roof's height over a point: the plane of the face it lies in (in plan)
+            double RoofAt(double x, double z)
+            {
+                if (type == RoofType.Shed) return HOf(low, x, z);
+                int best = -1; double bd = double.MaxValue;
+                foreach (var f in faces)
+                {
+                    var ring = new List<Vec2>(f.pts.Count); foreach (var q in f.pts) ring.Add(new Vec2(q[0], q[1]));
+                    if (Geo.Pip(ring, x, z)) return HOf(f.j, x, z);
+                    foreach (var q in f.pts) { double dd = Geo.Hypot(q[0] - x, q[1] - z); if (dd < bd) { bd = dd; best = f.j; } }
+                }
+                return best >= 0 ? HOf(best, x, z) : hb;
+            }
             int CapAt(int j, int end)
             {
                 int nb = end == 1 ? (j + 1) % n : (j - 1 + n) % n; if (kinds[nb] != EdgeKind.Eave || e < 0.05) return -1;
@@ -220,6 +285,16 @@ namespace Triband.Storey.Generate
                 var A = Q[j]; var B = Q[(j + 1) % n]; double L = Geo.Hypot(B.x - A.x, B.z - A.z); if (L < 1e-4) continue;
                 var d = new[] { (B.x - A.x) / L, (B.z - A.z) / L }; var outN = new P3(-E[j].nin[0], 0, -E[j].nin[1]);
                 P3 Lift(double t, double y) => new P3(A.x + d[0] * t, y, A.z + d[1] * t);
+                if (kinds[j] == EdgeKind.Eave && src != null && src[j] < 0)
+                {
+                    // a cut corner's eave runs round inside the sharp roof's eave line: as high as the roof is at each end
+                    if (e < 0.05) continue;
+                    double hA = RoofAt(A.x, A.z), hB = RoofAt(B.x, B.z), ya = hA - 0.15, yb2 = hB - 0.15; var Wa = W[j]; var Wb = W[(j + 1) % n];
+                    parts.Add(new RoofPart { Pts = { new P3(A.x, ya, A.z), new P3(B.x, yb2, B.z), new P3(B.x, hB, B.z), new P3(A.x, hA, A.z) }, N = outN, Kind = RoofKind.Trim });
+                    parts.Add(new RoofPart { Pts = { new P3(A.x, ya, A.z), new P3(B.x, yb2, B.z), new P3(Wb.x, yb2, Wb.z), new P3(Wa.x, ya, Wa.z) }, N = new P3(0, -1, 0), Kind = RoofKind.Soffit });
+                    if (Math.Min(ya, yb2) > top + 0.01) parts.Add(new RoofPart { Pts = { new P3(Wa.x, top, Wa.z), new P3(Wb.x, top, Wb.z), new P3(Wb.x, yb2, Wb.z), new P3(Wa.x, ya, Wa.z) }, N = outN, Kind = RoofKind.Wall });
+                    continue;
+                }
                 if (kinds[j] == EdgeKind.Eave)
                 {
                     if (e < 0.05) continue;

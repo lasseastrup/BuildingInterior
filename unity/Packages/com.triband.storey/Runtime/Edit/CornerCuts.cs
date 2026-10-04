@@ -78,6 +78,29 @@ namespace Triband.Storey.Edit
             return (map, sharp);
         }
 
+        /// <summary>
+        /// For the generator (a gable or shed roof is planned on the sharp outline): each of tier k0's outline points' place
+        /// in the sharp outline (a cut's points share their corner's), and the sharp outline. Null when no cut stands.
+        /// Reads only: unlike <see cref="Live"/> it never drops a cut that no longer stands from the layout.
+        /// </summary>
+        public static (int[] map, List<Vec2> sharp)? SharpMap(BuildingData b, int k0)
+        {
+            var list = Tiers.Corners(b, k0); if (list.Count == 0) return null;
+            var fp = Tiers.Outline(b, k0);
+            var live = new List<(CornerData, int)>(); var used = new HashSet<int>();
+            foreach (var c in list)
+            {
+                int st = Find(fp, c.pts); if (st < 0) continue;
+                bool clash = false;
+                for (int k = 0; k < c.pts.Count; k++) clash |= used.Contains((st + k) % fp.Count);
+                if (clash) continue;
+                for (int k = 0; k < c.pts.Count; k++) used.Add((st + k) % fp.Count);
+                live.Add((c, st));
+            }
+            if (live.Count == 0) return null;
+            return Collapse(fp, live.OrderBy(x => x.Item2).ToList());
+        }
+
         /// <summary>The sharp outline of tier k0, as the editor shows it, and the cut corners on it.</summary>
         public static (List<Vec2> sharp, List<Spec> cuts) Sharp(BuildingData b, int k0)
         {

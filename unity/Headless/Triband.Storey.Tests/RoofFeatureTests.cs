@@ -163,5 +163,60 @@ namespace Triband.Storey.Tests
             var l1 = Lod1.Build(site, b);
             Assert.Contains(l1.PaneUV.Keys, i => l1.P[i].y > top);
         }
+
+        // ---- gable and shed roofs over cut corners: planned on the sharp outline ----
+
+        static (BuildingData b, RoofParts R) Rounded(RoofType type, CornerShape shape)
+        {
+            var (d, b, _) = Block(type);
+            Assert.True(CornerCuts.CutAll(b, 0, shape, 3) > 0);
+            var site = new Site(d.buildings);
+            return (b, Roofs.Parts(site, b)!);
+        }
+
+        static List<P3> Slopes(RoofParts R) =>
+            R.Parts.Where(p => p.Kind == RoofKind.Roof).Select(p => p.N).Aggregate(new List<P3>(), (l, n) =>
+            { if (!l.Any(o => Math.Abs(o.x - n.x) < 1e-3 && Math.Abs(o.y - n.y) < 1e-3 && Math.Abs(o.z - n.z) < 1e-3)) l.Add(n); return l; });
+
+        [Theory]
+        [InlineData(CornerShape.Round)]
+        [InlineData(CornerShape.Chamfer)]
+        public void AGableOverCutCornersHasTwoSlopes(CornerShape shape)
+        {
+            var (b, R) = Rounded(RoofType.Gable, shape);
+            var slopes = Slopes(R);
+            Assert.Equal(2, slopes.Count);   // not a fan of little hips at each rounded corner
+            Assert.Contains(R.Parts, p => p.Kind == RoofKind.Wall);   // the gable ends
+            NoSpikes(b, R);
+        }
+
+        [Theory]
+        [InlineData(CornerShape.Round)]
+        [InlineData(CornerShape.Chamfer)]
+        public void AShedOverCutCornersIsOnePlane(CornerShape shape)
+        {
+            var (b, R) = Rounded(RoofType.Shed, shape);
+            Assert.Single(Slopes(R));
+            NoSpikes(b, R);
+        }
+
+        [Fact]
+        public void AHipOverRoundedCornersStillFollowsThem()
+        {
+            // only gables and sheds are planned on the sharp outline: a hip's rounded corners round its hips
+            var (_, R) = Rounded(RoofType.Hip, CornerShape.Round);
+            Assert.True(Slopes(R).Count > 4);
+        }
+
+        /// <summary>Nothing reaches further out than the eave's overhang past the outline's bounds.</summary>
+        static void NoSpikes(BuildingData b, RoofParts R)
+        {
+            var bb = Tiers.Bbox(b.footprint); double reach = Dim.T_EXT + 1.3;
+            foreach (var p in R.Parts) foreach (var q in p.Pts)
+            {
+                Assert.InRange(q.x - b.pos.x, bb.x0 - reach, bb.x1 + reach);
+                Assert.InRange(q.z - b.pos.z, bb.z0 - reach, bb.z1 + reach);
+            }
+        }
     }
 }
