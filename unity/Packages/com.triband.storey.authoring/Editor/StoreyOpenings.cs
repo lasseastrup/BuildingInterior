@@ -16,12 +16,23 @@ namespace Triband.Storey.Editor
     [InitializeOnLoad]
     internal static class StoreyOpenings
     {
-        static StoreyOpenings() => EditorApplication.delayCall += () => { foreach (var o in All()) o.Register(); };
+        static StoreyOpenings()
+        {
+            EditorApplication.delayCall += () => { foreach (var o in All()) o.Register(); };
+            EditorApplication.projectChanged += () => all = null;
+        }
 
-        /// <summary>Every Storey Opening asset in the project, by name.</summary>
-        public static List<StoreyOpening> All() =>
-            AssetDatabase.FindAssets("t:" + nameof(StoreyOpening)).Select(g => AssetDatabase.LoadAssetAtPath<StoreyOpening>(AssetDatabase.GUIDToAssetPath(g)))
+        /// <summary>
+        /// Every Storey Opening asset in the project, by name. Searched once and kept until the project changes: the
+        /// inspector asks on every redraw, and a search of a big project's AssetDatabase is slow.
+        /// </summary>
+        public static List<StoreyOpening> All()
+        {
+            if (all != null && all.All(o => o != null)) return all;
+            return all = AssetDatabase.FindAssets("t:" + nameof(StoreyOpening)).Select(g => AssetDatabase.LoadAssetAtPath<StoreyOpening>(AssetDatabase.GUIDToAssetPath(g)))
                 .Where(o => o != null).Select(o => o!).OrderBy(o => o.name).ToList();
+        }
+        static List<StoreyOpening>? all;
 
         /// <summary>Add an opening to a site's list, if it isn't there.</summary>
         public static void Keep(StoreySite? site, StoreyOpening o)

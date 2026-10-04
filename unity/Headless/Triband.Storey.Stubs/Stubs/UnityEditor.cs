@@ -76,6 +76,7 @@ namespace UnityEditor
     public static class EditorApplication
     {
         public static event System.Func<bool> wantsToQuit;
+        public static event System.Action projectChanged { add { } remove { } }
         public static event System.Action<PlayModeStateChange> playModeStateChanged;
         public static void QueuePlayerLoopUpdate() { }
         public static void EnterPlaymode() { }
@@ -115,6 +116,11 @@ namespace UnityEditor
         public void Repaint() { }
         public Rect position { get => default; set { } }
         public void ShowNotification(GUIContent notification, double fadeoutWait) { }
+    }
+
+    public static class Menu
+    {
+        public static void SetChecked(string menuPath, bool isChecked) { }
     }
 
     public static class EditorPrefs

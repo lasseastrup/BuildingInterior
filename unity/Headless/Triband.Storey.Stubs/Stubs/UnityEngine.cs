@@ -576,3 +576,12 @@ namespace Unity.Jobs
         public static JobHandle Schedule<T>(this T jobData, int arrayLength, int innerloopBatchCount, JobHandle dependsOn = default) where T : struct, IJobParallelFor => default;
     }
 }
+
+namespace UnityEngine.Profiling
+{
+    public static class Profiler
+    {
+        public static void BeginSample(string name) { }
+        public static void EndSample() { }
+    }
+}

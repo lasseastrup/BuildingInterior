@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Tools ▸ Storey ▸ Log Edit Timings**: one Console line per edit with where its time went, and Profiler samples named "Storey …" for each stage (docs/EDITOR.md §2.1). The project's Storey Opening and Facade Style assets are searched for once and kept until the project changes, instead of on every inspector redraw.
 - Drags (corners, pushed walls, wall points, splits) put back only the dragged building at each step instead of reading the whole layout again: on the 3,000-building city about 0.1 s a step instead of 1.4 s. `StoreyEdit.DragStartBuilding`.
 - Problems: a **Check** button and an **Auto** toggle. The check runs on a worker thread, on a copy of the layout. After the first check, only the buildings changed since the last one (with their neighbours and bridges) are checked again. On the 3,000-building test city an edit's check takes about 0.3 s; before, a 22 s check froze the editor after every edit (docs/EDITOR.md §6.5).
 - **Test city** in the site inspector: 300, 1,000 or 3,000 generated buildings, or Remove (docs/CITY.md §1).

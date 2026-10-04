@@ -106,16 +106,21 @@ namespace Triband.Storey.Editor
         public bool ApplyFromDragStart(string undoName, Func<BuildingData, bool> op)
         {
             if (dragText == null) return ApplyTo(undoName, op);
+            StoreyTimingLog.Edited(undoName);
+            using var _t = StoreyTimings.Time("edit (all of the below)");
             string bid = View.selectedId;
-            Undo.RecordObject(this, undoName);
+            using (StoreyTimings.Time("edit: undo record")) Undo.RecordObject(this, undoName);
             // back to where the drag began: only the dragged building, when it is the selected one (reading the whole
             // layout took a second a step on a 3,000-building city)
             SessionChange? back = null;
-            if (!(dragBuilding is (string did, string djson) && did == bid && Core.Restore(did, djson))) back = Core.Load(dragText);
+            using (StoreyTimings.Time("edit: drag back to its start"))
+                if (!(dragBuilding is (string did, string djson) && did == bid && Core.Restore(did, djson))) back = Core.Load(dragText);
             var b = Core.Document.buildings.FirstOrDefault(x => x.id == bid);
-            bool ok = b != null && op(b);
-            if (!ok) Core.Discard();
-            var change = Core.Commit();
+            bool ok;
+            using (StoreyTimings.Time("edit: the operation")) ok = b != null && op(b);
+            if (!ok) using (StoreyTimings.Time("edit: refused, put back")) Core.Discard();
+            SessionChange change;
+            using (StoreyTimings.Time("edit: find what changed")) change = Core.Commit();
             if (back != null) { change.structural |= back.structural; change.rebuild.UnionWith(back.rebuild); }
             if (change.None) return ok;
             text = Core.Text;
@@ -179,14 +184,20 @@ namespace Triband.Storey.Editor
         /// </summary>
         public bool Apply(string undoName, Func<StoreyDocument, bool> op)
         {
-            Undo.RecordObject(this, undoName);
-            if (!op(Core.Document)) { Core.Discard(); return false; }
+            StoreyTimingLog.Edited(undoName);
+            using var _t = StoreyTimings.Time("edit (all of the below)");
+            using (StoreyTimings.Time("edit: undo record")) Undo.RecordObject(this, undoName);
+            bool ok;
+            using (StoreyTimings.Time("edit: the operation")) ok = op(Core.Document);
+            if (!ok) { using (StoreyTimings.Time("edit: refused, put back")) Core.Discard(); return false; }
             // presets, new buildings and imports carry CSS colours: every edit ends inside the palette
-            if (StoreyColorField.Conform != null) StoreyColorField.Conform(Core.Document);
-            var change = Core.Commit();
+            if (StoreyColorField.Conform != null) using (StoreyTimings.Time("edit: match colours to the palette")) StoreyColorField.Conform(Core.Document);
+            SessionChange change;
+            using (StoreyTimings.Time("edit: find what changed")) change = Core.Commit();
             if (change.None) return true;
             text = Core.Text;
             EditorUtility.SetDirty(this);
+            StoreyTimings.Count(change.structural ? "edits that change which buildings there are" : "buildings to rebuild", change.structural ? 1 : change.rebuild.Count);
             site!.Preview(Core.Document, text, change);
             Poke();
             return true;

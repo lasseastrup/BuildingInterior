@@ -23,6 +23,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- `StoreyTimings`: Profiler samples and per-stage times for an edit's work (docs/EDITOR.md §2.1).
 - `EditSession.Restore`: put one building back without reading the whole layout (a drag step). `EditSession.Discard` only reads back the buildings an operation changed, and the commit finds bridge links in one pass, not one per building. On the 3,000-building city: a commit goes from about 350 to 140 ms, a drag step from about 1.4 s to 0.1 s.
 - `Problems.Check` with a scope, `Problems.Scope`, `Changed`, `Prints` and `Merge`: check only what an edit touched. `Problem.otherId`. The overlap test skips footprints whose bounding boxes don't overlap: the 3,000-building city's full check goes from 22 s to 7 s.
 - City scale (docs/CITY.md):

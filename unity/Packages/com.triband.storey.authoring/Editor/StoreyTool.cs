@@ -52,6 +52,7 @@ namespace Triband.Storey.Editor
 
         public override void OnToolGUI(EditorWindow window)
         {
+            using var _t = StoreyTimings.Time("scene view: Storey tool");
             if (window is not SceneView sv) return;
             var site = Site; if (site == null) return;
             var e = StoreyEdit.Of(site);

@@ -133,6 +133,7 @@ namespace Triband.Storey.Unity
         /// <summary>Build what is out of date and set this frame's globals. Edit mode calls it on every scene update.</summary>
         public void Refresh()
         {
+            using var _t = StoreyTimings.Time("site: refresh (all of the below)");
             if (layout == null || opaque == null || glass == null || massing == null) { if (site != null) TearDown(); return; }
             bool auto = lodMode == LodMode.Automatic;
             if (site != null && (builtWith[0] != opaque || builtWith[1] != glass || builtWith[2] != massing || builtAuto != auto)) TearDown();   // materials or the LOD mode changed
@@ -158,7 +159,7 @@ namespace Triband.Storey.Unity
             site.Occlusion = Application.isPlaying && Occlusion != null && Occlusion.isActiveAndEnabled ? Occlusion.Apply : null;
             var v = ViewSource != null ? (view = ViewSource()) : view;
             if (auto) PickFor(site, v);
-            site.Frame(lodTint, v);
+            using (StoreyTimings.Time("site: frame")) site.Frame(lodTint, v);
         }
 
         /// <summary>The automatic LOD's camera and the buildings kept at full detail, this frame.</summary>

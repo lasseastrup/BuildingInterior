@@ -15,6 +15,22 @@ These rules are ported to the engine-free `Runtime/Edit/` and judged against the
 - **Edit session and undo.** Editing a site opens a `StoreyEditSession`, a hidden ScriptableObject holding the document's JSON. Every edit is `Undo.RecordObject(session, name)`, an operation from `Runtime/Edit`, and the JSON written back, so each edit is one named undo step and undo restores the text exactly. Saving (Ctrl+S, or leaving the tool) writes the `.storey` file and reimports it.
 - **Live preview.** The edited building and the neighbours whose shared walls changed regenerate after each edit, debounced, LOD0 only while editing (UNITY-PACKAGE-PLAN §4.3). Generation never runs in `OnValidate`.
 
+### 2.1 Where an edit's time goes
+
+Every stage of an edit is a Profiler sample whose name starts with "Storey". Search the Profiler's hierarchy for "Storey".
+
+The stages:
+- **The edit:** the undo record, the operation, matching colours to the palette, and finding what changed.
+- **The site:** a rebuild of the edited buildings, or a full rebuild of every building, and its parts:
+  - indexing the layout;
+  - rewriting the colour rows;
+  - each building's massing;
+  - LOD0 and LOD1 built and uploaded;
+  - the cells merged.
+- **The editor:** the automatic LOD, the colliders, the inspector's draw and the Storey tool in the Scene view.
+
+**Tools ▸ Storey ▸ Log Edit Timings** prints one Console line per edit once it has settled. The line gives the stages, slowest first, and counts such as buildings rebuilt, full rebuilds and cells merged. It also gives the slowest editor frame since the edit. If that frame is far above Storey's stages, the time went somewhere else: another inspector or window, the Scene view, or the garbage collector.
+
 ## 3. Order of work
 
 | # | Slice | Contents | Done when |

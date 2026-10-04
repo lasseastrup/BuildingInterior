@@ -35,6 +35,7 @@ namespace Triband.Storey.Editor
 
         public override void OnInspectorGUI()
         {
+            using var _t = StoreyTimings.Time("inspector: draw");
             var site = (StoreySite)target;
             serializedObject.Update();
             EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(StoreySite.layout)), new GUIContent("Layout", "The .storey file this site draws and edits"));
@@ -654,10 +655,21 @@ namespace Triband.Storey.Editor
             StoreyOpenings.Keep(e.Site, k);
         }
 
+        // the project's Facade Style assets: searched once and kept until the project changes (the inspector redraws often,
+        // and a search of a big project's AssetDatabase is slow)
+        static List<FacadeStylePreset>? presetAssets;
+        static bool presetHook;
+        static List<FacadeStylePreset> PresetAssets()
+        {
+            if (!presetHook) { presetHook = true; EditorApplication.projectChanged += () => presetAssets = null; }
+            if (presetAssets != null && presetAssets.All(a => a != null)) return presetAssets;
+            return presetAssets = AssetDatabase.FindAssets("t:" + nameof(FacadeStylePreset)).Select(g => AssetDatabase.LoadAssetAtPath<FacadeStylePreset>(AssetDatabase.GUIDToAssetPath(g))).Where(a => a != null).Select(a => a!).ToList();
+        }
+
         void Presets(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
         {
             // one list: the built-in presets, then the project's Facade Style assets; "Custom" once the style is edited
-            var assets = AssetDatabase.FindAssets("t:" + nameof(FacadeStylePreset)).Select(g => AssetDatabase.LoadAssetAtPath<FacadeStylePreset>(AssetDatabase.GUIDToAssetPath(g))).Where(a => a != null).Select(a => a!).ToList();
+            var assets = PresetAssets();
             var names = Styles.Presets.Select(p => p.style.label).ToList();
             if (assets.Count > 0) { names.Add(""); names.AddRange(assets.Select(a => "Project/" + a.name)); }
             int current = Styles.Presets.ToList().FindIndex(p => p.key == st.preset);

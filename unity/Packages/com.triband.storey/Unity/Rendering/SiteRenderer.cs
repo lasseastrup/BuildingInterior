@@ -201,6 +201,7 @@ namespace Triband.Storey.Unity
         /// <summary>Build everything again.</summary>
         public void Show(StoreyDocument doc)
         {
+            using var _t = StoreyTimings.Time("site: full rebuild (every building)");
             // automatic LOD: the detail each building showed is built again at once, so a structural edit (a building
             // added or removed) doesn't fade the buildings in view through their massings
             carry.Clear();
@@ -220,9 +221,10 @@ namespace Triband.Storey.Unity
         /// </summary>
         public void Rebuild(StoreyDocument doc, IEnumerable<string> ids)
         {
-            if (book == null || site == null || doc.buildings.Count != built.Count || doc.buildings.Any(b => !built.ContainsKey(b.id))) { Show(doc); return; }
-            site = new Site(doc.buildings);
-            book.Retarget(new ColorResolver(site));
+            if (book == null || site == null || doc.buildings.Count != built.Count || doc.buildings.Any(b => !built.ContainsKey(b.id))) { StoreyTimings.Count("full rebuilds: the layout's buildings changed"); Show(doc); return; }
+            using var _t = StoreyTimings.Time("site: rebuild of the edited buildings");
+            using (StoreyTimings.Time("site: index the layout")) site = new Site(doc.buildings);
+            using (StoreyTimings.Time("site: rewrite every colour row")) book.Retarget(new ColorResolver(site));
             foreach (var id in ids)
             {
                 var b = site.ById(id); if (b == null) continue;
@@ -342,10 +344,13 @@ namespace Triband.Storey.Unity
             bt.root = root;
             built[b.id] = bt; byIdx[bt.idx] = bt;
 
+            StoreyTimings.Count("buildings built");
+            var t2 = StoreyTimings.Time("build: massing and its rows");
             var l2 = Lod2.Build(site!, b);
             var rowMap = new int[l2.Rows.Count];
             for (int r = 0; r < l2.Rows.Count; r++) { rowMap[r] = table.WriteRow(l2.Rows[r], RowOf(l2.Rows[r].wall.style)); bt.rows.Add(rowMap[r]); }
             l2.Tag = bt.idx + 2 * Lod1.LOD_TAG;
+            t2.Dispose();
 
             if (lods == null)
             {
@@ -379,7 +384,12 @@ namespace Triband.Storey.Unity
         }
 
         /// <summary>A building's LOD0 (with its glass and its walls in the table) or LOD1, generated and uploaded now.</summary>
-        void BuildDetail(Built bt, BuildingData b, int which) => FinishDetail(bt, b.name, which, Generate(site!, b, bt.idx, which));
+        void BuildDetail(Built bt, BuildingData b, int which)
+        {
+            object made;
+            using (StoreyTimings.Time(which == 0 ? "build: LOD0 on the main thread" : "build: LOD1 on the main thread")) made = Generate(site!, b, bt.idx, which);
+            FinishDetail(bt, b.name, which, made);
+        }
 
         /// <summary>
         /// The engine-free half of a detail build: generated, tagged and welded. Safe on a worker thread (the generator's
@@ -396,6 +406,7 @@ namespace Triband.Storey.Unity
         /// <summary>The main thread's half: the walls into the table, the meshes uploaded and drawn.</summary>
         void FinishDetail(Built bt, string name, int which, object made)
         {
+            using var _t = StoreyTimings.Time(which == 0 ? "build: LOD0 upload" : "build: LOD1 upload");
             bool opt = Application.isPlaying;   // edit mode rebuilds on every drag: skip the cache reorder there
             if (which == 1)
             {
@@ -460,6 +471,7 @@ namespace Triband.Storey.Unity
         /// </summary>
         void UpdateLods()
         {
+            using var _t = StoreyTimings.Time("site: automatic LOD");
             var sw = System.Diagnostics.Stopwatch.StartNew();
             float now = Time.realtimeSinceStartup, dt = lastLod < 0 ? 0 : Mathf.Min(0.1f, now - lastLod); lastLod = now;
             var l = lods!; int made = 0, queued = 0; bool fading = false;
@@ -524,6 +536,8 @@ namespace Triband.Storey.Unity
         /// <summary>A cell's massings merged again (a member was built, rebuilt or removed).</summary>
         void BuildCell((int x, int z) key)
         {
+            using var _t = StoreyTimings.Time("site: cells merged");
+            StoreyTimings.Count("cells merged");
             if (!cells.TryGetValue(key, out var c)) return;
             foreach (var r in c.renderers) if (r != null) Kill(r.gameObject);
             foreach (var m in c.meshes) Kill(m);
@@ -582,6 +596,7 @@ namespace Triband.Storey.Unity
         /// </summary>
         void BuildColliders()
         {
+            using var _t = StoreyTimings.Time("site: colliders");
             var todo = new List<(Built bt, Mesh mesh)>();
             foreach (var id in colliderPending)
             {
