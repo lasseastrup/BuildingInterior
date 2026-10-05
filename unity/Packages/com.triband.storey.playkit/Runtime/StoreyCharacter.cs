@@ -38,6 +38,7 @@ namespace Triband.Storey.PlayKit
             spawned = true; Place();
         }
 
+        Vector3 lastOrigin; bool hasOrigin;
         Vector3 Origin => occlusion != null && occlusion.site != null ? occlusion.site.transform.position : Vector3.zero;
 
         void Start()
@@ -72,6 +73,11 @@ namespace Triband.Storey.PlayKit
             float dt = Mathf.Min(Time.deltaTime, 0.05f);
             Input.Read(dt);
             if (world == null) return;   // the site has not been built yet
+            // the occlusion moved to another district (StoreyOcclusion.followPlayer): the walk state is in the site's own
+            // space, so it moves by the difference between the two sites' origins, and the character stays put
+            var o = Origin;
+            if (hasOrigin && o != lastOrigin) { State.x += lastOrigin.x - o.x; State.y += lastOrigin.y - o.y; State.z += lastOrigin.z - o.z; }
+            lastOrigin = o; hasOrigin = true;
             double yaw = 0;
             if (cam != null) { var f = cam.transform.forward; yaw = Mathf.Atan2(-f.x, -f.z); }   // the walk model's yaw: forward is (-sin, -cos)
             Walker.Step(world, State, new MoveInput(Input.Move.x, Input.Move.y, Input.Run), yaw, dt);

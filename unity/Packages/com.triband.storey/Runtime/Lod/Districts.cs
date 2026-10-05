@@ -1,0 +1,38 @@
+#nullable enable
+using System;
+using System.Collections.Generic;
+
+namespace Triband.Storey.Lod
+{
+    /// <summary>
+    /// Districts (docs/CITY.md §5): a city split into Storey Sites, one a scene, loaded by distance. Engine-free choices
+    /// the Unity side acts on: which loaded district the player is in, and which to load and unload.
+    /// </summary>
+    public static class Districts
+    {
+        /// <summary>A district's ground plan in world space, metres.</summary>
+        public readonly struct Area
+        {
+            public readonly double x0, z0, x1, z1;
+            public Area(double x0, double z0, double x1, double z1) { this.x0 = x0; this.z0 = z0; this.x1 = x1; this.z1 = z1; }
+            /// <summary>How far a point is from the area (0 inside).</summary>
+            public double Distance(double x, double z)
+            {
+                double dx = Math.Max(Math.Max(x0 - x, 0), x - x1), dz = Math.Max(Math.Max(z0 - z, 0), z - z1);
+                return Math.Sqrt(dx * dx + dz * dz);
+            }
+        }
+
+        /// <summary>
+        /// The district the player is in: the current one while they are within <paramref name="margin"/> of it (so a
+        /// player on the boundary doesn't flick between two), else the nearest, else -1 when there are none.
+        /// </summary>
+        public static int PlayerIn(IReadOnlyList<Area> areas, int current, double x, double z, double margin = 4)
+        {
+            if (current >= 0 && current < areas.Count && areas[current].Distance(x, z) <= margin) return current;
+            int best = -1; double bd = double.MaxValue;
+            for (int i = 0; i < areas.Count; i++) { double d = areas[i].Distance(x, z); if (d < bd) { bd = d; best = i; } }
+            return best;
+        }
+    }
+}

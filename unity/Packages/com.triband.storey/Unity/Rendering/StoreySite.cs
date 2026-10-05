@@ -82,6 +82,24 @@ namespace Triband.Storey.Unity
         /// <summary>The occlusion system driving this site in Play mode (it registers itself), or null.</summary>
         public StoreyOcclusion? Occlusion { get; internal set; }
 
+        /// <summary>The layout's ground plan in world space (its buildings' bounds), for picking the district a player is in.</summary>
+        public Lod.Districts.Area? PlanArea
+        {
+            get
+            {
+                var d = Shown; if (d == null || d.buildings.Count == 0) return null;
+                var o = transform.position;
+                if (!ReferenceEquals(d, areaFor) || d.buildings.Count != areaCount || o != areaAt)
+                {
+                    double x0 = double.MaxValue, z0 = x0, x1 = double.MinValue, z1 = x1;
+                    foreach (var b in d.buildings) { var bb = Generate.Site.BoundsOf(b); x0 = Math.Min(x0, bb.x0); z0 = Math.Min(z0, bb.z0); x1 = Math.Max(x1, bb.x1); z1 = Math.Max(z1, bb.z1); }
+                    area = new Lod.Districts.Area(x0 + o.x, z0 + o.z, x1 + o.x, z1 + o.z); areaFor = d; areaCount = d.buildings.Count; areaAt = o;
+                }
+                return area;
+            }
+        }
+        Lod.Districts.Area area; StoreyDocument? areaFor; int areaCount; Vector3 areaAt;
+
         /// <summary>The layout as shown: the unsaved edit while there is one, otherwise the asset's.</summary>
         public StoreyDocument? Shown => preview ?? (layout != null ? layout.Document : null);
 

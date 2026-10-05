@@ -26,6 +26,8 @@ namespace Triband.Storey.Unity
         public Camera? viewCamera;
         [Tooltip("The player's feet. Or leave empty and call SetPlayer each frame.")]
         public Transform? player;
+        [Tooltip("With the city split into districts (several Storey Sites loaded at once), occlude the one the player is in, moving over as they cross into the next.")]
+        public bool followPlayer = true;
 
         readonly OcclusionSettings core = new OcclusionSettings();
         PlayWorld? world; OcclusionCore? occ; Site? builtFor;
@@ -57,6 +59,22 @@ namespace Triband.Storey.Unity
         public void SetCameraTarget(Vector3? worldTarget) => cameraTarget = worldTarget;
 
         void OnEnable() { if (site != null) site.Occlusion = this; }
+
+        readonly List<StoreySite> candidates = new List<StoreySite>();
+        readonly List<Lod.Districts.Area> areas = new List<Lod.Districts.Area>();
+
+        // before the sites draw (they run late): the district the player is in takes the occlusion
+        void Update()
+        {
+            if (!followPlayer || StoreySite.All.Count < 2) return;
+            var cam = viewCamera != null ? viewCamera : Camera.main;
+            Vector3? at = player != null ? player.position : hasFeet ? feet : cam != null ? cam.transform.position : (Vector3?)null;
+            if (at == null) return;
+            candidates.Clear(); areas.Clear();
+            foreach (var s in StoreySite.All) if (s.isActiveAndEnabled && s.PlanArea is Lod.Districts.Area a) { candidates.Add(s); areas.Add(a); }
+            int pick = Lod.Districts.PlayerIn(areas, site != null ? candidates.IndexOf(site) : -1, at.Value.x, at.Value.z);
+            if (pick >= 0 && candidates[pick] != site) Attach(candidates[pick]);
+        }
 
         /// <summary>Drive this site (for a component added from code, whose OnEnable ran before the site was set).</summary>
         public void Attach(StoreySite s)
