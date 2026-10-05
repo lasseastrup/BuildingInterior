@@ -13,7 +13,7 @@ How Storey draws a few thousand buildings: a test city to measure with, the auto
   - To make that file: `cd prototype/tools && npm run city`.
 - Generated buildings are marked `gen`. Making a city again replaces them. `TestCity.Clear` removes them.
 
-In the editor: select a Storey Site, then **Tools ▸ Storey ▸ Test City ▸ Make 300 / 1,000 / 3,000 Buildings**. It asks before adding them. **Remove Test City** takes them out. It's in a menu rather than the site's inspector so nobody adds thousands of buildings by accident. The city is an edit like any other, so it is saved with the layout and can be undone.
+In the editor: select a Storey Site, then **Tools ▸ Storey ▸ Test City ▸ Make 300 / 1,000 / 3,000 Buildings**. It asks before adding them. **Make … Walk-in Buildings** makes the same city with every building walk-in: switchback stairs from the ground to the top where they fit (about 95% of buildings or more), and a lift beside them above five storeys. Use it to test interiors, LOD0 and the occlusion at scale. **Remove Test City** takes them out. It's in a menu rather than the site's inspector so nobody adds thousands of buildings by accident. The city is an edit like any other, so it is saved with the layout and can be undone.
 
 ## 2. The automatic LOD
 

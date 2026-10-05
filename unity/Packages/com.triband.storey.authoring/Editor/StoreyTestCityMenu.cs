@@ -20,14 +20,22 @@ namespace Triband.Storey.Editor
 
         static bool HasLayout() { var s = Selected; return s != null && s.layout != null; }
 
-        [MenuItem(Root + "Make 300 Buildings")] static void Make300() => Make(300);
-        [MenuItem(Root + "Make 1,000 Buildings")] static void Make1000() => Make(1000);
-        [MenuItem(Root + "Make 3,000 Buildings")] static void Make3000() => Make(3000);
+        [MenuItem(Root + "Make 300 Buildings", false, 10)] static void Make300() => Make(300);
+        [MenuItem(Root + "Make 1,000 Buildings", false, 10)] static void Make1000() => Make(1000);
+        [MenuItem(Root + "Make 3,000 Buildings", false, 10)] static void Make3000() => Make(3000);
         [MenuItem(Root + "Make 300 Buildings", true)] static bool Can300() => HasLayout();
         [MenuItem(Root + "Make 1,000 Buildings", true)] static bool Can1000() => HasLayout();
         [MenuItem(Root + "Make 3,000 Buildings", true)] static bool Can3000() => HasLayout();
 
-        [MenuItem(Root + "Remove Test City")]
+        // the same city with every building walk-in: stairs to the top, and a lift above five storeys
+        [MenuItem(Root + "Make 300 Walk-in Buildings", false, 30)] static void Walk300() => Make(300, true);
+        [MenuItem(Root + "Make 1,000 Walk-in Buildings", false, 30)] static void Walk1000() => Make(1000, true);
+        [MenuItem(Root + "Make 3,000 Walk-in Buildings", false, 30)] static void Walk3000() => Make(3000, true);
+        [MenuItem(Root + "Make 300 Walk-in Buildings", true)] static bool CanWalk300() => HasLayout();
+        [MenuItem(Root + "Make 1,000 Walk-in Buildings", true)] static bool CanWalk1000() => HasLayout();
+        [MenuItem(Root + "Make 3,000 Walk-in Buildings", true)] static bool CanWalk3000() => HasLayout();
+
+        [MenuItem(Root + "Remove Test City", false, 50)]
         static void Remove()
         {
             var e = Edit(); if (e == null) return;
@@ -37,13 +45,14 @@ namespace Triband.Storey.Editor
         }
         [MenuItem(Root + "Remove Test City", true)] static bool CanRemove() => HasLayout();
 
-        static void Make(int n)
+        static void Make(int n, bool walkIn = false)
         {
             var e = Edit(); if (e == null) return;
+            string what = walkIn ? $"{n:N0} generated walk-in buildings, each with stairs to the top (and a lift above five storeys)," : $"{n:N0} generated buildings";
             if (!EditorUtility.DisplayDialog("Make a test city",
-                    $"Add {n:N0} generated buildings round \"{e.Site!.layout!.name}\"'s own? Any test city already there is replaced. The layout saves as usual; undo or Tools ▸ Storey ▸ Test City ▸ Remove Test City takes them out.",
+                    $"Add {what} round \"{e.Site!.layout!.name}\"'s own? Any test city already there is replaced. The layout saves as usual; undo or Tools ▸ Storey ▸ Test City ▸ Remove Test City takes them out.",
                     "Make it", "Cancel")) return;
-            e.Apply($"Made a test city of {n:N0}", d => { TestCity.Generate(d, n); return true; });
+            e.Apply($"Made a {(walkIn ? "walk-in " : "")}test city of {n:N0}", d => { TestCity.Generate(d, n, walkIn); return true; });
             if (e.Site.lodMode == StoreySite.LodMode.Fixed)
                 Debug.LogWarning("Storey: the site's LOD mode is Fixed, so every building builds every LOD. Set it to Automatic in Site settings for a city this size.");
         }

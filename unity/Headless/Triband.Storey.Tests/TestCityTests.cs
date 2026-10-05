@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using Triband.Storey.Edit;
+using Triband.Storey.Generate;
 using Xunit;
 
 namespace Triband.Storey.Tests
@@ -51,6 +52,36 @@ namespace Triband.Storey.Tests
             Assert.Equal(200, TestCity.Clear(d));
             Assert.Equal(hand, d.buildings.Count);
             Assert.Equal(d.buildings.Count, d.buildings.Select(b => b.id).Distinct().Count());
+        }
+
+        [Fact]
+        public void AWalkInCityHasStairsInEveryBuilding()
+        {
+            var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document;
+            int n = TestCity.Generate(d, 300, walkIn: true);
+            var gen = d.buildings.Where(b => b.gen).ToList();
+            Assert.Equal(300, n);
+            Assert.All(gen, b => Assert.True(b.interior));
+            int stairs = gen.Count(b => b.shafts.Any(s => s.type == CoreType.Stairs));
+            int lifts = gen.Count(b => b.shafts.Any(s => s.type == CoreType.Lift));
+            Assert.True(stairs >= gen.Count * 0.95, $"{stairs} of {gen.Count} have stairs");
+            Assert.All(gen, b => Assert.All(b.shafts, s => Assert.True(Cores.CoreFits(b.footprint, s))));
+            Assert.True(lifts > 0, "the tall ones have lifts");
+            // the same city otherwise: positions, outlines and heights as the prototype's
+            var plain = PrototypeJson.Read(Fixtures.Text("demo.json")).Document; TestCity.Generate(plain, 300);
+            var pg = plain.buildings.Where(b => b.gen).ToList();
+            for (int i = 0; i < gen.Count; i++) { Assert.Equal(pg[i].pos.x, gen[i].pos.x); Assert.Equal(pg[i].floors.Count, gen[i].floors.Count); Assert.Equal(pg[i].footprint.Count, gen[i].footprint.Count); }
+        }
+
+        [Fact]
+        public void EveryStoreyOfAWalkInCityCanBeReached()
+        {
+            var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document;
+            TestCity.Generate(d, 60, walkIn: true);
+            var site = new Site(d.buildings);
+            var gen = new HashSet<string>(d.buildings.Where(b => b.gen && b.shafts.Count > 0).Select(b => b.id));
+            var bad = Validate.Problems.Check(site).Where(p => gen.Contains(p.buildingId) && p.severity == Validate.Severity.Error).ToList();
+            Assert.True(bad.Count == 0, string.Join("\n", bad.Take(10)));
         }
     }
 }

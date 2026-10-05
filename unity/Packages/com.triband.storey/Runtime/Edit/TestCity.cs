@@ -41,12 +41,14 @@ namespace Triband.Storey.Edit
 
         /// <summary>
         /// Replace the layout's generated buildings with <paramref name="count"/> new ones. The hand-made buildings stay,
-        /// with 12 m kept clear round each.
+        /// with 12 m kept clear round each. <paramref name="walkIn"/>: every building is walk-in, with switchback stairs
+        /// from the ground to the top and, above five storeys, a lift (the same city otherwise: the prototype's draws are
+        /// made in the same order, so the default city still matches it).
         /// </summary>
-        public static int Generate(StoreyDocument d, int count)
+        public static int Generate(StoreyDocument d, int count, bool walkIn = false)
         {
             d.buildings.RemoveAll(b => b.gen);
-            var made = Buildings(d, count);
+            var made = Buildings(d, count, walkIn);
             d.buildings.AddRange(made);
             return made.Count;
         }
@@ -54,7 +56,7 @@ namespace Triband.Storey.Edit
         /// <summary>Remove the generated buildings. Returns how many there were.</summary>
         public static int Clear(StoreyDocument d) => d.buildings.RemoveAll(b => b.gen);
 
-        static List<BuildingData> Buildings(StoreyDocument d, int count)
+        static List<BuildingData> Buildings(StoreyDocument d, int count, bool walkIn)
         {
             var R = new Rng(Seed); var out_ = new List<BuildingData>();
             var keep = d.buildings.Where(b => !b.gen).ToList();
@@ -102,10 +104,35 @@ namespace Triband.Storey.Edit
                             var sc = new CoreData { id = Shafts.NewId(d), type = CoreType.Stairs, x = SnapG(w / 2), z = SnapG(dd / 2), rot = 0, bottom = 0, top = -1, roof = true };
                             if (Cores.CoreFits(b.footprint, sc)) b.shafts.Add(sc);
                         }
+                        if (walkIn) WalkIn(d, b, w, dd);
                         out_.Add(b);
                     }
             }
             return out_;
+        }
+
+        /// <summary>A building made walk-in: stairs, and a lift above five storeys, where they fit in the footprint.</summary>
+        static void WalkIn(StoreyDocument d, BuildingData b, double w, double dd)
+        {
+            b.interior = true;
+            var fracs = new[] { 0.5, 0.3, 0.7, 0.2, 0.8 };
+            CoreData? Fit(CoreType type, CoreData? clear)
+            {
+                foreach (double rot in new[] { 0.0, 90.0 })
+                    foreach (double fx in fracs)
+                        foreach (double fz in fracs)
+                        {
+                            var c = new CoreData { id = "", type = type, x = SnapG(w * fx), z = SnapG(dd * fz), rot = rot, bottom = 0, top = -1, roof = true };
+                            if (!Cores.CoreFits(b.footprint, c)) continue;
+                            if (clear != null && Shafts.Overlap(c, clear, 0.3)) continue;
+                            c.id = Shafts.NewId(d); return c;
+                        }
+                return null;
+            }
+            var stairs = b.shafts.FirstOrDefault(s => s.type == CoreType.Stairs) ?? Fit(CoreType.Stairs, null);
+            if (stairs == null) return;   // too narrow for stairs anywhere: it stays walk-in, ground floor only
+            if (!b.shafts.Contains(stairs)) b.shafts.Add(stairs);
+            if (b.floors.Count > 5 && Fit(CoreType.Lift, stairs) is CoreData lift) b.shafts.Add(lift);
         }
 
         static double[] P(double x, double z) => new[] { x, z };
