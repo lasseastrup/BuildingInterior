@@ -258,6 +258,12 @@ namespace Triband.Storey.Unity
                 shownLod = lod;
             }
             StoreyGlobals.SetLodTint(lodTint);
+            // the view globals (active building, cutaway, isolate, occlusion) are one set for every site: written by the
+            // site that has a view (the editor's, or the occlusion system's), and neutral only when none has
+            var v0 = view ?? SiteView.Neutral;
+            claims = Occlusion != null || v0.activeId != null || v0.isolateId != null;
+            live.Add(this);
+            bool writeView = claims || !OtherClaims();
             if (Occlusion != null)
             {
                 Occlusion(this);
@@ -267,12 +273,13 @@ namespace Triband.Storey.Unity
                 table.Upload();
                 return;
             }
-            var v = view ?? SiteView.Neutral;
+            var v = v0;
+            EditCutaway(v.cut && v.activeId != null && TableIndexOf(v.activeId) >= 0 ? v.activeId : null, v);
+            if (!writeView) { palette.Bind(); table.Upload(); return; }
             int active = v.activeId != null ? TableIndexOf(v.activeId) : -1;
             StoreyGlobals.SetActive(active, active >= 0 ? v.clipY : 1e9f);
             if (active >= 0 && v.cut) { StoreyGlobals.SetCamera(v.camera, v.focus, v.cameraDir); StoreyGlobals.SetCut(true, v.stubHeight, v.cutBase, v.cutTop, v.clipY); }
             else StoreyGlobals.SetCut(false, 1, 0, 0, active >= 0 ? v.clipY : 1e9f);
-            EditCutaway(active >= 0 && v.cut ? v.activeId : null, v);
             int iso = v.isolateId != null ? TableIndexOf(v.isolateId) : -1;
             StoreyGlobals.SetIsolate(iso >= 0 ? v.isolateAmount : 0, iso);
             StoreyGlobals.SetOcclusion(StoreyGlobals.OcclusionMode.Off, Vector3.zero, 2.4f);
@@ -280,6 +287,11 @@ namespace Triband.Storey.Unity
             palette.Bind();
             table.Upload();
         }
+
+        // every renderer drawing now, and whether it owns the view globals (claims)
+        static readonly HashSet<SiteRenderer> live = new HashSet<SiteRenderer>();
+        bool claims;
+        bool OtherClaims() { foreach (var r in live) if (r != this && r.claims) return true; return false; }
 
         // the editor's wall slides, by wall id: eased over the prototype's 0.22 s, down when a wall is in the way, back up after
         readonly Dictionary<int, float> editSlide = new Dictionary<int, float>();
@@ -717,6 +729,7 @@ namespace Triband.Storey.Unity
             (palette as IDisposable)?.Dispose();   // Color Pipeline's palette listens for invalidations
             if (blockStart >= 0) table.ReleaseBlock(blockStart, blockSize);
             blockStart = -1; blockSize = 0;
+            live.Remove(this);
             BuildingTable.ReleaseShared(table);
         }
     }
