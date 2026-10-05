@@ -55,7 +55,12 @@ namespace Triband.Storey.Unity
         /// </summary>
         /// <param name="optimize">Unused (it called <c>Mesh.Optimize</c>, which crashed the editor); kept so callers compile.</param>
         /// <param name="windows">Opaque panes carry their place on the pane for the window shader (the opaque meshes; not the see-through glass).</param>
-        public static Mesh Upload(MeshBuilder gb, string name, Func<StyleRef, int> rowOf, int wallBase = -1, bool optimize = false, bool windows = false)
+        /// <param name="mates">
+        /// Where the site's buildings sit in the shared table (<see cref="BuildingTable.AllocBlock"/>): the first index, and
+        /// how many. A party wall's vertex names its neighbour by layout index; it is moved into the block, and a neighbour
+        /// past it (a building of a neighbouring district, there for its walls only) is dropped.
+        /// </param>
+        public static Mesh Upload(MeshBuilder gb, string name, Func<StyleRef, int> rowOf, int wallBase = -1, bool optimize = false, bool windows = false, (int start, int count)? mates = null)
         {
             if (!gb.Welded) gb.Weld();
             int nv = gb.Verts;
@@ -96,7 +101,8 @@ namespace Triband.Storey.Unity
                 for (int i = 0; i < nv; i++)
                 {
                     int wi = gb.WI[i];
-                    cut[i] = new Cutaway { kind = gb.K[i], wid = wi > 0 && wallBase >= 0 ? wallBase + wi - 1 : 0 };
+                    int kind = mates is (int ms, int mc) ? Lod.MateIndex.Shift(gb.K[i], ms, mc) : gb.K[i];
+                    cut[i] = new Cutaway { kind = kind, wid = wi > 0 && wallBase >= 0 ? wallBase + wi - 1 : 0 };
                 }
                 mesh.SetVertexBufferData(cut, 0, 0, nv, 1, flags);
             }

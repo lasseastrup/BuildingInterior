@@ -12,9 +12,41 @@ namespace Triband.Storey.Unity
     /// palette entries (docs/COLOURS.md §3.3). All are global structured buffers,
     /// so thousands of buildings need no per-object material state and merged meshes can still
     /// switch individual buildings. Written on the CPU into arrays, uploaded when dirty, once per frame.
+    ///
+    /// Global buffers mean one table for everything drawn (docs/CITY.md §5): every Storey Site in the loaded scenes
+    /// shares the one from <see cref="Acquire"/>, each with its own block of building indices (<see cref="AllocBlock"/>).
+    /// Two tables would each bind themselves as the globals, and the last to bind would win for every site.
     /// </summary>
     public sealed class BuildingTable : IDisposable, Generate.IColorRowSink
     {
+        static BuildingTable? shared; static int users;
+
+        /// <summary>The one table every site draws through; made by the first, disposed with the last (<see cref="ReleaseShared"/>).</summary>
+        public static BuildingTable Acquire() { users++; return shared ??= new BuildingTable(); }
+
+        /// <summary>A site is done with the shared table.</summary>
+        public static void ReleaseShared(BuildingTable t)
+        {
+            if (!ReferenceEquals(t, shared)) { t.Dispose(); return; }
+            if (--users > 0) return;
+            shared.Dispose(); shared = null; users = 0;
+        }
+
+        // building indices, handed out in blocks: one per site, its layout's buildings in order. The last row is Sink's
+        // footprints' (StoreyOcclusion)
+        readonly Lod.IndexBlocks blocks = new Lod.IndexBlocks(MaxBuildings - 1);
+
+        /// <summary>A block of <paramref name="n"/> building indices (the first returned), or -1 when none is free.</summary>
+        public int AllocBlock(int n) => blocks.Alloc(n);
+
+        /// <summary>Give a block back: its buildings culled, the indices free for another site.</summary>
+        public void ReleaseBlock(int start, int n)
+        {
+            if (n <= 0 || start < 0) return;
+            for (int i = start; i < start + n; i++) State[i] = new Vector4(3, 3, 1, 0);
+            stateDirty = true;
+            blocks.Release(start, n);
+        }
         public const int MaxBuildings = 8192;
         public const int OccSlots = 16, OccWidth = 64;
         public const int WallIds = 65536;
@@ -46,7 +78,6 @@ namespace Triband.Storey.Unity
         bool stateDirty = true, occDirty = true, wallDirty = true, wallDataDirty = true, paramsDirty = true, colorsDirty = true, detailsDirty = true;
 
         // free lists, as the prototype keeps them
-        readonly Stack<int> freeIdx = new Stack<int>(); int nextIdx;
         readonly Stack<int> freeRow = new Stack<int>(); int nextRow;
         readonly Stack<int> freeColorRow = new Stack<int>(); int nextColorRow;
         readonly Stack<int> freeSlot = new Stack<int>();
@@ -67,10 +98,6 @@ namespace Triband.Storey.Unity
         }
 
         // ---- allocation --------------------------------------------------------------------
-
-        /// <summary>A building index (row in <see cref="State"/>), reused after <see cref="ReleaseIndex"/>.</summary>
-        public int AllocIndex() => freeIdx.Count > 0 ? freeIdx.Pop() : Math.Min(nextIdx++, MaxBuildings - 1);
-        public void ReleaseIndex(int idx) { State[idx] = new Vector4(3, 3, 1, 0); stateDirty = true; freeIdx.Push(idx); }
 
         /// <summary>An occluder slot, or -1 when all are taken.</summary>
         public int AllocOccSlot() => freeSlot.Count > 0 ? freeSlot.Pop() : -1;

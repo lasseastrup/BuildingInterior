@@ -26,7 +26,8 @@ namespace Triband.Storey.Unity
         readonly Transform parent;
         readonly Material opaque, glass, massing;
         readonly HideFlags flags;
-        readonly BuildingTable table = new BuildingTable();
+        readonly BuildingTable table = BuildingTable.Acquire();   // shared by every site (docs/CITY.md §5)
+        int blockStart = -1, blockSize;   // this site's building indices there: the layout's buildings in order
         readonly IStoreyPalette palette = StoreyPalettes.Active;
         readonly Dictionary<string, Built> built = new Dictionary<string, Built>(StringComparer.Ordinal);
         readonly Dictionary<int, (string[] original, string[] overwrite)> remaps = new Dictionary<int, (string[], string[])>();
@@ -207,6 +208,17 @@ namespace Triband.Storey.Unity
             carry.Clear();
             if (lods != null) foreach (var bt in built.Values) { var e = lods.Get(bt.idx); if (e != null && e.Shown < 2) carry[bt.id] = e.Shown; }
             Clear();
+            // this site's block of building indices in the shared table, as many as the layout has buildings
+            if (doc.buildings.Count != blockSize || blockStart < 0)
+            {
+                if (blockStart >= 0) table.ReleaseBlock(blockStart, blockSize);
+                blockSize = doc.buildings.Count; blockStart = table.AllocBlock(blockSize);
+                if (blockStart < 0)
+                {
+                    Debug.LogError($"Storey: the loaded sites have more than {BuildingTable.MaxBuildings - 1:N0} buildings between them; this one ({blockSize:N0}) isn't drawn.");
+                    blockSize = 0; site = null; return;
+                }
+            }
             site = new Site(doc.buildings);
             book?.Dispose();
             book = new ColorRowBook(new ColorResolver(site), palette, table);
@@ -337,9 +349,9 @@ namespace Triband.Storey.Unity
 
         void Build(BuildingData b)
         {
-            // the table row is the building's index in the layout: party walls carry their neighbour's layout index, and
-            // the shader looks that up in the same table
-            var bt = new Built { id = b.id, idx = site!.IndexOf(b) };
+            // the table row is the site's block plus the building's index in the layout: party walls carry their
+            // neighbour's layout index, moved into the block at upload (MeshUpload's mates), and the shader looks it up
+            var bt = new Built { id = b.id, idx = blockStart + site!.IndexOf(b) };
             var root = new GameObject(b.name) { hideFlags = flags };
             root.transform.SetParent(parent, false);
             bt.root = root;
@@ -423,8 +435,9 @@ namespace Triband.Storey.Unity
                 table.MarkWallDataDirty();
             }
             // a shell building's LOD0 has no see-through glass: no mesh for it
-            if (l0.Op.Tris > 0) Add(bt, 0, "LOD0", MeshUpload.Upload(l0.Op, name + " LOD0", RowOf, bt.wallBase, opt, windows: true), opaque, true);
-            if (l0.Glass.Tris > 0) Add(bt, 0, "LOD0 glass", MeshUpload.Upload(l0.Glass, name + " glass", RowOf, bt.wallBase, opt), glass, false);
+            var mates = (blockStart, blockSize);
+            if (l0.Op.Tris > 0) Add(bt, 0, "LOD0", MeshUpload.Upload(l0.Op, name + " LOD0", RowOf, bt.wallBase, opt, windows: true, mates: mates), opaque, true);
+            if (l0.Glass.Tris > 0) Add(bt, 0, "LOD0 glass", MeshUpload.Upload(l0.Glass, name + " glass", RowOf, bt.wallBase, opt, mates: mates), glass, false);
             // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
             if (lods != null && colliders && bt.collision == null) colliderPending.Add(bt.id);
         }
@@ -702,7 +715,9 @@ namespace Triband.Storey.Unity
             if (cellRoot != null) Kill(cellRoot);
             book?.Dispose(); book = null;
             (palette as IDisposable)?.Dispose();   // Color Pipeline's palette listens for invalidations
-            table.Dispose();
+            if (blockStart >= 0) table.ReleaseBlock(blockStart, blockSize);
+            blockStart = -1; blockSize = 0;
+            BuildingTable.ReleaseShared(table);
         }
     }
 }
