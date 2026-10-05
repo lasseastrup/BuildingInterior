@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Triband.Storey.Edit;
 using UnityEngine;
 
@@ -39,6 +40,19 @@ namespace Triband.Storey.Unity
         public bool collidersInEditMode;
         [Tooltip("The artist-made windows and doors the layout's styles use (the editor keeps this list), so builds include them.")]
         public List<StoreyOpening> openings = new List<StoreyOpening>();
+        [Tooltip("Districts next to this one (their layouts, and how far their sites are from this one): buildings back to back across the edge share one party wall. The inspector's Find neighbouring districts fills it.")]
+        public List<NeighbourDistrict> neighbours = new List<NeighbourDistrict>();
+
+        /// <summary>A district next to this one: its layout, and its site's position less this site's (x, z).</summary>
+        [Serializable]
+        public sealed class NeighbourDistrict
+        {
+            public StoreyDocumentAsset? layout;
+            public Vector2 offset;
+        }
+
+        string neighboursSeen = "";
+        readonly List<string?> neighbourTexts = new List<string?>();
 
         /// <summary>How a site picks each building's LOD.</summary>
         public enum LodMode { Automatic, Fixed }
@@ -137,7 +151,7 @@ namespace Triband.Storey.Unity
 
         void OnDisable() { all.Remove(this); TearDown(); }
 
-        void TearDown() { Disabling?.Invoke(this); site?.Dispose(); site = null; shownJson = null; preview = null; }
+        void TearDown() { Disabling?.Invoke(this); site?.Dispose(); site = null; shownJson = null; preview = null; neighboursSeen = ""; neighbourTexts.Clear(); }
 
         void OnGUI()
         {
@@ -163,6 +177,18 @@ namespace Triband.Storey.Unity
                 shownJson = null; pendingAll = true;
             }
             site.Colliders = generateColliders && (Application.isPlaying || collidersInEditMode);
+            // the neighbouring districts, for party walls along the edge: a change builds everything again
+            // (the layouts' texts compared as objects: a reimport makes a new one, and nothing is read or hashed)
+            string seen = layout.name + "|" + string.Join(";", neighbours.Where(n => n != null && n.layout != null).Select(n => $"{n.layout!.name}@{n.offset.x},{n.offset.y}"));
+            bool textsChanged = neighbourTexts.Count != neighbours.Count;
+            for (int i = 0; !textsChanged && i < neighbours.Count; i++) textsChanged = !ReferenceEquals(neighbourTexts[i], neighbours[i]?.layout?.Json);
+            if (seen != neighboursSeen || textsChanged)
+            {
+                neighboursSeen = seen; shownJson = null; pendingAll = true;
+                neighbourTexts.Clear(); foreach (var n in neighbours) neighbourTexts.Add(n?.layout?.Json);
+                site.District = layout.name; site.Neighbours.Clear();
+                foreach (var n in neighbours) if (n != null && n.layout != null && n.layout != layout) site.Neighbours.Add((n.layout.Document.buildings, n.layout.name, n.offset.x, n.offset.y));
+            }
             // an artist's window or door was added or changed: everything is built again with it
             foreach (var o in openings) if (o != null && Generate.OpeningKinds.Get(o.Id) == null) o.Register();
             if (Generate.OpeningKinds.Version != kindsSeen) { kindsSeen = Generate.OpeningKinds.Version; shownJson = null; pendingAll = true; }

@@ -10,6 +10,7 @@ using Xunit.Abstractions;
 namespace Triband.Storey.Tests
 {
     /// <summary>What one edit of one building costs, engine-free, on the 3,000-building test city (docs/CITY.md §4).</summary>
+    [Collection(TimingCollection.Name)]
     public class EditBenchTests
     {
         readonly ITestOutputHelper log;

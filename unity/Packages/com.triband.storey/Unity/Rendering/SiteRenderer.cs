@@ -132,6 +132,15 @@ namespace Triband.Storey.Unity
         /// <summary>The automatic LOD's settings (null when fixed); changes apply from the next frame.</summary>
         public LodSettings? LodSettings => lods?.Settings;
 
+        /// <summary>
+        /// This layout's district name and its neighbouring districts' buildings (with each district's offset from this
+        /// site, metres), for party walls along the district edges (docs/CITY.md §5). Set before <see cref="Show"/>.
+        /// </summary>
+        public string District { get; set; } = "";
+        public List<(List<BuildingData> buildings, string district, double dx, double dz)> Neighbours { get; } = new List<(List<BuildingData>, string, double, double)>();
+
+        Site NewSite(StoreyDocument doc) => Neighbours.Count == 0 ? new Site(doc.buildings) : Site.WithContext(doc.buildings, District, Neighbours);
+
         /// <summary>The automatic LOD's camera this frame. Null keeps every building at the LOD it shows.</summary>
         public LodEye? Eye { get; set; }
 
@@ -219,7 +228,7 @@ namespace Triband.Storey.Unity
                     blockSize = 0; site = null; return;
                 }
             }
-            site = new Site(doc.buildings);
+            site = NewSite(doc);
             book?.Dispose();
             book = new ColorRowBook(new ColorResolver(site), palette, table);
             foreach (var kv in remaps) book.SetRemap(kv.Key, kv.Value.original, kv.Value.overwrite);
@@ -235,7 +244,7 @@ namespace Triband.Storey.Unity
         {
             if (book == null || site == null || doc.buildings.Count != built.Count || doc.buildings.Any(b => !built.ContainsKey(b.id))) { StoreyTimings.Count("full rebuilds: the layout's buildings changed"); Show(doc); return; }
             using var _t = StoreyTimings.Time("site: rebuild of the edited buildings");
-            using (StoreyTimings.Time("site: index the layout")) site = new Site(doc.buildings);
+            using (StoreyTimings.Time("site: index the layout")) site = NewSite(doc);
             // only the rebuilt buildings' colour rows change, and they are written again as those are built
             book.Retarget(new ColorResolver(site), rewrite: false);
             foreach (var id in ids)

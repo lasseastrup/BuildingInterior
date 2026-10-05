@@ -98,6 +98,36 @@ namespace Triband.Storey.Editor
                     EditorGUILayout.PropertyField(it, true);
                 }
             serializedObject.ApplyModifiedProperties();
+            if (GUILayout.Button(new GUIContent("Find neighbouring districts", "Link this site with every other Storey Site in the open scenes whose buildings come within 2 m of its own, both ways, so buildings back to back across the edge share one party wall")))
+                FindNeighbours((StoreySite)target);
+        }
+
+        /// <summary>
+        /// Every other site in the open scenes whose layout comes within 2 m of this one's becomes its neighbour, and this
+        /// one becomes theirs (docs/CITY.md §5).
+        /// </summary>
+        static void FindNeighbours(StoreySite me)
+        {
+            if (me.layout == null || me.PlanArea is not Lod.Districts.Area a) return;
+            int linked = 0;
+            foreach (var other in StoreySite.All)
+            {
+                if (other == me || other.layout == null || other.layout == me.layout || other.PlanArea is not Lod.Districts.Area b) continue;
+                bool near = a.x0 <= b.x1 + 2 && b.x0 <= a.x1 + 2 && a.z0 <= b.z1 + 2 && b.z0 <= a.z1 + 2;
+                if (!near) continue;
+                Undo.RecordObjects(new UnityEngine.Object[] { me, other }, "Link neighbouring districts");
+                Link(me, other); Link(other, me); linked++;
+            }
+            Debug.Log(linked == 0 ? "Storey: no other site's buildings come within 2 m of this one's." : $"Storey: linked {linked} neighbouring district{(linked == 1 ? "" : "s")}.");
+        }
+
+        static void Link(StoreySite from, StoreySite to)
+        {
+            var d = to.transform.position - from.transform.position; var offset = new Vector2(d.x, d.z);
+            var n = from.neighbours.FirstOrDefault(x => x != null && x.layout == to.layout);
+            if (n == null) from.neighbours.Add(n = new StoreySite.NeighbourDistrict { layout = to.layout });
+            n.offset = offset;
+            EditorUtility.SetDirty(from);
         }
 
         static bool StoreyToolActive() => typeof(StoreyTool).IsAssignableFrom(ToolManager.activeToolType);

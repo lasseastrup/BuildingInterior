@@ -15,6 +15,7 @@ namespace Triband.Storey.Tests
     /// massing and every cell), a detail build (what the per-frame budget pays for one building), and the LOD pick.
     /// Headless numbers, without the upload; generous bounds, so a slow machine passes and a regression doesn't.
     /// </summary>
+    [Collection(TimingCollection.Name)]
     public class CityBenchTests
     {
         readonly ITestOutputHelper log;

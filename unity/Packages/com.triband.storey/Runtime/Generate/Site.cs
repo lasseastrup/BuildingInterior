@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Triband.Storey.Generate
 {
@@ -22,9 +23,22 @@ namespace Triband.Storey.Generate
         readonly HashSet<string> bridged = new HashSet<string>(StringComparer.Ordinal);
         const double BGRID = 32;
 
-        public Site(List<BuildingData> buildings)
+        /// <summary>
+        /// How many of <see cref="Buildings"/> are the layout's own, drawn; the rest are a neighbouring district's,
+        /// there for party walls only (<see cref="WithContext"/>). They come last, so the own ones keep their indices.
+        /// </summary>
+        public int Own { get; private set; }
+
+        // party walls' owner when two are as tall: the lower key. Within one layout the key is the id; across a district
+        // edge it is the layout's name and the id, so both districts pick the same owner
+        readonly Dictionary<BuildingData, string>? keys;
+        public string OwnerKey(BuildingData b) => keys != null && keys.TryGetValue(b, out var k) ? k : b.id;
+
+        public Site(List<BuildingData> buildings) : this(buildings, null) { }
+
+        Site(List<BuildingData> buildings, Dictionary<BuildingData, string>? keys)
         {
-            Buildings = buildings;
+            Buildings = buildings; Own = buildings.Count; this.keys = keys;
             for (int i = 0; i < buildings.Count; i++)
             {
                 var b = buildings[i];
@@ -41,6 +55,35 @@ namespace Triband.Storey.Generate
         }
 
         public int IndexOf(BuildingData b) => index[b.id];
+
+        /// <summary>
+        /// A site of <paramref name="own"/> (the layout called <paramref name="district"/>) with neighbouring districts'
+        /// buildings around it, for party walls along the district edge (docs/CITY.md §5). Each neighbour building is a
+        /// copy moved into this site's space by its district's offset, with an id no own building can have, and only
+        /// those within <paramref name="reach"/> metres of an own building are kept. Nothing of them is drawn.
+        /// </summary>
+        public static Site WithContext(List<BuildingData> own, string district, IEnumerable<(List<BuildingData> buildings, string district, double dx, double dz)> neighbours, double reach = 2)
+        {
+            var all = new List<BuildingData>(own);
+            var keys = new Dictionary<BuildingData, string>();
+            foreach (var b in own) keys[b] = district + "/" + b.id;
+            var boxes = own.Select(BoundsOf).ToList();
+            foreach (var (buildings, nd, dx, dz) in neighbours)
+            {
+                if (nd == district) continue;
+                foreach (var nb in buildings)
+                {
+                    var bb = BoundsOf(nb); double x0 = bb.x0 + dx, z0 = bb.z0 + dz, x1 = bb.x1 + dx, z1 = bb.z1 + dz;
+                    if (!boxes.Any(o => x0 <= o.x1 + reach && o.x0 <= x1 + reach && z0 <= o.z1 + reach && o.z0 <= z1 + reach)) continue;
+                    var c = PrototypeJson.ReadBuilding(PrototypeJson.Write(nb));
+                    c.id = "@" + nd + "/" + nb.id; c.pos = new Vec2(nb.pos.x + dx, nb.pos.z + dz); c.bridges.Clear();
+                    keys[c] = nd + "/" + nb.id;
+                    all.Add(c);
+                }
+            }
+            var site = new Site(all, keys) { Own = own.Count };
+            return site;
+        }
 
         /// <summary>Some building has a bridge to this one.</summary>
         public bool Bridged(string id) => bridged.Contains(id);
@@ -157,7 +200,7 @@ namespace Triband.Storey.Generate
                 out_.Add(new Range
                 {
                     s = s0, e = e0, sRaw = sRaw, eRaw = eRaw, Hp = Hp,
-                    own = Hm > Hp + 1e-3 || (Math.Abs(Hm - Hp) <= 1e-3 && string.CompareOrdinal(b.id, p.id) < 0),
+                    own = Hm > Hp + 1e-3 || (Math.Abs(Hm - Hp) <= 1e-3 && string.CompareOrdinal(site.OwnerKey(b), site.OwnerKey(p)) < 0),
                     pIdx = site.IndexOf(p), pInner = new Swatch(new StyleRef(site.IndexOf(p), 0), ColorSlot.Interior),
                 });
             }

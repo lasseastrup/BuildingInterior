@@ -90,6 +90,7 @@ namespace UnityEditor
 
     public static class Undo
     {
+        public static void RecordObjects(UnityEngine.Object[] objectsToUndo, string name) { }
         public delegate void UndoRedoCallback();
         public static UndoRedoCallback undoRedoPerformed;
         public static void RecordObject(Object objectToUndo, string name) { }
