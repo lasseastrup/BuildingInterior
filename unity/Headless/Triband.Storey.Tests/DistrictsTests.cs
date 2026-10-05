@@ -74,5 +74,43 @@ namespace Triband.Storey.Tests
             var site = Site.WithContext(A.buildings, "North", new[] { (B.buildings, "South", 60.0, 0.0) });
             Assert.Single(site.Buildings);
         }
+
+        static readonly List<Districts.Area> Row = new List<Districts.Area>
+        {
+            new Districts.Area(0, 0, 100, 100), new Districts.Area(400, 0, 500, 100), new Districts.Area(800, 0, 900, 100),
+        };
+
+        [Fact]
+        public void StreamingLoadsTheNearestFirstOneAtATime()
+        {
+            var st = new List<Districts.Load> { Districts.Load.Unloaded, Districts.Load.Unloaded, Districts.Load.Unloaded };
+            var (load, unload) = Districts.Plan(Row, st, 50, 50, loadRadius: 350);
+            Assert.Equal(new[] { 0 }, load);          // two are in range, the nearer goes first
+            Assert.Empty(unload);
+            st[0] = Districts.Load.Loading;
+            Assert.Empty(Districts.Plan(Row, st, 50, 50, loadRadius: 350).load);   // one at a time
+            st[0] = Districts.Load.Loaded;
+            Assert.Equal(new[] { 1 }, Districts.Plan(Row, st, 50, 50, loadRadius: 350).load);
+        }
+
+        [Fact]
+        public void StreamingUnloadsOnlyPastTheLargerRadius()
+        {
+            var st = new List<Districts.Load> { Districts.Load.Loaded, Districts.Load.Loaded, Districts.Load.Unloaded };
+            // walking east to x = 450: district 0 is 350 m away, between the load and unload radii: it stays
+            var (load, unload) = Districts.Plan(Row, st, 450, 50, loadRadius: 300, unloadRadius: 400);
+            Assert.Empty(unload);
+            Assert.Empty(load);                        // district 2 is 350 m away too: not yet
+            (load, unload) = Districts.Plan(Row, st, 520, 50, loadRadius: 300, unloadRadius: 400);
+            Assert.Equal(new[] { 0 }, unload);         // 420 m: gone
+            Assert.Equal(new[] { 2 }, load);           // 280 m: wanted
+        }
+
+        [Fact]
+        public void TheDistrictUnderThePlayerIsNeverUnloaded()
+        {
+            var st = new List<Districts.Load> { Districts.Load.Loaded };
+            Assert.Empty(Districts.Plan(new List<Districts.Area> { new Districts.Area(0, 0, 100, 100) }, st, 50, 50, loadRadius: 0, unloadRadius: 0).unload);
+        }
     }
 }

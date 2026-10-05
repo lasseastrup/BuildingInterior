@@ -34,5 +34,31 @@ namespace Triband.Storey.Lod
             for (int i = 0; i < areas.Count; i++) { double d = areas[i].Distance(x, z); if (d < bd) { bd = d; best = i; } }
             return best;
         }
+
+        /// <summary>Where a district's scene is.</summary>
+        public enum Load { Unloaded, Loading, Loaded, Unloading }
+
+        /// <summary>
+        /// What to load and unload this frame. A district within <paramref name="loadRadius"/> of the point is wanted;
+        /// one loaded stays until it is past <paramref name="unloadRadius"/> (larger: no loading and unloading over and
+        /// over at the edge). Loads start nearest first, at most <paramref name="maxLoading"/> at once (a scene loading
+        /// costs frames); the district the point is in is never unloaded.
+        /// </summary>
+        public static (List<int> load, List<int> unload) Plan(IReadOnlyList<Area> areas, IReadOnlyList<Load> states, double x, double z,
+            double loadRadius = 300, double unloadRadius = 400, int maxLoading = 1)
+        {
+            var load = new List<int>(); var unload = new List<int>();
+            int loading = 0; foreach (var st in states) if (st == Load.Loading) loading++;
+            var want = new List<(int i, double d)>();
+            for (int i = 0; i < areas.Count && i < states.Count; i++)
+            {
+                double d = areas[i].Distance(x, z);
+                if (states[i] == Load.Unloaded && d <= loadRadius) want.Add((i, d));
+                else if (states[i] == Load.Loaded && d > Math.Max(unloadRadius, loadRadius) && d > 0) unload.Add(i);
+            }
+            want.Sort((a, b) => a.d.CompareTo(b.d));
+            foreach (var (i, _) in want) { if (loading >= maxLoading) break; load.Add(i); loading++; }
+            return (load, unload);
+        }
     }
 }

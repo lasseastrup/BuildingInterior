@@ -180,6 +180,11 @@ namespace UnityEngine
     {
         public float x, y, z, w;
         public Vector4(float x, float y, float z, float w) { this.x = x; this.y = y; this.z = z; this.w = w; }
+        public static Vector4 zero => default;
+        public static bool operator ==(Vector4 a, Vector4 b) => a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;
+        public static bool operator !=(Vector4 a, Vector4 b) => !(a == b);
+        public override bool Equals(object obj) => obj is Vector4 v && v == this;
+        public override int GetHashCode() => 0;
     }
 
     public struct Color
@@ -494,9 +499,16 @@ namespace UnityEngine
         public Vector3 TransformPoint(Vector3 position) => position;
     }
 
+    public class AsyncOperation
+    {
+        public bool isDone => false;
+        public float progress => 0;
+    }
+
     public sealed class GameObject : Object
     {
         public void SetActive(bool value) { }
+        public UnityEngine.SceneManagement.Scene scene => default;
         public GameObject(string name) { }
         public int layer { get; set; }
         public static GameObject CreatePrimitive(PrimitiveType type) => new GameObject("");
@@ -548,7 +560,24 @@ namespace UnityEngine.Scripting
 
 namespace UnityEngine.SceneManagement
 {
-    public struct Scene { }
+    public struct Scene
+    {
+        public bool isLoaded => false;
+        public string path => "";
+        public string name => "";
+        public bool IsValid() => false;
+    }
+
+    public enum LoadSceneMode { Single = 0, Additive = 1 }
+
+    public static class SceneManager
+    {
+        public static int sceneCount => 0;
+        public static Scene GetSceneAt(int index) => default;
+        public static Scene GetSceneByPath(string scenePath) => default;
+        public static UnityEngine.AsyncOperation LoadSceneAsync(string sceneName, LoadSceneMode mode) => null;
+        public static UnityEngine.AsyncOperation UnloadSceneAsync(string sceneName) => null;
+    }
 }
 
 namespace Unity.Collections

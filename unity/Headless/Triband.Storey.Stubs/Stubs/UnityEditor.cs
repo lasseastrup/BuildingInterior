@@ -124,6 +124,17 @@ namespace UnityEditor
         public static void SetChecked(string menuPath, bool isChecked) { }
     }
 
+    public sealed class EditorBuildSettingsScene
+    {
+        public string path => "";
+        public bool enabled => false;
+    }
+
+    public static class EditorBuildSettings
+    {
+        public static EditorBuildSettingsScene[] scenes { get => new EditorBuildSettingsScene[0]; set { } }
+    }
+
     public static class EditorPrefs
     {
         public static bool GetBool(string key, bool defaultValue = false) => defaultValue;
