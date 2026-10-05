@@ -80,6 +80,18 @@ Headless numbers (`CityBenchTests`, `LodManagerTests`). They are CPU only, witho
 
 The time for one LOD0 is several frames' budget. That's why the generating is on worker threads, so the main thread pays only for the upload. How long the upload takes in Unity is not measured yet. If it shows up as a hitch, the next step is to build the vertex buffers on the workers too, with `Mesh.AllocateWritableMeshData`.
 
+**The two test cities, 1,000 buildings each** (headless, one thread):
+
+| | Plain | Walk-in |
+|---|---|---|
+| Walk-in buildings | 42 (4%) | 1,000, all with stairs, 746 with a lift |
+| LOD0 triangles a building (average / 95th percentile / most) | 18,300 / 48,500 / 142,000 | 24,500 / 62,600 / 178,000 |
+| LOD0 build a building (average) | 22–24 ms | 29–38 ms |
+| LOD0 GPU memory, 16 resident at the 95th percentile | 48 MB | 60 MB |
+| LOD1 and LOD2 | the same (LOD1 about 6,600 triangles; LOD2 43, 4.2 MB for the city) | the same |
+| Collision mesh triangles a building | 89 | 566 |
+| First problem check of the whole city | 0.7 s | 89 s (in the background; edits after it recheck only what they touch) |
+
 ## 5. Trying it in Unity
 
 1. Select a Storey Site. In **Site settings**, check that LOD mode is *Automatic* and turn on **Show LOD stats**.

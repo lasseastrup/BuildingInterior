@@ -124,7 +124,8 @@ namespace Triband.Storey.Edit
                         {
                             var c = new CoreData { id = "", type = type, x = SnapG(w * fx), z = SnapG(dd * fz), rot = rot, bottom = 0, top = -1, roof = true };
                             if (!Cores.CoreFits(b.footprint, c)) continue;
-                            if (clear != null && Shafts.Overlap(c, clear, 0.3)) continue;
+                            // a corridor's width clear of the stairs: closer, the lift walls off a sliver of floor or the stairs' way in
+                            if (clear != null && Shafts.Overlap(c, clear, 1.5)) continue;
                             c.id = Shafts.NewId(d); return c;
                         }
                 return null;
