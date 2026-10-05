@@ -31,6 +31,12 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- Districts (docs/CITY.md §5):
+  - `BuildingTable.Acquire`, `ReleaseShared`, `AllocBlock` and `ReleaseBlock`: one building table shared by every Storey Site, each with a block of building indices (`IndexBlocks`, `MateIndex`). `MeshUpload.Upload`'s `mates`.
+  - Only the site with a view writes the view globals.
+  - `StoreySite.neighbours` (`NeighbourDistrict`) and `PlanArea`; `Site.WithContext`, `Own` and `OwnerKey`: party walls across district edges, built once.
+  - `StoreyOcclusion.followPlayer`: the occlusion moves to the district the player is in (`Districts.PlayerIn`).
+  - `StoreyDistricts`: district scenes loaded and unloaded by distance (`Districts.Plan`).
 - `TestCity.Generate(doc, count, walkIn)`: the same city with every building walk-in, with stairs to the top and a lift above five storeys.
 - `Walls.Inside` and the problem list's "wall-outside": a wall wholly outside its storey (over a terrace) builds nothing, so it is flagged.
 - `StoreyTimings`: Profiler samples and per-stage times for an edit's work (docs/EDITOR.md §2.1).

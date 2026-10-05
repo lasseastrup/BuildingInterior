@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Find neighbouring districts** in the site's Site settings, and the **Storey Districts** inspector (**Add open district scenes**, **Read areas**, a warning for scenes missing from the build) (docs/CITY.md §5).
 - **Tools ▸ Storey ▸ Test City ▸ Make 300 / 1,000 / 3,000 Walk-in Buildings**: a test city where every building has an interior.
 - **Tools ▸ Storey ▸ Log Edit Timings**: one Console line per edit with where its time went, and Profiler samples named "Storey …" for each stage (docs/EDITOR.md §2.1). The project's Storey Opening and Facade Style assets are searched for once and kept until the project changes, instead of on every inspector redraw.
 - Drags (corners, pushed walls, wall points, splits) put back only the dragged building at each step instead of reading the whole layout again: on the 3,000-building city about 0.1 s a step instead of 1.4 s. `StoreyEdit.DragStartBuilding`.

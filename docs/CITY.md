@@ -92,7 +92,22 @@ The time for one LOD0 is several frames' budget. That's why the generating is on
 | Collision mesh triangles a building | 89 | 566 |
 | First problem check of the whole city | 0.7 s | 89 s (in the background; edits after it recheck only what they touch) |
 
-## 5. Trying it in Unity
+## 5. Districts
+
+A city too big for one layout is split into districts: one Storey Site each, a street or a few blocks (50–300 buildings), each in a scene of its own. Cut along streets where you can, so few buildings share a wall across an edge.
+
+**One building table for every site.** The table's buffers are the shaders' globals, so there can only be one: every site's renderer takes the shared one (`BuildingTable.Acquire`) and a block of building indices for its layout (`IndexBlocks`, at most 8,191 buildings across the loaded sites). A party wall's vertices name their neighbour by layout index, moved into the block at upload (`MateIndex.Shift`). The view globals (the active building, the cutaway, isolate, the occlusion) are written only by the site that has a view, the editor's or the occlusion system's.
+
+**Party walls across an edge.** A site lists its neighbouring districts: their layouts, and how far their sites are from it. In the site's inspector, **Find neighbouring districts** links every other open site whose buildings come within 2 m, both ways. Their buildings near the edge join this site's generator as context (`Site.WithContext`): copies, never drawn, there so the party walls along the edge are worked out as within one layout. Where two buildings across the edge are as tall, the owner is picked by layout name and id, so both districts agree and the wall is built once (`Site.OwnerKey`, `DistrictsTests`).
+
+**The player.** **Storey Occlusion** with *Follow Player* (on by default) attaches each frame to the district the player is in (the one they are in while within 4 m of it, otherwise the nearest), and the play kit's character keeps its place in the world as it moves to the next site.
+
+**Streaming.** Add **Storey Districts** to the scene that stays loaded (the player, the camera, the lighting):
+1. Open the district scenes alongside it and press **Add open district scenes**: each becomes a district, with its area read from its Storey Site. **Read areas** reads them again after editing.
+2. Put the district scenes in the build's scene list (the inspector warns about those missing).
+3. In Play mode, a district within **Load Radius** (300 m) of the player is loaded additively, nearest first and **Max Loading** at a time. One loaded is unloaded once it is past **Unload Radius** (400 m), and the one the player is in never is (`Districts.Plan`).
+
+## 6. Trying it in Unity
 
 1. Select a Storey Site. In **Site settings**, check that LOD mode is *Automatic* and turn on **Show LOD stats**.
 2. **Tools ▸ Storey ▸ Test City ▸ Make 3,000 Buildings**.
@@ -101,10 +116,13 @@ The time for one LOD0 is several frames' budget. That's why the generating is on
    - Turn on **LOD tint** to see the LODs in colour.
 4. Press Play with the play kit. The stats show in the Game view, and the player's building and the buildings in the way stay at LOD0.
 
-## 6. Not yet
+## 7. Not yet
 
 - Measuring the upload in Unity, and moving the vertex buffers onto the workers if it hitches (§4).
-- Districts: streaming parts of the city in and out (Addressables). The whole layout is still loaded at once.
+- Loading districts through Addressables. They load as scenes from the build's scene list today (§5).
+- Occluders across a district edge: the occlusion works on the district the player is in, so a building of the next district in the camera's way doesn't sink.
+- Bridges between districts: a bridge reaches only buildings of its own layout.
+- A neighbour district edited in the same session: its party walls along the edge update when this site next rebuilds everything (the neighbour's file is saved and reimported).
 - Cells baked at import. They are merged when the layout loads, which takes tens of milliseconds for the test city.
 - Memory accounting against the budgets in the package plan §6.6.
 - None of the above is measured in Unity yet; the numbers in §4 are headless.
