@@ -55,6 +55,20 @@ namespace Triband.Storey
 
         public static bool HasTerrace(BuildingData b, int k) => IsSetback(b, k) && b.floors[k].terraceRoof == null;
 
+        /// <summary>The style of the nearest tier at or below storey k that has one of its own, or null (the building's).</summary>
+        static FacadeStyle? OwnStyleAt(BuildingData b, int k)
+        {
+            int j = TierStart(b, k);
+            while (j > 0 && b.floors[j].style == null) j = TierStart(b, j - 1);
+            return j > 0 ? b.floors[j].style : null;
+        }
+
+        /// <summary>
+        /// <see cref="StyleAt"/> for reading an exterior field (the roof, the walls, the windows) without the copy it makes
+        /// for a setback's own style: the same values for those, the indoor ones not mixed in. Never change what it returns.
+        /// </summary>
+        public static FacadeStyle ExteriorStyleAt(BuildingData b, int k) => OwnStyleAt(b, k) ?? b.style;
+
         /// <summary>
         /// Exterior style of storey <paramref name="k"/>: the nearest tier at or below it with a
         /// style of its own, with the interior, floor, core and ground values and the indoor colours
@@ -63,9 +77,7 @@ namespace Triband.Storey
         /// </summary>
         public static FacadeStyle StyleAt(BuildingData b, int k)
         {
-            int j = TierStart(b, k);
-            while (j > 0 && b.floors[j].style == null) j = TierStart(b, j - 1);
-            var own = j > 0 ? b.floors[j].style : null;
+            var own = OwnStyleAt(b, k);
             if (own == null) return b.style;
             var mixed = own.Clone();
             mixed.interior = b.style.interior;

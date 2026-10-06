@@ -1,4 +1,5 @@
 #nullable enable
+using System.Linq;
 using Triband.Storey.Play;
 using Triband.Storey.Unity;
 using UnityEngine;
@@ -43,6 +44,7 @@ namespace Triband.Storey.PlayKit
 
         void Start()
         {
+            useGUILayout = false;   // the HUD draws with GUI, not GUILayout: skips the layout pass's garbage
             if (!spawned) Spawn(transform.position, transform.eulerAngles.y * Mathf.Deg2Rad);
             if (GetComponentInChildren<Renderer>() == null) Body();
         }
@@ -100,8 +102,14 @@ namespace Triband.Storey.PlayKit
             float s = label.fontSize * 2.2f;
             // where the character is
             var loc = world?.Locate(State.x, State.y, State.z);
-            string where = loc == null ? "Outside" : $"{loc.Value.b.name} · {Floor(loc.Value.b, loc.Value.floor)}";
-            GUI.Box(new Rect(10, 10, s * 7, s), where, label);
+            // the label made again only when the place changes (OnGUI runs several times a frame)
+            var at = loc == null ? (null, -1) : (loc.Value.b, loc.Value.floor);
+            if (whereText == null || at.Item1 != whereFor.Item1 || at.Item2 != whereFor.Item2)
+            {
+                whereFor = at;
+                whereText = loc == null ? "Outside" : $"{loc.Value.b.name} · {Floor(loc.Value.b, loc.Value.floor)}";
+            }
+            GUI.Box(new Rect(10, 10, s * 7, s), whereText, label);
             // the lift panel, in a car
             var lift = world?.LiftAt(State.x, State.y, State.z);
             if (lift != null && State.ride == null)
@@ -127,6 +135,8 @@ namespace Triband.Storey.PlayKit
         }
 
         static string Floor(BuildingData b, int k) => k == b.floors.Count ? "Roof" : k == 0 ? "Ground floor" : "Floor " + k;
-        static string Short(BuildingData b, int k) => k == b.floors.Count ? "R" : k == 0 ? "G" : k.ToString();
+        static string Short(BuildingData b, int k) => k == b.floors.Count ? "R" : k == 0 ? "G" : k < Numbers.Length ? Numbers[k] : k.ToString();
+        static readonly string[] Numbers = Enumerable.Range(0, 100).Select(i => i.ToString()).ToArray();
+        string? whereText; (BuildingData?, int) whereFor;
     }
 }

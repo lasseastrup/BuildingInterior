@@ -66,7 +66,8 @@ namespace Triband.Storey.Unity
         /// <summary>Write these into the automatic LOD's settings (a site's, live).</summary>
         public void ApplyTo(Lod.LodSettings s)
         {
-            s.PX = new double[] { lod0PixelsPerMetre, lod1PixelsPerMetre, lod2PixelsPerMetre };
+            if (s.PX.Length != 3) s.PX = new double[3];   // into the array it has: the site applies this every frame
+            s.PX[0] = lod0PixelsPerMetre; s.PX[1] = lod1PixelsPerMetre; s.PX[2] = lod2PixelsPerMetre;
             s.Hysteresis = hysteresis; s.Fade = Mathf.Max(0.01f, fadeSeconds); s.Far = farDistance;
             s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.BudgetMs = buildBudgetMs; s.Threads = buildOnWorkerThreads ? -1 : 0;
         }

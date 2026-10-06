@@ -66,12 +66,12 @@ namespace Triband.Storey.Edit
             double max = Math.Max(a, b);
             if (double.IsInfinity(max)) return double.PositiveInfinity;
             if (max == 0) return 0;
+            // the two terms in order, unrolled (an array here was garbage on every call, thousands a frame in Play mode)
             double sum = 0, compensation = 0;
-            foreach (var v in new[] { a, b })
-            {
-                double n = v / max, summand = n * n - compensation, preliminary = sum + summand;
-                compensation = (preliminary - sum) - summand; sum = preliminary;
-            }
+            double n = a / max, summand = n * n - compensation, preliminary = sum + summand;
+            compensation = (preliminary - sum) - summand; sum = preliminary;
+            n = b / max; summand = n * n - compensation; preliminary = sum + summand;
+            sum = preliminary;
             return Math.Sqrt(sum) * max;
         }
 

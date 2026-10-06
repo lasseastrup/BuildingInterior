@@ -145,6 +145,10 @@ namespace UnityEngine
         public void Normalize() { }
         public static Vector2 ClampMagnitude(Vector2 vector, float maxLength) => vector;
         public static Vector2 operator +(Vector2 a, Vector2 b) => a;
+        public static bool operator ==(Vector2 a, Vector2 b) => a.x == b.x && a.y == b.y;
+        public static bool operator !=(Vector2 a, Vector2 b) => !(a == b);
+        public override bool Equals(object? o) => o is Vector2 v && v == this;
+        public override int GetHashCode() => x.GetHashCode() ^ y.GetHashCode();
         public static Vector2 operator -(Vector2 a, Vector2 b) => a;
         public static Vector2 operator *(Vector2 a, float d) => a;
         public static Vector2 operator /(Vector2 a, float d) => a;
@@ -481,7 +485,7 @@ namespace UnityEngine
 
     public class Behaviour : Component { public bool isActiveAndEnabled => false; public bool enabled { get; set; } }
 
-    public class MonoBehaviour : Behaviour { }
+    public class MonoBehaviour : Behaviour { public bool useGUILayout { get; set; } }
 
     public sealed class Transform : Component
     {

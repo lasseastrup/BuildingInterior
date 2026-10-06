@@ -51,8 +51,11 @@ namespace Triband.Storey.Unity
             public Vector2 offset;
         }
 
-        string neighboursSeen = "";
-        readonly List<string?> neighbourTexts = new List<string?>();
+        // the layout and neighbours last built with, compared by reference each frame (no strings: they were garbage every frame)
+        StoreyDocumentAsset? neighboursFor;
+        readonly List<(StoreyDocumentAsset? layout, Vector2 offset, string? text)> neighboursSeen = new List<(StoreyDocumentAsset?, Vector2, string?)>();
+        // the occlusion's per-frame call, made once (a method group made a new delegate every frame)
+        Action<SiteRenderer>? occApply; StoreyOcclusion? occApplyFor;
 
         /// <summary>How a site picks each building's LOD.</summary>
         public enum LodMode { Automatic, Fixed }
@@ -162,12 +165,14 @@ namespace Triband.Storey.Unity
         static readonly HashSet<StoreySite> all = new HashSet<StoreySite>();
         /// <summary>The sites enabled now (the editor redraws when the camera moves for those with the automatic LOD).</summary>
         public static IReadOnlyCollection<StoreySite> All => all;
+        /// <summary><see cref="All"/> as the set itself, for a loop every frame (the interface boxes its enumerator).</summary>
+        internal static HashSet<StoreySite> AllSet => all;
 
-        void OnEnable() { all.Add(this); Enabled?.Invoke(this); Refresh(); }
+        void OnEnable() { useGUILayout = false; all.Add(this); Enabled?.Invoke(this); Refresh(); }
 
         void OnDisable() { all.Remove(this); TearDown(); }
 
-        void TearDown() { Disabling?.Invoke(this); site?.Dispose(); site = null; shownJson = null; preview = null; neighboursSeen = ""; neighbourTexts.Clear(); }
+        void TearDown() { Disabling?.Invoke(this); site?.Dispose(); site = null; shownJson = null; preview = null; neighboursFor = null; neighboursSeen.Clear(); }
 
         void OnGUI()
         {
@@ -196,13 +201,16 @@ namespace Triband.Storey.Unity
             site.Colliders = generateColliders && (Application.isPlaying || collidersInEditMode);
             // the neighbouring districts, for party walls along the edge: a change builds everything again
             // (the layouts' texts compared as objects: a reimport makes a new one, and nothing is read or hashed)
-            string seen = layout.name + "|" + string.Join(";", neighbours.Where(n => n != null && n.layout != null).Select(n => $"{n.layout!.name}@{n.offset.x},{n.offset.y}"));
-            bool textsChanged = neighbourTexts.Count != neighbours.Count;
-            for (int i = 0; !textsChanged && i < neighbours.Count; i++) textsChanged = !ReferenceEquals(neighbourTexts[i], neighbours[i]?.layout?.Json);
-            if (seen != neighboursSeen || textsChanged)
+            bool neighboursChanged = neighboursFor != layout || neighboursSeen.Count != neighbours.Count;
+            for (int i = 0; !neighboursChanged && i < neighbours.Count; i++)
             {
-                neighboursSeen = seen; shownJson = null; pendingAll = true;
-                neighbourTexts.Clear(); foreach (var n in neighbours) neighbourTexts.Add(n?.layout?.Json);
+                var n = neighbours[i]; var was = neighboursSeen[i];
+                neighboursChanged = was.layout != n?.layout || was.offset != (n?.offset ?? default) || !ReferenceEquals(was.text, n?.layout?.Json);
+            }
+            if (neighboursChanged)
+            {
+                neighboursFor = layout; shownJson = null; pendingAll = true;
+                neighboursSeen.Clear(); foreach (var n in neighbours) neighboursSeen.Add((n?.layout, n?.offset ?? default, n?.layout?.Json));
                 site.District = layout.name; site.Neighbours.Clear();
                 foreach (var n in neighbours) if (n != null && n.layout != null && n.layout != layout) site.Neighbours.Add((n.layout.Document.buildings, n.layout.name, n.offset.x, n.offset.y));
             }
@@ -217,7 +225,8 @@ namespace Triband.Storey.Unity
             else if (pending.Count > 0) site.Rebuild(preview, pending);
             pendingAll = false; pending.Clear();
             site.Lod = displayedLod;
-            site.Occlusion = Application.isPlaying && Occlusion != null && Occlusion.isActiveAndEnabled ? Occlusion.Apply : null;
+            if (occApplyFor != Occlusion) { occApplyFor = Occlusion; occApply = Occlusion != null ? Occlusion.Apply : null; }
+            site.Occlusion = Application.isPlaying && Occlusion != null && Occlusion.isActiveAndEnabled ? occApply : null;
             var v = ViewSource != null ? (view = ViewSource()) : view;
             if (auto) PickFor(site, v);
             using (StoreyTimings.Time("site: frame")) site.Frame(lodTint, v);
@@ -248,7 +257,7 @@ namespace Triband.Storey.Unity
             if (core != null)
             {
                 if (core.View.active != null) f.Add(core.View.active.id);
-                foreach (var oc in core.Active) f.Add(oc.b.id);
+                for (int i = 0; i < core.Active.Count; i++) f.Add(core.Active[i].b.id);
             }
         }
     }

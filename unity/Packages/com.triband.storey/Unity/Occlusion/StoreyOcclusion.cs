@@ -38,6 +38,7 @@ namespace Triband.Storey.Unity
         readonly Stack<GameObject> spareFootprints = new Stack<GameObject>();
         readonly HashSet<int> occluding = new HashSet<int>();
         readonly HashSet<int> wallsSet = new HashSet<int>();
+        readonly PlayerState playerState = new PlayerState();
 
         /// <summary>The walk model for this layout (where the player is, what they stand on, what stops them), for a controller.</summary>
         public PlayWorld? World => world;
@@ -69,7 +70,7 @@ namespace Triband.Storey.Unity
             Vector3? at = player != null ? player.position : hasFeet ? feet : cam != null ? cam.transform.position : (Vector3?)null;
             if (at == null) return;
             candidates.Clear(); areas.Clear();
-            foreach (var s in StoreySite.All) if (s.isActiveAndEnabled && s.PlanArea is Lod.Districts.Area a) { candidates.Add(s); areas.Add(a); }
+            foreach (var s in StoreySite.AllSet) if (s.isActiveAndEnabled && s.PlanArea is Lod.Districts.Area a) { candidates.Add(s); areas.Add(a); }
             int pick = Lod.Districts.PlayerIn(areas, site != null ? candidates.IndexOf(site) : -1, at.Value.x, at.Value.z);
             if (pick >= 0 && candidates[pick] != site) Attach(candidates[pick]);
         }
@@ -110,7 +111,7 @@ namespace Triband.Storey.Unity
             }
             var origin = site.transform.position;   // the layout is in the site's space: unrotated, unscaled (the inspector says so)
             Vector3 pw = player != null ? player.position : hasFeet ? feet : cam.transform.position;
-            var p = new PlayerState(); p.Spawn(pw.x - origin.x, pw.y - origin.y, pw.z - origin.z);
+            var p = playerState; p.Spawn(pw.x - origin.x, pw.y - origin.y, pw.z - origin.z);
             var cw = cam.transform.position; var tw = cameraTarget ?? pw + Vector3.up * (float)FollowCamera.Chest;
             occ!.Frame(p, (cw.x - origin.x, cw.y - origin.y, cw.z - origin.z), (tw.x - origin.x, tw.y - origin.y, tw.z - origin.z), Time.deltaTime);
             Write(r, occ, origin, pw);
@@ -150,8 +151,9 @@ namespace Triband.Storey.Unity
             foreach (int i in occluding) table.SetOccluder(i, -1);
             occluding.Clear();
             HideFootprints();
-            foreach (var oc in o.Active)
+            for (int ai = 0; ai < o.Active.Count; ai++)
             {
+                var oc = o.Active[ai];
                 if (oc.slot < 0) continue;
                 int idx = r.TableIndexOf(oc.b.id); if (idx < 0) continue;
                 table.SetOccluder(idx, oc.slot); occluding.Add(idx);

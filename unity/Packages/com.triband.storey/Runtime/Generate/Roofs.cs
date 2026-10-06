@@ -38,7 +38,7 @@ namespace Triband.Storey.Generate
     /// </summary>
     public static class Roofs
     {
-        public static RoofType TypeOf(BuildingData b) => Derived.StyleAt(b, b.floors.Count).roofType;
+        public static RoofType TypeOf(BuildingData b) => Derived.ExteriorStyleAt(b, b.floors.Count).roofType;   // no copy: the stair tests ask every frame
         public static bool IsPitched(BuildingData b) => TypeOf(b) != RoofType.Flat;
 
         enum EdgeKind { Eave, Rake, Own, Skip, Gable }

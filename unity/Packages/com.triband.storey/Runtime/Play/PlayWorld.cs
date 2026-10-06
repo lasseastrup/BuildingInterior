@@ -91,12 +91,25 @@ namespace Triband.Storey.Play
         /// <summary>The buildings in the grid cells a circle touches, in the order the prototype visits them.</summary>
         public List<BuildingData> Near(double x, double z, double rad)
         {
-            var out_ = new List<BuildingData>(); var seen = new HashSet<BuildingData>();
-            for (int gx = (int)Math.Floor((x - rad) / BGRID); gx <= (int)Math.Floor((x + rad) / BGRID); gx++)
-                for (int gz = (int)Math.Floor((z - rad) / BGRID); gz <= (int)Math.Floor((z + rad) / BGRID); gz++)
-                    if (grid.TryGetValue((gx, gz), out var l)) foreach (var b in l) if (seen.Add(b)) out_.Add(b);
+            var out_ = new List<BuildingData>();
+            NearInto(x, z, rad, out_);
             return out_;
         }
+
+        readonly HashSet<BuildingData> nearSeen = new HashSet<BuildingData>();
+        readonly List<BuildingData> nearShared = new List<BuildingData>();
+
+        /// <summary><see cref="Near"/> into a list the caller keeps (cleared first): nothing allocated.</summary>
+        public void NearInto(double x, double z, double rad, List<BuildingData> into)
+        {
+            into.Clear(); nearSeen.Clear();
+            for (int gx = (int)Math.Floor((x - rad) / BGRID); gx <= (int)Math.Floor((x + rad) / BGRID); gx++)
+                for (int gz = (int)Math.Floor((z - rad) / BGRID); gz <= (int)Math.Floor((z + rad) / BGRID); gz++)
+                    if (grid.TryGetValue((gx, gz), out var l)) foreach (var b in l) if (nearSeen.Add(b)) into.Add(b);
+        }
+
+        // the walk model's own queries, each done with its list before the next (every frame: no garbage)
+        List<BuildingData> NearShared(double x, double z, double rad) { NearInto(x, z, rad, nearShared); return nearShared; }
 
         // ---- where ----
 
@@ -109,12 +122,28 @@ namespace Triband.Storey.Play
         }
 
         /// <summary>Inside one of the building's tier outlines (building-local).</summary>
-        public static bool Inside(BuildingData b, double lx, double lz) => Party.Tiers(b).Any(t => Geo.Pip(Derived.OutlineAt(b, t.k0), lx, lz));
+        public static bool Inside(BuildingData b, double lx, double lz)
+        {
+            // each tier's outline: the footprint and every setback (Party.Tiers' starts), without making the list
+            if (Geo.Pip(b.footprint, lx, lz)) return true;
+            for (int j = 1; j < b.floors.Count; j++) if (b.floors[j].HasShape && Geo.Pip(b.floors[j].shape, lx, lz)) return true;
+            return false;
+        }
+
+        /// <summary>On one of the building's tier outlines, or within a wall's thickness of its edge (building-local).</summary>
+        static bool OnAnyTier(BuildingData b, double lx, double lz)
+        {
+            if (OnOutline(b.footprint, lx, lz)) return true;
+            for (int j = 1; j < b.floors.Count; j++) if (b.floors[j].HasShape && OnOutline(b.floors[j].shape, lx, lz)) return true;
+            return false;
+        }
+
+        static bool OnOutline(List<Vec2> fp, double lx, double lz) => Geo.Pip(fp, lx, lz) || DistToEdges(fp, lx, lz) <= Dim.T_EXT + 0.02;
 
         /// <summary>The building and storey the player is in (up to 1.5 m above its roof), or null outside.</summary>
         public (BuildingData b, int floor)? Locate(double x, double y, double z)
         {
-            foreach (var b in Near(x, z, 0))
+            foreach (var b in NearShared(x, z, 0))
                 if (Inside(b, x - b.pos.x, z - b.pos.z) && y <= Derived.RoofY(b) + 1.5) return (b, FloorAtY(b, y));
             return null;
         }
@@ -153,21 +182,19 @@ namespace Triband.Storey.Play
         public double SurfaceAt(double x, double z, double y)
         {
             double best = y + StepUp >= 0 ? 0 : -1e9;
-            foreach (var b in Near(x, z, Dim.T_EXT + 0.05))
+            foreach (var b in NearShared(x, z, Dim.T_EXT + 0.05))
             {
                 foreach (var br in b.bridges)
                     if (Bridges.Span(Site, b, br) is BridgeSpan bs && Bridges.DeckAt(bs, x, z) is double dy && dy <= y + StepUp && dy > best) best = dy;
                 double lx = x - b.pos.x, lz = z - b.pos.z;
-                bool On(List<Vec2> fp) => Geo.Pip(fp, lx, lz) || DistToEdges(fp, lx, lz) <= Dim.T_EXT + 0.02;
-                if (!Party.Tiers(b).Any(t => On(Derived.OutlineAt(b, t.k0)))) continue;
+                if (!OnAnyTier(b, lx, lz)) continue;
                 int N = b.floors.Count;
                 for (int k = 0; k <= N; k++)
                 {
                     double yk = Derived.FloorBase(b, k);
                     if (yk > y + StepUp || yk <= best) continue;
-                    if (!(k > 0 && On(Derived.OutlineAt(b, k - 1))) && !(k < N && On(Derived.OutlineAt(b, k)))) continue;   // the storey below's roof or terrace, or this storey's floor
-                    if (b.shafts.Any(s => Cores.StairHoleAt(b, s, k) && InHole(s, ToCore(s, lx, lz).x, ToCore(s, lx, lz).z))) continue;
-                    if (b.voids.Any(v => Courtyards.HoleAt(b, v, k) && Geo.Pip(v.shape, lx, lz))) continue;   // a courtyard or an atrium is open here
+                    if (!(k > 0 && OnOutline(Derived.OutlineAt(b, k - 1), lx, lz)) && !(k < N && OnOutline(Derived.OutlineAt(b, k), lx, lz))) continue;   // the storey below's roof or terrace, or this storey's floor
+                    if (HoleAt(b, k, lx, lz)) continue;
                     best = yk;
                 }
                 foreach (var s in b.shafts)
@@ -202,16 +229,28 @@ namespace Triband.Storey.Play
             return best;
         }
 
+        /// <summary>A stair's slab hole, a courtyard or an atrium is open at storey k here (loops: this runs every frame).</summary>
+        static bool HoleAt(BuildingData b, int k, double lx, double lz)
+        {
+            foreach (var s in b.shafts)
+                if (Cores.StairHoleAt(b, s, k)) { var q = ToCore(s, lx, lz); if (InHole(s, q.x, q.z)) return true; }
+            foreach (var v in b.voids)
+                if (Courtyards.HoleAt(b, v, k) && Geo.Pip(v.shape, lx, lz)) return true;
+            return false;
+        }
+
         // ---- what stops it ----
 
         /// <summary>
         /// A point moved out of every wall near it (the walls of the storey at height y, within 3 m): each segment
         /// pushes it to its radius plus the player's, four passes over all of them.
         /// </summary>
+        readonly List<Seg> collideSegs = new List<Seg>();
+
         public (double x, double z) Collide(double px, double pz, double y)
         {
-            var segs = new List<Seg>();
-            foreach (var b in Near(px, pz, 3))
+            var segs = collideSegs; segs.Clear();
+            foreach (var b in NearShared(px, pz, 3))
             {
                 var bb = bboxAll[b.id];
                 if (px < bb.x0 + b.pos.x - 3 || px > bb.x1 + b.pos.x + 3 || pz < bb.z0 + b.pos.z - 3 || pz > bb.z1 + b.pos.z + 3) continue;

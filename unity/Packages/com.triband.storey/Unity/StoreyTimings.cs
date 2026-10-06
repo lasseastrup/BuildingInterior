@@ -23,13 +23,18 @@ namespace Triband.Storey.Unity
         public readonly struct Scope : IDisposable
         {
             readonly string what; readonly long t0;
-            internal Scope(string what) { this.what = what; t0 = Stopwatch.GetTimestamp(); UnityEngine.Profiling.Profiler.BeginSample("Storey " + what); }
+            internal Scope(string what) { this.what = what; t0 = Stopwatch.GetTimestamp(); UnityEngine.Profiling.Profiler.BeginSample(SampleName(what)); }
             public void Dispose()
             {
                 UnityEngine.Profiling.Profiler.EndSample();
                 if (Enabled) Add(what, (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency);
             }
         }
+
+        // the Profiler's sample names, made once each (joining the prefix on every sample was garbage every frame)
+        static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> sampleNames = new System.Collections.Concurrent.ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+        static readonly Func<string, string> prefixed = w => "Storey " + w;
+        static string SampleName(string what) => sampleNames.GetOrAdd(what, prefixed);
 
         /// <summary>Time a stage: <c>using (StoreyTimings.Time("site: rebuild")) { … }</c>.</summary>
         public static Scope Time(string what) => new Scope(what);

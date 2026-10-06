@@ -112,6 +112,24 @@ namespace Triband.Storey.Occlusion
         // the building the view is on: the one the player is in, or the one just left while it is still in the way
         BuildingData? held; int heldFloor;
 
+        // reused every frame, so a frame makes no garbage (FrameAllocTests)
+        readonly (double x, double y, double z)[] targets = new (double, double, double)[3];
+        readonly List<Occluder> hits = new List<Occluder>(), activeCopy = new List<Occluder>();
+        readonly List<BuildingData> cand = new List<BuildingData>(), near = new List<BuildingData>();
+        readonly HashSet<BuildingData> candSeen = new HashSet<BuildingData>();
+        readonly HashSet<(string, int)> wallsSeen = new HashSet<(string, int)>();
+        readonly List<(string, int)> wallKeys = new List<(string, int)>();
+        bool[] gone = new bool[8];
+
+        /// <summary>What the segment test needs of a building, worked out once (its tiers' starts and ends, its roof's rise).</summary>
+        sealed class Shape { public List<(int k0, int k1)> tiers = null!; public double rise; }
+        readonly Dictionary<BuildingData, Shape> shapes = new Dictionary<BuildingData, Shape>();
+        Shape ShapeOf(BuildingData b)
+        {
+            if (!shapes.TryGetValue(b, out var s)) shapes[b] = s = new Shape { tiers = Party.Tiers(b), rise = Roofs.IsPitched(b) ? (Roofs.Parts(World.Site, b)?.Rise ?? 0) : 1.1 };
+            return s;
+        }
+
         public OcclusionCore(PlayWorld world, OcclusionSettings settings) { World = world; Settings = settings; }
 
         /// <summary>The buildings in the way now, each with its slot.</summary>
@@ -147,7 +165,7 @@ namespace Triband.Storey.Occlusion
             if (held != null && Settings.holdAfterExit)
             {
                 var b = World.Site.ById(held.id);
-                if (b != null && heldFloor <= b.floors.Count && Targets(p, cam).Any(t => SegmentHits(b, cam, t))) { held = b; return; }
+                if (b != null && heldFloor <= b.floors.Count && AnyHits(b, cam, Targets(p, cam))) { held = b; return; }
             }
             held = null;
         }
@@ -193,8 +211,7 @@ namespace Triband.Storey.Occlusion
         void UpdateCutaway(double dt)
         {
             double step = dt / CutSlide;
-            var seen = new HashSet<(string, int)>();
-            void Set((string, int) id, double v) { if (v > 0) Walls[id] = v; else Walls.Remove(id); }
+            var seen = wallsSeen; seen.Clear();
             var act = View.active;
             if (View.cutOn && act != null)
             {
@@ -212,12 +229,16 @@ namespace Triband.Storey.Occlusion
                         // a wall starts down only with the player clear of its line, and stays down until they cross back
                         bool up = WallBlocks(walls[i].W, View.cx, View.cz, View.fx, View.fz, a > 0 ? 0 : Settings.wallMargin);
                         if (!up && a == 0) continue;
-                        Set(id, Math.Max(0, Math.Min(1, a + (up ? step : -step))));
+                        SetWall(id, Math.Max(0, Math.Min(1, a + (up ? step : -step))));
                     }
                 }
             }
-            foreach (var kv in Walls.ToList()) if (!seen.Contains(kv.Key)) Set(kv.Key, Math.Max(0, kv.Value - step));   // walls no longer cut slide back up
+            // walls no longer cut slide back up
+            wallKeys.Clear(); foreach (var key in Walls.Keys) if (!seen.Contains(key)) wallKeys.Add(key);
+            foreach (var key in wallKeys) SetWall(key, Math.Max(0, Walls[key] - step));
         }
+
+        void SetWall((string, int) id, double v) { if (v > 0) Walls[id] = v; else Walls.Remove(id); }
 
         // ---- buildings in the way ----
 
@@ -228,7 +249,7 @@ namespace Triband.Storey.Occlusion
             return d;
         }
 
-        double RoofRise(BuildingData b) => Roofs.IsPitched(b) ? (Roofs.Parts(World.Site, b)?.Rise ?? 0) : 1.1;
+        double RoofRise(BuildingData b) => ShapeOf(b).rise;
 
         /// <summary>
         /// The segment p–q passes through the building's volume: one prism per setback tier, the roof's rise or the
@@ -237,8 +258,8 @@ namespace Triband.Storey.Occlusion
         /// </summary>
         public bool SegmentHits(BuildingData b, (double x, double y, double z) p, (double x, double y, double z) q)
         {
-            int N = b.floors.Count; double extra = RoofRise(b);
-            foreach (var (k0, k1) in Party.Tiers(b))
+            int N = b.floors.Count; var shape = ShapeOf(b); double extra = shape.rise;
+            foreach (var (k0, k1) in shape.tiers)
             {
                 double y0 = Derived.FloorBase(b, k0), y1 = Derived.FloorBase(b, k1) + (k1 == N ? extra : 0), dy = q.y - p.y, t0 = 0, t1 = 1;
                 if (Math.Abs(dy) < 1e-9) { if (p.y < y0 || p.y > y1) continue; }
@@ -309,29 +330,39 @@ namespace Triband.Storey.Occlusion
         }
 
         /// <summary>The three rays' ends, the feet, chest and head, 0.5 m short so the character's own body touching a wall doesn't count.</summary>
-        static (double x, double y, double z)[] Targets(PlayerState p, (double x, double y, double z) c)
+        (double x, double y, double z)[] Targets(PlayerState p, (double x, double y, double z) c)
         {
             double dl = Tiers.Hypot(c.x - p.x, c.z - p.z), sh = dl > 0.6 ? 0.5 / dl : 0;
-            return new[] { 0.25, 1.1, 1.75 }.Select(h => (x: p.x + (c.x - p.x) * sh, y: p.y + h, z: p.z + (c.z - p.z) * sh)).ToArray();
+            targets[0] = (p.x + (c.x - p.x) * sh, p.y + 0.25, p.z + (c.z - p.z) * sh);
+            targets[1] = (p.x + (c.x - p.x) * sh, p.y + 1.1, p.z + (c.z - p.z) * sh);
+            targets[2] = (p.x + (c.x - p.x) * sh, p.y + 1.75, p.z + (c.z - p.z) * sh);
+            return targets;
+        }
+
+        bool AnyHits(BuildingData b, (double x, double y, double z) c, (double x, double y, double z)[] tg)
+        {
+            foreach (var t in tg) if (SegmentHits(b, c, t)) return true;
+            return false;
         }
 
         void UpdateOccluders(PlayerState p, (double x, double y, double z) c, double dt)
         {
-            var hits = new List<Occluder>(); var m = Settings.mode;
+            hits.Clear(); var m = Settings.mode;
             if (m != OccluderMode.Off)
             {
                 var tg = Targets(p, c);
                 double L = Tiers.Hypot(c.x - p.x, c.z - p.z); int steps = (int)Math.Ceiling(L / 16);
-                var cand = new List<BuildingData>(); var seen = new HashSet<BuildingData>();
+                cand.Clear(); candSeen.Clear();
                 for (int i = 0; i <= steps; i++)
                 {
                     double f = (double)i / Math.Max(steps, 1);
-                    foreach (var b in World.Near(c.x + (p.x - c.x) * f, c.z + (p.z - c.z) * f, 17)) if (seen.Add(b)) cand.Add(b);
+                    World.NearInto(c.x + (p.x - c.x) * f, c.z + (p.z - c.z) * f, 17, near);
+                    foreach (var b in near) if (candSeen.Add(b)) cand.Add(b);
                 }
                 foreach (var b in cand)
                 {
                     if (b == held || AtDoorOf(b, p)) continue;
-                    if (tg.Any(t => SegmentHits(b, c, t)))
+                    if (AnyHits(b, c, tg))
                     {
                         var r = Record(b); hits.Add(r);
                         r.sliceY = SliceHeight(b, p); r.top = Derived.RoofY(b) + RoofRise(b) + 0.5;
@@ -349,7 +380,8 @@ namespace Triband.Storey.Occlusion
                     slots[i] = r; r.slot = i; r.t = 0; r.k = OccStorey(r.b, p); active.Add(r);
                 }
             }
-            foreach (var r in active.ToList())
+            activeCopy.Clear(); activeCopy.AddRange(active);
+            foreach (var r in activeCopy)
             {
                 var b = World.Site.ById(r.b.id);
                 bool want = b != null && (hits.Contains(r) || (r.hold -= dt) > 0);
@@ -390,7 +422,7 @@ namespace Triband.Storey.Occlusion
             }
             var S = r.plan.segs; int n = S.Count; double T = r.t;
             Rows[o] = n; Rows[o + 1] = (float)Math.Min(1, T / 0.08);
-            var gone = new bool[n];
+            if (gone.Length < n) gone = new bool[Math.Max(n, gone.Length * 2)];
             for (int i = n - 1; i >= 0; i--)
             {
                 int q = o + (1 + i) * 4;

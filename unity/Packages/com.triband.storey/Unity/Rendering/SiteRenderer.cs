@@ -527,10 +527,12 @@ namespace Triband.Storey.Unity
         /// camera, meshes dropped past the caps, detail built most-pixels-first within the budget, the changed buildings'
         /// state written, and the cells built again where a building changed and shown where any shows its massing.
         /// </summary>
+        readonly System.Diagnostics.Stopwatch lodClock = new System.Diagnostics.Stopwatch();
+
         void UpdateLods()
         {
             using var _t = StoreyTimings.Time("site: automatic LOD");
-            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var sw = lodClock; sw.Restart();
             float now = Time.realtimeSinceStartup, dt = lastLod < 0 ? 0 : Mathf.Min(0.1f, now - lastLod); lastLod = now;
             var l = lods!; int made = 0, queued = 0; bool fading = false;
             forcedIdx.Clear();
@@ -583,8 +585,7 @@ namespace Triband.Storey.Unity
                 if (on) shown++;
                 pieces += c.renderers.Count;
             }
-            int r0 = 0, r1 = 0;
-            foreach (var e in l.Entries.Values) { if (e.Has0) r0++; if (e.Has1) r1++; }
+            var (r0, r1) = l.Resident();
             lodBusy = fading || queued > 0 || jobs.Count > 0;
             stats.buildings = built.Count; stats.resident0 = r0; stats.resident1 = r1;
             stats.cells = cells.Count; stats.cellMeshes = pieces; stats.cellsShown = shown;

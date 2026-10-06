@@ -54,7 +54,7 @@ namespace Triband.Storey.Lod
             public bool Visible(int lod) => Shown == lod || (T < 1 && From == lod);
         }
 
-        /// <summary>What a frame asks of the renderer.</summary>
+        /// <summary>What a frame asks of the renderer. The manager's own, reused: valid until the next <see cref="Update"/>.</summary>
         public sealed class Frame
         {
             /// <summary>LODs to build, most pixels first: (building, LOD, pixels per metre).</summary>
@@ -65,7 +65,18 @@ namespace Triband.Storey.Lod
             public readonly List<int> Changed = new List<int>();
             /// <summary>How many buildings show each LOD (index 3: not drawn).</summary>
             public readonly int[] Count = new int[4];
+
+            internal void Clear() { Build.Clear(); Drop.Clear(); Changed.Clear(); Array.Clear(Count, 0, Count.Length); }
         }
+
+        // reused every frame, so a frame makes no garbage (FrameAllocTests)
+        readonly Frame frameOut = new Frame();
+        readonly List<(int, int, double)> forcedBuild = new List<(int, int, double)>();
+        readonly List<(int idx, long used)> idle = new List<(int, long)>();
+        sealed class MostPixels : IComparer<(int idx, int lod, double px)> { public int Compare((int idx, int lod, double px) a, (int idx, int lod, double px) b) => b.px.CompareTo(a.px); }
+        sealed class LeastRecent : IComparer<(int idx, long used)> { public int Compare((int idx, long used) a, (int idx, long used) b) => a.used.CompareTo(b.used); }
+        static readonly MostPixels mostPixels = new MostPixels();
+        static readonly LeastRecent leastRecent = new LeastRecent();
 
         public readonly LodSettings Settings;
         readonly Dictionary<int, Entry> entries = new Dictionary<int, Entry>();
@@ -74,6 +85,14 @@ namespace Triband.Storey.Lod
         public LodManager(LodSettings? s = null) { Settings = s ?? new LodSettings(); }
 
         public IReadOnlyDictionary<int, Entry> Entries => entries;
+
+        /// <summary>How many buildings have their LOD0 and their LOD1 built (no garbage: <see cref="Entries"/> boxes its enumerator).</summary>
+        public (int lod0, int lod1) Resident()
+        {
+            int r0 = 0, r1 = 0;
+            foreach (var e in entries.Values) { if (e.Has0) r0++; if (e.Has1) r1++; }
+            return (r0, r1);
+        }
         public Entry? Get(int idx) => entries.TryGetValue(idx, out var e) ? e : null;
 
         /// <summary>Add a building (or move it: an edit), by its table index. Its detail LODs are marked unbuilt.</summary>
@@ -105,9 +124,9 @@ namespace Triband.Storey.Lod
         public Frame Update(double cx, double cy, double cz, double pixelsPerMetre, double dt, ICollection<int>? forced = null)
         {
             frame++;
-            var f = new Frame(); var s = Settings;
+            var f = frameOut; f.Clear(); var s = Settings;
             double pxm = pixelsPerMetre * s.Bias, H = s.Hysteresis;
-            var forcedBuild = new List<(int, int, double)>();
+            forcedBuild.Clear();
             foreach (var kv in entries)
             {
                 var e = kv.Value; int idx = kv.Key;
@@ -131,7 +150,7 @@ namespace Triband.Storey.Lod
                 if (e.Visible(1)) e.Used1 = frame;
                 f.Count[e.Shown]++;
             }
-            f.Build.Sort((a, b) => b.px.CompareTo(a.px));
+            f.Build.Sort(mostPixels);
             f.Build.InsertRange(0, forcedBuild);
             Evict(f, 0, s.MaxLod0); Evict(f, 1, s.MaxLod1);
             return f;
@@ -140,7 +159,7 @@ namespace Triband.Storey.Lod
         /// <summary>Past the cap, the meshes not on screen go, least recently shown first.</summary>
         void Evict(Frame f, int lod, int max)
         {
-            int count = 0; var idle = new List<(int idx, long used)>();
+            int count = 0; idle.Clear();
             foreach (var kv in entries)
             {
                 var e = kv.Value; bool has = lod == 0 ? e.Has0 : e.Has1; if (!has) continue;
@@ -148,7 +167,7 @@ namespace Triband.Storey.Lod
                 if (!e.Visible(lod)) idle.Add((kv.Key, lod == 0 ? e.Used0 : e.Used1));
             }
             if (count <= max) return;
-            idle.Sort((a, b) => a.used.CompareTo(b.used));
+            idle.Sort(leastRecent);
             foreach (var (idx, _) in idle)
             {
                 if (count <= max) break;
