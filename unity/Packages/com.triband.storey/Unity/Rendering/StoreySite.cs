@@ -176,6 +176,7 @@ namespace Triband.Storey.Unity
                 builtWith = new Material?[] { opaque, glass, massing }; builtAuto = auto;
                 shownJson = null; pendingAll = true;
             }
+            site.Layer = gameObject.layer;   // everything the site makes is on its layer
             site.Colliders = generateColliders && (Application.isPlaying || collidersInEditMode);
             // the neighbouring districts, for party walls along the edge: a change builds everything again
             // (the layouts' texts compared as objects: a reimport makes a new one, and nothing is read or hashed)

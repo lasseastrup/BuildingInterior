@@ -56,7 +56,7 @@ namespace Triband.Storey.Unity
         /// <param name="auto">The automatic LOD's settings; null for the fixed LOD (every LOD built, <see cref="Lod"/> shown).</param>
         public SiteRenderer(Transform parent, Material opaque, Material glass, Material massing, HideFlags flags = HideFlags.None, LodSettings? auto = null)
         {
-            this.parent = parent; this.opaque = opaque; this.glass = glass; this.massing = massing; this.flags = flags;
+            this.parent = parent; layer = parent.gameObject.layer; this.opaque = opaque; this.glass = glass; this.massing = massing; this.flags = flags;
             if (auto != null) lods = new LodManager(auto);
         }
 
@@ -184,7 +184,30 @@ namespace Triband.Storey.Unity
         internal Mesh UploadExtra(MeshBuilder gb, string name, int tag) { gb.RetagForUpload(tag); var m = MeshUpload.Upload(gb, name, RowOf); m.hideFlags = flags; return m; }
 
         bool colliders;
+        int layer;
         readonly HashSet<string> colliderPending = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The layer of every object the site makes (the buildings, their LODs and colliders, the cells): the Storey
+        /// Site's own, so cameras' culling masks, lights and physics see the buildings as the project sorts them.
+        /// Changing it moves the objects already made.
+        /// </summary>
+        public int Layer
+        {
+            get => layer;
+            set
+            {
+                if (layer == value) return;
+                layer = value;
+                foreach (var bt in built.Values)
+                {
+                    if (bt.root != null) bt.root.layer = value;
+                    foreach (var list in bt.objs) foreach (var go in list) if (go != null) go.layer = value;
+                }
+                if (cellRoot != null) cellRoot.layer = value;
+                foreach (var c in cells.Values) foreach (var r in c.renderers) if (r != null) r.gameObject.layer = value;
+            }
+        }
 
         /// <summary>
         /// Give every building a <see cref="MeshCollider"/> on its root, from <see cref="CollisionMesh"/> (floors, stairs,
@@ -373,7 +396,7 @@ namespace Triband.Storey.Unity
             // the table row is the site's block plus the building's index in the layout: party walls carry their
             // neighbour's layout index, moved into the block at upload (MeshUpload's mates), and the shader looks it up
             var bt = new Built { id = b.id, idx = blockStart + site!.IndexOf(b) };
-            var root = new GameObject(b.name) { hideFlags = flags };
+            var root = new GameObject(b.name) { hideFlags = flags, layer = layer };
             root.transform.SetParent(parent, false);
             bt.root = root;
             built[b.id] = bt; byIdx[bt.idx] = bt;
@@ -578,14 +601,14 @@ namespace Triband.Storey.Unity
             foreach (var m in c.meshes) Kill(m);
             c.renderers.Clear(); c.meshes.Clear();
             if (c.members.Count == 0) { cells.Remove(key); return; }
-            if (cellRoot == null) { cellRoot = new GameObject("Cells") { hideFlags = flags }; cellRoot.transform.SetParent(parent, false); }
+            if (cellRoot == null) { cellRoot = new GameObject("Cells") { hideFlags = flags, layer = layer }; cellRoot.transform.SetParent(parent, false); }
             var pieces = Cells.Merge(c.members.Values.Select(bt => new Cells.Member(bt.l2!, bt.idx + 2 * Lod1.LOD_TAG, bt.rowMap!)));
             for (int i = 0; i < pieces.Count; i++)
             {
                 string name = $"Cell {key.x},{key.z}" + (pieces.Count > 1 ? $" ({i + 1})" : "");
                 var mesh = MeshUpload.Upload(pieces[i], name, null); mesh.hideFlags = flags;
                 c.meshes.Add(mesh);
-                var go = new GameObject(name) { hideFlags = flags };
+                var go = new GameObject(name) { hideFlags = flags, layer = layer };
                 go.transform.SetParent(cellRoot.transform, false);
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
                 var mr = go.AddComponent<MeshRenderer>();
@@ -603,7 +626,7 @@ namespace Triband.Storey.Unity
         {
             mesh.hideFlags = flags;
             bt.meshes[which].Add(mesh);
-            var go = new GameObject(name) { hideFlags = flags };
+            var go = new GameObject(name) { hideFlags = flags, layer = layer };
             bt.objs[which].Add(go);
             go.transform.SetParent(bt.root!.transform, false);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
@@ -658,7 +681,6 @@ namespace Triband.Storey.Unity
             foreach (var (bt, mesh) in todo)
             {
                 bt.collision = mesh;
-                bt.root!.layer = parent.gameObject.layer;
                 var mc = bt.root.AddComponent<MeshCollider>();
                 mc.cookingOptions = Cooking;   // before the mesh: the same options as the bake, so nothing is cooked again
                 mc.sharedMesh = mesh;

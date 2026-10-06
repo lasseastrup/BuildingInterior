@@ -82,7 +82,7 @@ The play kit depends on the Input System package. With the project's *Active Inp
 
 ## 5. Mesh colliders
 
-For a project's own physics character, raycasts or props, every building gets one `MeshCollider` on its root GameObject, on the site's layer. **Generate colliders** on the Storey Site switches it (on by default). Storey's play kit does not use them: it walks the walk model.
+For a project's own physics character, raycasts or props, every building gets one `MeshCollider` on its root GameObject, on the site's layer. Every object the site makes (each building, its LODs and collider, the merged cells, Sink's footprints) is on the Storey Site's layer, so set the layer on the site for cameras' culling masks, lights and physics; changing it moves the objects already made. **Generate colliders** on the Storey Site switches it (on by default). Storey's play kit does not use them: it walks the walk model.
 
 **The mesh.** `Play/CollisionMesh` builds it from the walk model's own data, so the collider and the walk model agree:
 - **Walls:** a thin box round every collision segment (LOD0's segments, at their radius), storey by storey, merged into one box where a segment repeats on the storeys above.

@@ -5,6 +5,7 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Changed
+- Every object a Storey Site makes (buildings, their LOD objects and colliders, the merged cells, Sink's footprints) is on the site's own layer, not Default; changing the site's layer moves them. `SiteRenderer.Layer`.
 - `StoreyQualitySettings`' level-of-detail fields are now the automatic LOD's numbers (`lod0PixelsPerMetre`, `lod1PixelsPerMetre`, `lod2PixelsPerMetre`, `hysteresis`, `fadeSeconds`, `farDistance`, `lod0Residency`, `lod1Residency`, `buildBudgetMs`), with defaults from the prototype. `ToLodSettings`, `ApplyTo`.
 - Cut corners are kept as one corner: `CornerData` (the building's and a setback's `corners`), and `CornerCuts` (`Sharp`, `Around`, `Cut`, `Clear`, `CutAll`, `ClearAll`). The outline still holds the cut's points. `CornerShape` moved to the `Triband.Storey` namespace.
 - LOD0 vertices are 28 bytes instead of 44. They carry only the cutaway kind and wall id; each wall's start and normal sit once in the building table (`_StoreyWallData`), and the shader reads them by id. On the demo street LOD0 goes from 4.6 to 3.1 MB.

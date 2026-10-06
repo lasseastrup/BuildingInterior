@@ -185,6 +185,7 @@ namespace Triband.Storey.Unity
                 footprints[(b.id, k)] = mesh = r.UploadExtra(SinkFootprint.Build(r.Site!, b, k), b.name + " footprint " + k, FootprintRow);
             var go = spareFootprints.Count > 0 ? spareFootprints.Pop() : NewFootprint();
             go.GetComponent<MeshFilter>().sharedMesh = mesh;
+            go.layer = site!.gameObject.layer;   // the site's layer, like its buildings
             go.SetActive(true);
             shownFootprints.Add(go);
         }
