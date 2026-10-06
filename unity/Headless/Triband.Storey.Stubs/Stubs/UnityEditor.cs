@@ -62,9 +62,12 @@ namespace UnityEditor
         public CustomEditor(System.Type inspectedType) { }
     }
 
+    public sealed class CanEditMultipleObjects : System.Attribute { }
+
     public class Editor : ScriptableObject
     {
         public Object target => new Object();
+        public Object[] targets => new Object[0];
         public virtual void OnInspectorGUI() { }
         public bool DrawDefaultInspector() => false;
         public SerializedObject serializedObject { get; } = new SerializedObject();

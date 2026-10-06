@@ -89,6 +89,11 @@ namespace Triband.Storey.Generate
         public bool Bridged(string id) => bridged.Contains(id);
         public BuildingData? ById(string id) => byId.TryGetValue(id, out var b) ? b : null;
 
+        static readonly List<BuildingData> none = new List<BuildingData>();
+        /// <summary>The buildings whose box covers the grid cell holding (x, z): every building a point there can be in. No garbage.</summary>
+        public IReadOnlyList<BuildingData> InCell(double x, double z) =>
+            grid.TryGetValue(((int)Math.Floor(x / BGRID), (int)Math.Floor(z / BGRID)), out var l) ? l : none;
+
         /// <summary>World bounding box of every outline of a building.</summary>
         public static (double x0, double z0, double x1, double z1) BoundsOf(BuildingData b)
         {

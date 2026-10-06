@@ -100,6 +100,9 @@ namespace Triband.Storey.Unity
         public StoreyOcclusion? Occlusion { get; internal set; }
 
         /// <summary>The layout's ground plan in world space (its buildings' bounds), for picking the district a player is in.</summary>
+        /// <summary>The site's renderer (null until it has built), for the props manager.</summary>
+        internal SiteRenderer? Renderer => site;
+
         public Lod.Districts.Area? PlanArea
         {
             get

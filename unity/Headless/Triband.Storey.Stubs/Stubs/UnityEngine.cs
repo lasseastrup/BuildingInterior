@@ -162,6 +162,7 @@ namespace UnityEngine
         public static Vector3 zero => default;
         public static Vector3 one => default;
         public static Vector3 up => default;
+        public float sqrMagnitude => 0;
         public static Vector3 down => default;
         public static Vector3 right => default;
         public static Vector3 forward => default;
@@ -356,6 +357,7 @@ namespace UnityEngine
     {
         public Bounds(Vector3 center, Vector3 size) : this() { }
         public void Encapsulate(Vector3 point) { }
+        public void Encapsulate(Bounds bounds) { }
         public Vector3 center { get; set; }
         public Vector3 size { get; set; }
         public Vector3 min { get; set; }
@@ -371,6 +373,7 @@ namespace UnityEngine
         public static void SetGlobalFloat(int nameID, float value) { }
         public static void SetGlobalInt(int nameID, int value) { }
         public static int GetGlobalInt(int nameID) => 0;
+        public static float GetGlobalFloat(int nameID) => 0;
         public static void SetGlobalTexture(int nameID, Texture value) { }
     }
 
@@ -464,6 +467,8 @@ namespace UnityEngine
         public GameObject gameObject { get; } = new GameObject("");
         public T GetComponent<T>() => default!;
         public T GetComponentInChildren<T>() => default!;
+        public T GetComponentInParent<T>() => default!;
+        public T[] GetComponents<T>() => System.Array.Empty<T>();
     }
 
     public class Collider : Component { }
@@ -502,6 +507,9 @@ namespace UnityEngine
 
     public sealed class Transform : Component
     {
+        public int childCount => 0;
+        public Transform GetChild(int index) => this;
+        public bool hasChanged { get; set; }
         public Vector3 position { get => default; set { } }
         public Quaternion rotation { get => default; set { } }
         public Vector3 eulerAngles => default;
@@ -558,9 +566,17 @@ namespace UnityEngine
         public Material sharedMaterial { get; set; } = new Material();
         public UnityEngine.Rendering.ShadowCastingMode shadowCastingMode { get; set; }
         public UnityEngine.Rendering.LightProbeUsage lightProbeUsage { get; set; }
+        public bool forceRenderingOff { get; set; }
+        public Bounds bounds => default;
     }
 
-    public sealed class MeshRenderer : Renderer { }
+    public sealed class MeshRenderer : Renderer { public void SetShaderUserValue(uint value) { } }
+    public class SkinnedMeshRenderer : Renderer { public void SetShaderUserValue(uint value) { } }
+
+    public class Rigidbody : Component { public bool IsSleeping() => false; }
+
+    [System.AttributeUsage(System.AttributeTargets.Class)]
+    public sealed class DisallowMultipleComponent : System.Attribute { }
 }
 
 namespace UnityEngine.Rendering

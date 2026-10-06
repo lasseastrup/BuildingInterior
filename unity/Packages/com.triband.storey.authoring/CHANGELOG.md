@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- The Storey Prop's inspector says which building and storey it's in; *Tools ▸ Storey ▸ Props ▸ Show Prop Buildings* tints every prop by its building (docs/PROPS.md).
 - Shape ▸ *Placement*: a building's **Elevation**, and **Snap to ground**, which casts down onto the scene's colliders under it (a Terrain's too), stands it on the highest ground found and deepens its foundation to the lowest (docs/EDITOR.md §6.11).
 - **Find neighbouring districts** in the site's Site settings, and the **Storey Districts** inspector (**Add open district scenes**, **Read areas**, a warning for scenes missing from the build) (docs/CITY.md §5).
 - **Tools ▸ Storey ▸ Test City ▸ Make 300 / 1,000 / 3,000 Walk-in Buildings**: a test city where every building has an interior.

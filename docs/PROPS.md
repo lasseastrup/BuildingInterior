@@ -1,135 +1,141 @@
 # Props: occluding the objects inside buildings
 
-**Status: plan, not started.** The game puts objects on each floor of a house: furniture, clutter, rigidbodies that can be knocked down the stairs or out of a window. They have to disappear with the building around them:
+**Status: written; checking in Unity is outstanding** (§5).
+
+The game puts objects on each floor of a house: furniture, clutter, rigidbodies that can be knocked down the stairs or out of a window. They disappear with the building around them:
 
 - **The player's own building:** the floors above the player are clipped.
 - **Buildings in the way:** Sink, Slice, Cutout, Fade or Dissolve.
-- **Through every LOD change.**
+- **The building's LOD0:** they fade with it, and are switched off once it settles at LOD1.
 
-This plan says how, and in what order.
+Props in the street (outside every building) are never occluded, as before.
 
 ## 1. The idea: a prop is drawn as part of the building it's in
 
-The building shaders already decide everything per vertex and per pixel from one building index. The index tells them:
+The building shaders decide everything per vertex and per pixel from one building index. The index tells them:
 - the building's state row (shown LOD, cross-fade, occluder slot);
 - its occluder row (Sink's floor lines, Slice's height, Cutout/Fade/Dissolve's fade);
 - the view globals (the active building and its ceiling clip).
 
-A prop that knows its building's index can go through the same two functions, `StoreySink` (vertex) and `StoreyOcclude` (fragment), with no new occlusion logic:
+A prop that knows its building's index goes through the same `StoreySink` and `StoreyOcclude`, with no occlusion logic of its own:
 
-| What happens to the building | What its props do, through the same code |
+| What happens to the building | What its props do |
 |---|---|
 | Floors above the player clipped | A prop on those floors is clipped (per pixel, by height) |
-| Sink | Props squash with their storey, and vanish when it has |
+| Sink | Props squash with their storey, and collapse once it has gone |
 | Slice | Clipped at the slice height |
 | Cutout, Fade | The same hole or ghost around the player, the same dark base |
 | Dissolve | The same dither, the same darkening |
 | LOD cross-fade | A prop counts as LOD0: it fades in and out with the building's LOD0 |
 | Isolate (editor) | Ghosts with its building |
 
-A prop outside every building has no index and is never occluded. That's the same rule as now: only buildings are occluded.
-
 Two consequences:
-- **Moving props need no special handling.** A dropped object is re-filed under whichever building it's now in. Within its building it's tested by height every frame, so a fall to another floor needs nothing at all.
-- **The behaviour can't drift from the buildings' own,** because it's the same code.
+- **Moving props need little handling.** A dropped object is re-filed under whichever building it's now in. Within its building it's tested by height every frame, so a fall to another floor needs nothing at all.
+- **The behaviour can't drift from the buildings'**, because it's the same code.
 
 ## 2. The parts
 
 ### 2.1 Telling the shader which building: Renderer Shader User Value
 
-Unity 6.3's `MeshRenderer` / `SkinnedMeshRenderer.SetShaderUserValue(uint)` gives each renderer a 32-bit value the shader reads as `unity_RendererUserValue`. All props share one material.
-- **What it costs:** no material instances or MaterialPropertyBlocks. A property block would take each prop out of the SRP Batcher and the GPU Resident Drawer (SPEC §6.4).
-- **What's stored:** the building's table index + 1, 13 bits. 0 means "outside".
-- **What it isn't:** it isn't saved with the scene. That's fine, because it's worked out at run time anyway (§2.3).
+Unity 6.3's `MeshRenderer` / `SkinnedMeshRenderer.SetShaderUserValue(uint)` gives each renderer a 32-bit value the shader reads as `unity_RendererUserValue`. All props share their materials.
+- **What it costs:** no material instances and no MaterialPropertyBlocks. A property block would take each prop out of the SRP Batcher and the GPU Resident Drawer (SPEC §6.4).
+- **What's stored:** the building's table index + 1; 0 means "in the street" (`PropLocator.Encode`).
+- **What it isn't:** the value isn't saved with the scene. Storey Prop writes it at run time, and in the editor.
 
-**To verify first (phase 0):**
-- that the value is read correctly in every pass: colour, shadow and depth;
-- that it reads correctly with the GPU Resident Drawer on (UNITY-PACKAGE-PLAN §6.1 marks this as undocumented);
-- that it reaches a Shader Graph Custom Function.
+**Still to verify in Unity:**
+- that the value arrives in every pass, colour, shadow and depth, with the GPU Resident Drawer on and off (UNITY-PACKAGE-PLAN §6.1 marks GRD as undocumented);
+- the declaration's type. `StoreyProp.hlsl` reads it as `(uint)unity_RendererUserValue`; if your URP version declares it differently, define `STOREY_PROP_USER_VALUE` before the include.
 
-**Fallback if it doesn't hold:** a per-site grid of building indices, a 0.5 m raster of the outlines, read in the shader at the object's pivot (the model matrix's translation).
-- **Pros:** no per-renderer data at all, and moving props cost no CPU.
-- **Cons:** memory (about 0.7 MB for a 300 × 300 m district), and props within half a cell of a shared wall can be filed under the neighbour.
-- Only built if phase 0 fails.
+**Fallback if it doesn't hold:** a per-site grid of building indices, read at the prop's pivot. Not built.
 
-### 2.2 Shaders: three ways to opt in, for designers
+### 2.2 Your Shader Graphs: two Custom Function nodes
 
-1. **Storey/Prop Lit**: a ready-made URP shader (base map, normal map, metallic, smoothness, emission) with the occlusion built in. Swap it onto a prop's material and it works.
-2. **Storey Prop Occlusion** Shader Graph sub-graph, for the project's own graphs. It takes three connections:
-   - **Vertex position:** wire it through the sub-graph.
-   - **Alpha Clip Threshold:** wire it to the master stack.
-   - **Base Color:** wire it through the darkening.
+`Packages/com.triband.storey/Unity/Shaders/StoreyProp.hlsl` holds two functions for Custom Function nodes in **File** mode.
 
-   Underneath it's a Custom Function in file mode on `StoreyProp.hlsl`, the way the building table is read already (SPEC §6.4).
-3. **Any other shader:** the CPU fallback (§2.5).
+1. **Vertex.** Add a Custom Function node in the vertex stage.
+   - **Name:** `StoreyPropVertex`
+   - **Input:** `PositionOS` (Vector 3), from a Position node set to **Object** space.
+   - **Output:** `Out` (Vector 3), into the master stack's **Vertex ▸ Position**.
+   - If the graph already offsets vertices, chain it: your offset first, then this node.
+2. **Fragment.** Add a Custom Function node in the fragment stage.
+   - **Name:** `StoreyPropFragment`
+   - **Inputs:** `PositionWS` (Vector 3), from a Position node set to **World** space; `BaseColor` (Vector 3), your colour.
+   - **Outputs:** `Color` (Vector 3), into **Fragment ▸ Base Color**; `Alpha` (Float), into **Fragment ▸ Alpha**.
+   - In the Graph Settings turn **Alpha Clipping** on, threshold 0.5. Alpha is always 1, but wiring it makes Shader Graph run the function in the depth and shadow passes too.
+3. **Optional:** wrap the two nodes in a sub-graph, so every prop graph takes one node. Shader Graph assets can't be written outside the editor, so this is a two-minute job in Unity.
 
-The include is the buildings' own:
-- `StoreyProp.hlsl` wraps `StoreySink`, `StoreyVertex` (as LOD0) and `StoreyOcclude` (kind 0: no cutaway, which is for walls).
-- **Same pass rules as the buildings:** clipping is colour-pass only, so light indoors doesn't change with the cutaway. Sink's squash and Dissolve's dither reach the shadow pass.
+**How clipping behaves in each pass:**
+- **Colour pass:** all the clipping happens here, as for the buildings, so the light indoors doesn't change with the cutaway.
+- **Depth and shadow passes:** only the LOD cross-fade and Dissolve reach them.
+- **Darkening:** a building in the way darkens the prop's base colour, before lighting (the buildings darken after). Emission isn't darkened.
 
 ### 2.3 Which building a prop is in: the locator
 
-- **How it decides:** an engine-free `PropLocator` uses each site's grid and outline test (what `PlayWorld.Locate` does) to give a point's building and storey.
-- **Which point:** the prop's bounds centre, or its pivot (a setting).
-- **Several districts:** they're searched by area, as the occlusion's Follow Player does.
-
-The result is held by building **id** and turned into a table index when it's written. A site rebuilt by an edit, or a district streamed in, moves its buildings' indices, and its props are written again.
+`PropLocator.BuildingAt(site, x, y, z)` returns the site's own building whose outline holds the point, from a metre below its ground floor to 4 m above its roof base.
+- **Garbage-free:** it uses the site's grid cell (`Site.InCell`) and the outline test (`PlayWorld.Inside`).
+- **Neighbouring districts:** their buildings, there only for shared walls, are never a prop's home.
+- **Several sites:** they're searched in turn.
 
 ### 2.4 Components
 
-- **Storey Prop** goes on any object or prefab root and covers every renderer under it. A chair, a whole room's furniture or a spawned crate all get the same component.
-  - **Static:** located once when enabled (and when moved in the editor).
-  - **Dynamic** (automatic when there's a Rigidbody): located again when it has moved more than 5 cm, and only while the rigidbody is awake.
-  - **Its inspector shows:**
-    - which building and storey it's in (live in Play mode);
-    - a warning for any renderer whose material won't follow the occlusion, with a button to switch the material to Storey/Prop Lit or to use the CPU fallback.
-- **Storey Props** is the one manager, created on demand.
-  - It keeps every prop in flat arrays and updates them in one loop: no `Update` per prop, and no garbage per frame (`FrameAllocTests` gets a case).
-  - It also has **Track layers**: every renderer on chosen layers under the sites' areas is a prop without a component. That covers set dressing placed in bulk, and spawned objects on those layers are picked up by a rescan or by `StoreyProps.Register(go)`.
-- **Distance culling:** a building's props are switched off (`renderer.enabled`) once the building has settled at LOD1 or LOD2. Seen from a street away, a house's hundred props then cost no draw calls. It runs on the LOD manager's change list, not every frame. Off in the editor.
+**Storey Prop** (*Add Component ▸ Storey ▸ Storey Prop*) goes on any object or prefab root. It covers every MeshRenderer and SkinnedMeshRenderer under it, except those under another Storey Prop.
 
-### 2.5 The CPU fallback, for shaders that can't be changed
+| Setting | What it does |
+|---|---|
+| **Motion: Auto** | Moving if there's a Rigidbody on it or above it, still otherwise. |
+| **Motion: Still** | Found its building when enabled, and when moved in the editor. A script that teleports it calls `Refresh()`. |
+| **Motion: Moving** | Found again whenever it has moved 5 cm; a Rigidbody's only while awake. |
+| **Locate By** | Its renderers' bounds centre (the default), or its pivot. |
+| **Hide Whole** | §2.5. |
 
-A per-renderer setting on Storey Prop, **Hide whole**, switches the renderer off (or to shadows only) instead of clipping it in the shader. It hides when either:
-- the prop's storey is above the player's in the player's building;
-- its building is in the way and its storey has gone (sunk, sliced, dissolved).
+The inspector says which building and storey it's in.
 
-The decision is an engine-free function of the occlusion core's state, so it's testable. It's all or nothing (no dither, no squash), which is why it's the fallback and not the default.
+**Storey Props** is the manager. It's hidden, made on demand, and runs after the sites each frame.
+- **No per-prop cost:** one list, one loop, no garbage, and no Update per prop.
+- **Writing the value:** only when a prop's building changes.
+- **Rebuilds:** when any site is built again (an edit, a district streamed in), props re-resolve their building's index by id, and props that had no building look again.
+- **Distance culling:** each building's props are a group, switched off with `forceRenderingOff` once the building has settled at LOD1 or LOD2 (Play mode only). That's one check per group per frame, not per prop. Their own `enabled` is never touched.
+
+**Tools ▸ Storey ▸ Props ▸ Show Prop Buildings** tints every prop by its building, and magenta in the street. A prop that doesn't change colour has a shader without the nodes. This is also the quickest check that the user value reaches the shader with your settings.
+
+### 2.5 Hide Whole: for shaders that can't take the nodes
+
+A Storey Prop with **Hide Whole** is switched off while its point is in a storey the occlusion hides (`OcclusionCore.HidesPoint`):
+- above the ceiling clip of the player's building;
+- a Sink storey gone or squashed past half;
+- above Slice's plane;
+- above Cutout's, Fade's or Dissolve's base once half faded.
+
+It's all or nothing: no dither, no squash.
 
 ## 3. What it costs
 
 - **CPU:**
-  - Static props cost nothing per frame.
-  - A moving prop costs one grid lookup and an outline test when it has moved, then one `SetShaderUserValue` if its building changed. Target: 1,000 moving props under 0.2 ms.
-  - LOD culling only runs when a building's LOD changes.
+  - Still props cost nothing per frame.
+  - An awake rigidbody costs a vector compare per frame, plus a grid lookup and an outline test (no garbage, `PropTests`) each time it has gone 5 cm.
+  - Each building with props costs one LOD check per frame.
 - **GPU:**
-  - Per vertex, the same reads as a building vertex: its state row, plus its occluder row when it's in the way.
+  - Per vertex, the same reads as a building vertex.
   - Per pixel, the same tests as a building's.
-  - No extra draws, and the SRP Batcher and GPU Resident Drawer stay on.
-- **Memory:** a few bytes per prop for the arrays.
+  - No extra draws, the SRP Batcher and GPU Resident Drawer stay on, and props of buildings at LOD1 aren't drawn.
 
-## 4. Order of work
+## 4. Not built (yet)
 
-| Phase | What | Checked by |
-|---|---|---|
-| 0 | Verify Renderer Shader User Value: a scene of cubes with a test shader reading it, GRD on and off, in Game view and shadows. Choose user value or the fallback grid | You, in Unity (I write the scene and the shader) |
-| 1 | `PropLocator`, the prop registry (by building id, written as table indices), the user-value encoding, the CPU fallback's rule | Headless tests: the demo street and the test city; props moved between storeys and out of a window; indices kept across a rebuild |
-| 2 | `StoreyProp.hlsl`, Storey/Prop Lit, the Shader Graph sub-graph | Compiles against the stubs; in Unity: a prop on each floor goes with its building in every mode |
-| 3 | Storey Prop and Storey Props components: static and dynamic, Track layers, distance culling, inspector warnings | Headless (no garbage, culling decisions); in Unity: knock a crate down the stairs and out of the door |
-| 4 | The play kit's demo street gets some props; docs, changelog | The checks in §5 |
+- **The Storey/Prop Lit shader.** Your props use your own Shader Graphs, so it waits until it's wanted.
+- **Track Layers** (props by layer without a component), and `StoreyProps.Register` for objects without one.
+- **The fallback grid** (§2.1), unless the user value fails its check.
+- **Props in the play kit's demo street.**
 
 ## 5. Checks in Unity
 
-1. Walk into a house with props on every floor: the floors above go, and their props go with them. Climb the stairs: the next floor's props appear as its ceiling clip lifts.
-2. Walk behind the house in each mode (Sink, Slice, Cutout, Fade, Dissolve): its props squash, clip, open, ghost or dissolve with it. Their shadows behave like the building's.
-3. Throw a crate down the stairs: it shows or hides with whichever floor it's on. Throw it out of the window: it stays visible in the street.
-4. Walk away: the house's props fade with its LOD0, and the Frame Debugger shows no prop draws once the house is at LOD1.
-5. Edit the house in the editor: its props keep following it.
-6. A prop with a third-party shader: the inspector warns. With **Hide whole** it pops in and out with its storey.
-7. The profiler: no GC Alloc from Storey Props while walking; under 0.2 ms with 1,000 rigidbodies moving.
-
-## 6. Decisions for you
-
-1. **What shaders do your props use?** URP Lit, your own Shader Graphs, or third-party? This sets which of §2.2's paths comes first.
-2. **Should props be switched off once their building is at LOD1?** I recommend yes (§2.4). A prop on a balcony would then go at distance, along with the building's detail.
-3. **Props in the street** (outside every building) stay unoccluded, as they are now. Is that right for the game?
+1. **The user value:**
+   - Add the two nodes to a prop graph, put Storey Prop on some furniture inside a house, and turn on **Show Prop Buildings**: each house's props take its colour, and props in the street turn magenta.
+   - Repeat with the GPU Resident Drawer on.
+   - Repeat in a build.
+2. **Floors:** walk into a house with props on every floor. The floors above go, and their props go with them. Climb the stairs: the next floor's props appear as its ceiling clip lifts.
+3. **Buildings in the way:** walk behind the house in each mode (Sink, Slice, Cutout, Fade, Dissolve). Its props squash, clip, open, ghost or dissolve with it.
+4. **Moving props:** throw a crate down the stairs; it shows or hides with whichever floor it's on. Throw it out of a window: it stays visible in the street.
+5. **Distance:** walk away. The house's props fade with its LOD0, and the Frame Debugger shows no prop draws once the house is at LOD1.
+6. **Edits:** edit the house in the editor. Its props keep following it (its index may move).
+7. **Hide Whole:** set it on a prop with a third-party shader. It pops in and out with its storey.
+8. **The profiler:** no GC Alloc from Storey Props while walking.

@@ -155,6 +155,37 @@ namespace Triband.Storey.Occlusion
             View = new OcclusionView { clipY = 1e9 };
         }
 
+        // ---- props drawn whole (docs/PROPS.md §2.5) ----
+
+        /// <summary>
+        /// Whether a point of building b at site height y is hidden this frame: above the ceiling clip of the building the
+        /// player is in, or in a storey of a building in the way that has gone (sunk, sliced off, or faded past half).
+        /// What a prop whose shader can't follow the occlusion is switched off by: the whole of it, by one point.
+        /// </summary>
+        public bool HidesPoint(BuildingData b, double y)
+        {
+            if (View.active != null && View.active.id == b.id) return y > View.clipY;
+            for (int i = 0; i < active.Count; i++)
+            {
+                var r = active[i];
+                if (r.slot < 0 || r.b.id != b.id) continue;
+                int o = r.slot * RowTexels * 4, n = (int)Rows[o];
+                if (n > 0)
+                {
+                    // Sink: the storey holding y, gone or squashed past half
+                    for (int s = 0; s < n; s++)
+                    {
+                        int q = o + (1 + s) * 4; double top = s + 1 < n ? Rows[q + 4] : double.PositiveInfinity;
+                        if (y >= Rows[q] && y < top) return Rows[q + 2] > 0.5 || Rows[q + 1] < 0.5;
+                    }
+                    return false;
+                }
+                if (y > Rows[o + 2]) return true;                         // Slice
+                return y >= Rows[o + 3] && Rows[o + 1] >= 0.5;           // Cutout, Fade, Dissolve: above the base, half gone
+            }
+            return false;
+        }
+
         // ---- the view ----
 
         /// <summary>The building the view is on this frame (<see cref="OcclusionSettings.holdAfterExit"/>).</summary>

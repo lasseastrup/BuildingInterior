@@ -166,6 +166,24 @@ namespace Triband.Storey.Unity
         /// <summary>The layout as built (null before <see cref="Show"/>). A new one after every change.</summary>
         public Site? Site => site;
 
+        /// <summary>
+        /// Counts the times the layout was built again (all of it, or some buildings): a building's table index may have
+        /// moved, or the building gone. <see cref="AnyVersion"/> counts it for every site (the props re-file then).
+        /// </summary>
+        public int Version { get; private set; }
+        public static int AnyVersion { get; private set; }
+
+        /// <summary>
+        /// The building at table index idx is showing its LOD0 (or fading from it): its props draw. False once it has settled
+        /// at LOD1 or LOD2, or with the fixed LOD set to another.
+        /// </summary>
+        public bool DetailShown(int idx)
+        {
+            if (lods == null) return lod == 0;
+            var e = lods.Get(idx);
+            return e == null || e.Visible(0);
+        }
+
         /// <summary>A building's LOD0 as built: its collision segments and its wall list (for the cutaway).</summary>
         public Lod0Result? Lod0Of(string id) => built.TryGetValue(id, out var b) ? b.l0 : null;
 
@@ -238,6 +256,7 @@ namespace Triband.Storey.Unity
         /// <summary>Build everything again.</summary>
         public void Show(StoreyDocument doc)
         {
+            Version++; AnyVersion++;
             using var _t = StoreyTimings.Time("site: full rebuild (every building)");
             // automatic LOD: the detail each building showed is built again at once, so a structural edit (a building
             // added or removed) doesn't fade the buildings in view through their massings
@@ -269,6 +288,7 @@ namespace Triband.Storey.Unity
         /// </summary>
         public void Rebuild(StoreyDocument doc, IEnumerable<string> ids)
         {
+            Version++; AnyVersion++;
             if (book == null || site == null || doc.buildings.Count != built.Count || doc.buildings.Any(b => !built.ContainsKey(b.id))) { StoreyTimings.Count("full rebuilds: the layout's buildings changed"); Show(doc); return; }
             using var _t = StoreyTimings.Time("site: rebuild of the edited buildings");
             using (StoreyTimings.Time("site: index the layout")) site = NewSite(doc);
