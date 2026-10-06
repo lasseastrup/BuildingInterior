@@ -32,9 +32,12 @@ namespace Triband.Storey.Unity
         }
 
         // the Profiler's sample names, made once each (joining the prefix on every sample was garbage every frame)
-        static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> sampleNames = new System.Collections.Concurrent.ConcurrentDictionary<string, string>(StringComparer.Ordinal);
-        static readonly Func<string, string> prefixed = w => "Storey " + w;
-        static string SampleName(string what) => sampleNames.GetOrAdd(what, prefixed);
+        static readonly Dictionary<string, string> sampleNames = new Dictionary<string, string>(StringComparer.Ordinal);
+        static string SampleName(string what)
+        {
+            if (!sampleNames.TryGetValue(what, out var name)) sampleNames[what] = name = "Storey " + what;
+            return name;
+        }
 
         /// <summary>Time a stage: <c>using (StoreyTimings.Time("site: rebuild")) { … }</c>.</summary>
         public static Scope Time(string what) => new Scope(what);

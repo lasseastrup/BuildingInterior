@@ -84,6 +84,10 @@ namespace Triband.Storey.Unity
         sealed class Cell
         {
             public readonly SortedDictionary<int, Built> members = new SortedDictionary<int, Built>();
+            // the members' indices as a plain array, for the visibility check every frame: enumerating a
+            // SortedDictionary makes garbage each time. Made again with the cell's meshes (every change to the members
+            // marks the cell dirty, and dirty cells are built before the check)
+            public int[] order = Array.Empty<int>();
             public readonly List<Mesh> meshes = new List<Mesh>();
             public readonly List<MeshRenderer> renderers = new List<MeshRenderer>();
             public bool shown = true;
@@ -587,7 +591,7 @@ namespace Triband.Storey.Unity
             foreach (var c in cells.Values)
             {
                 bool on = false;
-                foreach (var kv in c.members) { var e = l.Get(kv.Key); if (e == null || e.Visible(2)) { on = true; break; } }
+                foreach (int idx in c.order) { var e = l.Get(idx); if (e == null || e.Visible(2)) { on = true; break; } }
                 if (on != c.shown) { c.shown = on; foreach (var r in c.renderers) r.enabled = on; }
                 if (on) shown++;
                 pieces += c.renderers.Count;
@@ -609,6 +613,7 @@ namespace Triband.Storey.Unity
             foreach (var m in c.meshes) Kill(m);
             c.renderers.Clear(); c.meshes.Clear();
             if (c.members.Count == 0) { cells.Remove(key); return; }
+            c.order = c.members.Keys.ToArray();
             if (cellRoot == null) { cellRoot = new GameObject("Cells") { hideFlags = flags, layer = layer }; cellRoot.transform.SetParent(parent, false); }
             var pieces = Cells.Merge(c.members.Values.Select(bt => new Cells.Member(bt.l2!, bt.idx + 2 * Lod1.LOD_TAG, bt.rowMap!)));
             for (int i = 0; i < pieces.Count; i++)
