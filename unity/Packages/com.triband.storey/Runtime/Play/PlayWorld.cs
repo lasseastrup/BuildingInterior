@@ -54,7 +54,7 @@ namespace Triband.Storey.Play
             return r;
         }
 
-        readonly Dictionary<string, List<BuildingData>> touching = new Dictionary<string, List<BuildingData>>(StringComparer.Ordinal);
+        readonly System.Collections.Concurrent.ConcurrentDictionary<string, List<BuildingData>> touching = new System.Collections.Concurrent.ConcurrentDictionary<string, List<BuildingData>>(StringComparer.Ordinal);
 
         /// <summary>
         /// The building and every one whose box comes within a metre of its own, in layout order: the only ones that can
@@ -69,7 +69,7 @@ namespace Triband.Storey.Play
                 var q = bboxAll[o.id];
                 if (q.x0 + o.pos.x <= a.x1 + b.pos.x + 1 && a.x0 + b.pos.x <= q.x1 + o.pos.x + 1 && q.z0 + o.pos.z <= a.z1 + b.pos.z + 1 && a.z0 + b.pos.z <= q.z1 + o.pos.z + 1) l.Add(o);
             }
-            return touching[b.id] = l;
+            return touching.GetOrAdd(b.id, l);
         }
 
         /// <summary>How many buildings' LOD0s the walk model holds (built or handed in).</summary>
@@ -96,12 +96,15 @@ namespace Triband.Storey.Play
             return out_;
         }
 
-        readonly HashSet<BuildingData> nearSeen = new HashSet<BuildingData>();
-        readonly List<BuildingData> nearShared = new List<BuildingData>();
+        // scratch, per thread: a walk model may be asked from more than one (no garbage, and no thread treads on another's)
+        [ThreadStatic] static HashSet<BuildingData>? nearSeenT;
+        [ThreadStatic] static List<BuildingData>? nearSharedT;
+        [ThreadStatic] static List<Seg>? collideSegsT;
 
         /// <summary><see cref="Near"/> into a list the caller keeps (cleared first): nothing allocated.</summary>
         public void NearInto(double x, double z, double rad, List<BuildingData> into)
         {
+            var nearSeen = nearSeenT ??= new HashSet<BuildingData>();
             into.Clear(); nearSeen.Clear();
             for (int gx = (int)Math.Floor((x - rad) / BGRID); gx <= (int)Math.Floor((x + rad) / BGRID); gx++)
                 for (int gz = (int)Math.Floor((z - rad) / BGRID); gz <= (int)Math.Floor((z + rad) / BGRID); gz++)
@@ -109,7 +112,7 @@ namespace Triband.Storey.Play
         }
 
         // the walk model's own queries, each done with its list before the next (every frame: no garbage)
-        List<BuildingData> NearShared(double x, double z, double rad) { NearInto(x, z, rad, nearShared); return nearShared; }
+        List<BuildingData> NearShared(double x, double z, double rad) { var l = nearSharedT ??= new List<BuildingData>(); NearInto(x, z, rad, l); return l; }
 
         // ---- where ----
 
@@ -245,11 +248,9 @@ namespace Triband.Storey.Play
         /// A point moved out of every wall near it (the walls of the storey at height y, within 3 m): each segment
         /// pushes it to its radius plus the player's, four passes over all of them.
         /// </summary>
-        readonly List<Seg> collideSegs = new List<Seg>();
-
         public (double x, double z) Collide(double px, double pz, double y)
         {
-            var segs = collideSegs; segs.Clear();
+            var segs = collideSegsT ??= new List<Seg>(); segs.Clear();
             foreach (var b in NearShared(px, pz, 3))
             {
                 var bb = bboxAll[b.id];
