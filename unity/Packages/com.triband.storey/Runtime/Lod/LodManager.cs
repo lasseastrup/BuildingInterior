@@ -27,6 +27,15 @@ namespace Triband.Storey.Lod
         /// worker threads, only the upload counts: the meshes are generated off the main thread.
         /// </summary>
         public double BudgetMs = 6;
+        /// <summary>
+        /// LOD0's see-through windows show LOD1's painted pane where LOD0 takes over, and are clear glass within this share
+        /// of that distance (blended between), so the switch changes nothing in the windows. 1: clear at once (no blend).
+        /// </summary>
+        public double GlassClear = 0.6;
+
+        /// <summary>The distance at which a building's nearest point takes LOD0 coming closer, for a camera's pixels per metre.</summary>
+        public double Lod0Distance(double pixelsPerMetre) => pixelsPerMetre * Bias / (PX[0] * (1 + Hysteresis));
+
         /// <summary>Worker threads generating detail at once: 0 builds on the main thread, -1 one fewer than the cores (at least one).</summary>
         public int Threads = -1;
     }

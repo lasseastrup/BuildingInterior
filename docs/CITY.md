@@ -31,6 +31,7 @@ A Storey Site's **LOD mode** is *Automatic* by default; *Fixed* shows one LOD ev
 - **Feature scale, not screen size.** The pixel count is taken at the building's nearest point. Frames and furniture only matter up close, however big the building is. At 1080p with a 60° field of view, LOD0 is within about 58 m and LOD1 within about 230 m.
 - **Hysteresis of 12%** stops buildings flickering at a boundary.
 - **Changes cross-fade** (dithered) over 0.35 s. The shader hides a building's other LODs through its row in the building table (shown, fading from, fade), so nothing is enabled or disabled per building.
+- **Windows don't change at the switch.** LOD1's windows are opaque panes showing a painted room; LOD0's, in a building with an interior, are see-through glass onto the real rooms. LOD0's glass starts as LOD1's pane (the same painted room, opaque) at the distance LOD0 takes over (`LodSettings.Lod0Distance`) and clears to glass by **Windows Clear At** (0.6) of that distance, blended by each pixel's distance (`_StoreyGlassFill`). So the cross-fade swaps the geometry while the windows look the same, and the rooms behind them fade in as the camera comes closer.
 - **Detail is built on demand.**
   - Only the massings are built when a layout loads.
   - A building that wants LOD0 or LOD1 asks for it, and the ones covering the most pixels go first.

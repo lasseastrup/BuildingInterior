@@ -38,6 +38,23 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
         float2 wdx = ddx(wuv), wdy = ddy(wuv);   // uniform branch: every pixel of the quad takes them
         if (onPane > 0.5 && isFront) color.rgb = StoreyWindowPane(wuv, wdx, wdy, id, s.positionWS, s.normalWS);
     }
+#elif !defined(STOREY_DEPTH)
+    // LOD0's see-through glass: where LOD0 has just taken over it is LOD1's pane (the painted room, opaque), and it clears
+    // to glass as the camera comes closer, so the LOD switch changes nothing in the windows and the real rooms behind
+    // them fade in with distance instead of appearing at once
+    if (_StoreyGlassFill.y > 0.0)
+    {
+        float2 wuv = IN.win.xy; float id = IN.win.w; float onPane = IN.win.z;
+        float2 wdx = ddx(wuv), wdy = ddy(wuv);   // uniform branch: every pixel of the quad takes them
+        float fill = saturate((distance(_WorldSpaceCameraPos, s.positionWS) - _StoreyGlassFill.x) / max(_StoreyGlassFill.y - _StoreyGlassFill.x, 1e-3));
+        if (fill > 0.0 && onPane > 0.5 && isFront)
+        {
+            // LOD1's pane: the painted room, or with the window effect off its dark glass (the opaque glass's shade)
+            float3 painted = _StoreyWindowsOn > 0.5 ? StoreyWindowPane(wuv, wdx, wdy, id, s.positionWS, s.normalWS) : color.rgb * 0.42;
+            color.rgb = lerp(color.rgb, painted, fill);
+            color.a = lerp(color.a, 1.0, fill);
+        }
+    }
 #endif
 #ifdef STOREY_CAP
     if (!isFront) color.rgb = _StoreyCap.rgb;   // a cut exposes a wall's inside: the section cap

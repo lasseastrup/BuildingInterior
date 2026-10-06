@@ -293,6 +293,14 @@ namespace Triband.Storey.Unity
                 foreach (var b in built.Values) table.SetLod(b.idx, lod, lod, 1);
                 shownLod = lod;
             }
+            // LOD0's see-through windows: LOD1's painted pane where LOD0 takes over, clear glass closer in (the automatic
+            // LOD only: with a fixed LOD there is no switch to hide)
+            if (lods != null && Eye is LodEye ge)
+            {
+                float at = (float)lods.Settings.Lod0Distance(ge.pixelsPerMetre), clear = (float)Math.Min(1, Math.Max(0, lods.Settings.GlassClear));
+                StoreyGlobals.SetGlassFill(at * clear, clear >= 1 ? 0 : at);
+            }
+            else StoreyGlobals.SetGlassFill(0, 0);
             StoreyGlobals.SetLodTint(lodTint);
             // the view globals (active building, cutaway, isolate, occlusion) are one set for every site: written by the
             // site that has a view (the editor's, or the occlusion system's), and neutral only when none has
@@ -485,7 +493,7 @@ namespace Triband.Storey.Unity
             // a shell building's LOD0 has no see-through glass: no mesh for it
             var mates = (blockStart, blockSize);
             if (l0.Op.Tris > 0) Add(bt, 0, "LOD0", MeshUpload.Upload(l0.Op, name + " LOD0", RowOf, bt.wallBase, opt, windows: true, mates: mates), opaque, true);
-            if (l0.Glass.Tris > 0) Add(bt, 0, "LOD0 glass", MeshUpload.Upload(l0.Glass, name + " glass", RowOf, bt.wallBase, opt, mates: mates), glass, false);
+            if (l0.Glass.Tris > 0) Add(bt, 0, "LOD0 glass", MeshUpload.Upload(l0.Glass, name + " glass", RowOf, bt.wallBase, opt, windows: true, mates: mates), glass, false);   // its panes carry their place, to start as LOD1's
             // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
             if (lods != null && colliders && bt.collision == null) colliderPending.Add(bt.id);
         }

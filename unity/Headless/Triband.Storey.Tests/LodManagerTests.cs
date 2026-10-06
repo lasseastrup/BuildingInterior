@@ -114,5 +114,17 @@ namespace Triband.Storey.Tests
             Console.WriteLine($"LOD selection, 3,000 buildings: {ms:0.000} ms a frame");
             Assert.True(ms < 5, $"{ms:0.00} ms a frame");
         }
+
+        [Fact]
+        public void Lod0DistanceIsWhereABuildingTakesLod0ComingCloser()
+        {
+            // the shader fades LOD0's windows from LOD1's look at this distance: it must be where the switch happens
+            var m = new LodManager(); double at = m.Settings.Lod0Distance(Pxm);
+            var far = Box(m, 0, at + 0.5); var near = Box(m, 1, at - 0.5);
+            far.Want = far.Shown = near.Want = near.Shown = 1;
+            Step(m);
+            Assert.Equal(1, far.Want);
+            Assert.Equal(0, near.Want);
+        }
     }
 }

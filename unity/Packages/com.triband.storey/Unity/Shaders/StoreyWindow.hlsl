@@ -19,6 +19,7 @@ float4 _StoreyWindowTint;       // by day: the room × the main light's colour �
 float4 _StoreyWindowLight;      // at night: the room × a lamp colour between these two
 float4 _StoreyWindowLight2;
 float4 _StoreyWindowNight;      // x: night blend (0 day .. 1 night); y: the share of windows that light at full night
+float4 _StoreyGlassFill;        // LOD0's see-through panes: x clear (see-through) within this distance, y painted (LOD1's look) from this one; y 0: always clear
 
 #include "StoreyWindowId.hlsl"
 

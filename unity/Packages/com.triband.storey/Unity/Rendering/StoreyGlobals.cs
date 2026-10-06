@@ -52,6 +52,12 @@ namespace Triband.Storey.Unity
             Shader.SetGlobalVector(StoreyShaderIds.Player, new Vector4(playerChest.x, playerChest.y, playerChest.z, holeRadius));
         }
 
+        /// <summary>
+        /// LOD0's see-through windows: clear within <paramref name="clearWithin"/> metres of the camera, LOD1's painted pane
+        /// from <paramref name="paintedFrom"/> on, blended between. 0 for <paramref name="paintedFrom"/>: always clear.
+        /// </summary>
+        public static void SetGlassFill(float clearWithin, float paintedFrom) => Shader.SetGlobalVector(StoreyShaderIds.GlassFill, new Vector4(clearWithin, paintedFrom, 0, 0));
+
         /// <summary>Debug tint by LOD (0 off, 1 on).</summary>
         public static void SetLodTint(bool on) => Shader.SetGlobalFloat(StoreyShaderIds.LodTint, on ? 1 : 0);
     }
