@@ -40,7 +40,8 @@ Straight flights (`CoreType.Flight`) are not in the prototype. Their walk surfac
   - each wall's slide;
   - each building in the way's occluder slot and row.
 
-  It shows Sink's footprints. The site's renderer hands it the view in Play mode and leaves its own view globals alone.
+  It shows Sink's and Dissolve's footprints, each through its occluder slot's own row in the table. The site's renderer hands it the view in Play mode and leaves its own view globals alone.
+- **Dissolve:** a sixth mode for the buildings in the way. It ends where Sink ends: everything from the floor of the player's storey up is gone, the rest is dark, and the footprint (a dark fill ringed by a 30 cm rim of the outer wall) stands in. It gets there by fading instead of collapsing: over the fade (0.2 s) the building dithers away and darkens while its footprint dithers in on the complementary pattern, so the two never draw the same pixel and the rim doesn't z-fight the wall it replaces. The shadow and depth passes dither the same way, so the building's shadow goes with it, as Sink's does. The storey that stays is held while the building is partly gone, as Sink holds it while sunk.
 - **The play kit:** add **Storey Play Kit** to any object (*Add Component ▸ Storey ▸ Play Kit*). It adds the occlusion system to the site if there is none, and makes the character and the camera. The character walks the walk model, with no physics.
 
 **Controls.**

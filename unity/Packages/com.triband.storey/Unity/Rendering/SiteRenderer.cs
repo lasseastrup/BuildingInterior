@@ -247,7 +247,7 @@ namespace Triband.Storey.Unity
                 blockSize = doc.buildings.Count; blockStart = table.AllocBlock(blockSize);
                 if (blockStart < 0)
                 {
-                    Debug.LogError($"Storey: the loaded sites have more than {BuildingTable.MaxBuildings - 1:N0} buildings between them; this one ({blockSize:N0}) isn't drawn.");
+                    Debug.LogError($"Storey: the loaded sites have more than {BuildingTable.Capacity:N0} buildings between them; this one ({blockSize:N0}) isn't drawn.");
                     blockSize = 0; site = null; return;
                 }
             }

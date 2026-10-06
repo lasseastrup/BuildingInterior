@@ -32,9 +32,9 @@ namespace Triband.Storey.Unity
             shared.Dispose(); shared = null; users = 0;
         }
 
-        // building indices, handed out in blocks: one per site, its layout's buildings in order. The last row is Sink's
-        // footprints' (StoreyOcclusion)
-        readonly Lod.IndexBlocks blocks = new Lod.IndexBlocks(MaxBuildings - 1);
+        // building indices, handed out in blocks: one per site, its layout's buildings in order. The last OccSlots rows
+        // are the footprints' (StoreyOcclusion), one per occluder slot
+        readonly Lod.IndexBlocks blocks = new Lod.IndexBlocks(Capacity);
 
         /// <summary>A block of <paramref name="n"/> building indices (the first returned), or -1 when none is free.</summary>
         public int AllocBlock(int n) => blocks.Alloc(n);
@@ -49,6 +49,10 @@ namespace Triband.Storey.Unity
         }
         public const int MaxBuildings = 8192;
         public const int OccSlots = 16, OccWidth = 64;
+        /// <summary>The buildings all loaded sites can have between them: the rest of the rows are the footprints'.</summary>
+        public const int Capacity = MaxBuildings - OccSlots;
+        /// <summary>The row the footprint of the occluder in <paramref name="slot"/> draws through: its own, so it can fade.</summary>
+        public static int FootprintRow(int slot) => MaxBuildings - 1 - slot;
         public const int WallIds = 65536;
         /// <summary>
         /// The parameter (LOD2 massing) and colour-row tables start this big and double when full. They used to be fixed,

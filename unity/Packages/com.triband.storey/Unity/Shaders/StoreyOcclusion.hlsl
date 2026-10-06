@@ -27,7 +27,7 @@ float4 _StoreyCut;      // x: cutaway on, y: stub height, z: cut base, w: cut to
 float4 _StoreyActive;   // x: active building index (-1 none), y: ceiling clip height
 float4 _StoreyCap;      // section cap colour
 float4 _StoreyIso;      // x: isolate amount, y: isolated building index
-float _StoreyOccMode;   // 0 off, 1 Sink/Slice, 2 Cutout, 3 Fade
+float _StoreyOccMode;   // 0 off, 1 Sink/Slice, 2 Cutout, 3 Fade, 4 Dissolve
 // Heights are world heights; the cutaway's camera and focus are given in the site's own x and z (the wall data in the
 // vertices is), which for an unrotated, unscaled site is world minus its position
 float4 _StoreyPlayer;   // xyz: the player's chest (world), w: Cutout's hole radius (metres)
@@ -178,6 +178,13 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
                 break;
             }
         }
+        else if (_StoreyOccMode > 3.5)
+        {
+            // Dissolve: Sink's end state, faded to. From the floor of the storey that stays up it dithers away (its
+            // footprint dithers in on the same pattern's complement, so the two never draw the same pixel); all dark
+            dark = hd.y;
+            if (v.origY >= hd.w && StoreyBayer(screenPos) < hd.y) clip(-1);
+        }
         else if (v.origY < hd.w) dark = hd.y;                              // Cutout / Fade keep a solid dark base
         else if (hd.y > 0.001)
         {
@@ -198,6 +205,13 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
                 else if (StoreyBayer(screenPos + float2(2.0, 1.0)) < hd.y * 0.8) clip(-1);   // fades to a light ghost
             }
         }
+    }
+#else
+    // Dissolve takes its shadow and depth away with it, dithered alike (Sink's squash runs in every pass, so its shadow goes as it sinks)
+    if (_StoreyOccMode > 3.5 && !act && v.occ > -0.5 && !(mate >= 0.0 && _StoreyState[(int)mate].w < 0.5))
+    {
+        float4 hd = _StoreyOcc[(int)(v.occ + 0.5) * STOREY_OCC_W];
+        if (hd.x < 0.5 && v.origY >= hd.w && StoreyBayer(screenPos) < hd.y) clip(-1);
     }
 #endif
     return dark;

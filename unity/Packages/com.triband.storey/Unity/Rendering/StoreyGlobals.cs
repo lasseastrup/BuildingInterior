@@ -10,7 +10,7 @@ namespace Triband.Storey.Unity
     /// </summary>
     public static class StoreyGlobals
     {
-        public enum OcclusionMode { Off = 0, SinkOrSlice = 1, Cutout = 2, Fade = 3 }   // Sink and Slice share a mode; the occluder rows decide (segments > 0 = Sink)
+        public enum OcclusionMode { Off = 0, SinkOrSlice = 1, Cutout = 2, Fade = 3, Dissolve = 4 }   // Sink and Slice share a mode; the occluder rows decide (segments > 0 = Sink)
 
         /// <summary>Camera position used by the cutaway: the focus plus the camera's offset from the play camera's target.</summary>
         public static void SetCamera(Vector3 cam, Vector3 focus, Vector2 camDir)

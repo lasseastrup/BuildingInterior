@@ -32,6 +32,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- Dissolve, a buildings-in-the-way mode (`OccluderMode.Dissolve`, `StoreyGlobals.OcclusionMode.Dissolve`): Sink's end state, reached by fading instead of collapsing. The footprint fades in as the building fades out, on complementary dither patterns, and the shadow fades with it. Each occluder slot's footprint has its own row in the building table (`BuildingTable.FootprintRow`), so loaded sites can now have 8,176 buildings between them (`BuildingTable.Capacity`), not 8,191.
 - Districts (docs/CITY.md §5):
   - `BuildingTable.Acquire`, `ReleaseShared`, `AllocBlock` and `ReleaseBlock`: one building table shared by every Storey Site, each with a block of building indices (`IndexBlocks`, `MateIndex`). `MeshUpload.Upload`'s `mates`.
   - Only the site with a view writes the view globals.

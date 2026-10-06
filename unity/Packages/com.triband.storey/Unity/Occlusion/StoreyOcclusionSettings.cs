@@ -11,7 +11,7 @@ namespace Triband.Storey.Unity
     [CreateAssetMenu(menuName = "Storey/Occlusion Settings", fileName = "StoreyOcclusionSettings")]
     public sealed class StoreyOcclusionSettings : ScriptableObject
     {
-        [Tooltip("What happens to a building between the camera and the player. Sink: it collapses to a black outline with a low rim of its wall. Slice: it is cut down to the player's storey. Cutout: a soft hole opens around the player. Fade: it ghosts out above a dark base.")]
+        [Tooltip("What happens to a building between the camera and the player. Sink: it collapses to a black outline with a low rim of its wall. Slice: it is cut down to the player's storey. Cutout: a soft hole opens around the player. Fade: it ghosts out above a dark base. Dissolve: it ends as Sink does, but fades away instead of collapsing.")]
         public OccluderMode buildingsInTheWay = OccluderMode.Sink;
         [Tooltip("Cut away the walls between the camera and the player in the building they are in.")]
         public bool cutaway = true;

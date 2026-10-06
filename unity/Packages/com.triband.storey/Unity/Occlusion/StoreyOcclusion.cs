@@ -33,13 +33,11 @@ namespace Triband.Storey.Unity
         PlayWorld? world; OcclusionCore? occ; Site? builtFor;
         Vector3 feet; bool hasFeet;
         Vector3? cameraTarget;
-        readonly Dictionary<(string, int), Mesh> footprints = new Dictionary<(string, int), Mesh>();
+        readonly Dictionary<(string, int, int), Mesh> footprints = new Dictionary<(string, int, int), Mesh>();
         readonly List<GameObject> shownFootprints = new List<GameObject>();
         readonly Stack<GameObject> spareFootprints = new Stack<GameObject>();
         readonly HashSet<int> occluding = new HashSet<int>();
         readonly HashSet<int> wallsSet = new HashSet<int>();
-        // a table row no building uses: Sink's footprints are drawn through it, always at LOD0 and never occluded
-        const int FootprintRow = BuildingTable.MaxBuildings - 1;
 
         /// <summary>The walk model for this layout (where the player is, what they stand on, what stops them), for a controller.</summary>
         public PlayWorld? World => world;
@@ -165,7 +163,12 @@ namespace Triband.Storey.Unity
                     int q = (at + i) * 4;
                     table.Occ[at + i] = new Vector4(o.Rows[q] + (i <= n ? lift : 0), o.Rows[q + 1], o.Rows[q + 2], o.Rows[q + 3]);
                 }
-                if (core.mode == OccluderMode.Sink && oc.t > 0 && oc.k < oc.b.floors.Count) ShowFootprint(r, oc.b, oc.k);
+                // the footprint stands in once the building starts to go: Sink's at once, Dissolve's fading in as it fades out
+                if (oc.k < oc.b.floors.Count && (core.mode == OccluderMode.Sink ? oc.t > 0 : core.mode == OccluderMode.Dissolve && oc.a > 0))
+                {
+                    ShowFootprint(r, oc.b, oc.k, oc.slot);
+                    table.SetLod(BuildingTable.FootprintRow(oc.slot), 0, 0, core.mode == OccluderMode.Dissolve ? (float)oc.a : 1);
+                }
             }
             table.MarkOccDirty();
             var modeG = core.mode switch
@@ -173,16 +176,18 @@ namespace Triband.Storey.Unity
                 OccluderMode.Off => StoreyGlobals.OcclusionMode.Off,
                 OccluderMode.Cutout => StoreyGlobals.OcclusionMode.Cutout,
                 OccluderMode.Fade => StoreyGlobals.OcclusionMode.Fade,
+                OccluderMode.Dissolve => StoreyGlobals.OcclusionMode.Dissolve,
                 _ => StoreyGlobals.OcclusionMode.SinkOrSlice,
             };
             StoreyGlobals.SetOcclusion(modeG, playerWorld + Vector3.up * 1.1f, (float)core.holeRadius);
-            table.SetLod(FootprintRow, 0, 0, 1);
         }
 
-        void ShowFootprint(SiteRenderer r, BuildingData b, int k)
+        // a footprint's mesh carries its row, so it is kept per slot: drawn through the slot's row, always at LOD0, never
+        // occluded, and faded with the building in Dissolve
+        void ShowFootprint(SiteRenderer r, BuildingData b, int k, int slot)
         {
-            if (!footprints.TryGetValue((b.id, k), out var mesh))
-                footprints[(b.id, k)] = mesh = r.UploadExtra(SinkFootprint.Build(r.Site!, b, k), b.name + " footprint " + k, FootprintRow);
+            if (!footprints.TryGetValue((b.id, k, slot), out var mesh))
+                footprints[(b.id, k, slot)] = mesh = r.UploadExtra(SinkFootprint.Build(r.Site!, b, k), b.name + " footprint " + k, BuildingTable.FootprintRow(slot));
             var go = spareFootprints.Count > 0 ? spareFootprints.Pop() : NewFootprint();
             go.GetComponent<MeshFilter>().sharedMesh = mesh;
             go.layer = site!.gameObject.layer;   // the site's layer, like its buildings

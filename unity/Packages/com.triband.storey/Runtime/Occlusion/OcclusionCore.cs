@@ -8,8 +8,11 @@ using Triband.Storey.Play;
 
 namespace Triband.Storey.Occlusion
 {
-    /// <summary>What happens to a building between the camera and the player (SPEC §5.1).</summary>
-    public enum OccluderMode { Off, Sink, Slice, Cutout, Fade }
+    /// <summary>
+    /// What happens to a building between the camera and the player (SPEC §5.1). Dissolve ends as Sink does (gone from
+    /// the player's storey up, the rest dark, the footprint in its place) but fades there instead of collapsing.
+    /// </summary>
+    public enum OccluderMode { Off, Sink, Slice, Cutout, Fade, Dissolve }
 
     /// <summary>The designer's occlusion settings (SPEC §10 decision 8: per project, not per player).</summary>
     public sealed class OcclusionSettings
@@ -295,7 +298,8 @@ namespace Triband.Storey.Occlusion
                     {
                         var r = Record(b); hits.Add(r);
                         r.sliceY = SliceHeight(b, p); r.top = Derived.RoofY(b) + RoofRise(b) + 0.5;
-                        int k = OccStorey(b, p); if (k != r.k && !(r.t > 0)) r.k = k;
+                        // the storey that stays is held while the building is down (sunk, or partly dissolved)
+                        int k = OccStorey(b, p); if (k != r.k && !(r.t > 0) && !(m == OccluderMode.Dissolve && r.a > 0)) r.k = k;
                     }
                 }
             }
@@ -341,6 +345,12 @@ namespace Triband.Storey.Occlusion
             int k = r.k, N = b.floors.Count;
             double bas = (k < N ? Derived.FloorBase(b, k) : Derived.RoofY(b)) + Settings.baseHeight;
             if (m == OccluderMode.Cutout || m == OccluderMode.Fade) { Rows[o + 1] = (float)r.a; Rows[o + 3] = (float)bas; return; }
+            if (m == OccluderMode.Dissolve)
+            {
+                // no segments: (0, fade, -, the floor of the storey that stays). The shader dithers away everything from
+                // that floor up and darkens the rest; the footprint dithers in with the complementary pattern
+                Rows[o + 1] = (float)r.a; Rows[o + 3] = (float)(k < N ? Derived.FloorBase(b, k) : Derived.RoofY(b)); return;
+            }
             var S = r.plan.segs; int n = S.Count; double T = r.t;
             Rows[o] = n; Rows[o + 1] = (float)Math.Min(1, T / 0.08);
             var gone = new bool[n];
