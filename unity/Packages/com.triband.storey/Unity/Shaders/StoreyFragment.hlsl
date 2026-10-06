@@ -38,6 +38,10 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
         float2 wdx = ddx(wuv), wdy = ddy(wuv);   // uniform branch: every pixel of the quad takes them
         if (onPane > 0.5 && isFront) color.rgb = StoreyWindowPane(wuv, wdx, wdy, id, s.positionWS, s.normalWS);
     }
+  #ifndef STOREY_MASSING
+    // LOD1's flat walls: the window's reveal, shaded at the pane's edges (LOD0 models it)
+    if (IN.misc.w > 0.5 && IN.win.z > 0.5 && isFront) color.rgb *= StoreyRevealShade(IN.win.xy);
+  #endif
 #elif !defined(STOREY_DEPTH)
     // LOD0's see-through glass: where LOD0 has just taken over it is LOD1's pane (the painted room, opaque), and it clears
     // to glass as the camera comes closer, so the LOD switch changes nothing in the windows and the real rooms behind

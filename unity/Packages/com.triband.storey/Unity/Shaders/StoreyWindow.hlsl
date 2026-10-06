@@ -23,6 +23,15 @@ float4 _StoreyGlassFill;        // LOD0's see-through panes: x clear (see-throug
 
 #include "StoreyWindowId.hlsl"
 
+// LOD1's flat walls (Lod1.cs): a plain window's pane lies on the wall, and its reveal is shaded here, darker at the sides
+// and the head the way the recess LOD0 models shades them, a little at the sill. uv: across and up the pane (0..1).
+float StoreyRevealShade(float2 uv)
+{
+    float side = min(uv.x, 1.0 - uv.x), head = 1.0 - uv.y;
+    float s = saturate(side * 8.0) * saturate(head * 6.0) * lerp(0.85, 1.0, saturate(uv.y * 12.0));
+    return lerp(0.5, 1.0, s);
+}
+
 // The room atlas's UV for a point (uv, 0 to 1) on a pane, seen along viewTS (towards the camera, in the pane's
 // tangent space: x across, y up, z out of the wall). The same inputs as the project's WindowInteriorParallax_float
 // node, so that node can stand in here. A single-texture interior: the room is a box behind the pane whose back wall

@@ -138,7 +138,7 @@ namespace Triband.Storey.Tests
             Assert.Equal(b.id, e.GetProperty("id").GetString());
 
             var colors = new ColorResolver(site);
-            var got = lod == 0 ? CensusOf(Lod0.Build(site, b).Op, colors) : lod == 1 ? CensusOf(Lod1.Build(site, b), colors) : CensusOf(Lod2.Build(site, b), colors);
+            var got = lod == 0 ? CensusOf(Lod0.Build(site, b).Op, colors) : lod == 1 ? CensusOf(Lod1.Build(site, b, recessed: true), colors) : CensusOf(Lod2.Build(site, b), colors);
             var want = lod < 2 ? CensusOf(e) : Census2Of(e);
             var tol = Census[lod].Value.RootElement.GetProperty("tolerance");
             double abs = tol.GetProperty("area").GetDouble(), rel = tol.GetProperty("areaRelative").GetDouble();
@@ -160,7 +160,7 @@ namespace Triband.Storey.Tests
             var (site, doc) = SiteOf(file);
             var b = doc.buildings[i];
             int want = Expected(file, i, lod).GetProperty("tris").GetInt32();
-            int got = lod == 0 ? Lod0.Build(site, b).Op.Tris : lod == 1 ? Lod1.Build(site, b).Tris : Lod2.Build(site, b).Tris;
+            int got = lod == 0 ? Lod0.Build(site, b).Op.Tris : lod == 1 ? Lod1.Build(site, b, recessed: true).Tris : Lod2.Build(site, b).Tris;
             Assert.InRange(got, want * 0.9, want * 1.1);
         }
 

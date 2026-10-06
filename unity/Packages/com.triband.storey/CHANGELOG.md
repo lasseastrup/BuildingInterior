@@ -5,6 +5,7 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Changed
+- LOD1's walls are flat: a plain window is an opaque pane 3 cm proud of the wall (`Lod1.PaneProud`), its reveal shaded in the shader at the pane's sides and head (`StoreyRevealShade`), instead of a hole cut in the wall with modelled reveals. Doors and artist-made windows keep their openings. On the 3,000-building test city LOD1 goes from about 4,230 triangles a building to 980. `Lod1.Build(..., recessed: true)` builds the prototype's LOD1 for the parity tests.
 - Every object a Storey Site makes (buildings, their LOD objects and colliders, the merged cells, Sink's footprints) is on the site's own layer, not Default; changing the site's layer moves them. `SiteRenderer.Layer`.
 - `StoreyQualitySettings`' level-of-detail fields are now the automatic LOD's numbers (`lod0PixelsPerMetre`, `lod1PixelsPerMetre`, `lod2PixelsPerMetre`, `hysteresis`, `fadeSeconds`, `farDistance`, `lod0Residency`, `lod1Residency`, `buildBudgetMs`), with defaults from the prototype. `ToLodSettings`, `ApplyTo`.
 - Cut corners are kept as one corner: `CornerData` (the building's and a setback's `corners`), and `CornerCuts` (`Sharp`, `Around`, `Cut`, `Clear`, `CutAll`, `ClearAll`). The outline still holds the cut's points. `CornerShape` moved to the `Triband.Storey` namespace.

@@ -242,7 +242,7 @@ All modes keep the **silhouette** (on by default), so the player is never lost e
 | LOD | Contents | Triangles (prototype) | Used when | Built |
 |---|---|---|---|---|
 | **LOD0** full | Everything: interior walls, cores, frames, see-through glass, occlusion data. | Linden Court 31,940 · Harbor Office 15,080 · 38-floor tower 78,916 | Within ~60 m (feature scale ≥ 16 px/m), plus the building the player is in or the designer is editing, always | On demand, a storey per step |
-| **LOD1** shell | Outer faces only; recessed opaque windows and doors; floor bands, plinth, canopies, parapet, terrace decks and parapets, stair/lift bulkheads. No interior, frames or transparency. | 4,150 · 3,062 · 26,818 | Up to ~240 m (≥ 4 px/m) | On demand, a storey per step |
+| **LOD1** shell | Outer faces only; flat walls with opaque window panes just proud of them, the reveal shaded in the shader (cutting every window into the wall made walls four-fifths of LOD1); doors and artist-made windows keep their openings; floor bands, plinth, canopies, parapet, terrace decks and parapets, stair/lift bulkheads. No interior, frames or transparency. | 4,150 · 3,062 · 26,818 | Up to ~240 m (≥ 4 px/m) | On demand, a storey per step |
 | **LOD2** massing | One quad per outline edge for the height of each setback tier, parapet (inner face and cap), terrace decks and parapets, and the roof polygon. Windows and bands come from the facade shader, from the same parameters as the geometry, so they don't move at the switch. Sub-pixel windows fade to their average colour. | 40 · 54 · 26 (about 7 per footprint edge) | Beyond LOD1 range, out to the far plane | Always resident; merged per cell |
 | **Culled** | — | 0 | Past the far plane / fog | — |
 

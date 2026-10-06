@@ -89,7 +89,7 @@ The time for one LOD0 is several frames' budget. That's why the generating is on
 | LOD0 triangles a building (average / 95th percentile / most) | 18,300 / 48,500 / 142,000 | 24,500 / 62,600 / 178,000 |
 | LOD0 build a building (average) | 22–24 ms | 29–38 ms |
 | LOD0 GPU memory, 16 resident at the 95th percentile | 48 MB | 60 MB |
-| LOD1 and LOD2 | the same (LOD1 about 6,600 triangles; LOD2 43, 4.2 MB for the city) | the same |
+| LOD1 and LOD2 | the same (LOD1 about 980 triangles, flat walls: 4,230 when every window was cut into them; LOD2 43, 4.2 MB for the city) | the same |
 | Collision mesh triangles a building | 89 | 566 |
 | First problem check of the whole city | 0.7 s | 89 s (in the background; edits after it recheck only what they touch) |
 

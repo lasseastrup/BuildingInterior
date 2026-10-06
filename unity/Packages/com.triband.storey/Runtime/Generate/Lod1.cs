@@ -4,15 +4,21 @@ using System.Collections.Generic;
 namespace Triband.Storey.Generate
 {
     /// <summary>
-    /// LOD1: exterior shell only. Outer faces with recessed opaque windows, doors, floor bands,
-    /// plinth, canopies, parapet and stair/lift bulkheads. No interior, frames or transparency,
-    /// and no per-vertex occlusion data (a lean mesh).
+    /// LOD1: exterior shell only. Outer faces with opaque windows, doors, floor bands, plinth,
+    /// canopies, parapet and stair/lift bulkheads. No interior, frames or transparency, and no
+    /// per-vertex occlusion data (a lean mesh). A plain window is a pane just proud of a flat wall,
+    /// its reveal shaded in the shader (StoreyFragment): cutting the wall round every window made
+    /// the walls four-fifths of LOD1. Doors and artist-made windows keep their openings.
     /// </summary>
     public static class Lod1
     {
         public const int LOD_TAG = 65536;
 
-        public static MeshBuilder Build(Site site, BuildingData b, bool solids = false)
+        /// <summary>How far a flat wall's window pane stands proud of the wall (metres): clear of it at LOD1's distances.</summary>
+        public const double PaneProud = 0.03;
+
+        /// <param name="recessed">The prototype's LOD1: every window cut into the wall with its reveals (the parity tests).</param>
+        public static MeshBuilder Build(Site site, BuildingData b, bool solids = false, bool recessed = false)
         {
             int idx = site.IndexOf(b), N = b.floors.Count; double T = Dim.T_EXT;
             var op = new MeshBuilder(idx + LOD_TAG, lean: true);
@@ -38,16 +44,18 @@ namespace Triband.Storey.Generate
                         if (pc.kind == Party.PieceKind.Skip) continue;
                         bool party = pc.kind == Party.PieceKind.Party;
                         var ops = party ? new List<Opening>() : all.FindAll(o => o.u0 >= pc.lo && o.u1 <= pc.hi);
-                        Facade.WallPanel(op, F, new Miter(pc.S, pc.E), 0, T, y, h, ops, party ? pc.r!.pInner : C.wall, C.wall, new Facade.PanelOpt { inner = false, revealFrom = T * 0.45, threshold = k == 0 });
                         var stk = Derived.StyleAt(b, k);
                         var wk = OpeningKinds.Of(stk, false); var dk = OpeningKinds.Of(stk, true);
+                        // the wall is cut for doors and artist-made windows only; a plain window lies on it (recessed: all)
+                        var cut = recessed ? ops : ops.FindAll(o => o.door || wk?.lod1 != null);
+                        Facade.WallPanel(op, F, new Miter(pc.S, pc.E), 0, T, y, h, cut, party ? pc.r!.pInner : C.wall, C.wall, new Facade.PanelOpt { inner = false, revealFrom = T * 0.45, threshold = k == 0 });
                         foreach (var o in ops)
                         {
                             // an artist's window or door with a LOD1 mesh takes the opening; without one, the plain pane
                             var kk = o.door ? (o.bare ? null : dk) : wk;
                             if (kk?.lod1 != null) { OpeningKinds.Place(op, null, F, kk, kk.lod1, o.u0, o.u1, o.door ? y : y + o.y0, y + o.y1, C, true); continue; }
                             bool glazedDoor = o.door && Derived.StyleAt(b, k).doorType == DoorType.Glazed;
-                            Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, o.door && !glazedDoor ? C.door : C.glassDark, false);
+                            Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, recessed || o.door ? T * 0.45 : T + PaneProud, o.door && !glazedDoor ? C.door : C.glassDark, false);
                             if (o.door && !o.bare && !glazedDoor && kk == null) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
                         }
                         if (!party) L0.PieceStrips(op, k, F, m, pc, ops, y, h, C);
