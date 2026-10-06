@@ -30,6 +30,18 @@ namespace Triband.Storey.Occlusion
         public bool assist = false;
         /// <summary>Draw the character through walls.</summary>
         public bool silhouette = true;
+        /// <summary>
+        /// How far past a wall's line the player must be before the cutaway starts to drop it (metres); once it is going
+        /// down, crossing back is enough to raise it. A wall seen edge-on (pointing at the camera) then doesn't drop and
+        /// rise again as the player passes its line. The prototype's is 0.
+        /// </summary>
+        public double wallMargin = 0.3;
+        /// <summary>
+        /// Once the player steps out of a building, it stays cut away (floors above clipped, walls down) while it still
+        /// stands between the camera and the player, so a camera that trails behind isn't buried in it. The prototype's
+        /// is off.
+        /// </summary>
+        public bool holdAfterExit = true;
     }
 
     /// <summary>The view's occlusion state for the shaders (SPEC §5): the building the player is in, cut and clipped.</summary>
@@ -97,6 +109,8 @@ namespace Triband.Storey.Occlusion
         readonly List<Occluder> active = new List<Occluder>();
         readonly Dictionary<string, Occluder> records = new Dictionary<string, Occluder>(StringComparer.Ordinal);
         double hiddenFor;
+        // the building the view is on: the one the player is in, or the one just left while it is still in the way
+        BuildingData? held; int heldFloor;
 
         public OcclusionCore(PlayWorld world, OcclusionSettings settings) { World = world; Settings = settings; }
 
@@ -109,6 +123,7 @@ namespace Triband.Storey.Occlusion
         /// </summary>
         public void Frame(PlayerState p, (double x, double y, double z) cam, (double x, double y, double z) target, double dt)
         {
+            HoldView(p, cam);
             UpdateOccluders(p, cam, dt);
             ApplyView(p, cam, target);
             UpdateCutaway(dt);
@@ -118,16 +133,29 @@ namespace Triband.Storey.Occlusion
         public void Clear()
         {
             foreach (var r in active) { r.a = 0; r.t = 0; if (r.slot >= 0) slots[r.slot] = null; r.slot = -1; }
-            active.Clear(); Walls.Clear(); hiddenFor = 0; Assist = 0;
+            active.Clear(); Walls.Clear(); hiddenFor = 0; Assist = 0; held = null;
             View = new OcclusionView { clipY = 1e9 };
         }
 
         // ---- the view ----
 
+        /// <summary>The building the view is on this frame (<see cref="OcclusionSettings.holdAfterExit"/>).</summary>
+        void HoldView(PlayerState p, (double x, double y, double z) cam)
+        {
+            var loc = World.Locate(p.x, p.y, p.z);
+            if (loc != null) { held = loc.Value.b; heldFloor = loc.Value.floor; return; }
+            if (held != null && Settings.holdAfterExit)
+            {
+                var b = World.Site.ById(held.id);
+                if (b != null && heldFloor <= b.floors.Count && Targets(p, cam).Any(t => SegmentHits(b, cam, t))) { held = b; return; }
+            }
+            held = null;
+        }
+
         void ApplyView(PlayerState p, (double x, double y, double z) cam, (double x, double y, double z) target)
         {
             var v = View;
-            var loc = World.Locate(p.x, p.y, p.z);
+            var loc = held != null ? (held, heldFloor) : ((BuildingData, int)?)null;
             v.fx = p.x; v.fy = p.y + FollowCamera.Chest; v.fz = p.z;
             // the camera trails the player: test the cutaway with its offset applied to the player's exact position, or
             // a wall seen edge-on drops for a frame as the player crosses its line
@@ -148,12 +176,15 @@ namespace Triband.Storey.Occlusion
 
         // ---- the sliding cutaway ----
 
-        /// <summary>The cutaway test for one wall: it separates camera and player, and the sightline crosses it (±0.5 m for the body).</summary>
-        public static bool WallBlocks(double[] W, double cx, double cz, double fx, double fz)
+        /// <summary>
+        /// The cutaway test for one wall: it separates camera and player, and the sightline crosses it (±0.5 m for the
+        /// body). With a <paramref name="margin"/>, the player must be that far past the wall's line.
+        /// </summary>
+        public static bool WallBlocks(double[] W, double cx, double cz, double fx, double fz, double margin = 0)
         {
             double nl = Tiers.Hypot(W[2], W[3]), nx = W[2] / nl, nz = W[3] / nl;
             double sc = (cx - W[0]) * nx + (cz - W[1]) * nz, sp = (fx - W[0]) * nx + (fz - W[1]) * nz;
-            if (sc * sp >= 0) return false;
+            if (sc * sp >= 0 || Math.Abs(sp) < margin) return false;
             if (nl < 1.01) return true;
             double t = sc / (sc - sp), x = cx + (fx - cx) * t, z = cz + (fz - cz) * t, st = (x - W[0]) * nz - (z - W[1]) * nx;
             return st > -0.5 && st < nl - 1 + 0.5;
@@ -168,7 +199,8 @@ namespace Triband.Storey.Occlusion
             if (View.cutOn && act != null)
             {
                 int ai = World.Site.IndexOf(act);
-                foreach (var b in World.Site.Buildings)
+                // only the buildings next to it can share a wall with it: the rest's LOD0s are never built for this
+                foreach (var b in World.Touching(act))
                 {
                     var walls = World.Lod0Of(b).Op.Walls;
                     for (int i = 0; i < walls.Count; i++)
@@ -177,7 +209,8 @@ namespace Triband.Storey.Occlusion
                         if (b != act && (walls[i].K < 8 || (walls[i].K >> 3) - 1 != ai)) continue;
                         var id = (b.id, i); seen.Add(id);
                         Walls.TryGetValue(id, out double a);
-                        bool up = WallBlocks(walls[i].W, View.cx, View.cz, View.fx, View.fz);
+                        // a wall starts down only with the player clear of its line, and stays down until they cross back
+                        bool up = WallBlocks(walls[i].W, View.cx, View.cz, View.fx, View.fz, a > 0 ? 0 : Settings.wallMargin);
                         if (!up && a == 0) continue;
                         Set(id, Math.Max(0, Math.Min(1, a + (up ? step : -step))));
                     }
@@ -275,15 +308,19 @@ namespace Triband.Storey.Occlusion
             return r;
         }
 
+        /// <summary>The three rays' ends, the feet, chest and head, 0.5 m short so the character's own body touching a wall doesn't count.</summary>
+        static (double x, double y, double z)[] Targets(PlayerState p, (double x, double y, double z) c)
+        {
+            double dl = Tiers.Hypot(c.x - p.x, c.z - p.z), sh = dl > 0.6 ? 0.5 / dl : 0;
+            return new[] { 0.25, 1.1, 1.75 }.Select(h => (x: p.x + (c.x - p.x) * sh, y: p.y + h, z: p.z + (c.z - p.z) * sh)).ToArray();
+        }
+
         void UpdateOccluders(PlayerState p, (double x, double y, double z) c, double dt)
         {
             var hits = new List<Occluder>(); var m = Settings.mode;
-            var loc = World.Locate(p.x, p.y, p.z);
             if (m != OccluderMode.Off)
             {
-                // three rays, to the feet, chest and head, ending 0.5 m short so the character's own body touching a wall doesn't count
-                double dl = Tiers.Hypot(c.x - p.x, c.z - p.z), sh = dl > 0.6 ? 0.5 / dl : 0;
-                var tg = new[] { 0.25, 1.1, 1.75 }.Select(h => (x: p.x + (c.x - p.x) * sh, y: p.y + h, z: p.z + (c.z - p.z) * sh)).ToArray();
+                var tg = Targets(p, c);
                 double L = Tiers.Hypot(c.x - p.x, c.z - p.z); int steps = (int)Math.Ceiling(L / 16);
                 var cand = new List<BuildingData>(); var seen = new HashSet<BuildingData>();
                 for (int i = 0; i <= steps; i++)
@@ -293,7 +330,7 @@ namespace Triband.Storey.Occlusion
                 }
                 foreach (var b in cand)
                 {
-                    if ((loc != null && b == loc.Value.b) || AtDoorOf(b, p)) continue;
+                    if (b == held || AtDoorOf(b, p)) continue;
                     if (tg.Any(t => SegmentHits(b, c, t)))
                     {
                         var r = Record(b); hits.Add(r);
@@ -323,7 +360,7 @@ namespace Triband.Storey.Occlusion
                     r.t = m == OccluderMode.Sink ? Math.Max(0, Math.Min(r.plan.total, r.t + (want ? dt : -dt * 1.25))) : 0;
                 }
                 bool done = !want && r.a <= 0 && !(r.t > 0);
-                if (done || b == null || (loc != null && b == loc.Value.b))
+                if (done || b == null || b == held)
                 {
                     r.a = 0; r.t = 0; active.Remove(r);
                     if (r.slot >= 0) { slots[r.slot] = null; r.slot = -1; }

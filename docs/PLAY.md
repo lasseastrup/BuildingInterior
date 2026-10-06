@@ -42,6 +42,10 @@ Straight flights (`CoreType.Flight`) are not in the prototype. Their walk surfac
 
   It shows Sink's and Dissolve's footprints, each through its occluder slot's own row in the table. The site's renderer hands it the view in Play mode and leaves its own view globals alone.
 - **Dissolve:** a sixth mode for the buildings in the way. It ends where Sink ends: everything from the floor of the player's storey up is gone, the rest is dark, and the footprint (a dark fill ringed by a 30 cm rim of the outer wall) stands in. It gets there by fading instead of collapsing: over the fade (0.2 s) the building dithers away and darkens while its footprint dithers in on the complementary pattern, so the two never draw the same pixel and the rim doesn't z-fight the wall it replaces. The shadow and depth passes dither the same way, so the building's shadow goes with it, as Sink's does. The storey that stays is held while the building is partly gone, as Sink holds it while sunk.
+- **Entering and leaving:**
+  - **Wall Margin** (0.3 m): a wall starts to drop only once the player is that far past its line, and stays down until they cross back. A wall seen edge-on, pointing at the camera, no longer drops and rises again as the player passes it. The prototype's is 0.
+  - **Hold After Exit** (on): a building the player steps out of stays cut away (the floors above clipped, the walls between camera and player down) while it still stands between the camera and the player, by the same three rays as the buildings in the way. A camera trailing behind is no longer buried in it. It's let go as soon as the camera is clear of it, or the player walks into another building.
+  - Only the buildings next to the one the player is in are checked for shared walls, so walking into the first building no longer builds every building's LOD0 for the walk model.
 - **The play kit:** add **Storey Play Kit** to any object (*Add Component ▸ Storey ▸ Play Kit*). It adds the occlusion system to the site if there is none, and makes the character and the camera. The character walks the walk model, with no physics.
 
 **Controls.**

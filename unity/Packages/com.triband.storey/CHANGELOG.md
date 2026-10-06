@@ -14,6 +14,8 @@ All notable changes to this package are documented here. The format follows [Kee
 - A building's row in the building table is its index in the layout, so party walls find their neighbour in the shader.
 
 ### Fixed
+- A long pause the first time the player walked into a building in Play mode: the cutaway's check for shared walls built every building's LOD0 for the walk model. It now looks only at the buildings next to the player's.
+- A long pause the first time the Storey Site was selected (in Play mode too): starting the edit built every building again, though the layout was the one shown.
 - Compiler warnings in Unity:
   - `Physics.BakeMesh(int, …)` obsolete in Unity 6.3: the warning is suppressed there, since the call still works.
   - `StoreyWindows.light` hid `Component.light`: now marked `new`.
@@ -32,6 +34,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- `OcclusionSettings.wallMargin` and `holdAfterExit` (and on `StoreyOcclusionSettings`): a wall the cutaway drops waits for the player to be 0.3 m past it, and a building the player steps out of stays cut away while it is still in the camera's way. `PlayWorld.Touching`, `PlayWorld.Lod0Count`. `StoreySite.Preview` with the text the edit was read from.
 - Dissolve, a buildings-in-the-way mode (`OccluderMode.Dissolve`, `StoreyGlobals.OcclusionMode.Dissolve`): Sink's end state, reached by fading instead of collapsing. The footprint fades in as the building fades out, on complementary dither patterns, and the shadow fades with it. Each occluder slot's footprint has its own row in the building table (`BuildingTable.FootprintRow`), so loaded sites can now have 8,176 buildings between them (`BuildingTable.Capacity`), not 8,191.
 - Districts (docs/CITY.md §5):
   - `BuildingTable.Acquire`, `ReleaseShared`, `AllocBlock` and `ReleaseBlock`: one building table shared by every Storey Site, each with a block of building indices (`IndexBlocks`, `MateIndex`). `MeshUpload.Upload`'s `mates`.

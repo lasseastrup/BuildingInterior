@@ -130,6 +130,22 @@ namespace Triband.Storey.Unity
         /// </summary>
         public void Preview(StoreyDocument? doc, string? text, SessionChange? change)
         {
+            Preview(doc, text, change, null);
+        }
+
+        /// <summary>
+        /// <see cref="Preview(StoreyDocument?, string?, SessionChange?)"/>, for an edit read from <paramref name="readFrom"/>:
+        /// when that is the text the site shows now, the layout is the same and nothing is built again (selecting the
+        /// site starts an edit, and building every building again then was a long pause in Play mode).
+        /// </summary>
+        public void Preview(StoreyDocument? doc, string? text, SessionChange? change, string? readFrom)
+        {
+            if (doc != null && change == null && readFrom != null && site != null && preview == null && !pendingAll
+                && layout != null && shownJson == layout.Json && readFrom == shownJson)
+            {
+                preview = doc; shownJson = text;
+                return;
+            }
             if (doc == null) { preview = null; shownJson = text; return; }
             preview = doc; shownJson = text;
             if (change == null || change.structural) pendingAll = true;

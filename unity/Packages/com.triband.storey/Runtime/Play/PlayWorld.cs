@@ -54,6 +54,27 @@ namespace Triband.Storey.Play
             return r;
         }
 
+        readonly Dictionary<string, List<BuildingData>> touching = new Dictionary<string, List<BuildingData>>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The building and every one whose box comes within a metre of its own, in layout order: the only ones that can
+        /// share a party wall with it. Kept per building (the layout doesn't change under a walk model).
+        /// </summary>
+        public List<BuildingData> Touching(BuildingData b)
+        {
+            if (touching.TryGetValue(b.id, out var l)) return l;
+            var a = bboxAll[b.id]; l = new List<BuildingData>();
+            foreach (var o in Site.Buildings)
+            {
+                var q = bboxAll[o.id];
+                if (q.x0 + o.pos.x <= a.x1 + b.pos.x + 1 && a.x0 + b.pos.x <= q.x1 + o.pos.x + 1 && q.z0 + o.pos.z <= a.z1 + b.pos.z + 1 && a.z0 + b.pos.z <= q.z1 + o.pos.z + 1) l.Add(o);
+            }
+            return touching[b.id] = l;
+        }
+
+        /// <summary>How many buildings' LOD0s the walk model holds (built or handed in).</summary>
+        public int Lod0Count => lod0.Count;
+
         /// <summary>Hand in a LOD0 built elsewhere (the renderer's), so it is not built twice.</summary>
         public void UseLod0(BuildingData b, Lod0Result r) => lod0[b.id] = r;
 

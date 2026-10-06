@@ -34,7 +34,7 @@ namespace Triband.Storey.Tests
             var (doc, _) = PlayWorldTests.World("demo");
             var world = new PlayWorld(new Site(doc.buildings));   // its own: the occlusion state must start clean
             var o = w.GetProperty("occ");
-            var settings = new OcclusionSettings { mode = ModeOf(o.GetProperty("outside").GetString()!), cutaway = o.GetProperty("cut").GetBoolean(), stub = o.GetProperty("cutH").GetDouble(), baseHeight = o.GetProperty("baseH").GetDouble(), holeRadius = o.GetProperty("holeR").GetDouble(), assist = o.GetProperty("assist").GetBoolean() };
+            var settings = new OcclusionSettings { mode = ModeOf(o.GetProperty("outside").GetString()!), cutaway = o.GetProperty("cut").GetBoolean(), stub = o.GetProperty("cutH").GetDouble(), baseHeight = o.GetProperty("baseH").GetDouble(), holeRadius = o.GetProperty("holeR").GetDouble(), assist = o.GetProperty("assist").GetBoolean(), wallMargin = 0, holdAfterExit = false };   // the prototype's
             var core = new OcclusionCore(world, settings);
             var start = w.GetProperty("start").EnumerateArray().Select(e => e.GetDouble()).ToArray();
             var c = w.GetProperty("cam").EnumerateArray().Select(e => e.GetDouble()).ToArray();

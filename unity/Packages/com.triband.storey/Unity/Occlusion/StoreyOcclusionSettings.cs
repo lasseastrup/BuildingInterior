@@ -25,12 +25,17 @@ namespace Triband.Storey.Unity
         public bool cameraAssist = false;
         [Tooltip("Draw the character through walls (the play kit's character does; a project's own character reads this).")]
         public bool silhouette = true;
+        [Tooltip("How far past a wall the player must be before the cutaway starts to drop it, in metres. Keeps a wall seen edge-on from dropping and rising again as the player passes it.")]
+        [Range(0f, 1f)] public float wallMargin = 0.3f;
+        [Tooltip("When the player steps out of a building, keep it cut away while it still stands between the camera and the player, so a trailing camera isn't buried in it.")]
+        public bool holdAfterExit = true;
 
         /// <summary>Copy into the engine-free settings.</summary>
         public void ApplyTo(OcclusionSettings s)
         {
             s.mode = buildingsInTheWay; s.cutaway = cutaway; s.stub = wallStub; s.baseHeight = baseHeight;
             s.holeRadius = holeRadius; s.assist = cameraAssist; s.silhouette = silhouette;
+            s.wallMargin = wallMargin; s.holdAfterExit = holdAfterExit;
         }
     }
 }

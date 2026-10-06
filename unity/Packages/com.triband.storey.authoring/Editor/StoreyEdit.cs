@@ -147,7 +147,7 @@ namespace Triband.Storey.Editor
             e.core = new EditSession(s.layout.Json);
             e.text = e.core.Text;
             e.file = CreateInstance<SavedText>(); e.file.hideFlags = HideFlags.DontSave; e.file.text = e.text;
-            e.Attach();
+            e.Attach(s.layout.Json);   // read from what the site shows: nothing is built again
             // a layout from the prototype, or one the palette changed under, may hold colours the palette lacks
             if (StoreyColorField.Conform != null) e.Apply("Match colours to the palette", _ => true);
             return e;
@@ -169,10 +169,10 @@ namespace Triband.Storey.Editor
             Poke();
         }
 
-        void Attach()
+        void Attach(string? readFrom = null)
         {
             if (!open.Contains(this)) open.Add(this);
-            site!.Preview(Core.Document, text, null);
+            site!.Preview(Core.Document, text, null, readFrom);
             Poke();
         }
 
