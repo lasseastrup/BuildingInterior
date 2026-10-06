@@ -529,6 +529,14 @@ namespace Triband.Storey.Unity
         /// </summary>
         readonly System.Diagnostics.Stopwatch lodClock = new System.Diagnostics.Stopwatch();
 
+        // its own method: a lambda capturing the build loop's locals made its closure on every pass of the loop, job or not
+        // (hundreds of buildings a frame wanting detail: about 14 KB of garbage a frame)
+        void StartJob(Built bt, BuildingData b, int which)
+        {
+            var s0 = site!; int ix = bt.idx;
+            jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, task = System.Threading.Tasks.Task.Run(() => Generate(s0, b, ix, which)) });
+        }
+
         void UpdateLods()
         {
             using var _t = StoreyTimings.Time("site: automatic LOD");
@@ -550,18 +558,17 @@ namespace Triband.Storey.Unity
                 var o = parent.position;   // the layout is in the site's space: unrotated, unscaled
                 var f = l.Update(eye.position.x - o.x, eye.position.y - o.y, eye.position.z - o.z, eye.pixelsPerMetre, dt, forcedIdx);
                 foreach (var (idx, which) in f.Drop) if (byIdx.TryGetValue(idx, out var bt)) DropDetail(bt, which);
-                foreach (var (idx, which, _) in f.Build)
+                for (int bi = 0; bi < f.Build.Count; bi++)
                 {
+                    var (idx, which, _) = f.Build[bi];
                     if (busy.Contains(idx)) continue;   // being generated
+                    if (threads > 0 && jobs.Count >= threads) { queued += f.Build.Count - bi; break; }   // the rest wait for a thread
                     if (!byIdx.TryGetValue(idx, out var bt)) continue;
                     var b = site?.ById(bt.id); if (b == null) continue;
                     if (threads > 0)
                     {
                         // most pixels first, as many at once as there are threads; the upload comes in a later frame
-                        if (jobs.Count >= threads) { queued++; continue; }
-                        var s0 = site!; int ix = bt.idx, w = which;
-                        jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, task = System.Threading.Tasks.Task.Run(() => Generate(s0, b, ix, w)) });
-                        busy.Add(idx);
+                        StartJob(bt, b, which); busy.Add(idx);
                         continue;
                     }
                     if (made > 0 && sw.Elapsed.TotalMilliseconds > l.Settings.BudgetMs) { queued++; continue; }
