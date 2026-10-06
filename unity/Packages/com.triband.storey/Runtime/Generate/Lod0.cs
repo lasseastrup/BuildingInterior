@@ -240,7 +240,7 @@ namespace Triband.Storey.Generate
             var Wp = new List<Vec2>(n); foreach (var p in lo) Wp.Add(new Vec2(p.x + b.pos.x, p.z + b.pos.z));
             var cor = Geo.Corners(lo, lccw);
             var ex = new List<List<(double, double)>>(n);
-            for (int i = 0; i < n; i++) ex.Add(kA == null ? Geo.ExposedRanges(lo, up, i) : Geo.MinusRanges(Geo.ExposedRanges(lo, up, i), Party.Skips(site, b, kA.Value, i)));
+            for (int i = 0; i < n; i++) ex.Add(kA == null ? Geo.ExposedRanges(lo, up, i) : Geo.MinusRanges(Geo.ExposedRanges(lo, up, i), Party.Skips(site, b, kA.Value, i, Derived.FloorBase(b, kA.Value))));
             var out_ = new List<Run>();
             for (int i = 0; i < n; i++)
             {
@@ -347,14 +347,14 @@ namespace Triband.Storey.Generate
                 {
                     double fo = FoundationOut(st);
                     var rf = Clip(m.Span(T, T + fo));
-                    Facade.StripPieces(op, F, m, new List<(double, double)> { rf }, -Math.Max(0, depth), fTop, T, T + fo, C.foundation, C.foundation, Skip.In | Skip.Bot);
+                    Facade.StripPieces(op, F, m, new List<(double, double)> { rf }, y - Math.Max(0, depth), y + fTop, T, T + fo, C.foundation, C.foundation, Skip.In | Skip.Bot);   // y: the ground floor's slab, the building's ground
                 }
                 if (pTop > fTop + 0.01)
                 {
                     var r = Clip(m.Span(T, T + 0.04));
                     var widened = ops.ConvertAll(o => { if (!o.door) return o; var d = o.Clone(); d.u0 -= 0.08; d.u1 += 0.08; return d; });
                     var pc0 = st.plinth != null ? new Swatch(C.style, ColorSlot.Plinth) : C.plinth;
-                    Facade.StripPieces(op, F, m, Facade.SolidRanges(r.Item1, r.Item2, widened), fTop, pTop, T, T + 0.04, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart);
+                    Facade.StripPieces(op, F, m, Facade.SolidRanges(r.Item1, r.Item2, widened), y + fTop, y + pTop, T, T + 0.04, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart);
                 }
             }
         }
@@ -422,7 +422,7 @@ namespace Triband.Storey.Generate
             for (int i = 0; i < n; i++)
             {
                 var e = Geo.EdgeInfo(g.Wp, i, g.ccw); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L);
-                var cut = new List<(double, double)>(Party.Skips(site, b, k0, i)); cut.AddRange(CoreRoofSkips(i));
+                var cut = new List<(double, double)>(Party.Skips(site, b, k0, i, y)); cut.AddRange(CoreRoofSkips(i));
                 var c0 = Party.CornerCut(site, b, k0, i, false, y); var c1 = Party.CornerCut(site, b, k0, i, true, y);
                 List<(double, double)> R((double, double) r) => Geo.MinusRanges(new List<(double, double)> {
                     (c0 != null ? Math.Max(r.Item1, c0.Value.At(T)) : r.Item1, c1 != null ? Math.Min(r.Item2, c1.Value.At(T)) : r.Item2) }, cut);

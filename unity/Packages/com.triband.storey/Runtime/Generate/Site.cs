@@ -112,13 +112,16 @@ namespace Triband.Storey.Generate
     /// <summary>
     /// Shared (party) walls: an outline edge that runs along a neighbour's edge the other way round
     /// (within 1 cm) is one wall for both. The taller building along it owns the wall (ties: the lower
-    /// id) and builds it blank wherever the neighbour reaches; the other leaves its wall out.
+    /// id) and builds it blank wherever the neighbour reaches; the other leaves its wall out. With the
+    /// two at different elevations, only the heights both reach are shared (<see cref="Range.Lo"/> to
+    /// <see cref="Range.Hp"/>): the storeys outside that band keep their own outside wall.
     /// </summary>
     public static class Party
     {
         public sealed class Range
         {
-            public double s, e, sRaw, eRaw, Hp;
+            /// <summary>Hp: the top of the heights both buildings reach along it (site height); Lo: the bottom (the higher elevation).</summary>
+            public double s, e, sRaw, eRaw, Hp, Lo;
             public bool own;
             public int pIdx;
             public Swatch pInner;
@@ -197,9 +200,13 @@ namespace Triband.Storey.Generate
                 var (p, s0, e0, sRaw, eRaw) = found[id];
                 double sx = ax + ux * s0, sz = az + uz * s0, ex = ax + ux * e0, ez = az + uz * e0;
                 double Hm = CoverH(b, sx, sz, ex, ez), Hp = CoverH(p, sx, sz, ex, ez);
+                // the heights both reach: from the higher elevation to the lower top (site heights). Equal elevations:
+                // from the ground to the neighbour's top for the taller, as before. None at all: nothing is shared
+                double lo = Math.Max(b.elevation, p.elevation), hi = Math.Min(Hm, Hp);
+                if (hi - lo < 0.5) continue;
                 out_.Add(new Range
                 {
-                    s = s0, e = e0, sRaw = sRaw, eRaw = eRaw, Hp = Hp,
+                    s = s0, e = e0, sRaw = sRaw, eRaw = eRaw, Hp = hi, Lo = lo,
                     own = Hm > Hp + 1e-3 || (Math.Abs(Hm - Hp) <= 1e-3 && string.CompareOrdinal(site.OwnerKey(b), site.OwnerKey(p)) < 0),
                     pIdx = site.IndexOf(p), pInner = new Swatch(new StyleRef(site.IndexOf(p), 0), ColorSlot.Interior),
                 });
@@ -209,13 +216,16 @@ namespace Triband.Storey.Generate
             return out_;
         }
 
-        /// <summary>Ranges along tier k0's edge i that belong to a neighbour's wall.</summary>
-        public static List<(double, double)> Skips(Site site, BuildingData b, int k0, int i)
+        /// <summary>Ranges along tier k0's edge i that belong to a neighbour's wall (at height <paramref name="y"/>: those whose shared band holds it).</summary>
+        public static List<(double, double)> Skips(Site site, BuildingData b, int k0, int i, double? y = null)
         {
             var out_ = new List<(double, double)>();
-            foreach (var r in Ranges(site, b, k0, i)) if (!r.own) out_.Add((r.s, r.e));
+            foreach (var r in Ranges(site, b, k0, i)) if (!r.own && (y == null || Shares(r, y.Value))) out_.Add((r.s, r.e));
             return out_;
         }
+
+        /// <summary>Height y (a storey's floor, a roof's edge) is within the band the two buildings share along r.</summary>
+        public static bool Shares(Range r, double y) => y >= r.Lo - 0.2 && y <= r.Hp + 0.01;
 
         /// <summary>
         /// At a corner next to a party wall, a wall stops against the face of the wall holding the
@@ -227,7 +237,7 @@ namespace Triband.Storey.Generate
             double Lj = Geo.EdgeLen(fp, j);
             Range? r = null;
             foreach (var x in Ranges(site, b, k0, j)) if (end ? x.s < 0.02 : x.e > Lj - 0.02) { r = x; break; }
-            if (r == null) return null;
+            if (r == null || y < r.Lo - 0.2) return null;   // below the shared band the neighbour isn't there: an open corner
             bool past = end ? r.sRaw < -0.02 : r.eRaw > Lj + 0.02;
             double off = Dim.T_EXT + (strip && past ? 0.06 : 0);
             if (r.own && !(past && y < r.Hp + 0.01)) { if (!strip || y >= r.Hp) return null; off = -Dim.T_EXT; }
@@ -251,7 +261,8 @@ namespace Triband.Storey.Generate
         {
             double y = Derived.FloorBase(b, k); int k0 = Derived.TierStart(b, k);
             var cuts = new List<Range>();
-            foreach (var r in Ranges(site, b, k0, i)) if (!r.own || y < r.Hp - 0.2) cuts.Add(r);
+            // a storey whose floor is in the band the two share: the neighbour's wall (skip it), or ours to build blank
+            foreach (var r in Ranges(site, b, k0, i)) if (y >= r.Lo - 0.2 && (!r.own || y < r.Hp - 0.2)) cuts.Add(r);
             var c0 = CornerCut(site, b, k0, i, false, y); var c1 = CornerCut(site, b, k0, i, true, y);
             Piece Mk(PieceKind kind, double s0, double e0, Range? r) => new Piece
             {

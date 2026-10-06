@@ -24,12 +24,16 @@ namespace Triband.Storey
             return k == 0 ? b.groundHeight : b.floorHeight;
         }
 
-        /// <summary>Height of the floor slab of storey <paramref name="k"/> above the ground; fractional k interpolates.</summary>
+        /// <summary>
+        /// Height of the floor slab of storey <paramref name="k"/> in the site: the building's elevation plus the storeys
+        /// below; fractional k interpolates. Site heights, so they compare directly with a neighbour's, a bridge's, the
+        /// player's and the camera's.
+        /// </summary>
         public static double FloorBase(BuildingData b, double k)
         {
-            if (k <= 0) return 0;
+            if (k <= 0) return b.elevation;
             int n = (int)Math.Floor(k);
-            double y = 0;
+            double y = b.elevation;
             for (int j = 0; j < n; j++) y += FloorH(b, j);
             return y + (k - n) * FloorH(b, n);
         }

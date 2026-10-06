@@ -162,6 +162,7 @@ namespace UnityEngine
         public static Vector3 zero => default;
         public static Vector3 one => default;
         public static Vector3 up => default;
+        public static Vector3 down => default;
         public static Vector3 right => default;
         public static Vector3 forward => default;
         public static float Dot(Vector3 a, Vector3 b) => 0;
@@ -221,6 +222,7 @@ namespace UnityEngine
 
     public struct Ray
     {
+        public Ray(Vector3 origin, Vector3 direction) { }
         public Vector3 origin => default;
         public Vector3 direction => default;
         public Vector3 GetPoint(float distance) => default;
@@ -478,7 +480,18 @@ namespace UnityEngine
 
     public static class Physics
     {
+        public const int DefaultRaycastLayers = -5;
         public static void BakeMesh(int meshID, bool convex, MeshColliderCookingOptions cookingOptions) { }
+        public static RaycastHit[] RaycastAll(Ray ray, float maxDistance, int layerMask, QueryTriggerInteraction queryTriggerInteraction) => System.Array.Empty<RaycastHit>();
+    }
+
+    public enum QueryTriggerInteraction { UseGlobal = 0, Ignore = 1, Collide = 2 }
+
+    public struct RaycastHit
+    {
+        public Vector3 point => default;
+        public float distance => 0;
+        public Collider collider => null!;
     }
 
     public enum PrimitiveType { Sphere = 0, Capsule = 1, Cylinder = 2, Cube = 3, Plane = 4, Quad = 5 }
@@ -500,6 +513,7 @@ namespace UnityEngine
         public Matrix4x4 localToWorldMatrix => default;
         public Matrix4x4 worldToLocalMatrix => default;
         public void SetParent(Transform parent, bool worldPositionStays) { }
+        public bool IsChildOf(Transform parent) => false;
         public Vector3 TransformPoint(Vector3 position) => position;
     }
 

@@ -289,9 +289,47 @@ namespace Triband.Storey.Editor
 
         // ---- Shape ----
 
+        /// <summary>The building's height in the site: typed in, or stood on the ground under it (docs/EDITOR.md §6.11).</summary>
+        void Placement(StoreyEdit e, BuildingData b)
+        {
+            StoreyInspectorUI.Section("Placement", "How high the building stands in the site: its ground floor's height above the site's ground");
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUI.BeginChangeCheck();
+                float el = EditorGUILayout.DelayedFloatField(new GUIContent("Elevation", "The ground floor's height above the Storey Site, in metres. Every floor, the roof and the interior stand on it; neighbours at other heights share only the storeys both reach."), (float)b.elevation);
+                if (EditorGUI.EndChangeCheck()) e.ApplyTo("Elevation", bb => { bb.elevation = Tiers.Cm(el); return true; });
+                if (GUILayout.Button(new GUIContent("Snap to ground", "Cast down onto the scene's colliders (a Terrain has one) under the building: it stands on the highest ground it finds, and its foundation reaches down to the lowest"), GUILayout.Width(110)))
+                    SnapToGround(e, b);
+            }
+        }
+
+        void SnapToGround(StoreyEdit e, BuildingData b)
+        {
+            var site = (StoreySite)target; var o = site.transform.position;
+            var heights = new List<double>();
+            foreach (var p in Ground.Samples(b))
+            {
+                // from high above, the nearest hit that isn't the site's own (its buildings' colliders)
+                var ray = new Ray(new Vector3(o.x + (float)p.x, o.y + 10000f, o.z + (float)p.z), Vector3.down);
+                float best = float.PositiveInfinity; double at = 0;
+                foreach (var h in Physics.RaycastAll(ray, 20000f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                {
+                    if (h.collider == null || h.collider.transform.IsChildOf(site.transform) || h.distance >= best) continue;
+                    best = h.distance; at = h.point.y - o.y;
+                }
+                if (!float.IsPositiveInfinity(best)) heights.Add(at);
+            }
+            double? drop = null;
+            if (heights.Count > 0) e.ApplyTo("Snap to ground", bb => (drop = Ground.Snap(bb, heights)) != null);
+            message = drop == null ? "No ground found under the building: Snap to ground casts down onto colliders (a Terrain has one), and none were under it."
+                : drop > 0.05 ? $"Standing on the highest ground under it, {b.elevation:0.00} m; the foundation reaches {drop:0.00} m further down to the lowest."
+                : $"Standing on the ground, {b.elevation:0.00} m.";
+        }
+
         void ShapeTab(StoreyEdit e, BuildingData b)
         {
             var v = e.View; int k0 = v.tier; var ts = Tiers.Of(b); var cur = ts.First(t => t.k0 == k0);
+            Placement(e, b);
             StoreyInspectorUI.Section("Outline", "The building's footprint, and the setbacks above it that each have their own outline");
             foreach (var t in ts.AsEnumerable().Reverse())
             {

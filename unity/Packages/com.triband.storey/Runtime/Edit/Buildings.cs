@@ -99,6 +99,7 @@ namespace Triband.Storey.Edit
         {
             var nb = PrototypeJson.ReadBuilding(PrototypeJson.Write(template));
             nb.id = NewId(d); nb.gen = false; nb.bridges.Clear();
+            nb.elevation = 0;   // somewhere else: the ground there isn't the template's (Snap to ground stands it on it)
             foreach (var s in nb.shafts) s.id = Shafts.NewId(d);
             string name = nb.name.Trim().Length > 0 ? nb.name.Trim() : NextName(d);
             if (d.buildings.Any(b => b.name == name)) { int n = 2; while (d.buildings.Any(b => b.name == $"{name} {n}")) n++; name = $"{name} {n}"; }

@@ -390,7 +390,7 @@ The site's inspector reads top to bottom in the order you work: which layout, wh
 3. **Problems**: one quiet line when there are none, or a warning foldout with the count.
 4. **Shape / Facade / Interior**: three large buttons, each with an icon and a line saying what it's for. The selected one is tinted, with an accent bar along its bottom. On a narrow inspector the line moves under the bar.
 5. The mode's settings in named groups, each a header with a hairline and space above it, not a box:
-   - **Shape:** *Outline* (setbacks, presets), *Corners*, *Courtyards and atria* (folded until the building has one), *Storey heights*.
+   - **Shape:** *Placement* (elevation, Snap to ground), *Outline* (setbacks, presets), *Corners*, *Courtyards and atria* (folded until the building has one), *Storey heights*.
    - **Facade:** *Style for* (with setbacks), *Style* (preset), *Windows and doors* (type, artist's window, width, bay spacing, heads, glazing bars, frames, street doors), *Walls* (ground floor, bands, plinth, foundation, brick patches), *Colours* (*More colours* folded), *Roof*, *Details by rule* (folded), *Place on walls* (two rows of tools), *Bridges*.
    - **Interior:** *Inside* (walk-in or shell), *Floor*, *Tools*, the selection, *This storey's height*, *Interior colours* (folded).
 6. **Site settings** (folded): materials, the LOD shown, colliders, and the artist's windows and doors the layout uses.
@@ -409,3 +409,22 @@ Code: `StoreyInspectorUI` (`Section`, `Fold`, `ModeBar`, the three icons, drawn 
 2. Click each mode: the button tints and the Scene view's tool changes.
 3. Narrow the inspector: the mode buttons keep their icons and names, and the description moves below them.
 4. Switch the editor to the light skin: the icons and accents are still readable.
+
+### 6.11 Buildings at different heights
+
+Each building has an **Elevation**: its ground floor's height above the Storey Site, in metres (Shape ▸ *Placement*). The whole building stands on it, interior included. Every floor height in the code (`Derived.FloorBase`) is a site height, so the walk model, the occlusion, the cutaway, bridges and the editor's tools all follow it. A layout saves `elevation` only for a raised building, so one on flat ground reads as before.
+
+**Snap to ground** casts down onto the scene's colliders (a Terrain has one) at the building's corners (30 cm in), its edges' middles and its centre, skipping the site's own colliders (`Ground.Samples`). The building stands on the highest ground found, so it never sinks into the slope. Where the ground falls away by more than 5 cm, its foundation (Facade ▸ *Walls*) reaches 10 cm past the lowest point, so it never floats (`Ground.Snap`). One undo step.
+
+**Neighbours at different heights** share a wall only over the heights both reach: from the higher elevation to the lower top (`Party.Range.Lo` to `Hp`). The taller one still owns that band and builds it blank. Each building's storeys outside the band keep their own outside wall, windows and all: a ground floor below a raised neighbour, or the storeys of a raised building above a lower one. Two buildings that share less than half a metre of height share nothing. A storey counts as in the band if its floor is.
+
+A template comes in at elevation 0 (it lands somewhere else); a duplicate keeps its source's.
+
+**Not handled:** a building that steps down a slope within itself (split levels, a ground floor that's one storey on one side and two on the other). Raise it to the high side and let the foundation fill the low side.
+
+**Checks:**
+1. Put a Terrain with a slope under a site. Select a building, Shape ▸ *Snap to ground*: it stands on the high side, and its foundation reaches the ground on the low side.
+2. Type an elevation: the building moves up, inside and out. Walk into it with the play kit, and up its stairs: the floor clip and the cutaway follow.
+3. Raise one of two buildings back to back by a storey: the lower one's ground floor along the shared wall gets windows; the raised one's top storey above its neighbour does too.
+4. Undo each step.
+

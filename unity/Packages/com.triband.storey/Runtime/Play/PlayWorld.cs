@@ -143,11 +143,11 @@ namespace Triband.Storey.Play
 
         static bool OnOutline(List<Vec2> fp, double lx, double lz) => Geo.Pip(fp, lx, lz) || DistToEdges(fp, lx, lz) <= Dim.T_EXT + 0.02;
 
-        /// <summary>The building and storey the player is in (up to 1.5 m above its roof), or null outside.</summary>
+        /// <summary>The building and storey the player is in (up to 1.5 m above its roof, from a metre below its ground floor), or null outside.</summary>
         public (BuildingData b, int floor)? Locate(double x, double y, double z)
         {
             foreach (var b in NearShared(x, z, 0))
-                if (Inside(b, x - b.pos.x, z - b.pos.z) && y <= Derived.RoofY(b) + 1.5) return (b, FloorAtY(b, y));
+                if (Inside(b, x - b.pos.x, z - b.pos.z) && y <= Derived.RoofY(b) + 1.5 && y >= b.elevation - 1) return (b, FloorAtY(b, y));   // not under a raised one
             return null;
         }
 

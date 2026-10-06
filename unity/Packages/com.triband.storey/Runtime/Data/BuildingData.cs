@@ -46,6 +46,11 @@ namespace Triband.Storey
         public string name = "";
         /// <summary>World position of the local origin; every other coordinate is building-local.</summary>
         public Vec2 pos;
+        /// <summary>
+        /// The height of the ground floor's slab in the site (metres; 0 = the site's ground). Every floor, the roof and the
+        /// interior stand on it: <see cref="Derived.FloorBase"/> is in site heights. Storey's own.
+        /// </summary>
+        public double elevation;
         /// <summary>Base outline: any simple polygon, either winding.</summary>
         public List<Vec2> footprint = new List<Vec2>();
         /// <summary>The cut corners of <see cref="footprint"/> (<see cref="CornerData"/>). Storey's own.</summary>

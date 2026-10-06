@@ -87,6 +87,7 @@ namespace Triband.Storey
                 id = c.Str(o, "id", "", path),
                 name = c.Str(o, "name", "", path),
                 pos = c.Point(o, "pos", path),
+                elevation = c.Num(o, "elevation", 0, path),
                 footprint = c.Points(o, "footprint", path),
                 groundHeight = c.Num(o, "groundHeight", 3.6, path),
                 floorHeight = c.Num(o, "floorHeight", 3.0, path),
@@ -132,7 +133,7 @@ namespace Triband.Storey
                 c.Check(bo, bp, "id", "to", "k", "at", "toK", "width", "open");
             }
             b.corners = Corners(c, o, path);
-            c.Check(o, path, "id", "name", "pos", "footprint", "floors", "shafts", "entrances", "details", "blank", "groundHeight", "floorHeight", "interior", "style", "gen", "voids", "bridges", "corners");
+            c.Check(o, path, "id", "name", "pos", "elevation", "footprint", "floors", "shafts", "entrances", "details", "blank", "groundHeight", "floorHeight", "interior", "style", "gen", "voids", "bridges", "corners");
             return b;
         }
 
@@ -291,8 +292,10 @@ namespace Triband.Storey
         {
             var o = new Dictionary<string, object?>
             {
-                ["id"] = b.id, ["name"] = b.name, ["pos"] = Pt(b.pos), ["footprint"] = Pts(b.footprint),
+                ["id"] = b.id, ["name"] = b.name, ["pos"] = Pt(b.pos),
             };
+            if (b.elevation != 0) o["elevation"] = b.elevation;   // only when raised: a layout on flat ground reads as before
+            o["footprint"] = Pts(b.footprint);
             var floors = new List<object?>();
             foreach (var f in b.floors) floors.Add(Floor(f));
             o["floors"] = floors;

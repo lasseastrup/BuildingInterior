@@ -250,6 +250,7 @@ namespace UnityEditor
 
     public static class EditorGUILayout
     {
+        public static float DelayedFloatField(GUIContent label, float value, params GUILayoutOption[] options) => value;
         public static bool PropertyField(SerializedProperty property, params GUILayoutOption[] options) => false;
         public static bool PropertyField(SerializedProperty property, GUIContent label, params GUILayoutOption[] options) => false;
         public static bool PropertyField(SerializedProperty property, bool includeChildren, params GUILayoutOption[] options) => false;
