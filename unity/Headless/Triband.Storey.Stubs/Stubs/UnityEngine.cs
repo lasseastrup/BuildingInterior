@@ -456,7 +456,7 @@ namespace UnityEngine
 {
     public sealed class DefaultExecutionOrder : System.Attribute { public DefaultExecutionOrder(int order) { } }
     public sealed class RequireComponent : System.Attribute { public RequireComponent(System.Type requiredComponent) { } }
-    public enum RuntimeInitializeLoadType { AfterSceneLoad = 0, BeforeSceneLoad = 1 }
+    public enum RuntimeInitializeLoadType { AfterSceneLoad = 0, BeforeSceneLoad = 1, AfterAssembliesLoaded = 2, BeforeSplashScreen = 3, SubsystemRegistration = 4 }
     public sealed class RuntimeInitializeOnLoadMethodAttribute : System.Attribute { public RuntimeInitializeOnLoadMethodAttribute(RuntimeInitializeLoadType loadType) { } }
 
     public sealed class AddComponentMenuAttribute : System.Attribute { public AddComponentMenuAttribute(string menuName) { } }
@@ -588,6 +588,11 @@ namespace UnityEngine.Rendering
 namespace UnityEngine.Scripting
 {
     public class PreserveAttribute : System.Attribute
+    {
+    }
+
+    [System.AttributeUsage(System.AttributeTargets.Assembly)]
+    public class AlwaysLinkAssemblyAttribute : System.Attribute
     {
     }
 }

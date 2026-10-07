@@ -29,6 +29,16 @@ namespace Triband.Storey.ColorPipeline
         [Preserve]
         public ColorPipelinePalette() : this(StoreyColorSettings.Load()) { }
 
+        // Storey asks for its palette by name, which a player can't rely on: the bridge says how to make it before any
+        // scene loads (a player) and when scripts load (the editor)
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration), Preserve]
+        static void Register() => StoreyPalettes.RegisterBridge(() => new ColorPipelinePalette());
+
+#if UNITY_EDITOR
+        [UnityEditor.InitializeOnLoadMethod]
+        static void RegisterInEditor() => Register();
+#endif
+
         public ColorPipelinePalette(StoreyColorSettings? settings)
         {
             Defaults = settings != null ? settings.ToDefaults() : new StyleDefaults();

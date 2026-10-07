@@ -162,6 +162,10 @@ int atlasRow = offset / Shader.GetGlobalInt("_ColorAtlasWidth"); // goes into en
 }
 ```
 
+**In a player build.** Nothing references the bridge (Storey finds its palette by name, so the bridge stays optional), so IL2CPP's managed code stripping would remove the whole assembly, `[Preserve]` or not. Then no building draws, and every site throws "Storey's bridge … not in this build". So:
+- the bridge is marked `[assembly: AlwaysLinkAssembly]`, which keeps it in the build;
+- it registers itself before the first scene loads (`RuntimeInitializeOnLoadMethod`, `StoreyPalettes.RegisterBridge`), and in the editor as scripts load, so the lookup by name is only a fallback.
+
 - The `-0` in the upper bound matters. Semver sorts `3.0.0-preview2` below `3.0.0`, so `[2.1.11,3.0.0)` would compile this assembly against the 3.0 preview, which has no `ColorRemapDescriptor`.
 - The assembly holds `ColorPipelinePalette` (palette ids to indices, remaps, invalidation) and `StoreyColorSettings` (loaded from `Resources/StoreyColorSettings`). Runtime assemblies may not name `UnityEditor` (a layout rule), so instead of registering itself at load the bridge is found by `StoreyPalettes` by type name when Color Pipeline is installed, which works in edit mode, play mode and players (`[Preserve]` keeps it from being stripped).
 - **Fallback, `HexPalette`** (no Color Pipeline): it indexes the distinct hex literals in use, writes them as `Color.linear` into a 512 × 1 RGBAHalf texture, and binds that as `_GlobalColorPaletteTex` with `_ColorAtlasWidth` = 512. That is the same contract, so the shaders can't tell the difference. There are no remaps. The parity harness runs this way and still matches the prototype.

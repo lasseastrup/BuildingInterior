@@ -24,6 +24,14 @@ namespace Triband.Storey.Unity
         /// <summary>The bridge's palette type, found by name: the bridge is optional, so nothing here can reference it.</summary>
         const string BridgeType = "Triband.Storey.ColorPipeline.ColorPipelinePalette, Triband.Storey.ColorPipeline";
 
+        static Func<IStoreyPalette>? bridge;
+
+        /// <summary>
+        /// The Color Pipeline bridge registers how to make its palette as the player starts (and as the editor loads), so a
+        /// player never depends on finding it by name: IL2CPP's stripping removes what nothing references.
+        /// </summary>
+        public static void RegisterBridge(Func<IStoreyPalette> make) => bridge = make;
+
         /// <summary>The palette everything that writes colour rows uses. A project may set its own.</summary>
         public static IStoreyPalette Active
         {
@@ -35,9 +43,12 @@ namespace Triband.Storey.Unity
         {
 #if STOREY_HAS_COLORPIPELINE
             // Never the built-in palette here: it would replace the atlas every other Color Pipeline object samples.
+            if (bridge != null) return bridge();
             var t = Type.GetType(BridgeType);
             if (t == null)
-                throw new InvalidOperationException("Color Pipeline is installed but Storey's bridge did not compile: it needs com.triband.colorpipeline 2.1.11 up to 3.0 (docs/COLOURS.md §3.7).");
+                throw new InvalidOperationException(Application.isEditor
+                    ? "Color Pipeline is installed but Storey's bridge did not compile: it needs com.triband.colorpipeline 2.1.11 up to 3.0 (docs/COLOURS.md §3.7)."
+                    : "Color Pipeline is installed but Storey's bridge (Triband.Storey.ColorPipeline) is not in this build: was it stripped? It is marked AlwaysLinkAssembly; check the build's managed stripping and link.xml (docs/COLOURS.md §3.7).");
             return (IStoreyPalette)Activator.CreateInstance(t)!;
 #else
             return new HexPalette();
