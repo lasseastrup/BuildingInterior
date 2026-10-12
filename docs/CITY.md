@@ -30,6 +30,7 @@ A Storey Site's **LOD mode** is *Automatic* by default; *Fixed* shows one LOD ev
 
 - **Feature scale, not screen size.** The pixel count is taken at the building's nearest point. Frames and furniture only matter up close, however big the building is. At 1080p with a 60° field of view, LOD0 is within about 58 m and LOD1 within about 230 m.
 - **Hysteresis of 12%** stops buildings flickering at a boundary.
+- **Squares passed over.** The manager keeps the buildings in 128 m squares. A square whose buildings all show their massing, or nothing, and can't change this frame is passed over whole: each building's nearest point is between the square's nearest and farthest, and neither crosses a threshold. On the test city most of the city is such squares, so a frame looks at a few hundred buildings, not 3,000; `LodSquaresTests` checks the picks are exactly those of looking at every building.
 - **Changes cross-fade** (dithered) over 0.35 s. The shader hides a building's other LODs through its row in the building table (shown, fading from, fade), so nothing is enabled or disabled per building.
 - **Windows don't change at the switch.** LOD1's windows are opaque panes showing a painted room; LOD0's, in a building with an interior, are see-through glass onto the real rooms. LOD0's glass starts as LOD1's pane (the same painted room, opaque) at the distance LOD0 takes over (`LodSettings.Lod0Distance`) and clears to glass by **Windows Clear At** (0.6) of that distance, blended by each pixel's distance (`_StoreyGlassFill`). So the cross-fade swaps the geometry while the windows look the same, and the rooms behind them fade in as the camera comes closer.
 - **Loading.** Only the massings are built when a layout loads, cell by cell, each cell merged as soon as its buildings are built. The worker threads build the massings a few cells ahead of the one the main thread is writing and merging (`LayoutLoad`).
@@ -76,7 +77,7 @@ Headless numbers (`CityBenchTests`, `LodManagerTests`). They are CPU only, witho
 |---|---|
 | Loading 3,000 buildings: every massing | 0.1–0.2 ms a building, built on the workers ahead of the main thread, which works about 50 ms of the load (writing and merging) instead of about 300 ms (4 cores). In Play mode a site's first load is spread over frames within the build budget |
 | Merging the 307 cells | 43 ms |
-| Picking every building's LOD | 0.4–0.9 ms a frame |
+| Picking every building's LOD | about 0.05 ms a frame walking the street (Release build; 0.16 ms when every building was looked at every frame) |
 | One LOD1 | about 6–8 ms |
 | One LOD0 | about 23–34 ms on average, 100–150 ms at worst (tall walk-in buildings) |
 | LOD0 and LOD1 on 3 worker threads | about 9 ms a building, off the main thread |

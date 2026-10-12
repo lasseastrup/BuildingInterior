@@ -46,10 +46,18 @@ namespace Triband.Storey.Lod
     /// yet is asked for (largest on screen first) and the best one it has is shown meanwhile; a change cross-fades.
     /// LOD0 and LOD1 meshes past the resident caps are dropped, least recently shown first. Engine-free: the renderer
     /// builds and drops the meshes and writes the state into the building table.
+    ///
+    /// The buildings are kept in 128 m squares of the ground. A square whose buildings all show their massing (or nothing)
+    /// and stay so this frame is passed over whole: every building's nearest point is between the square's box's nearest
+    /// and farthest, so when neither crosses a threshold none of them can (exactly so: the floating-point steps are
+    /// monotonic). Most of a city is such squares.
     /// </summary>
     public sealed class LodManager
     {
-        /// <summary>One building: its bounds (site space, metres; the ground is y 0), and its LOD state.</summary>
+        /// <summary>
+        /// One building: its bounds (site space, metres; the ground is y 0), and its LOD state. Change the state only right
+        /// after <see cref="Set"/>, or through <see cref="SetBuilt"/>: a square whose buildings stay as they are is passed over.
+        /// </summary>
         public sealed class Entry
         {
             public double x0, z0, x1, z1, y1;
@@ -61,6 +69,21 @@ namespace Triband.Storey.Lod
             /// <summary>The frame each was last drawn, for eviction.</summary>
             public long Used0, Used1;
             public bool Visible(int lod) => Shown == lod || (T < 1 && From == lod);
+            internal int idx;
+            internal Square? square;
+        }
+
+        /// <summary>A square of the ground's buildings, the box round them all, and whether they are settled.</summary>
+        internal sealed class Square
+        {
+            public readonly (int x, int z) key;
+            public readonly List<Entry> members = new List<Entry>();
+            public double x0, z0, x1, z1, yLo, yHi;
+            public bool stale = true;
+            /// <summary>Every member wants and shows this LOD (2 or 3), not fading; -1 when not.</summary>
+            public int settled = -1;
+            public long forcedAt = -1;
+            public Square((int, int) key) { this.key = key; }
         }
 
         /// <summary>What a frame asks of the renderer. The manager's own, reused: valid until the next <see cref="Update"/>.</summary>
@@ -82,44 +105,79 @@ namespace Triband.Storey.Lod
         readonly Frame frameOut = new Frame();
         readonly List<(int, int, double)> forcedBuild = new List<(int, int, double)>();
         readonly List<(int idx, long used)> idle = new List<(int, long)>();
-        sealed class MostPixels : IComparer<(int idx, int lod, double px)> { public int Compare((int idx, int lod, double px) a, (int idx, int lod, double px) b) => b.px.CompareTo(a.px); }
-        sealed class LeastRecent : IComparer<(int idx, long used)> { public int Compare((int idx, long used) a, (int idx, long used) b) => a.used.CompareTo(b.used); }
+        // ties in building order, so the order never depends on how the buildings are kept
+        sealed class MostPixels : IComparer<(int idx, int lod, double px)>
+        {
+            public int Compare((int idx, int lod, double px) a, (int idx, int lod, double px) b)
+            { int c = b.px.CompareTo(a.px); if (c != 0) return c; c = a.idx.CompareTo(b.idx); return c != 0 ? c : a.lod.CompareTo(b.lod); }
+        }
+        sealed class LeastRecent : IComparer<(int idx, long used)>
+        {
+            public int Compare((int idx, long used) a, (int idx, long used) b) { int c = a.used.CompareTo(b.used); return c != 0 ? c : a.idx.CompareTo(b.idx); }
+        }
         static readonly MostPixels mostPixels = new MostPixels();
         static readonly LeastRecent leastRecent = new LeastRecent();
 
         public readonly LodSettings Settings;
         readonly Dictionary<int, Entry> entries = new Dictionary<int, Entry>();
+        readonly Dictionary<(int, int), Square> byKey = new Dictionary<(int, int), Square>();
+        readonly List<Square> squares = new List<Square>();
+        // the buildings holding their LOD0 and LOD1 meshes: the caps look at these only
+        readonly HashSet<Entry> has0 = new HashSet<Entry>(), has1 = new HashSet<Entry>();
         long frame;
 
         public LodManager(LodSettings? s = null) { Settings = s ?? new LodSettings(); }
 
         public IReadOnlyDictionary<int, Entry> Entries => entries;
 
-        /// <summary>How many buildings have their LOD0 and their LOD1 built (no garbage: <see cref="Entries"/> boxes its enumerator).</summary>
-        public (int lod0, int lod1) Resident()
-        {
-            int r0 = 0, r1 = 0;
-            foreach (var e in entries.Values) { if (e.Has0) r0++; if (e.Has1) r1++; }
-            return (r0, r1);
-        }
+        /// <summary>How many buildings have their LOD0 and their LOD1 built.</summary>
+        public (int lod0, int lod1) Resident() => (has0.Count, has1.Count);
         public Entry? Get(int idx) => entries.TryGetValue(idx, out var e) ? e : null;
 
         /// <summary>Add a building (or move it: an edit), by its table index. Its detail LODs are marked unbuilt.</summary>
         public Entry Set(int idx, double x0, double z0, double x1, double z1, double y1)
         {
-            if (!entries.TryGetValue(idx, out var e)) entries[idx] = e = new Entry();
-            e.x0 = x0; e.z0 = z0; e.x1 = x1; e.z1 = z1; e.y1 = y1; e.Has0 = e.Has1 = false;
+            if (!entries.TryGetValue(idx, out var e)) entries[idx] = e = new Entry { idx = idx };
+            e.x0 = x0; e.z0 = z0; e.x1 = x1; e.z1 = z1; e.y1 = y1;
+            Built(e, 0, false); Built(e, 1, false);
+            var key = Cells.KeyOf((x0 + x1) / 2, (z0 + z1) / 2);
+            if (e.square == null || e.square.key != key)
+            {
+                Leave(e);
+                if (!byKey.TryGetValue(key, out var sq)) { byKey[key] = sq = new Square(key); squares.Add(sq); }
+                sq.members.Add(e); e.square = sq;
+            }
+            e.square.stale = true; e.square.settled = -1;
             return e;
         }
 
-        public void Remove(int idx) => entries.Remove(idx);
-        public void Clear() => entries.Clear();
+        void Leave(Entry e)
+        {
+            var sq = e.square; if (sq == null) return;
+            sq.members.Remove(e); sq.stale = true; sq.settled = -1; e.square = null;
+        }
+
+        public void Remove(int idx)
+        {
+            if (!entries.TryGetValue(idx, out var e)) return;
+            Built(e, 0, false); Built(e, 1, false); Leave(e);
+            entries.Remove(idx);
+        }
+
+        public void Clear() { entries.Clear(); byKey.Clear(); squares.Clear(); has0.Clear(); has1.Clear(); }
 
         /// <summary>A building's LOD0 or LOD1 mesh is built (or gone).</summary>
         public void SetBuilt(int idx, int lod, bool built)
         {
             if (!entries.TryGetValue(idx, out var e)) return;
-            if (lod == 0) e.Has0 = built; else if (lod == 1) e.Has1 = built;
+            Built(e, lod, built);
+            if (e.square != null) e.square.settled = -1;
+        }
+
+        void Built(Entry e, int lod, bool built)
+        {
+            if (lod == 0) { e.Has0 = built; if (built) has0.Add(e); else has0.Remove(e); }
+            else if (lod == 1) { e.Has1 = built; if (built) has1.Add(e); else has1.Remove(e); }
         }
 
         /// <summary>Pixels one metre covers at one metre away, for a camera's vertical field of view and screen height.</summary>
@@ -136,28 +194,48 @@ namespace Triband.Storey.Lod
             var f = frameOut; f.Clear(); var s = Settings;
             double pxm = pixelsPerMetre * s.Bias, H = s.Hysteresis;
             forcedBuild.Clear();
-            foreach (var kv in entries)
+            // a forced building's square is looked at building by building (a HashSet's own enumerator: no garbage)
+            if (forced is HashSet<int> fs) { foreach (int i in fs) Force(i); }
+            else if (forced != null) foreach (int i in forced) Force(i);
+            // passing over a square needs the finer LODs at more pixels, as they are unless the settings say otherwise
+            bool ordered = s.PX[0] >= s.PX[1] && s.PX[1] >= s.PX[2] && H > -1;
+            for (int q = 0; q < squares.Count; q++)
             {
-                var e = kv.Value; int idx = kv.Key;
-                // the nearest point of the building's box
-                double dx = Math.Max(Math.Max(e.x0 - cx, 0), cx - e.x1), dy = Math.Max(Math.Max(-cy, 0), cy - e.y1), dz = Math.Max(Math.Max(e.z0 - cz, 0), cz - e.z1);
-                double d = Math.Max(1, Math.Sqrt(dx * dx + dy * dy + dz * dz)), rel = pxm / d;
-                int want = 3;
-                for (int l = 0; l < 3; l++) if (rel >= s.PX[l] * (l < e.Want ? 1 + H : 1 - H)) { want = l; break; }
-                if (d > s.Far) want = 3;
-                bool force = forced != null && forced.Contains(idx);
-                if (force) want = 0;
-                e.Want = want;
-                int show = want;
-                if (show == 0 && !e.Has0) { (force ? forcedBuild : f.Build).Add((idx, 0, force ? double.MaxValue : rel)); show = e.Has1 ? 1 : 2; }
-                if (show == 1 && !e.Has1) { f.Build.Add((idx, 1, rel)); show = 2; }
-                bool changed = false;
-                if (show != e.Shown) { e.From = e.Shown; e.Shown = show; e.T = 0; changed = true; }
-                if (e.T < 1) { e.T = Math.Min(1, e.T + dt / s.Fade); changed = true; }
-                if (changed) f.Changed.Add(idx);
-                if (e.Visible(0)) e.Used0 = frame;
-                if (e.Visible(1)) e.Used1 = frame;
-                f.Count[e.Shown]++;
+                var sq = squares[q]; var ms = sq.members;
+                if (ms.Count == 0) continue;
+                if (sq.stale) Bound(sq);
+                if (ordered && sq.settled >= 2 && sq.forcedAt != frame && Stays(sq, cx, cy, cz, pxm, H))
+                {
+                    f.Count[sq.settled] += ms.Count;
+                    continue;
+                }
+                int settled = -2;
+                for (int m = 0; m < ms.Count; m++)
+                {
+                    var e = ms[m]; int idx = e.idx;
+                    // the nearest point of the building's box
+                    double dx = Math.Max(Math.Max(e.x0 - cx, 0), cx - e.x1), dy = Math.Max(Math.Max(-cy, 0), cy - e.y1), dz = Math.Max(Math.Max(e.z0 - cz, 0), cz - e.z1);
+                    double d = Math.Max(1, Math.Sqrt(dx * dx + dy * dy + dz * dz)), rel = pxm / d;
+                    int want = 3;
+                    for (int l = 0; l < 3; l++) if (rel >= s.PX[l] * (l < e.Want ? 1 + H : 1 - H)) { want = l; break; }
+                    if (d > s.Far) want = 3;
+                    bool force = forced != null && forced.Contains(idx);
+                    if (force) want = 0;
+                    e.Want = want;
+                    int show = want;
+                    if (show == 0 && !e.Has0) { (force ? forcedBuild : f.Build).Add((idx, 0, force ? double.MaxValue : rel)); show = e.Has1 ? 1 : 2; }
+                    if (show == 1 && !e.Has1) { f.Build.Add((idx, 1, rel)); show = 2; }
+                    bool changed = false;
+                    if (show != e.Shown) { e.From = e.Shown; e.Shown = show; e.T = 0; changed = true; }
+                    if (e.T < 1) { e.T = Math.Min(1, e.T + dt / s.Fade); changed = true; }
+                    if (changed) f.Changed.Add(idx);
+                    if (e.Visible(0)) e.Used0 = frame;
+                    if (e.Visible(1)) e.Used1 = frame;
+                    f.Count[e.Shown]++;
+                    int st = e.T >= 1 && e.Want == e.Shown && e.Want >= 2 ? e.Want : -1;
+                    settled = settled == -2 || settled == st ? st : -1;
+                }
+                sq.settled = settled;
             }
             f.Build.Sort(mostPixels);
             f.Build.InsertRange(0, forcedBuild);
@@ -165,17 +243,42 @@ namespace Triband.Storey.Lod
             return f;
         }
 
+        void Force(int idx) { if (entries.TryGetValue(idx, out var e) && e.square != null) e.square.forcedAt = frame; }
+
+        /// <summary>The box round a square's buildings (y from the lowest top, or the ground, to the highest).</summary>
+        static void Bound(Square sq)
+        {
+            double x0 = double.MaxValue, z0 = x0, yLo = 0, x1 = double.MinValue, z1 = x1, yHi = 0;
+            foreach (var e in sq.members)
+            {
+                x0 = Math.Min(x0, e.x0); z0 = Math.Min(z0, e.z0); x1 = Math.Max(x1, e.x1); z1 = Math.Max(z1, e.z1);
+                yLo = Math.Min(yLo, e.y1); yHi = Math.Max(yHi, e.y1);
+            }
+            sq.x0 = x0; sq.z0 = z0; sq.x1 = x1; sq.z1 = z1; sq.yLo = yLo; sq.yHi = yHi; sq.stale = false;
+        }
+
+        /// <summary>
+        /// A settled square's buildings all stay so this frame: each one's nearest point is no nearer than the square's
+        /// box's nearest and no farther than its farthest, and neither of those crosses a threshold of the LOD they show.
+        /// </summary>
+        bool Stays(Square sq, double cx, double cy, double cz, double pxm, double H)
+        {
+            var s = Settings;
+            double nx = Math.Max(Math.Max(sq.x0 - cx, 0), cx - sq.x1), ny = Math.Max(Math.Max(-cy, 0), cy - sq.yHi), nz = Math.Max(Math.Max(sq.z0 - cz, 0), cz - sq.z1);
+            double near = Math.Max(1, Math.Sqrt(nx * nx + ny * ny + nz * nz));
+            double fx = Math.Max(Math.Abs(cx - sq.x0), Math.Abs(cx - sq.x1)), fy = Math.Max(Math.Abs(cy), Math.Max(Math.Abs(cy - sq.yHi), Math.Abs(cy - sq.yLo))), fz = Math.Max(Math.Abs(cz - sq.z0), Math.Abs(cz - sq.z1));
+            double far = Math.Max(1, Math.Sqrt(fx * fx + fy * fy + fz * fz));
+            if (sq.settled == 2) return pxm / near < s.PX[1] * (1 + H) && pxm / far >= s.PX[2] * (1 - H) && far <= s.Far;
+            return pxm / near < s.PX[2] * (1 + H) || near > s.Far;   // 3: none near enough for its massing, or all past the far distance
+        }
+
         /// <summary>Past the cap, the meshes not on screen go, least recently shown first.</summary>
         void Evict(Frame f, int lod, int max)
         {
-            int count = 0; idle.Clear();
-            foreach (var kv in entries)
-            {
-                var e = kv.Value; bool has = lod == 0 ? e.Has0 : e.Has1; if (!has) continue;
-                count++;
-                if (!e.Visible(lod)) idle.Add((kv.Key, lod == 0 ? e.Used0 : e.Used1));
-            }
-            if (count <= max) return;
+            var held = lod == 0 ? has0 : has1;
+            int count = held.Count; if (count <= max) return;
+            idle.Clear();
+            foreach (var e in held) if (!e.Visible(lod)) idle.Add((e.idx, lod == 0 ? e.Used0 : e.Used1));
             idle.Sort(leastRecent);
             foreach (var (idx, _) in idle)
             {
