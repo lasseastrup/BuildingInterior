@@ -8,31 +8,30 @@ using UnityEngine.Rendering;
 namespace Triband.Storey.Unity
 {
     /// <summary>
-    /// Turns generator output into Unity meshes in the prototype's compact vertex formats (Plan §6.5):
-    /// float position, SNorm8 normal, UNorm8 × 4 colour reference (colour row, slot and shade; docs/COLOURS.md
-    /// §3.4), a float building tag, and for LOD0 the cutaway
-    /// data (float4 wall, float kind, float wall id). Sixteen-bit indices where they fit. The CPU copy
-    /// is released after upload; collision uses the generator's 2D segments, never the mesh.
+    /// Turns generator output into Unity meshes in the prototype's compact vertex formats (Plan §6.5): float position,
+    /// SNorm8 normal, UNorm8 × 4 colour reference (colour row, slot and shade; docs/COLOURS.md §3.4) and a float building
+    /// tag, 24 bytes; LOD0 adds a second stream of 8, the cutaway kind and the wall id. A detail mesh comes packed
+    /// (<see cref="PackedMesh"/>, made on the worker that built it): the upload fills in the colour rows and wall ids and
+    /// copies. Sixteen-bit indices (a detail mesh over 65,535 vertices comes in parts). The CPU copy is released after
+    /// upload; collision uses the generator's 2D segments, never the mesh.
     /// </summary>
     public static class MeshUpload
     {
-        /// <summary>LOD0/LOD1 vertex: 32 bytes (LOD0 adds a 24-byte second stream).</summary>
-        [StructLayout(LayoutKind.Sequential)]
-        public struct Vertex
+        static readonly VertexAttributeDescriptor[] LeanLayout =
         {
-            public Vector3 position;
-            public sbyte nx, ny, nz, nw;
-            /// <summary>Colour reference: row low byte, row high byte, slot, shade × 128 (not RGB).</summary>
-            public byte r, g, b, a;
-            public float tag;
-        }
-
-        /// <summary>LOD0's second stream: the cutaway kind and the global wall id. The wall's own data (start, normal scaled by 1 + length) is in the building table, by id.</summary>
-        [StructLayout(LayoutKind.Sequential)]
-        public struct Cutaway
+            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
+            new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
+            new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 1),
+        };
+        static readonly VertexAttributeDescriptor[] Lod0Layout =
         {
-            public float kind, wid;
-        }
+            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
+            new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
+            new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 1),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, 2, 1),   // kind, wall id: 32 bytes a vertex in all
+        };
 
         /// <summary>LOD2 vertex: position, SNorm8 normal, the facade parameters and the parameter row.</summary>
         [StructLayout(LayoutKind.Sequential)]
@@ -46,72 +45,50 @@ namespace Triband.Storey.Unity
             public float slot;
         }
 
-        static sbyte S8(double v) => (sbyte)Math.Round(Math.Max(-1, Math.Min(1, v)) * 127);
+        const MeshUpdateFlags Quiet = MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontNotifyMeshUsers;
 
         /// <summary>
-        /// A detail LOD mesh. <paramref name="wallBase"/> is the first global wall id of the building's
-        /// block (LOD0 only; the mesh's 1-based local ids are offset onto it; -1 = no ids). <paramref name="rowOf"/>
-        /// gives the colour row of each style the swatches name (party walls name a neighbour's).
+        /// A packed detail mesh, finished and uploaded. <paramref name="rowOf"/> gives the colour row of each style its
+        /// vertices name (party walls name a neighbour's); <paramref name="wallBase"/> is the first global wall id of the
+        /// building's block (LOD0 only; -1 = no ids).
+        /// </summary>
+        public static Mesh Upload(PackedMesh pm, string name, Func<StyleRef, int> rowOf, int wallBase = -1)
+        {
+            var rows = new int[pm.Styles.Length];
+            for (int s = 0; s < rows.Length; s++) rows[s] = rowOf(pm.Styles[s]);
+            pm.Finish(rows, wallBase);
+            int nv = pm.Verts, ni = pm.Indices;
+            var mesh = new Mesh { name = name, indexFormat = pm.I16 != null ? IndexFormat.UInt16 : IndexFormat.UInt32 };
+            mesh.SetVertexBufferParams(nv, pm.Cut != null ? Lod0Layout : LeanLayout);
+            mesh.SetVertexBufferData(pm.V, 0, 0, nv, 0, Quiet);
+            if (pm.Cut != null) mesh.SetVertexBufferData(pm.Cut, 0, 0, nv, 1, Quiet);
+            if (pm.I16 != null) { mesh.SetIndexBufferParams(ni, IndexFormat.UInt16); mesh.SetIndexBufferData(pm.I16, 0, 0, ni, Quiet); }
+            else { mesh.SetIndexBufferParams(ni, IndexFormat.UInt32); mesh.SetIndexBufferData(pm.I32!, 0, 0, ni, Quiet); }
+            mesh.subMeshCount = 1;
+            mesh.SetSubMesh(0, new SubMeshDescriptor(0, ni), Quiet);
+            mesh.bounds = new Bounds(new Vector3((pm.X0 + pm.X1) / 2, (pm.Y0 + pm.Y1) / 2, (pm.Z0 + pm.Z1) / 2), new Vector3(pm.X1 - pm.X0, pm.Y1 - pm.Y0, pm.Z1 - pm.Z0));
+            // no Mesh.Optimize: it crashed the editor natively in its vertex-cache pass on valid LOD0 meshes, and the generator's
+            // own order is within a few percent of a vertex-cache optimiser's (measured with Forsyth's: 1.88 → 1.80 misses a triangle)
+            mesh.UploadMeshData(true);
+            return mesh;
+        }
+
+        /// <summary>
+        /// A mesh the generator made, packed here and uploaded as one (32-bit indices past 65,535 vertices): for meshes
+        /// made on the main thread anyway (Sink's footprints). <paramref name="wallBase"/> as <see cref="Upload(PackedMesh, string, Func{StyleRef, int}, int)"/>.
         /// </summary>
         /// <param name="optimize">Unused (it called <c>Mesh.Optimize</c>, which crashed the editor); kept so callers compile.</param>
         /// <param name="windows">Opaque panes carry their place on the pane for the window shader (the opaque meshes; not the see-through glass).</param>
         /// <param name="mates">
         /// Where the site's buildings sit in the shared table (<see cref="BuildingTable.AllocBlock"/>): the first index, and
-        /// how many. A party wall's vertex names its neighbour by layout index; it is moved into the block, and a neighbour
-        /// past it (a building of a neighbouring district, there for its walls only) is dropped.
+        /// how many. A party wall's vertex names its neighbour by layout index; it is moved into the block at upload, and a
+        /// neighbour past it (a building of a neighbouring district, there for its walls only) is dropped.
         /// </param>
         public static Mesh Upload(MeshBuilder gb, string name, Func<StyleRef, int> rowOf, int wallBase = -1, bool optimize = false, bool windows = false, (int start, int count)? mates = null)
         {
-            if (!gb.Welded) gb.Weld();
-            int nv = gb.Verts;
-            var mesh = new Mesh { name = name, indexFormat = nv > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
-            var layout = gb.Lean
-                ? new[]
-                {
-                    new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
-                    new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
-                    new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4),
-                    new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 1),
-                }
-                : new[]
-                {
-                    new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
-                    new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
-                    new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4),
-                    new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 1),
-                    new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, 2, 1),   // kind, wall id: 28 bytes a vertex, not 44
-                };
-            mesh.SetVertexBufferParams(nv, layout);
-            var verts = new Vertex[nv];
-            var bounds = new Bounds(); bool first = true;
-            for (int i = 0; i < nv; i++)
-            {
-                var p = gb.P[i]; var n = gb.N[i]; var s = gb.C[i];
-                var (cr, cg, cb, ca) = ColorRows.EncodeVertex(rowOf(s.style), s.slot, s.tone);
-                var pos = new Vector3((float)p.x, (float)p.y, (float)p.z);
-                verts[i] = new Vertex { position = pos, nx = S8(n.x), ny = S8(n.y), nz = S8(n.z), r = cr, g = cg, b = cb, a = ca, tag = gb.Tag };
-                if (windows && s.slot == ColorSlot.Glass && gb.PaneUV.TryGetValue(i, out var uv)) { var (pa, pw, pb) = ColorRows.EncodePane(uv.u, uv.v, uv.id); verts[i].a = pa; verts[i].nw = pw; verts[i].b = pb; }
-                if (first) { bounds = new Bounds(pos, Vector3.zero); first = false; } else bounds.Encapsulate(pos);
-            }
-            const MeshUpdateFlags flags = MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontNotifyMeshUsers;
-            mesh.SetVertexBufferData(verts, 0, 0, nv, 0, flags);
-            if (!gb.Lean)
-            {
-                var cut = new Cutaway[nv];
-                for (int i = 0; i < nv; i++)
-                {
-                    int wi = gb.WI[i];
-                    int kind = mates is (int ms, int mc) ? Lod.MateIndex.Shift(gb.K[i], ms, mc) : gb.K[i];
-                    cut[i] = new Cutaway { kind = kind, wid = wi > 0 && wallBase >= 0 ? wallBase + wi - 1 : 0 };
-                }
-                mesh.SetVertexBufferData(cut, 0, 0, nv, 1, flags);
-            }
-            SetIndices(mesh, gb.I, nv, flags);
-            mesh.bounds = bounds;
-            // no Mesh.Optimize: it crashed the editor natively in its vertex-cache pass on valid LOD0 meshes, and the generator's
-            // own order is within a few percent of a vertex-cache optimiser's (measured with Forsyth's: 1.88 → 1.80 misses a triangle)
-            mesh.UploadMeshData(true);
-            return mesh;
+            var parts = MeshPack.Pack(gb, windows, mates, int.MaxValue);
+            if (parts.Count == 0) return new Mesh { name = name };
+            return Upload(parts[0], name, rowOf, wallBase);
         }
 
         /// <summary>A wall's cutaway data as the shader reads it from the table: its start (x, z) and its normal scaled by 1 + its length.</summary>
@@ -146,9 +123,8 @@ namespace Triband.Storey.Unity
                 };
                 if (first) { bounds = new Bounds(pos, Vector3.zero); first = false; } else bounds.Encapsulate(pos);
             }
-            const MeshUpdateFlags flags = MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontNotifyMeshUsers;
-            mesh.SetVertexBufferData(verts, 0, 0, nv, 0, flags);
-            SetIndices(mesh, m.I, nv, flags);
+            mesh.SetVertexBufferData(verts, 0, 0, nv, 0, Quiet);
+            SetIndices(mesh, m.I, nv, Quiet);
             mesh.bounds = bounds;
             mesh.UploadMeshData(true);
             return mesh;

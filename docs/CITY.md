@@ -79,7 +79,7 @@ Headless numbers (`CityBenchTests`, `LodManagerTests`). They are CPU only, witho
 | Committing one edit (finding what changed, the layout's text) | about 140 ms (was 350) |
 | One step of a drag | about 0.1 s (was 1.4 s: the whole layout was read again each step) |
 
-The time for one LOD0 is several frames' budget. That's why the generating is on worker threads, so the main thread pays only for the upload. How long the upload takes in Unity is not measured yet. If it shows up as a hitch, the next step is to build the vertex buffers on the workers too, with `Mesh.AllocateWritableMeshData`.
+The time for one LOD0 is several frames' budget. That's why the generating is on worker threads, so the main thread pays only for the upload. The workers also pack the meshes into the upload's vertex format (`MeshPack`). The main thread fills in each vertex's colour row and wall id, which only it knows, and hands the arrays to Unity: 0.13 ms a building on the 3,000-building test city, where packing on the main thread took 2.5 ms (worst 42 ms). How long Unity's own copy and upload take is not measured yet. If it shows up as a hitch, the next step is `Mesh.AllocateWritableMeshData` on the workers.
 
 **The two test cities, 1,000 buildings each** (headless, one thread):
 
@@ -134,6 +134,8 @@ Both budgets in the package plan (§6.6: 120 MB on iPhone 7, 200 MB on iPhone 14
 - **LOD0 and LOD1.** The meshes are uploaded from the generator's result, with no CPU copy kept (`UploadMeshData(true)`), and the result is let go. While a building has its LOD0, the renderer keeps its shape (`Lod0Shape`, `SiteRenderer.ShapeOf`): the collision segments and the wall list, for the walk model, the colliders and the cutaway. A shape is 10–25 KB, about 1% of its LOD0's GPU meshes, and 40–70 KB for the largest towers. The generator's whole result, kept before, was 4.7 to 5 times the GPU meshes: 3.5 to 7.7 MB a building, 32 to 35 MB for the largest towers.
 - **Massings.** A layout loads cell by cell: each cell is merged as soon as its buildings' massings are built, and the massings are let go. One cell's massings are held at a time, 0.4 MB at most on the test city; all 3,000 were kept before (50 MB). When a cell is merged again (a building in it was edited or removed), its other buildings' massings are made again from the layout: about 1 ms for the test city's biggest cell (24 buildings).
 - **The walk model** (`PlayWorld`, docs/PLAY.md §1) keeps the shapes of the buildings the player has been near, at most `PlayWorld.Keep` (32), the least recently used going first. It takes the renderer's shape while the building has its LOD0 (built on a worker as the camera nears, long before the player can touch it) and otherwise builds the shape itself without meshes (`Lod0.BuildShape`: exactly the full build's segments and walls, about 50 times faster). The walk above holds 14 shapes, 1.4 MB. It kept 14 whole LOD0 results before, 170 MB, and built them on the main thread: five frames over 16.7 ms, the worst 68 ms. The walk's worst frame is now 1.0 ms with the walk model building its own shapes, 0.6 ms with the renderer's.
+- **A finished build** waits for its upload packed (§4): 0.8 MB a building on the 3,000-building test city, 1.7 MB in the walk-in one, where the generator's welded result was 3.0 and 6.5 MB. Building a LOD0 allocates half what it did (14 MB for a walk-in building, was 29): the builder no longer copies each wall's data into every vertex, and welds in place.
+- **Large LOD0s** come in parts: a mesh past 65,535 vertices is split into meshes with 16-bit indices instead of one with 32-bit ones (`MeshPack.Pack`; a triangle is never split, and almost no vertex is copied). The 16 largest LOD0s of the 3,000-building city take 90.5 MB on the GPU instead of 98.6, in 51 meshes instead of 32.
 - **The problem list** builds shapes too: a full check of the 3,000-building city takes 0.7 s instead of 2.7 s, of the walk-in city of 1,000 6 s instead of 16 s (Release build).
 
 | One building's | Plain city of 1,000 | Walk-in city of 1,000 |
@@ -153,5 +155,5 @@ Both budgets in the package plan (§6.6: 120 MB on iPhone 7, 200 MB on iPhone 14
 - A neighbour district edited in the same session: its party walls along the edge update when this site next rebuilds everything (the neighbour's file is saved and reimported).
 - Cells baked at import. They are merged when the layout loads, which takes tens of milliseconds for the test city.
 - Memory measured in Unity and on a device (the Memory Profiler, Xcode's gauge). §7 is headless.
-- The generator's result while it waits for its upload: about 5 times its GPU meshes, for as many buildings as there are worker threads. Packing the vertices on the worker would make it the size of the meshes (and take the packing off the main thread).
+- Unity's own copy and upload of a mesh (§4).
 - None of the above is measured in Unity yet; the numbers in §4 are headless.

@@ -497,48 +497,63 @@ namespace Triband.Storey.Unity
         void BuildDetail(Built bt, BuildingData b, int which)
         {
             object made;
-            using (StoreyTimings.Time(which == 0 ? "build: LOD0 on the main thread" : "build: LOD1 on the main thread")) made = Generate(site!, b, bt.idx, which);
+            using (StoreyTimings.Time(which == 0 ? "build: LOD0 on the main thread" : "build: LOD1 on the main thread")) made = Generate(site!, b, bt.idx, which, (blockStart, blockSize));
             FinishDetail(bt, b.name, which, made);
         }
 
         /// <summary>
-        /// The engine-free half of a detail build: generated, tagged and welded. Safe on a worker thread (the generator's
-        /// memos are per site and thread-safe; ParallelBuildTests).
+        /// A detail build as a worker hands it over: its meshes packed in the upload's layout, in parts past 65,535
+        /// vertices, and for LOD0 the shape that is kept. The generator's own result is gone by then (docs/CITY.md §7).
         /// </summary>
-        static object Generate(Site site, BuildingData b, int idx, int which)
+        sealed class Detail
         {
-            if (which == 1) { var m = Lod1.Build(site, b); m.RetagForUpload(idx + Lod1.LOD_TAG); m.Weld(); return m; }
-            var l0 = Lod0.Build(site, b);
-            l0.Op.RetagForUpload(idx); l0.Op.Weld(); l0.Glass.RetagForUpload(idx); l0.Glass.Weld();
-            return l0;
+            public List<PackedMesh> opaque = null!;
+            public List<PackedMesh>? glass;
+            public Lod0Shape? shape;
         }
 
-        /// <summary>The main thread's half: the walls into the table, the meshes uploaded and drawn.</summary>
+        /// <summary>
+        /// The engine-free half of a detail build: generated, tagged, welded and packed. Safe on a worker thread (the
+        /// generator's memos are per site and thread-safe; ParallelBuildTests). <paramref name="mates"/>: the site's block
+        /// of the table, for party walls.
+        /// </summary>
+        static object Generate(Site site, BuildingData b, int idx, int which, (int start, int count) mates)
+        {
+            if (which == 1) { var m = Lod1.Build(site, b); m.RetagForUpload(idx + Lod1.LOD_TAG); return new Detail { opaque = MeshPack.Pack(m, windows: true) }; }
+            var l0 = Lod0.Build(site, b);
+            l0.Op.RetagForUpload(idx); l0.Glass.RetagForUpload(idx);
+            // the glass's panes carry their place too, to start as LOD1's
+            return new Detail { opaque = MeshPack.Pack(l0.Op, true, mates), glass = MeshPack.Pack(l0.Glass, true, mates), shape = l0.Shape };
+        }
+
+        /// <summary>
+        /// The main thread's half: the walls into the table, the meshes' colour rows and wall ids filled in, uploaded and
+        /// drawn. A shell building's LOD0 has no see-through glass: no mesh for it.
+        /// </summary>
         void FinishDetail(Built bt, string name, int which, object made)
         {
             using var _t = StoreyTimings.Time(which == 0 ? "build: LOD0 upload" : "build: LOD1 upload");
-            bool opt = Application.isPlaying;   // edit mode rebuilds on every drag: skip the cache reorder there
+            var d = (Detail)made;
             if (which == 1)
             {
-                var m1 = (MeshBuilder)made;
-                if (m1.Tris > 0) Add(bt, 1, "LOD1", MeshUpload.Upload(m1, name + " LOD1", RowOf, -1, opt, windows: true), opaque, true);
+                for (int i = 0; i < d.opaque.Count; i++) Add(bt, 1, Part("LOD1", i, d.opaque.Count), MeshUpload.Upload(d.opaque[i], Part(name + " LOD1", i, d.opaque.Count), RowOf), opaque, true);
                 return;
             }
-            // the meshes are uploaded from the generator's result, and only its shape is kept (docs/CITY.md §7)
-            var l0 = (Lod0Result)made; bt.shape = l0.Shape;
-            bt.wallCount = l0.Op.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
+            var shape = d.shape!; bt.shape = shape;
+            bt.wallCount = shape.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
             if (bt.wallBase >= 0)
             {
-                for (int i = 0; i < bt.wallCount; i++) table.WallData[bt.wallBase + i] = MeshUpload.WallData(l0.Op.Walls[i].W);
+                for (int i = 0; i < bt.wallCount; i++) table.WallData[bt.wallBase + i] = MeshUpload.WallData(shape.Walls[i].W);
                 table.MarkWallDataDirty();
             }
-            // a shell building's LOD0 has no see-through glass: no mesh for it
-            var mates = (blockStart, blockSize);
-            if (l0.Op.Tris > 0) Add(bt, 0, "LOD0", MeshUpload.Upload(l0.Op, name + " LOD0", RowOf, bt.wallBase, opt, windows: true, mates: mates), opaque, true);
-            if (l0.Glass.Tris > 0) Add(bt, 0, "LOD0 glass", MeshUpload.Upload(l0.Glass, name + " glass", RowOf, bt.wallBase, opt, windows: true, mates: mates), glass, false);   // its panes carry their place, to start as LOD1's
+            for (int i = 0; i < d.opaque.Count; i++) Add(bt, 0, Part("LOD0", i, d.opaque.Count), MeshUpload.Upload(d.opaque[i], Part(name + " LOD0", i, d.opaque.Count), RowOf, bt.wallBase), opaque, true);
+            for (int i = 0; i < d.glass!.Count; i++) Add(bt, 0, Part("LOD0 glass", i, d.glass.Count), MeshUpload.Upload(d.glass[i], Part(name + " glass", i, d.glass.Count), RowOf, bt.wallBase), glass, false);
             // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
             if (lods != null && colliders && bt.collision == null) colliderPending.Add(bt.id);
         }
+
+        /// <summary>A mesh's name, numbered when it comes in parts.</summary>
+        static string Part(string name, int i, int n) => n > 1 ? $"{name} ({i + 1})" : name;
 
         int Threads => lods == null ? 0 : lods.Settings.Threads >= 0 ? lods.Settings.Threads : Math.Max(1, Environment.ProcessorCount - 1);
 
@@ -552,13 +567,14 @@ namespace Triband.Storey.Unity
             for (int i = 0; i < jobs.Count; i++)
             {
                 var j = jobs[i]; if (!j.task.IsCompleted) continue;
-                bool ok = j.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && ReferenceEquals(j.site, site)
-                    && built.TryGetValue(j.bt.id, out var cur) && ReferenceEquals(cur, j.bt);
+                bool current = ReferenceEquals(j.site, site) && built.TryGetValue(j.bt.id, out var cur) && ReferenceEquals(cur, j.bt);
+                bool ok = j.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && current;
                 var e = ok ? l.Get(j.bt.idx) : null;
                 if (e == null || (j.which == 0 ? e.Has0 : e.Has1) || e.Want > j.which) ok = false;
                 if (ok && made > 0 && sw.Elapsed.TotalMilliseconds > l.Settings.BudgetMs) continue;   // next frame
                 jobs.RemoveAt(i--); busy.Remove(j.bt.idx);
-                if (j.task.IsFaulted) _ = j.task.Exception;   // observed: a build of a layout edited under it may throw, and is dropped
+                // a build of a layout edited under it may throw, and is dropped; one of the layout shown is a fault to report
+                if (j.task.IsFaulted) { var ex = j.task.Exception!; if (current) Debug.LogException(ex.InnerException ?? ex); }
                 if (!ok) continue;
                 FinishDetail(j.bt, j.name, j.which, j.task.Result); l.SetBuilt(j.bt.idx, j.which, true); made++;
             }
@@ -587,8 +603,8 @@ namespace Triband.Storey.Unity
         // (hundreds of buildings a frame wanting detail: about 14 KB of garbage a frame)
         void StartJob(Built bt, BuildingData b, int which)
         {
-            var s0 = site!; int ix = bt.idx;
-            jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, task = System.Threading.Tasks.Task.Run(() => Generate(s0, b, ix, which)) });
+            var s0 = site!; int ix = bt.idx; var mates = (blockStart, blockSize);
+            jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, task = System.Threading.Tasks.Task.Run(() => Generate(s0, b, ix, which, mates)) });
         }
 
         void UpdateLods()
