@@ -146,7 +146,7 @@ Both budgets in the package plan (§6.6: 120 MB on iPhone 7, 200 MB on iPhone 14
 | Its shape alone (`Lod0.BuildShape`) | 0.28 ms (2.8 ms), 0.22 MB allocated | 0.31 ms (3.0 ms), 0.28 MB allocated |
 | Kept after upload: the shape | 13 KB | 24 KB |
 
-`Lod0ShapeTests` checks that a shape built alone is the full build's to the last bit (the demo street, the variants, a walk-in city, bridges, courtyards and atria), that the walk model walks the same keeping two shapes as keeping all, and that a massing made again is the one built first.
+`MemoryBenchTests` keeps these numbers honest on the 3,000-building city, with bounds a few times what is measured: a LOD0 building keeps only its shape (8.7 KB a building, 38.5 KB for the largest), a finished build waits at the size of its meshes, a building built again allocates less than the first time, a load holds one cell's massings at a time, and the walk model stays small on a five-minute walk. `Lod0ShapeTests` checks that a shape built alone is the full build's to the last bit (the demo street, the variants, a walk-in city, bridges, courtyards and atria), that the walk model walks the same keeping two shapes as keeping all, and that a massing made again is the one built first.
 
 ## 8. Not yet
 
