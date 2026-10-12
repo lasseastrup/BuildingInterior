@@ -63,6 +63,8 @@ namespace Triband.Storey.Generate
         /// <summary>A door with no canopy over it (a bridge's: the bridge is its cover).</summary>
         public bool bare;
         public Opening Clone() => (Opening)MemberwiseClone();
+        /// <summary>This opening made a copy of <paramref name="o"/>, every field (as <see cref="Clone"/>, into one already made).</summary>
+        public Opening Set(Opening o) { u0 = o.u0; u1 = o.u1; y0 = o.y0; y1 = o.y1; door = o.door; full = o.full; thr = o.thr; bare = o.bare; return this; }
     }
 
     /// <summary>A collision segment (world XZ) with a radius.</summary>

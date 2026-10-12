@@ -149,6 +149,23 @@ namespace Triband.Storey.Tests
             output.WriteLine($"{n:N0} numbers, the largest {largest:0.0}: off by {worst * 100:0.00} cm at most ({at})");
             Assert.True(worst < 0.07, $"{worst:0.000} m off ({at})");
         }
+    }
+
+    /// <summary>
+    /// What packing allocates, given back and taken again (<see cref="Chunks"/>): counted on this thread, so on its own,
+    /// as no other test may take the chunks given back meanwhile.
+    /// </summary>
+    [Collection(TimingCollection.Name)]
+    public class MeshPackReuseTests
+    {
+        readonly ITestOutputHelper output;
+        public MeshPackReuseTests(ITestOutputHelper o) { output = o; }
+
+        static Site City(int n, bool walkIn)
+        {
+            var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document; TestCity.Generate(d, n, walkIn);
+            return new Site(d.buildings);
+        }
 
         [Fact]
         public void APackedMeshIsTheSizeOfItsGpuMesh()

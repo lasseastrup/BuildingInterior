@@ -165,10 +165,10 @@ namespace Triband.Storey.Generate
             // the deck: its walking surface (the floor's colour inside an enclosed bridge), sides and underside
             void Slab(double y0, double y1, Swatch top, Swatch bottom, Swatch side)
             {
-                op.Poly(new[] { At(0, -hw, y1), At(SE(-hw), -hw, y1), At(SE(hw), hw, y1), At(0, hw, y1) }, up, top);
-                op.Poly(new[] { At(0, -hw, y0), At(0, hw, y0), At(SE(hw), hw, y0), At(SE(-hw), -hw, y0) }, down, bottom);
-                op.Poly(new[] { At(0, -hw, y0), At(SE(-hw), -hw, y0), At(SE(-hw), -hw, y1), At(0, -hw, y1) }, right, side);
-                op.Poly(new[] { At(0, hw, y0), At(0, hw, y1), At(SE(hw), hw, y1), At(SE(hw), hw, y0) }, left, side);
+                op.Quad(At(0, -hw, y1), At(SE(-hw), -hw, y1), At(SE(hw), hw, y1), At(0, hw, y1), up, top);
+                op.Quad(At(0, -hw, y0), At(0, hw, y0), At(SE(hw), hw, y0), At(SE(-hw), -hw, y0), down, bottom);
+                op.Quad(At(0, -hw, y0), At(SE(-hw), -hw, y0), At(SE(-hw), -hw, y1), At(0, -hw, y1), right, side);
+                op.Quad(At(0, hw, y0), At(0, hw, y1), At(SE(hw), hw, y1), At(SE(hw), hw, y0), left, side);
             }
             Slab(-Deck, 0, s.br.open ? C.roof : C.floor, C.ceil, C.trim);
             double sideW = 0.05;
@@ -183,7 +183,7 @@ namespace Triband.Storey.Generate
                     var tris = new List<int> { 0, 1, 2, 0, 2, 3 };
                     if (gl != null) { gl.Ctx(null, 0); gl.PolyTris(pane, tris, n, C.glass); gl.PolyTris(pane, tris, n * -1, C.glass); }
                     else op.PolyTris(pane, tris, n, C.glassDark);
-                    op.Poly(new[] { At(0, o, 0), At(e, o, 0), At(e, o, 0.1), At(0, o, 0.1) }, n, C.trim);
+                    op.Quad(At(0, o, 0), At(e, o, 0), At(e, o, 0.1), At(0, o, 0.1), n, C.trim);
                     int mul = Math.Max(1, (int)Math.Round(e / 1.5));
                     for (int j = 1; j < mul; j++)
                     {
@@ -198,10 +198,10 @@ namespace Triband.Storey.Generate
                 {
                     double e = SE(o);
                     // a top rail and posts about every 1.5 m
-                    op.Poly(new[] { At(0, o - 0.03, 1.02), At(e, o - 0.03, 1.02), At(e, o + 0.03, 1.02), At(0, o + 0.03, 1.02) }, up, C.rail);
-                    op.Poly(new[] { At(0, o - 0.03, 0.95), At(0, o + 0.03, 0.95), At(e, o + 0.03, 0.95), At(e, o - 0.03, 0.95) }, down, C.rail);
-                    op.Poly(new[] { At(0, o + 0.03, 0.95), At(0, o + 0.03, 1.02), At(e, o + 0.03, 1.02), At(e, o + 0.03, 0.95) }, left, C.rail);
-                    op.Poly(new[] { At(0, o - 0.03, 0.95), At(e, o - 0.03, 0.95), At(e, o - 0.03, 1.02), At(0, o - 0.03, 1.02) }, right, C.rail);
+                    op.Quad(At(0, o - 0.03, 1.02), At(e, o - 0.03, 1.02), At(e, o + 0.03, 1.02), At(0, o + 0.03, 1.02), up, C.rail);
+                    op.Quad(At(0, o - 0.03, 0.95), At(0, o + 0.03, 0.95), At(e, o + 0.03, 0.95), At(e, o - 0.03, 0.95), down, C.rail);
+                    op.Quad(At(0, o + 0.03, 0.95), At(0, o + 0.03, 1.02), At(e, o + 0.03, 1.02), At(e, o + 0.03, 0.95), left, C.rail);
+                    op.Quad(At(0, o - 0.03, 0.95), At(e, o - 0.03, 0.95), At(e, o - 0.03, 1.02), At(0, o - 0.03, 1.02), right, C.rail);
                     int posts = Math.Max(1, (int)Math.Ceiling(e / 1.5));
                     for (int j = 0; j <= posts; j++)
                     {

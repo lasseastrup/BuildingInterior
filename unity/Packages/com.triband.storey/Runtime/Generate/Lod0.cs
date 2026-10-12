@@ -226,7 +226,7 @@ namespace Triband.Storey.Generate
                     double dx = c.x - a.x, dz = c.z - a.z, L = Geo.Hypot(dx, dz); if (L == 0) L = 1;
                     double nx = dz / L, nz = -dx / L, mx = (a.x + c.x) / 2 - cx, mz = (a.z + c.z) / 2 - cz;
                     if ((nx * mx + nz * mz > 0) == true) { nx = -nx; nz = -nz; }   // inward
-                    op.Poly(new[] { new P3(a.x, yb, a.z), new P3(c.x, yb, c.z), new P3(c.x, y, c.z), new P3(a.x, y, a.z) }, new P3(nx, 0, nz), side);
+                    op.Quad(new P3(a.x, yb, a.z), new P3(c.x, yb, c.z), new P3(c.x, y, c.z), new P3(a.x, y, a.z), new P3(nx, 0, nz), side);
                 }
             }
         }

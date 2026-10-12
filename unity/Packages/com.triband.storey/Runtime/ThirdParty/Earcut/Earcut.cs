@@ -4,6 +4,10 @@
 // The port keeps the original's structure and names so it can be diffed against upstream.
 // Behaviour is the same: a fast ear-clipping triangulator for polygons with holes, tolerant of
 // degenerate input, returning triangle vertex indices into the flat coordinate array.
+//
+// Storey's changes, for no garbage per call: a thread's nodes and hole queue are reused by its next
+// triangulation (NewNode, holeQueue), and an overload of Tessellate takes the lengths of the data and
+// hole arrays (which may be longer) and appends to a list it is given.
 #nullable enable annotations   // the port marks nullable references; annotations only, no warnings
 
 using System;
@@ -22,27 +26,56 @@ namespace Triband.Storey.ThirdParty
             public Node? prevZ, nextZ;
             public bool steiner;
             public Node(int i, double x, double y) { this.i = i; this.x = x; this.y = y; }
+            public void Set(int i, double x, double y) { this.i = i; this.x = x; this.y = y; prev = next = null!; z = 0; prevZ = nextZ = null; steiner = false; }
+        }
+
+        // Storey: the nodes of a thread's last triangulation, taken again by its next (Tessellate starts from the first)
+        [ThreadStatic] static List<Node>? nodes;
+        [ThreadStatic] static int nodesUsed;
+        [ThreadStatic] static List<Node>? holeQueue;
+        static readonly Comparison<Node> ByXYSlope = CompareXYSlope;
+
+        static Node NewNode(int i, double x, double y)
+        {
+            var pool = nodes ??= new List<Node>();
+            if (nodesUsed < pool.Count) { var n = pool[nodesUsed++]; n.Set(i, x, y); return n; }
+            var m = new Node(i, x, y); pool.Add(m); nodesUsed++;
+            return m;
         }
 
         /// <summary>
         /// Triangulate a polygon. <paramref name="data"/> is a flat array of vertex coordinates,
         /// <paramref name="holeIndices"/> the vertex index at which each hole ring starts.
         /// </summary>
-        public static List<int> Tessellate(double[] data, int[]? holeIndices, int dim = 2)
+        public static List<int> Tessellate(double[] data, int[]? holeIndices, int dim = 2) =>
+            Tessellate(data, data.Length, holeIndices, holeIndices?.Length ?? 0, new List<int>(), dim);
+
+        /// <summary>
+        /// <see cref="Tessellate(double[], int[], int)"/> on the first <paramref name="dataLength"/> numbers of
+        /// <paramref name="data"/> and the first <paramref name="holeCount"/> of <paramref name="holeIndices"/>, the
+        /// triangles appended to <paramref name="triangles"/> (Storey's: no garbage per call).
+        /// </summary>
+        public static List<int> Tessellate(double[] data, int dataLength, int[]? holeIndices, int holeCount, List<int> triangles, int dim = 2)
         {
-            bool hasHoles = holeIndices != null && holeIndices.Length > 0;
-            int outerLen = hasHoles ? holeIndices![0] * dim : data.Length;
+            nodesUsed = 0;
+            try { return Run(data, dataLength, holeIndices, holeCount, triangles, dim); }
+            finally { nodesUsed = 0; }
+        }
+
+        static List<int> Run(double[] data, int dataLength, int[]? holeIndices, int holeCount, List<int> triangles, int dim)
+        {
+            bool hasHoles = holeIndices != null && holeCount > 0;
+            int outerLen = hasHoles ? holeIndices![0] * dim : dataLength;
             var outerNode = LinkedList(data, 0, outerLen, dim, true);
-            var triangles = new List<int>();
 
             if (outerNode == null || outerNode.next == outerNode.prev) return triangles;
 
             double minX = 0, minY = 0, invSize = 0;
 
-            if (hasHoles) outerNode = EliminateHoles(data, holeIndices!, outerNode, dim);
+            if (hasHoles) outerNode = EliminateHoles(data, dataLength, holeIndices!, holeCount, outerNode, dim);
 
             // if the shape is not too simple, we'll use z-order curve hash later; calculate polygon bbox
-            if (data.Length > 80 * dim)
+            if (dataLength > 80 * dim)
             {
                 minX = double.PositiveInfinity; minY = double.PositiveInfinity;
                 double maxX = double.NegativeInfinity, maxY = double.NegativeInfinity;
@@ -223,20 +256,22 @@ namespace Triband.Storey.ThirdParty
             } while (a != start);
         }
 
-        static Node EliminateHoles(double[] data, int[] holeIndices, Node outerNode, int dim)
+        static Node EliminateHoles(double[] data, int dataLength, int[] holeIndices, int holeCount, Node outerNode, int dim)
         {
-            var queue = new List<Node>();
-            for (int i = 0, len = holeIndices.Length; i < len; i++)
+            var queue = holeQueue ??= new List<Node>();
+            queue.Clear();
+            for (int i = 0, len = holeCount; i < len; i++)
             {
                 int start = holeIndices[i] * dim;
-                int end = i < len - 1 ? holeIndices[i + 1] * dim : data.Length;
+                int end = i < len - 1 ? holeIndices[i + 1] * dim : dataLength;
                 var list = LinkedList(data, start, end, dim, false);
                 if (list == null) continue;
                 if (list == list.next) list.steiner = true;
                 queue.Add(GetLeftmost(list));
             }
-            queue.Sort(CompareXYSlope);
+            queue.Sort(ByXYSlope);
             for (int i = 0; i < queue.Count; i++) outerNode = EliminateHole(queue[i], outerNode);
+            queue.Clear();
             return outerNode;
         }
 
@@ -461,8 +496,8 @@ namespace Triband.Storey.ThirdParty
 
         static Node SplitPolygon(Node a, Node b)
         {
-            var a2 = new Node(a.i, a.x, a.y);
-            var b2 = new Node(b.i, b.x, b.y);
+            var a2 = NewNode(a.i, a.x, a.y);
+            var b2 = NewNode(b.i, b.x, b.y);
             Node an = a.next, bp = b.prev;
             a.next = b; b.prev = a;
             a2.next = an; an.prev = a2;
@@ -473,7 +508,7 @@ namespace Triband.Storey.ThirdParty
 
         static Node InsertNode(int i, double x, double y, Node? last)
         {
-            var p = new Node(i, x, y);
+            var p = NewNode(i, x, y);
             if (last == null)
             {
                 p.prev = p; p.next = p;

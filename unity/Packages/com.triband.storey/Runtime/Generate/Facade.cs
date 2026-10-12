@@ -232,7 +232,7 @@ namespace Triband.Storey.Generate
                         for (int q = 0; q < nb; q++)
                         {
                             double bu = pu + off + q * (BrickW + Mortar);
-                            op.Poly(new[] { F.At(bu, bv, wv), F.At(bu + BrickW, bv, wv), F.At(bu + BrickW, bv + BrickH, wv), F.At(bu, bv + BrickH, wv) }, nr, c);
+                            op.Quad(F.At(bu, bv, wv), F.At(bu + BrickW, bv, wv), F.At(bu + BrickW, bv + BrickH, wv), F.At(bu, bv + BrickH, wv), nr, c);
                         }
                     }
                     break;
@@ -267,12 +267,12 @@ namespace Triband.Storey.Generate
             for (int i = 0; i < n; i++)
             {
                 double x0 = -half + 2 * half * i / n, x1 = -half + 2 * half * (i + 1) / n, xm = (x0 + x1) / 2;
-                op.Poly(new[] { At(x0, Top(x0), w0), At(x1, Top(x1), w0), At(x1, Top(x1), w1), At(x0, Top(x0), w1) }, Up(-dTop(xm), 1), c);
-                op.Poly(new[] { At(x0, Bot(x0), w0), At(x0, Bot(x0), w1), At(x1, Bot(x1), w1), At(x1, Bot(x1), w0) }, Up(dBot(xm), -1), c);
+                op.Quad(At(x0, Top(x0), w0), At(x1, Top(x1), w0), At(x1, Top(x1), w1), At(x0, Top(x0), w1), Up(-dTop(xm), 1), c);
+                op.Quad(At(x0, Bot(x0), w0), At(x0, Bot(x0), w1), At(x1, Bot(x1), w1), At(x1, Bot(x1), w0), Up(dBot(xm), -1), c);
             }
             var side = new P3(F.u.x, 0, F.u.z);
-            op.Poly(new[] { At(-half, Bot(-half), w0), At(-half, Top(-half), w0), At(-half, Top(-half), w1), At(-half, Bot(-half), w1) }, side * -1, c);
-            op.Poly(new[] { At(half, Bot(half), w0), At(half, Bot(half), w1), At(half, Top(half), w1), At(half, Top(half), w0) }, side, c);
+            op.Quad(At(-half, Bot(-half), w0), At(-half, Top(-half), w0), At(-half, Top(-half), w1), At(-half, Bot(-half), w1), side * -1, c);
+            op.Quad(At(half, Bot(half), w0), At(half, Bot(half), w1), At(half, Top(half), w1), At(half, Top(half), w0), side, c);
         }
 
         /// <summary>How far a hood stands out from the wall, and how far past the opening it reaches each side.</summary>
@@ -335,17 +335,26 @@ namespace Triband.Storey.Generate
             return out_;
         }
 
-        public static List<Opening> MergeOps(List<Opening> ops)
+        public static List<Opening> MergeOps(List<Opening> ops) => MergeOps(ops, new List<Opening>(), new List<Opening>(ops.Count), null);
+
+        /// <summary>
+        /// <see cref="MergeOps(List{Opening})"/> into <paramref name="into"/>, sorting in <paramref name="sorted"/> (both
+        /// emptied first), the copies taken from <paramref name="copies"/> (made as needed) or made new when it is null.
+        /// </summary>
+        static List<Opening> MergeOps(List<Opening> ops, List<Opening> into, List<Opening> sorted, List<Opening>? copies)
         {
-            var sorted = new List<Opening>(ops); sorted.Sort((p, q) => p.u0.CompareTo(q.u0));
-            var out_ = new List<Opening>();
+            sorted.Clear(); sorted.AddRange(ops);
+            sorted.Sort((p, q) => p.u0.CompareTo(q.u0));
+            into.Clear();
+            int made = 0;
             foreach (var o in sorted)
             {
-                var l = out_.Count > 0 ? out_[out_.Count - 1] : null;
+                var l = into.Count > 0 ? into[into.Count - 1] : null;
                 if (l != null && o.u0 < l.u1 + 1e-3) { l.u1 = Math.Max(l.u1, o.u1); l.y0 = Math.Min(l.y0, o.y0); l.y1 = Math.Max(l.y1, o.y1); l.door = l.door || o.door; }
-                else out_.Add(o.Clone());
+                else if (copies == null) into.Add(o.Clone());
+                else { if (made == copies.Count) copies.Add(new Opening()); into.Add(copies[made++].Set(o)); }
             }
-            return out_;
+            return into;
         }
 
         public static void PushSeg(List<Seg> sg, Frame F, double s, double e, double wo, double r)
@@ -378,6 +387,30 @@ namespace Triband.Storey.Generate
             public double? revealFrom; public Swatch? revealC;
         }
 
+        static readonly PanelOpt DefaultPanel = new PanelOpt();   // read only: WallPanel never changes its options
+
+        // what WallPanel works in, kept by each build thread for its next panel
+        [ThreadStatic] static PanelScratch? panelScratch;
+
+        sealed class PanelScratch
+        {
+            public readonly List<Opening> Merged = new List<Opening>(), Sorted = new List<Opening>(), Copies = new List<Opening>();
+            public readonly List<Vec2> Cont = new List<Vec2>();
+            public readonly List<List<Vec2>> Holes = new List<List<Vec2>>();
+            readonly List<List<Vec2>> spare = new List<List<Vec2>>();
+            public readonly List<int> Tris = new List<int>();
+            public readonly List<P3> Pts = new List<P3>();
+
+            /// <summary>An empty ring added to <see cref="Holes"/>, one used before when there is one.</summary>
+            public List<Vec2> Hole()
+            {
+                int k = Holes.Count;
+                if (k == spare.Count) spare.Add(new List<Vec2>(4));
+                var h = spare[k]; h.Clear(); Holes.Add(h);
+                return h;
+            }
+        }
+
         /// <summary>
         /// Wall panel: each face one polygon with the openings cut out, triangulated once. Only visible
         /// surfaces: outer face, inner face (optional), the reveals of each opening, end faces for
@@ -386,21 +419,23 @@ namespace Triband.Storey.Generate
         public static void WallPanel(MeshBuilder gb, Frame F, Miter m, double w0, double w1, double y0, double h, List<Opening> ops, Swatch cOut, Swatch cIn, PanelOpt? opt = null)
         {
             if (gb.ShapeOnly) return;   // faces only: no walls numbered, no segments
-            opt ??= new PanelOpt();
-            var os = MergeOps(ops);
+            opt ??= DefaultPanel;
+            // the outline, holes, triangles and points of each face, and the merged openings, in this thread's own lists
+            var sc = panelScratch ??= new PanelScratch();
+            var os = MergeOps(ops, sc.Merged, sc.Sorted, sc.Copies);
             P3 X(double uu, double yy, double wv) => F.At(uu, y0 + yy, wv);
             void Face(double wv, int sign, Swatch c)
             {
                 double s = m.S.At(wv), e = m.E.At(wv);
-                var cont = new List<Vec2> { new Vec2(s, 0) };
+                var cont = sc.Cont; cont.Clear(); cont.Add(new Vec2(s, 0));
                 foreach (var o in os) if (o.y0 <= 1e-3) { cont.Add(new Vec2(o.u0, 0)); cont.Add(new Vec2(o.u0, o.y1)); cont.Add(new Vec2(o.u1, o.y1)); cont.Add(new Vec2(o.u1, 0)); }
                 cont.Add(new Vec2(e, 0)); cont.Add(new Vec2(e, h));
                 for (int j = os.Count - 1; j >= 0; j--) { var o = os[j]; if (o.y1 >= h - 1e-3 && o.y0 > 1e-3) { cont.Add(new Vec2(o.u1, h)); cont.Add(new Vec2(o.u1, o.y0)); cont.Add(new Vec2(o.u0, o.y0)); cont.Add(new Vec2(o.u0, h)); } }
                 cont.Add(new Vec2(s, h));
-                var holes = new List<List<Vec2>>();
-                foreach (var o in os) if (o.y0 > 1e-3 && o.y1 < h - 1e-3) holes.Add(new List<Vec2> { new Vec2(o.u0, o.y0), new Vec2(o.u1, o.y0), new Vec2(o.u1, o.y1), new Vec2(o.u0, o.y1) });
-                var tris = Triangulate.Shape(cont, holes);
-                var pts = new List<P3>();
+                var holes = sc.Holes; holes.Clear();
+                foreach (var o in os) if (o.y0 > 1e-3 && o.y1 < h - 1e-3) { var hl = sc.Hole(); hl.Add(new Vec2(o.u0, o.y0)); hl.Add(new Vec2(o.u1, o.y0)); hl.Add(new Vec2(o.u1, o.y1)); hl.Add(new Vec2(o.u0, o.y1)); }
+                var tris = Triangulate.Shape(cont, holes, sc.Tris);
+                var pts = sc.Pts; pts.Clear();
                 foreach (var q in cont) pts.Add(X(q.x, q.z, wv));
                 foreach (var hh in holes) foreach (var q in hh) pts.Add(X(q.x, q.z, wv));
                 gb.PolyTris(pts, tris, new P3(F.w.x * sign, 0, F.w.z * sign), c);
@@ -411,16 +446,16 @@ namespace Triband.Storey.Generate
             var nu = new P3(F.u.x, 0, F.u.z);
             foreach (var o in os)
             {
-                gb.Poly(new[] { X(o.u0, o.y0, rw), X(o.u0, o.y0, w1), X(o.u0, o.y1, w1), X(o.u0, o.y1, rw) }, nu, rc);
-                gb.Poly(new[] { X(o.u1, o.y0, rw), X(o.u1, o.y0, w1), X(o.u1, o.y1, w1), X(o.u1, o.y1, rw) }, new P3(-nu.x, 0, -nu.z), rc);
-                if (o.y0 > 1e-3 || opt.threshold || o.thr) gb.Poly(new[] { X(o.u0, o.y0, rw), X(o.u1, o.y0, rw), X(o.u1, o.y0, w1), X(o.u0, o.y0, w1) }, new P3(0, 1, 0), rc);
-                if (o.y1 < h - 1e-3) gb.Poly(new[] { X(o.u0, o.y1, rw), X(o.u1, o.y1, rw), X(o.u1, o.y1, w1), X(o.u0, o.y1, w1) }, new P3(0, -1, 0), rc);
+                gb.Quad(X(o.u0, o.y0, rw), X(o.u0, o.y0, w1), X(o.u0, o.y1, w1), X(o.u0, o.y1, rw), nu, rc);
+                gb.Quad(X(o.u1, o.y0, rw), X(o.u1, o.y0, w1), X(o.u1, o.y1, w1), X(o.u1, o.y1, rw), new P3(-nu.x, 0, -nu.z), rc);
+                if (o.y0 > 1e-3 || opt.threshold || o.thr) gb.Quad(X(o.u0, o.y0, rw), X(o.u1, o.y0, rw), X(o.u1, o.y0, w1), X(o.u0, o.y0, w1), new P3(0, 1, 0), rc);
+                if (o.y1 < h - 1e-3) gb.Quad(X(o.u0, o.y1, rw), X(o.u1, o.y1, rw), X(o.u1, o.y1, w1), X(o.u0, o.y1, w1), new P3(0, -1, 0), rc);
             }
             if (opt.ends)
             {
                 double s0 = m.S.At(w0), s1 = m.S.At(w1), e0 = m.E.At(w0), e1 = m.E.At(w1);
-                gb.Poly(new[] { X(s0, 0, w0), X(s1, 0, w1), X(s1, h, w1), X(s0, h, w0) }, Geo.EndNormal(F, s0, s1, w0, w1, -1), cOut);
-                gb.Poly(new[] { X(e0, 0, w0), X(e1, 0, w1), X(e1, h, w1), X(e0, h, w0) }, Geo.EndNormal(F, e0, e1, w0, w1, 1), cOut);
+                gb.Quad(X(s0, 0, w0), X(s1, 0, w1), X(s1, h, w1), X(s0, h, w0), Geo.EndNormal(F, s0, s1, w0, w1, -1), cOut);
+                gb.Quad(X(e0, 0, w0), X(e1, 0, w1), X(e1, h, w1), X(e0, h, w0), Geo.EndNormal(F, e0, e1, w0, w1, 1), cOut);
             }
             if (gb.Solids != null)
             {
@@ -437,10 +472,10 @@ namespace Triband.Storey.Generate
         /// <summary>A glass or door pane filling an opening: one quad (two for glass seen from both sides).</summary>
         public static void Pane(MeshBuilder gb, Frame F, double u0, double u1, double y0, double y1, double wv, Swatch c, bool two)
         {
-            var q = new[] { F.At(u0, y0, wv), F.At(u1, y0, wv), F.At(u1, y1, wv), F.At(u0, y1, wv) };
+            P3 a = F.At(u0, y0, wv), b = F.At(u1, y0, wv), d = F.At(u1, y1, wv), e = F.At(u0, y1, wv);
             int first = gb.Verts;
-            gb.Poly(q, new P3(F.w.x, 0, F.w.z), c);
-            if (two) gb.Poly((P3[])q.Clone(), new P3(-F.w.x, 0, -F.w.z), c);
+            gb.Quad(a, b, d, e, new P3(F.w.x, 0, F.w.z), c);
+            if (two) gb.Quad(a, b, d, e, new P3(-F.w.x, 0, -F.w.z), c);
             PaneUV(gb, first, F, u0, u1, y0, y1);
         }
 

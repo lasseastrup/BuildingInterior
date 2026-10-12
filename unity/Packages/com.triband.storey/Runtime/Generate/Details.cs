@@ -205,8 +205,8 @@ namespace Triband.Storey.Generate
                     case DetailKind.Awning:
                     {
                         double yt = y + d.yt, u0 = d.u0, u1 = d.u1; var nn = new P3(w.x * 0.371, 0.928, w.z * 0.371);
-                        op.Poly(new[] { X(u0, yt + 0.45, T), X(u1, yt + 0.45, T), X(u1, yt + 0.05, T + 1.0), X(u0, yt + 0.05, T + 1.0) }, nn, canvas);
-                        op.Poly(new[] { X(u0, yt + 0.41, T), X(u1, yt + 0.41, T), X(u1, yt + 0.01, T + 1.0), X(u0, yt + 0.01, T + 1.0) }, nn * -1, canvasIn);
+                        op.Quad(X(u0, yt + 0.45, T), X(u1, yt + 0.45, T), X(u1, yt + 0.05, T + 1.0), X(u0, yt + 0.05, T + 1.0), nn, canvas);
+                        op.Quad(X(u0, yt + 0.41, T), X(u1, yt + 0.41, T), X(u1, yt + 0.01, T + 1.0), X(u0, yt + 0.01, T + 1.0), nn * -1, canvasIn);
                         Bx(u0, u1, yt - 0.15, yt + 0.05, T + 0.98, T + 1.02, canvas, null, Skip.UStart | Skip.UEnd);
                         if (lod == 0) foreach (var (uu, sg) in new[] { (u0, -1.0), (u1, 1.0) }) op.Poly(new[] { X(uu, yt + 0.45, T), X(uu, yt + 0.05, T + 1.0), X(uu, yt - 0.15, T + 1.0) }, new P3(u.x * sg, 0, u.z * sg), canvasIn);
                         break;
@@ -235,7 +235,7 @@ namespace Triband.Storey.Generate
                             if (lod == 0)
                             {
                                 for (int j = 0; j < n; j++) { double uA = us + run * j, uB = us + run * (j + 1), yt = pt + rise * (j + 1); Bx(Math.Min(uA, uB), Math.Max(uA, uB), yt - 0.05, yt, T + 0.15, T + 0.95, rail); }
-                                foreach (var (ww, sg) in new[] { (T + 0.96, 1.0), (T + 0.14, -1.0) }) op.Poly(new[] { X(us, pt - 0.05, ww), X(ue, pt + h - 0.45, ww), X(ue, pt + h - 0.17, ww), X(us, pt + 0.23, ww) }, new P3(w.x * sg, 0, w.z * sg), dark);
+                                foreach (var (ww, sg) in new[] { (T + 0.96, 1.0), (T + 0.14, -1.0) }) op.Quad(X(us, pt - 0.05, ww), X(ue, pt + h - 0.45, ww), X(ue, pt + h - 0.17, ww), X(us, pt + 0.23, ww), new P3(w.x * sg, 0, w.z * sg), dark);
                             }
                             else
                             {
