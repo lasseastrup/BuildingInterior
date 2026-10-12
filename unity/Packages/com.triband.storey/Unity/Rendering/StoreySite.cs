@@ -107,7 +107,9 @@ namespace Triband.Storey.Unity
         {
             get
             {
-                var d = Shown; if (d == null || d.buildings.Count == 0) return null;
+                // a layout still being parsed on a build thread has no area yet: asking for it mustn't parse it here
+                var d = preview ?? (layout == null ? null : Application.isPlaying && LoadOverFrames ? layout.Parsed : layout.Document);
+                if (d == null || d.buildings.Count == 0) return null;
                 var o = transform.position;
                 if (!ReferenceEquals(d, areaFor) || d.buildings.Count != areaCount || o != areaAt)
                 {
@@ -134,13 +136,15 @@ namespace Triband.Storey.Unity
 
         /// <summary>
         /// Load the layout over several frames when the site starts in Play mode, nearest cells first, rather than all in
-        /// the frame it starts (docs/CITY.md §2). On by default, so a district streamed in never holds a frame; turn it off
-        /// to have every building at once (behind a loading screen, say), or wait for <see cref="Loading"/> to clear.
+        /// the frame it starts (docs/CITY.md §2): its text and its neighbours' are parsed on the build threads first. On by
+        /// default, so a district streamed in never holds a frame; turn it off to have every building at once (behind a
+        /// loading screen, say), or wait for <see cref="Loading"/> to clear.
         /// </summary>
         public bool LoadOverFrames { get; set; } = true;
 
-        /// <summary>The layout is still loading over frames: some of its buildings aren't built yet.</summary>
-        public bool Loading => site != null && site.Loading;
+        /// <summary>The layout is still loading over frames: its text is being parsed, or some of its buildings aren't built yet.</summary>
+        public bool Loading => site != null && (parsing || site.Loading);
+        bool parsing;
 
         /// <summary>
         /// Show an edited layout that is not saved yet, building again what <paramref name="change"/> names (all of it
@@ -215,6 +219,15 @@ namespace Triband.Storey.Unity
             }
             site.Layer = gameObject.layer;   // everything the site makes is on its layer
             site.LoadOverFrames = LoadOverFrames;
+            // in Play mode, loading over frames, the layouts are parsed on the build threads, all at once, and the site waits
+            // for them: a district streamed in isn't held up a frame by its text (docs/CITY.md §2)
+            parsing = false;
+            if (Application.isPlaying && LoadOverFrames)
+            {
+                site.StartThreads();
+                if (layout.DocumentOffMainThread() == null) parsing = true;
+                foreach (var n in neighbours) if (n != null && n.layout != null && n.layout.DocumentOffMainThread() == null) parsing = true;
+            }
             site.Colliders = generateColliders && (Application.isPlaying || collidersInEditMode);
             // the neighbouring districts, for party walls along the edge: a change builds everything again
             // (the layouts' texts compared as objects: a reimport makes a new one, and nothing is read or hashed)
@@ -224,7 +237,7 @@ namespace Triband.Storey.Unity
                 var n = neighbours[i]; var was = neighboursSeen[i];
                 neighboursChanged = was.layout != n?.layout || was.offset != (n?.offset ?? default) || !ReferenceEquals(was.text, n?.layout?.Json);
             }
-            if (neighboursChanged)
+            if (neighboursChanged && !parsing)
             {
                 neighboursFor = layout; shownJson = null; pendingAll = true;
                 neighboursSeen.Clear(); foreach (var n in neighbours) neighboursSeen.Add((n?.layout, n?.offset ?? default, n?.layout?.Json));
@@ -238,7 +251,7 @@ namespace Triband.Storey.Unity
             if (auto && Application.isPlaying && (pendingAll || (preview == null && shownJson != layout.Json))) EyeFor(site);
             if (preview == null)
             {
-                if (shownJson != layout.Json) { site.Show(layout.Document); shownJson = layout.Json; }
+                if (shownJson != layout.Json && !parsing) { site.Show(layout.Document); shownJson = layout.Json; }
             }
             else if (pendingAll) site.Show(preview);
             else if (pending.Count > 0) site.Rebuild(preview, pending);

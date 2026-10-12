@@ -25,6 +25,7 @@ namespace Triband.Storey.Unity
         [SerializeField] internal string[] unknownKeys = System.Array.Empty<string>();
 
         StoreyDocument? cached;
+        Lod.LayoutParse? parse;
 
         public string Json => json;
         public int BuildingCount => buildingCount;
@@ -32,8 +33,39 @@ namespace Triband.Storey.Unity
         /// <summary>Keys in the file the model does not know. Non-empty means the package lags the prototype.</summary>
         public string[] UnknownKeys => unknownKeys;
 
-        /// <summary>The parsed layout, parsed once per asset load.</summary>
-        public StoreyDocument Document => cached ??= PrototypeJson.Read(json).Document;
+        /// <summary>
+        /// The parsed layout, parsed once per asset load, on the caller's thread: one being parsed on a build thread
+        /// (<see cref="DocumentOffMainThread"/>) is waited for.
+        /// </summary>
+        public StoreyDocument Document
+        {
+            get
+            {
+                if (cached == null)
+                {
+                    cached = parse != null && ReferenceEquals(parse.Text, json) ? parse.Wait() : PrototypeJson.Read(json).Document;
+                    parse = null;
+                }
+                return cached;
+            }
+        }
+
+        /// <summary>The parsed layout when it is parsed already, otherwise null: nothing is parsed.</summary>
+        public StoreyDocument? Parsed => cached;
+
+        /// <summary>
+        /// The parsed layout, parsed on a build thread (<see cref="Lod.LayoutParse"/>): null until it is done, the parse
+        /// started by the first call. Ask each frame. A site loading over frames in Play mode reads its layouts so, and a
+        /// district streamed in isn't held up a frame by its text (docs/CITY.md §2).
+        /// </summary>
+        public StoreyDocument? DocumentOffMainThread()
+        {
+            if (cached != null) return cached;
+            if (parse == null || !ReferenceEquals(parse.Text, json)) parse = new Lod.LayoutParse(json);
+            var d = parse.Document;
+            if (d != null) { cached = d; parse = null; }
+            return d;
+        }
 
         internal void Set(string text, DocumentSummary s)
         {
@@ -45,7 +77,7 @@ namespace Triband.Storey.Unity
             coreCount = s.coreCount;
             detailCount = s.detailCount;
             unknownKeys = s.unknownKeys.ToArray();
-            cached = null;
+            cached = null; parse = null;
         }
     }
 }

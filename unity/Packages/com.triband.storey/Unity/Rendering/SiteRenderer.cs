@@ -693,6 +693,9 @@ namespace Triband.Storey.Unity
         /// <summary>A mesh's name, numbered when it comes in parts.</summary>
         static string Part(string name, int i, int n) => n > 1 ? $"{name} ({i + 1})" : name;
 
+        /// <summary>The build threads sized for this site, as its first build would size them, so work can start on them before it.</summary>
+        internal void StartThreads() => _ = Threads;
+
         /// <summary>
         /// Build threads (<see cref="BuildThreads.Shared"/>, sized here: one count for every site): the settings' number, or
         /// automatic, two on a phone or tablet and one fewer than the cores (at most four) on a desktop.
