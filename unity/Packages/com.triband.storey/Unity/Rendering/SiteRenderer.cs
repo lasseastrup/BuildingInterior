@@ -546,7 +546,7 @@ namespace Triband.Storey.Unity
         }
 
         /// <summary>
-        /// The engine-free half of a detail build: generated, tagged, welded and packed. Safe on a worker thread (the
+        /// The engine-free half of a detail build: generated, tagged and packed (LOD1 welded first). Safe on a worker thread (the
         /// generator's memos are per site and thread-safe; ParallelBuildTests). <paramref name="mates"/>: the site's block
         /// of the table, for party walls; <paramref name="collider"/>: the building's collision mesh is wanted too.
         /// </summary>
@@ -555,8 +555,8 @@ namespace Triband.Storey.Unity
             if (which == 1) { var m = Lod1.Build(site, b); m.RetagForUpload(idx + Lod1.LOD_TAG); return new Detail { opaque = MeshPack.Pack(m, windows: true) }; }
             var l0 = Lod0.Build(site, b);
             l0.Op.RetagForUpload(idx); l0.Glass.RetagForUpload(idx);
-            // the glass's panes carry their place too, to start as LOD1's
-            return new Detail { opaque = MeshPack.Pack(l0.Op, true, mates), glass = MeshPack.Pack(l0.Glass, true, mates), shape = l0.Shape, collision = collider ? CollisionMesh.Build(site, b, l0.Shape) : null };
+            // the glass's panes carry their place too, to start as LOD1's; neither is welded (it would find almost nothing)
+            return new Detail { opaque = MeshPack.Pack(l0.Op, true, mates, weld: false), glass = MeshPack.Pack(l0.Glass, true, mates, weld: false), shape = l0.Shape, collision = collider ? CollisionMesh.Build(site, b, l0.Shape) : null };
         }
 
         /// <summary>

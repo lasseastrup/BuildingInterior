@@ -119,16 +119,20 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>
-        /// The builder (welded first if it isn't) in the upload's layout, in parts of at most <paramref name="maxVerts"/>
-        /// vertices, each with 16-bit indices: the triangles in order, a part closed when the next would take it past,
-        /// the vertices a triangle shares with the part before copied into its own. A mesh that fits is one part, its
-        /// vertices as welded. None for a mesh without triangles. <paramref name="windows"/>: panes carry their place on
-        /// the pane (the opaque meshes and the glass, not the massing). <paramref name="mates"/>: where the site's
-        /// buildings sit in the table, for party walls (<see cref="MateIndex.Shift"/>).
+        /// The builder (welded first if it isn't, unless <paramref name="weld"/> is false) in the upload's layout, in parts
+        /// of at most <paramref name="maxVerts"/> vertices, each with 16-bit indices: the triangles in order, a part closed
+        /// when the next would take it past, the vertices a triangle shares with the part before copied into its own. A
+        /// mesh that fits is one part, its vertices as built. None for a mesh without triangles. <paramref name="windows"/>:
+        /// panes carry their place on the pane (the opaque meshes and the glass, not the massing). <paramref name="mates"/>:
+        /// where the site's buildings sit in the table, for party walls (<see cref="MateIndex.Shift"/>).
         /// </summary>
-        public static List<PackedMesh> Pack(MeshBuilder gb, bool windows = false, (int start, int count)? mates = null, int maxVerts = MaxVerts)
+        /// <param name="weld">
+        /// False for LOD0 and its glass: the generator already shares their vertices, and welding found under half a
+        /// percent more while taking a fifth to a quarter of a worker's build (docs/CITY.md §7, WeldTests).
+        /// </param>
+        public static List<PackedMesh> Pack(MeshBuilder gb, bool windows = false, (int start, int count)? mates = null, int maxVerts = MaxVerts, bool weld = true)
         {
-            if (!gb.Welded) gb.Weld();
+            if (weld && !gb.Welded) gb.Weld();
             int nv = gb.Verts, ni = gb.I.Count;
             var out_ = new List<PackedMesh>(1);
             if (ni == 0) return out_;

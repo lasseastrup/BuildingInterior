@@ -39,13 +39,13 @@ namespace Triband.Storey.Tests
 
         // each measurement in its own method: a local of the measuring one would keep a result alive through the collection
         [MethodImpl(MethodImplOptions.NoInlining)]
-        static List<Lod0Shape> Shapes(Site site, IEnumerable<BuildingData> bs) => bs.Select(b => { var r = Lod0.Build(site, b); r.Op.Weld(); r.Glass.Weld(); return r.Shape; }).ToList();
+        static List<Lod0Shape> Shapes(Site site, IEnumerable<BuildingData> bs) => bs.Select(b => Lod0.Build(site, b).Shape).ToList();
 
         [Fact]
         public void ABuildingAtLod0KeepsOnlyItsShape()
         {
             var (_, site) = City.Value;
-            (BuildingData b, long g) Sized(BuildingData b) { var r = Lod0.Build(site, b); r.Op.Weld(); r.Glass.Weld(); return (b, Gpu(r.Op) + Gpu(r.Glass)); }
+            (BuildingData b, long g) Sized(BuildingData b) { var r = Lod0.Build(site, b); return (b, Gpu(r.Op) + Gpu(r.Glass)); }
             // the largest: the 16 biggest LOD0s of the 48 buildings with the most floor area; and every 12th building (enough of
             // them that what they keep is well above the heap count's noise of a few hundred kilobytes)
             var largest = site.Buildings.OrderByDescending(b => b.floors.Count * Math.Abs(Geo.Area2(b.footprint))).Take(48).Select(Sized).OrderByDescending(x => x.g).Take(16).ToList();
@@ -69,12 +69,12 @@ namespace Triband.Storey.Tests
                 var r = Lod0.Build(site, b);
                 foreach (var m in new[] { r.Op, r.Glass })
                 {
-                    m.Weld(); gpu += Gpu(m);
-                    builder += m.Verts * (24L + 24 + 24 + 8) + 4L * m.I.Count;   // P, N, C, K and WI, I: what the welded builder held
-                    foreach (var p in MeshPack.Pack(m, true)) packed += 24L * p.Verts + (p.Cut != null ? 8L * p.Verts : 0) + 2L * p.Indices;
+                    gpu += Gpu(m);
+                    builder += m.Verts * (24L + 24 + 24 + 8) + 4L * m.I.Count;   // P, N, C, K and WI, I: what the builder held
+                    foreach (var p in MeshPack.Pack(m, true, weld: false)) packed += 24L * p.Verts + (p.Cut != null ? 8L * p.Verts : 0) + 2L * p.Indices;
                 }
             }
-            log.WriteLine($"a finished LOD0 waiting for its upload: {MB(packed) / n:0.00} MB packed, {MB(builder) / n:0.00} MB as the welded builder held it; its GPU meshes {MB(gpu) / n:0.00} MB");
+            log.WriteLine($"a finished LOD0 waiting for its upload: {MB(packed) / n:0.00} MB packed, {MB(builder) / n:0.00} MB as the builder held it; its GPU meshes {MB(gpu) / n:0.00} MB");
             Assert.True(packed <= gpu, "packed bigger than its meshes");
             Assert.True(packed * 2 < builder);
         }
@@ -82,7 +82,7 @@ namespace Triband.Storey.Tests
         static long Make(Site site, BuildingData b)
         {
             long a0 = GC.GetAllocatedBytesForCurrentThread();
-            var r = Lod0.Build(site, b); MeshPack.Pack(r.Op, true, (0, 10)); MeshPack.Pack(r.Glass, true, (0, 10));
+            var r = Lod0.Build(site, b); MeshPack.Pack(r.Op, true, (0, 10), weld: false); MeshPack.Pack(r.Glass, true, (0, 10), weld: false);
             MeshPack.Pack(Lod1.Build(site, b), true);
             return GC.GetAllocatedBytesForCurrentThread() - a0;
         }
@@ -97,7 +97,7 @@ namespace Triband.Storey.Tests
             foreach (var b in bs.Skip(1)) first += Make(site, b);
             foreach (var b in bs.Skip(1)) again += Make(site, b);
             double f = MB(first) / (bs.Count - 1), g = MB(again) / (bs.Count - 1);
-            log.WriteLine($"LOD0 and LOD1 built, welded and packed: {f:0.00} MB allocated the first time, {g:0.00} MB built again");
+            log.WriteLine($"LOD0 and LOD1 built and packed as the renderer does: {f:0.00} MB allocated the first time, {g:0.00} MB built again");
             Assert.True(f < 16, $"{f:0.0} MB allocated building a LOD0 and LOD1");
             Assert.True(g < f * 0.75, $"{g:0.0} MB built again, {f:0.0} the first time");
         }
