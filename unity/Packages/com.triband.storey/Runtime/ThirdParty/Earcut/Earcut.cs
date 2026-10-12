@@ -5,9 +5,10 @@
 // Behaviour is the same: a fast ear-clipping triangulator for polygons with holes, tolerant of
 // degenerate input, returning triangle vertex indices into the flat coordinate array.
 //
-// Storey's changes, for no garbage per call: a thread's nodes and hole queue are reused by its next
-// triangulation (NewNode, holeQueue), and an overload of Tessellate takes the lengths of the data and
-// hole arrays (which may be longer) and appends to a list it is given.
+// Storey's changes, for no garbage per call: Earcut is a class whose instance keeps its nodes and hole
+// queue for its next triangulation (NewNode, holeQueue); the functions that make nodes are its methods,
+// the rest stay static. An instance's Tessellate takes the lengths of the data and hole arrays (which may
+// be longer) and appends to a list it is given. One thread uses an instance at a time.
 #nullable enable annotations   // the port marks nullable references; annotations only, no warnings
 
 using System;
@@ -15,7 +16,7 @@ using System.Collections.Generic;
 
 namespace Triband.Storey.ThirdParty
 {
-    public static class Earcut
+    public sealed class Earcut
     {
         sealed class Node
         {
@@ -29,17 +30,16 @@ namespace Triband.Storey.ThirdParty
             public void Set(int i, double x, double y) { this.i = i; this.x = x; this.y = y; prev = next = null!; z = 0; prevZ = nextZ = null; steiner = false; }
         }
 
-        // Storey: the nodes of a thread's last triangulation, taken again by its next (Tessellate starts from the first)
-        [ThreadStatic] static List<Node>? nodes;
-        [ThreadStatic] static int nodesUsed;
-        [ThreadStatic] static List<Node>? holeQueue;
+        // Storey: the nodes of this instance's last triangulation, taken again by its next (Tessellate starts from the first)
+        readonly List<Node> nodes = new List<Node>();
+        int nodesUsed;
+        readonly List<Node> holeQueue = new List<Node>();
         static readonly Comparison<Node> ByXYSlope = CompareXYSlope;
 
-        static Node NewNode(int i, double x, double y)
+        Node NewNode(int i, double x, double y)
         {
-            var pool = nodes ??= new List<Node>();
-            if (nodesUsed < pool.Count) { var n = pool[nodesUsed++]; n.Set(i, x, y); return n; }
-            var m = new Node(i, x, y); pool.Add(m); nodesUsed++;
+            if (nodesUsed < nodes.Count) { var n = nodes[nodesUsed++]; n.Set(i, x, y); return n; }
+            var m = new Node(i, x, y); nodes.Add(m); nodesUsed++;
             return m;
         }
 
@@ -48,21 +48,21 @@ namespace Triband.Storey.ThirdParty
         /// <paramref name="holeIndices"/> the vertex index at which each hole ring starts.
         /// </summary>
         public static List<int> Tessellate(double[] data, int[]? holeIndices, int dim = 2) =>
-            Tessellate(data, data.Length, holeIndices, holeIndices?.Length ?? 0, new List<int>(), dim);
+            new Earcut().Tessellate(data, data.Length, holeIndices, holeIndices?.Length ?? 0, new List<int>(), dim);
 
         /// <summary>
         /// <see cref="Tessellate(double[], int[], int)"/> on the first <paramref name="dataLength"/> numbers of
         /// <paramref name="data"/> and the first <paramref name="holeCount"/> of <paramref name="holeIndices"/>, the
-        /// triangles appended to <paramref name="triangles"/> (Storey's: no garbage per call).
+        /// triangles appended to <paramref name="triangles"/> (Storey's: this instance's nodes are taken again, no garbage).
         /// </summary>
-        public static List<int> Tessellate(double[] data, int dataLength, int[]? holeIndices, int holeCount, List<int> triangles, int dim = 2)
+        public List<int> Tessellate(double[] data, int dataLength, int[]? holeIndices, int holeCount, List<int> triangles, int dim = 2)
         {
             nodesUsed = 0;
             try { return Run(data, dataLength, holeIndices, holeCount, triangles, dim); }
             finally { nodesUsed = 0; }
         }
 
-        static List<int> Run(double[] data, int dataLength, int[]? holeIndices, int holeCount, List<int> triangles, int dim)
+        List<int> Run(double[] data, int dataLength, int[]? holeIndices, int holeCount, List<int> triangles, int dim)
         {
             bool hasHoles = holeIndices != null && holeCount > 0;
             int outerLen = hasHoles ? holeIndices![0] * dim : dataLength;
@@ -95,7 +95,7 @@ namespace Triband.Storey.ThirdParty
             return triangles;
         }
 
-        static Node? LinkedList(double[] data, int start, int end, int dim, bool clockwise)
+        Node? LinkedList(double[] data, int start, int end, int dim, bool clockwise)
         {
             Node? last = null;
             if (clockwise == (SignedArea(data, start, end, dim) > 0))
@@ -135,7 +135,7 @@ namespace Triband.Storey.ThirdParty
             return end;
         }
 
-        static void EarcutLinked(Node? ear, List<int> triangles, int dim, double minX, double minY, double invSize, int pass)
+        void EarcutLinked(Node? ear, List<int> triangles, int dim, double minX, double minY, double invSize, int pass)
         {
             if (ear == null) return;
             if (pass == 0 && invSize != 0) IndexCurve(ear, minX, minY, invSize);
@@ -233,7 +233,7 @@ namespace Triband.Storey.ThirdParty
             return FilterPoints(p);
         }
 
-        static void SplitEarcut(Node start, List<int> triangles, int dim, double minX, double minY, double invSize)
+        void SplitEarcut(Node start, List<int> triangles, int dim, double minX, double minY, double invSize)
         {
             Node a = start;
             do
@@ -256,9 +256,9 @@ namespace Triband.Storey.ThirdParty
             } while (a != start);
         }
 
-        static Node EliminateHoles(double[] data, int dataLength, int[] holeIndices, int holeCount, Node outerNode, int dim)
+        Node EliminateHoles(double[] data, int dataLength, int[] holeIndices, int holeCount, Node outerNode, int dim)
         {
-            var queue = holeQueue ??= new List<Node>();
+            var queue = holeQueue;
             queue.Clear();
             for (int i = 0, len = holeCount; i < len; i++)
             {
@@ -291,7 +291,7 @@ namespace Triband.Storey.ThirdParty
             return result < 0 ? -1 : result > 0 ? 1 : 0;
         }
 
-        static Node EliminateHole(Node hole, Node outerNode)
+        Node EliminateHole(Node hole, Node outerNode)
         {
             var bridge = FindHoleBridge(hole, outerNode);
             if (bridge == null) return outerNode;
@@ -494,7 +494,7 @@ namespace Triband.Storey.ThirdParty
             return inside;
         }
 
-        static Node SplitPolygon(Node a, Node b)
+        Node SplitPolygon(Node a, Node b)
         {
             var a2 = NewNode(a.i, a.x, a.y);
             var b2 = NewNode(b.i, b.x, b.y);
@@ -506,7 +506,7 @@ namespace Triband.Storey.ThirdParty
             return b2;
         }
 
-        static Node InsertNode(int i, double x, double y, Node? last)
+        Node InsertNode(int i, double x, double y, Node? last)
         {
             var p = NewNode(i, x, y);
             if (last == null)

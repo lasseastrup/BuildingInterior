@@ -140,23 +140,34 @@ namespace Triband.Storey.Play
             return out_;
         }
 
-        // scratch, per thread: a walk model may be asked from more than one (no garbage, and no thread treads on another's)
-        [ThreadStatic] static HashSet<BuildingData>? nearSeenT;
-        [ThreadStatic] static List<BuildingData>? nearSharedT;
-        [ThreadStatic] static List<Seg>? collideSegsT;
+        // what a query works in, lent out for each: a walk model may be asked from more than one thread at once (the tests
+        // do), and none treads on another's; every frame, no garbage (Lender: no thread-static fields)
+        sealed class Scratch
+        {
+            public readonly HashSet<BuildingData> Seen = new HashSet<BuildingData>();
+            public readonly List<BuildingData> Near = new List<BuildingData>();
+            public readonly List<Seg> Segs = new List<Seg>();
+        }
+        readonly Lender<Scratch> scratch = new Lender<Scratch>(4);
 
         /// <summary><see cref="Near"/> into a list the caller keeps (cleared first): nothing allocated.</summary>
         public void NearInto(double x, double z, double rad, List<BuildingData> into)
         {
-            var nearSeen = nearSeenT ??= new HashSet<BuildingData>();
-            into.Clear(); nearSeen.Clear();
-            for (int gx = (int)Math.Floor((x - rad) / BGRID); gx <= (int)Math.Floor((x + rad) / BGRID); gx++)
-                for (int gz = (int)Math.Floor((z - rad) / BGRID); gz <= (int)Math.Floor((z + rad) / BGRID); gz++)
-                    if (grid.TryGetValue((gx, gz), out var l)) foreach (var b in l) if (nearSeen.Add(b)) into.Add(b);
+            var sc = scratch.Take();
+            try { NearInto(x, z, rad, into, sc.Seen); }
+            finally { scratch.Give(sc); }
         }
 
-        // the walk model's own queries, each done with its list before the next (every frame: no garbage)
-        List<BuildingData> NearShared(double x, double z, double rad) { var l = nearSharedT ??= new List<BuildingData>(); NearInto(x, z, rad, l); return l; }
+        void NearInto(double x, double z, double rad, List<BuildingData> into, HashSet<BuildingData> seen)
+        {
+            into.Clear(); seen.Clear();
+            for (int gx = (int)Math.Floor((x - rad) / BGRID); gx <= (int)Math.Floor((x + rad) / BGRID); gx++)
+                for (int gz = (int)Math.Floor((z - rad) / BGRID); gz <= (int)Math.Floor((z + rad) / BGRID); gz++)
+                    if (grid.TryGetValue((gx, gz), out var l)) foreach (var b in l) if (seen.Add(b)) into.Add(b);
+        }
+
+        // the walk model's own queries, each with the list of the scratch it was lent
+        List<BuildingData> NearOf(Scratch sc, double x, double z, double rad) { NearInto(x, z, rad, sc.Near, sc.Seen); return sc.Near; }
 
         // ---- where ----
 
@@ -190,7 +201,14 @@ namespace Triband.Storey.Play
         /// <summary>The building and storey the player is in (up to 1.5 m above its roof, from a metre below its ground floor), or null outside.</summary>
         public (BuildingData b, int floor)? Locate(double x, double y, double z)
         {
-            foreach (var b in NearShared(x, z, 0))
+            var sc = scratch.Take();
+            try { return Locate(x, y, z, sc); }
+            finally { scratch.Give(sc); }
+        }
+
+        (BuildingData b, int floor)? Locate(double x, double y, double z, Scratch sc)
+        {
+            foreach (var b in NearOf(sc, x, z, 0))
                 if (Inside(b, x - b.pos.x, z - b.pos.z) && y <= Derived.RoofY(b) + 1.5 && y >= b.elevation - 1) return (b, FloorAtY(b, y));   // not under a raised one
             return null;
         }
@@ -228,8 +246,15 @@ namespace Triband.Storey.Play
         /// </summary>
         public double SurfaceAt(double x, double z, double y)
         {
+            var sc = scratch.Take();
+            try { return SurfaceAt(x, z, y, sc); }
+            finally { scratch.Give(sc); }
+        }
+
+        double SurfaceAt(double x, double z, double y, Scratch sc)
+        {
             double best = y + StepUp >= 0 ? 0 : -1e9;
-            foreach (var b in NearShared(x, z, Dim.T_EXT + 0.05))
+            foreach (var b in NearOf(sc, x, z, Dim.T_EXT + 0.05))
             {
                 foreach (var br in b.bridges)
                     if (Bridges.Span(Site, b, br) is BridgeSpan bs && Bridges.DeckAt(bs, x, z) is double dy && dy <= y + StepUp && dy > best) best = dy;
@@ -294,8 +319,15 @@ namespace Triband.Storey.Play
         /// </summary>
         public (double x, double z) Collide(double px, double pz, double y)
         {
-            var segs = collideSegsT ??= new List<Seg>(); segs.Clear();
-            foreach (var b in NearShared(px, pz, 3))
+            var sc = scratch.Take();
+            try { return Collide(px, pz, y, sc); }
+            finally { scratch.Give(sc); }
+        }
+
+        (double x, double z) Collide(double px, double pz, double y, Scratch sc)
+        {
+            var segs = sc.Segs; segs.Clear();
+            foreach (var b in NearOf(sc, px, pz, 3))
             {
                 var bb = bboxAll[b.id];
                 if (px < bb.x0 + b.pos.x - 3 || px > bb.x1 + b.pos.x + 3 || pz < bb.z0 + b.pos.z - 3 || pz > bb.z1 + b.pos.z + 3) continue;

@@ -16,36 +16,16 @@ namespace Triband.Storey.Generate
 
         /// <summary>
         /// <see cref="Shape(List{Vec2}, List{List{Vec2}})"/> into <paramref name="tris"/>, emptied first: for a caller that
-        /// reuses its list. The coordinates go to Earcut through this thread's own arrays.
+        /// reuses its list. The coordinates go to Earcut through arrays lent for the call (<see cref="TriScratch"/>).
         /// </summary>
         public static List<int> Shape(List<Vec2> contour, List<List<Vec2>>? holes, List<int> tris)
         {
-            tris.Clear();
-            var d = data ??= new double[256]; var hi = holeIdx ??= new int[16];
-            int n = 0, nh = 0;
-            Put(contour, ref d, ref n);
-            if (holes != null)
-                foreach (var h in holes)
-                {
-                    if (nh == hi.Length) Array.Resize(ref hi, hi.Length * 2);
-                    hi[nh++] = n / 2;
-                    Put(h, ref d, ref n);
-                }
-            data = d; holeIdx = hi;
-            return Earcut.Tessellate(d, n, nh > 0 ? hi : null, nh, tris);
+            var s = lent.Take();
+            try { return s.Shape(contour, holes, tris); }
+            finally { lent.Give(s); }
         }
 
-        [ThreadStatic] static double[]? data;
-        [ThreadStatic] static int[]? holeIdx;
-
-        // a ring's points as Earcut takes them, but for a closing duplicate of the first (Dedupe)
-        static void Put(List<Vec2> ring, ref double[] d, ref int n)
-        {
-            int l = ring.Count;
-            if (l > 2 && ring[l - 1].x == ring[0].x && ring[l - 1].z == ring[0].z) l--;
-            if (d.Length < n + 2 * l) Array.Resize(ref d, Math.Max(n + 2 * l, d.Length * 2));
-            for (int i = 0; i < l; i++) { d[n++] = ring[i].x; d[n++] = ring[i].z; }
-        }
+        static readonly Lender<TriScratch> lent = new Lender<TriScratch>(8);
 
         /// <summary>The ring with its closing duplicate removed (three.js <c>removeDupEndPts</c>).</summary>
         public static List<Vec2> Dedupe(List<Vec2> ring)
@@ -69,6 +49,42 @@ namespace Triband.Storey.Generate
             var hs = new List<List<Vec2>>();
             if (holes != null) foreach (var h in holes) hs.Add(V(h));
             return Shape(V(pts), hs);
+        }
+    }
+
+    /// <summary>
+    /// What a triangulation works in: the coordinates as Earcut takes them, and an <see cref="Earcut"/> whose nodes are
+    /// taken again. One thread at a time: <see cref="Triangulate"/> lends these out, and a wall panel's builder keeps its own.
+    /// </summary>
+    public sealed class TriScratch
+    {
+        double[] data = new double[256];
+        int[] holeIdx = new int[16];
+        readonly Earcut earcut = new Earcut();
+
+        /// <summary><see cref="Triangulate.Shape(List{Vec2}, List{List{Vec2}})"/> into <paramref name="tris"/>, emptied first.</summary>
+        public List<int> Shape(List<Vec2> contour, List<List<Vec2>>? holes, List<int> tris)
+        {
+            tris.Clear();
+            int n = 0, nh = 0;
+            Put(contour, ref n);
+            if (holes != null)
+                foreach (var h in holes)
+                {
+                    if (nh == holeIdx.Length) Array.Resize(ref holeIdx, holeIdx.Length * 2);
+                    holeIdx[nh++] = n / 2;
+                    Put(h, ref n);
+                }
+            return earcut.Tessellate(data, n, nh > 0 ? holeIdx : null, nh, tris);
+        }
+
+        // a ring's points as Earcut takes them, but for a closing duplicate of the first (Triangulate.Dedupe)
+        void Put(List<Vec2> ring, ref int n)
+        {
+            int l = ring.Count;
+            if (l > 2 && ring[l - 1].x == ring[0].x && ring[l - 1].z == ring[0].z) l--;
+            if (data.Length < n + 2 * l) Array.Resize(ref data, Math.Max(n + 2 * l, data.Length * 2));
+            for (int i = 0; i < l; i++) { data[n++] = ring[i].x; data[n++] = ring[i].z; }
         }
     }
 }

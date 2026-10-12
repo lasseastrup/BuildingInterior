@@ -74,41 +74,43 @@ namespace Triband.Storey.Generate
 
         // ---- reuse (docs/CITY.md §7) ----
 
-        /// <summary>The builders a thread keeps for its next <see cref="Make"/>, their lists empty.</summary>
-        const int Spares = 6;
-        [ThreadStatic] static List<MeshBuilder>? spares;
+        /// <summary>The builders kept for the next <see cref="Make"/>, their lists empty, on any thread (a lock each way).</summary>
+        const int Spares = 16;
+        static readonly List<MeshBuilder> spares = new List<MeshBuilder>();
 
         /// <summary>
-        /// A builder as the constructor makes it: one this thread let go with <see cref="Recycle"/> when there is one, else
-        /// a new one. Either way its lists take their memory from <see cref="Chunks"/>, a chunk at a time.
+        /// A builder as the constructor makes it: one let go with <see cref="Recycle"/> when there is one, else a new one.
+        /// Either way its lists take their memory from <see cref="Chunks"/>, a chunk at a time.
         /// </summary>
         public static MeshBuilder Make(int tag = 0, bool lean = false, bool shapeOnly = false)
         {
-            var s = spares;
-            if (!shapeOnly && s != null)
-                for (int k = s.Count - 1; k >= 0; k--)
-                    if (s[k].Lean == lean) { var m = s[k]; s.RemoveAt(k); m.Tag = tag; return m; }
+            if (!shapeOnly)
+                lock (spares)
+                    for (int k = spares.Count - 1; k >= 0; k--)
+                        if (spares[k].Lean == lean) { var m = spares[k]; spares.RemoveAt(k); m.Tag = tag; return m; }
             return new MeshBuilder(tag, lean, shapeOnly);
         }
 
         /// <summary>
         /// Done with this builder (its meshes packed): its lists give their chunks back for the next build
-        /// (<see cref="Chunks"/>), and the builder is kept for this thread's next <see cref="Make"/>. Nothing may use it
-        /// after. What it handed out stays as it was: the wall lists (a LOD0's shape holds them) are replaced, not emptied.
+        /// (<see cref="Chunks"/>), and the builder is kept for the next <see cref="Make"/>, on any thread. Nothing may use
+        /// it after. What it handed out stays as it was: the wall lists (a LOD0's shape holds them) are replaced, not emptied.
         /// </summary>
         public void Recycle()
         {
             if (ShapeOnly) return;
-            var s = spares ??= new List<MeshBuilder>();
-            if (s.Contains(this)) return;
+            lock (spares) if (spares.Contains(this)) return;
             P.Clear(); N.Clear(); C.Clear(); K.Clear(); WI.Clear(); I.Clear(); PaneUV.Clear();
             Walls = new List<(double[], int)>(); WallBase = new List<double>(); Solids = null;
             StoreyBase = 0; curW = Zero4; curK = curI = 0; Welded = false;
-            if (s.Count < Spares) s.Add(this);
+            lock (spares) if (spares.Count < Spares) spares.Add(this);
         }
 
-        /// <summary>Let go of the builders this thread keeps (the tests' allocation counts start from none).</summary>
-        public static void ForgetSpares() => spares?.Clear();
+        /// <summary>Let go of the builders kept (the tests' allocation counts start from none).</summary>
+        public static void ForgetSpares() { lock (spares) spares.Clear(); }
+
+        /// <summary>What <see cref="Facade.WallPanel"/> works in, kept with the builder for its next panel.</summary>
+        internal Facade.PanelScratch? Panel;
 
         public int Tris => I.Count / 3;
         public int Verts => P.Count;
@@ -127,7 +129,7 @@ namespace Triband.Storey.Generate
             // each vertex's first equal, through a table of vertex indices (open addressing, at least twice as many slots as
             // vertices; 0 is empty, else the index + 1): no keys copied, a few bytes a vertex, in chunks given back after
             int size = 4; while (size < n * 2) size <<= 1;
-            var slots = weldSlots ??= new ChunkList<int>(); var map = weldMap ??= new ChunkList<int>();
+            var slots = weldSlots ??= new ChunkList<int>(); var map = weldMap ??= new ChunkList<int>();   // the builder's own: empty between welds
             try
             {
                 slots.Resize(size); for (int c = 0; c < slots.ChunkCount; c++) Array.Clear(slots.Chunk(c), 0, Chunks.Size);
@@ -167,8 +169,8 @@ namespace Triband.Storey.Generate
             finally { slots.Clear(); map.Clear(); }
         }
 
-        [ThreadStatic] static ChunkList<int>? weldSlots, weldMap;
-        [ThreadStatic] static List<KeyValuePair<int, (double u, double v, byte id)>>? weldPanes;
+        ChunkList<int>? weldSlots, weldMap;
+        List<KeyValuePair<int, (double u, double v, byte id)>>? weldPanes;
 
         /// <summary>Set by <see cref="Weld"/> (a build thread welds before the upload; the upload then skips it). Add nothing after.</summary>
         public bool Welded { get; private set; }

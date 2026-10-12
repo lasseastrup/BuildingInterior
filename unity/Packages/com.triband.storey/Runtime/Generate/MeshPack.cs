@@ -171,7 +171,7 @@ namespace Triband.Storey.Generate
             var I = gb.I;
             for (int i = 0; i < ni; i++) if ((uint)I[i] >= (uint)nv) throw new InvalidOperationException($"index {I[i]} of {nv} vertices");
 
-            var pk = packer ??= new Packer();
+            var pk = packers.Take();
             pk.Start(gb, windows, mates);
             try
             {
@@ -250,11 +250,11 @@ namespace Triband.Storey.Generate
                 if (pi.Count > 0) Close();
                 return out_;
             }
-            finally { pk.Done(); }
+            finally { pk.Done(); packers.Give(pk); }
         }
 
-        // what packing a mesh works with, kept by each thread for its next (the lists' chunks go back after each mesh)
-        [ThreadStatic] static Packer? packer;
+        // what packing a mesh works with, lent out for each (its lists' chunks go back after each mesh)
+        static readonly Lender<Packer> packers = new Lender<Packer>(8);
 
         sealed class Packer
         {

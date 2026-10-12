@@ -403,11 +403,10 @@ namespace Triband.Storey.Generate
 
         static readonly PanelOpt DefaultPanel = new PanelOpt();   // read only: WallPanel never changes its options
 
-        // what WallPanel works in, kept by each build thread for its next panel
-        [ThreadStatic] static PanelScratch? panelScratch;
-
-        sealed class PanelScratch
+        /// <summary>What <see cref="WallPanel"/> works in, kept by a builder for its next panel (<see cref="MeshBuilder.Panel"/>).</summary>
+        internal sealed class PanelScratch
         {
+            public readonly TriScratch Tri = new TriScratch();
             public readonly List<Opening> Merged = new List<Opening>(), Sorted = new List<Opening>(), Copies = new List<Opening>();
             public readonly List<Vec2> Cont = new List<Vec2>();
             public readonly List<List<Vec2>> Holes = new List<List<Vec2>>();
@@ -434,8 +433,9 @@ namespace Triband.Storey.Generate
         {
             if (gb.ShapeOnly) return;   // faces only: no walls numbered, no segments
             opt ??= DefaultPanel;
-            // the outline, holes, triangles and points of each face, and the merged openings, in this thread's own lists
-            var sc = panelScratch ??= new PanelScratch();
+            // the outline, holes, triangles and points of each face, and the merged openings, in the builder's own lists
+            // (a builder is used by one thread at a time)
+            var sc = gb.Panel ??= new PanelScratch();
             var os = MergeOps(ops, sc.Merged, sc.Sorted, sc.Copies);
             P3 X(double uu, double yy, double wv) => F.At(uu, y0 + yy, wv);
             void Face(double wv, int sign, Swatch c)
@@ -448,7 +448,7 @@ namespace Triband.Storey.Generate
                 cont.Add(new Vec2(s, h));
                 var holes = sc.Holes; holes.Clear();
                 foreach (var o in os) if (o.y0 > 1e-3 && o.y1 < h - 1e-3) { var hl = sc.Hole(); hl.Add(new Vec2(o.u0, o.y0)); hl.Add(new Vec2(o.u1, o.y0)); hl.Add(new Vec2(o.u1, o.y1)); hl.Add(new Vec2(o.u0, o.y1)); }
-                var tris = Triangulate.Shape(cont, holes, sc.Tris);
+                var tris = sc.Tri.Shape(cont, holes, sc.Tris);
                 var pts = sc.Pts; pts.Clear();
                 foreach (var q in cont) pts.Add(X(q.x, q.z, wv));
                 foreach (var hh in holes) foreach (var q in hh) pts.Add(X(q.x, q.z, wv));

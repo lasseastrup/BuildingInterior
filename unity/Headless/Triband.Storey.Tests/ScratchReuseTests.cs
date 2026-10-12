@@ -11,8 +11,8 @@ namespace Triband.Storey.Tests
 {
     /// <summary>
     /// The pieces detail builds reuse their memory with (docs/CITY.md §7): <see cref="ChunkList{T}"/> and the
-    /// <see cref="Chunks"/> it takes from, and the per-thread lists of Earcut, the triangulation and the wall panels,
-    /// which must give the same answers reused as new.
+    /// <see cref="Chunks"/> it takes from, and the working state of Earcut, the triangulation and the wall panels, kept
+    /// by an instance or lent out (no thread-static fields), which must give the same answers reused as new.
     /// </summary>
     public class ScratchReuseTests
     {
@@ -91,8 +91,8 @@ namespace Triband.Storey.Tests
         [Fact]
         public void EarcutGivesTheSameTrianglesReusingItsNodes()
         {
-            // a square with two square holes, and a long notched strip, each triangulated new and with a list reused,
-            // on several threads at once (each has its own nodes)
+            // a square with two square holes, and a long notched strip, each triangulated new and by an Earcut whose nodes
+            // and list are taken again, on several threads at once (each with its own instance)
             var shapes = new List<(double[] data, int[]? holes)>
             {
                 (new double[] { 0, 0, 10, 0, 10, 10, 0, 10, 2, 2, 4, 2, 4, 4, 2, 4, 6, 6, 8, 6, 8, 8, 6, 8 }, new[] { 4, 8 }),
@@ -101,7 +101,7 @@ namespace Triband.Storey.Tests
             var expect = shapes.Select(s => Earcut.Tessellate(s.data, s.holes)).ToList();
             Parallel.For(0, 8, t =>
             {
-                var into = new List<int>();
+                var into = new List<int>(); var earcut = new Earcut();
                 for (int round = 0; round < 50; round++)
                     for (int k = 0; k < shapes.Count; k++)
                     {
@@ -109,7 +109,7 @@ namespace Triband.Storey.Tests
                         var (d, h) = shapes[(k + t + round) % shapes.Count]; int e = (k + t + round) % shapes.Count;
                         var longer = d.Concat(new double[] { 99, 99, 98, 97 }).ToArray(); var hl = h?.Concat(new[] { 1000 }).ToArray();
                         into.Clear();
-                        Earcut.Tessellate(longer, d.Length, hl, h?.Length ?? 0, into);
+                        earcut.Tessellate(longer, d.Length, hl, h?.Length ?? 0, into);
                         Assert.Equal(expect[e], into);
                     }
             });

@@ -95,6 +95,25 @@ namespace Triband.Storey.Tests
         }
 
         /// <summary>
+        /// No package code keeps state per thread. Unity's manual warns that the .NET <c>[ThreadStatic]</c> attribute
+        /// crashes a Unity script (Unity's tracker: its liveness check doesn't treat thread or context statics as roots);
+        /// <c>ThreadLocal&lt;T&gt;</c> keeps its values in thread statics too. Working state is lent out (<c>Lender</c>) or
+        /// belongs to an object one thread uses at a time.
+        /// </summary>
+        [Theory, MemberData(nameof(Packages))]
+        public void NoPackageCodeKeepsStatePerThread(string package)
+        {
+            var p = Layout.Get(package);
+            static bool PerThread(string line)
+            {
+                var t = line.TrimStart();
+                return !t.StartsWith("//") && (t.Contains("[ThreadStatic") || t.Contains("[ContextStatic") || t.Contains("ThreadLocal<"));
+            }
+            var hits = p.Sources.Where(f => File.ReadLines(f).Any(PerThread)).Select(p.RelativeTo).ToList();
+            Assert.True(hits.Count == 0, "state kept per thread in: " + string.Join(", ", hits));
+        }
+
+        /// <summary>
         /// A reference to one of our own assemblies that no package in the set defines. Unity
         /// reports this as an unresolved reference at import; here it is a typo caught at
         /// commit time.
