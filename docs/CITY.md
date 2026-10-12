@@ -36,7 +36,7 @@ A Storey Site's **LOD mode** is *Automatic* by default; *Fixed* shows one LOD ev
 - **Loading.** Only the massings are built when a layout loads, cell by cell, each cell merged as soon as its buildings are built. The worker threads build the massings a few cells ahead of the one the main thread is writing and merging (`LayoutLoad`).
   - In Play mode a site's first load (a district streamed in, a scene starting) goes over several frames, nearest cells first, within the build budget, so it never holds a frame: the buildings appear as their cells come (**Storey Site** `LoadOverFrames`, on by default; `Loading` while it goes on, and the stats overlay counts the cells to go). Turn it off to have every building at once, behind a loading screen say.
   - The layout's text, and its neighbours' (for the party walls along the edge), is parsed on the build threads first (`StoreyDocumentAsset.DocumentOffMainThread`, `LayoutParse`). The site waits for it, `Loading` meanwhile and with no `PlanArea` yet. Parsing the 3,000-building test city's text takes 0.1–0.2 s and makes 60 MB of garbage. That held the frame the site started in, a hitch whenever a district streamed in. Headless, the frames now go on while it parses (11 at 60 fps), and the first cells show up to 0.1 s later. Edit mode, and Play mode with `LoadOverFrames` off, parse at once.
-  - The build threads make the massings four cells a thread ahead of the cell taken (`LayoutLoad.AheadPerThread`), so each frame takes as many cells as its budget allows. Headless, the 3,000-building test city loads in 30–45 frames: every cell shows after 0.9–1.1 s with two build threads at 60 fps and 1.2–1.3 s at 30 fps. With one cell a thread ahead, a frame took the few that were ready and the threads sat idle the rest: about 130 frames, 2.4 s and 4.5 s. A load's frames now spend up to the build budget on it (**Build Budget Ms**, 6 ms), where they spent 1–3 ms.
+  - The build threads make the massings four cells a thread ahead of the cell taken (`LayoutLoad.AheadPerThread`), so each frame takes as many cells as its budget allows. Headless, with the cells packed straight into the upload's layout and the massings reused (§7), the 3,000-building test city loads in 20–27 frames: every cell shows after 0.71–0.73 s with two build threads at 60 fps (0.63–0.68 s with three) and 0.96–1.06 s at 30 fps on the minimum tier, and the first view's detail is done after 1.36–1.47 s and 1.33–1.36 s. With one cell a thread ahead, a frame took the few that were ready and the threads sat idle the rest: about 130 frames, with every cell and the first view's detail done after 2.4–2.5 s and 4.5–4.6 s. A load's frames now spend up to the build budget on it (**Build Budget Ms**, 6 ms), where they spent 1–3 ms.
   - After an edit, and in the editor, a load is done at once, so nothing vanishes for a frame.
 - **Detail is built on demand.**
   - A building that wants LOD0 or LOD1 asks for it, and the ones covering the most pixels go first.
@@ -79,7 +79,7 @@ Headless numbers (`CityBenchTests`, `LodManagerTests`). They are CPU only, witho
 
 | | Time |
 |---|---|
-| Loading 3,000 buildings: every massing | 0.1–0.2 ms a building, built on the workers ahead of the main thread, which works about 50 ms of the load (writing and merging) instead of about 300 ms (4 cores). In Play mode a site's first load is spread over frames within the build budget: 30–45 frames for this city (§2) |
+| Loading 3,000 buildings: every massing | 0.1–0.2 ms a building, built on the workers ahead of the main thread, which works about 50 ms of the load (writing and merging) instead of about 300 ms (4 cores). In Play mode a site's first load is spread over frames within the build budget: 20–27 frames for this city (§2) |
 | Merging the 307 cells | 43 ms |
 | Picking every building's LOD | about 0.05 ms a frame walking the street (Release build; 0.16 ms when every building was looked at every frame) |
 | One LOD1 | about 6–8 ms |
@@ -128,18 +128,24 @@ A city too big for one layout is split into districts: one Storey Site each, a s
 
 ## 7. Memory
 
-What a Storey Site keeps, measured headlessly (.NET, not Unity) on the 3,000-building test city after a five-minute walk along the allocation test's route. MB = 2²⁰ bytes.
+What a Storey Site holds, measured headlessly (.NET 8, not Unity) by replaying the renderer's Play-mode load frame by frame with its engine-free code, then the allocation test's five-minute walk. Each figure is the C# live set after a full collection, the GPU's meshes and building table in the formats uploaded, and the colliders' meshes. PhysX's cooked copies of the colliders aren't counted, nor Unity's own objects (a GameObject per building and per mesh). MB = 2²⁰ bytes.
 
-| | Before | Now |
-|---|---|---|
-| GPU: cells, 260 shells, 16 LOD0s (typical buildings), collision meshes, the building table | 45.0 MB | 40.6 MB |
-| C# the game reads: the layout and its site, the generator's memos, the table's CPU copy, the LOD0 shapes | 12.1 MB | 12.5 MB |
-| C# kept but never read again | 276.5 MB | none |
-| Total | 333.6 MB | 53.1 MB |
+| | First view loaded | After the walk | Peak |
+|---|---|---|---|
+| 3,000-building test city, default tier (an iPhone 14's screen, three build threads) | 76.6 MB | 98.8 MB | 116.1 MB |
+| The same, minimum tier (an iPhone 7's screen, two build threads) | 46.6 MB | 76.2 MB | 83.6 MB |
+| 1,000-building walk-in city, default tier | 60.1 MB | 81.9 MB | 102.2 MB |
 
-Both budgets in the package plan (§6.6: 120 MB on iPhone 7, 200 MB on iPhone 14 and newer) hold for the typical view and the densest one (the 95th-percentile building at every LOD0 and the largest shells: 85.7 MB on the GPU, about 98 MB in all). With the 16 largest towers of the city all at LOD0 (144.0 MB on the GPU, 157 MB in all) only the newer phones' budget holds; the minimum tier needs lower residency caps.
+After the walk at the default tier, the 3,000-building city holds:
+- **GPU, 58.0 MB:** the 307 cells 9.8 MB, 16 LOD0s 26.2 MB, 215 shells 20.0 MB, the building table 2.0 MB.
+- **C#, 40.7 MB:** the mesh chunks kept for reuse 15.4 MB and the spare mesh builders 3.3 MB (Reuse below); the layout's text 3.9 MB and the parsed layout 8.9 MB (its asset keeps both); the site's index 3.8 MB; the renderer's buildings, cells, LOD entries and colour rows 1.8 MB; the building table's CPU copy 1.8 MB; the walk model and occlusion 1.3 MB; the LOD0 shapes 0.4 MB.
+- **Colliders:** 37, 0.1 MB of meshes (64 at most, §2).
 
-**The minimum tier.** On 2 GB phones (iPhone 7), give the sites a Storey Quality Settings with half the residency: **LOD0 Residency** 8 and **LOD1 Residency** 130. The 3,000-building city then takes 28.4 MB on the GPU typically, 54.8 MB in the densest view, and 90.1 MB with the 8 largest towers at LOD0: about 103 MB in all at worst, inside the 120 MB budget. Keep 12 MB of chunks there (**Mesh Chunks Kept MB**): the walk then makes 163 MB of garbage in five minutes (the smaller LOD1 residency rebuilds shells two and a half times as often), and the worst comes to about 115 MB. The walk-in city of 1,000, the heaviest test, takes 97.8 MB on the GPU at worst. Fewer buildings show full detail at once; the distances don't change.
+Before the memory work the same walk held 333.6 MB, 276.5 MB of it C# copies the game never read again. A load's C# peaks a little above where it settles: 41.2 MB in the default tier's, 36.5 MB in the walk-in city's (a cell being packed while detail builds wait for their upload).
+
+Both budgets in the package plan (§6.6: 120 MB on iPhone 7, 200 MB on iPhone 14 and newer) hold on the walk with room. The worst views are worked out from the GPU sizes of the buildings and the C# measured above. At the default tier, the densest view (the 95th-percentile building at every LOD0 and the largest shells) takes 85.7 MB on the GPU, about 126 MB in all; the 16 largest towers all at LOD0 take 144.0 MB on the GPU, about 185 MB in all. Both are inside 200 MB.
+
+**The minimum tier.** On 2 GB phones (iPhone 7), give the sites a Storey Quality Settings with half the residency (**LOD0 Residency** 8, **LOD1 Residency** 130) and 12 MB of chunks (**Mesh Chunks Kept MB**). The walk then makes 163 MB of garbage in five minutes: the smaller LOD1 residency rebuilds shells two and a half times as often. The residency caps drop only meshes off screen. What keeps the iPhone 7's detail down is its smaller screen (750 pixels high), which brings fewer buildings near enough for LOD0: 8 on the walk, where an iPhone 14's screen has 16. With the 37.7 MB of C# measured there, the 3,000-building city takes about 66 MB in all typically (28.4 MB on the GPU) and about 93 MB in the densest view (54.8 MB). With the 8 largest towers all at LOD0 (90.1 MB on the GPU) it comes to about 128 MB, past the 120 MB budget by about 8 MB. The C# side's largest parts there are the chunks kept for reuse (11.7 MB, the setting above) and the layout held twice, as text and parsed (12.8 MB). The walk-in city of 1,000, the heaviest test, takes 97.8 MB on the GPU at worst.
 
 **Nothing is kept from the generator but a building's shape.**
 - **LOD0 and LOD1.** The meshes are uploaded from the generator's result, with no CPU copy kept (`UploadMeshData(true)`), and the result is let go. While a building has its LOD0, the renderer keeps its shape (`Lod0Shape`, `SiteRenderer.ShapeOf`): the collision segments and the wall list, for the walk model, the colliders and the cutaway. A shape is 10–25 KB, about 1% of its LOD0's GPU meshes, and 40–70 KB for the largest towers. The generator's whole result, kept before, was 4.7 to 5 times the GPU meshes: 3.5 to 7.7 MB a building, 32 to 35 MB for the largest towers.
