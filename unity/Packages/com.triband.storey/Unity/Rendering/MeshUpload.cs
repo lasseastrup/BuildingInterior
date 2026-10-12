@@ -33,7 +33,7 @@ namespace Triband.Storey.Unity
             new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, 2, 1),   // kind, wall id: 32 bytes a vertex in all
         };
 
-        /// <summary>LOD2 vertex: position, SNorm8 normal, the facade parameters and the parameter row.</summary>
+        /// <summary>LOD2 vertex where the GPU can't read 16-bit floats: position, SNorm8 normal, the facade parameters and the parameter row. 48 bytes.</summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct MassVertex
         {
@@ -44,6 +44,44 @@ namespace Triband.Storey.Unity
             public Vector2 fac2;
             public float slot;
         }
+
+        /// <summary>
+        /// LOD2 vertex: the facade parameters as 16-bit floats (the shader reads them as floats, as it did), 36 bytes. They
+        /// are metres along a wall and up a run, and a bay's width: 3 cm off at most at 64 to 128 m, a tenth of a pixel
+        /// at the distances a massing shows (docs/CITY.md §7). The tag and the row stay 32-bit: they are integers past 2,048.
+        /// </summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MassVertexHalf
+        {
+            public Vector3 position;
+            public sbyte nx, ny, nz, nw;
+            public float tag;
+            public ushort facX, facY, facZ, facW;
+            public ushort fac2X, fac2Y;
+            public float slot;
+        }
+
+        static readonly VertexAttributeDescriptor[] MassLayout =
+        {
+            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
+            new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 1),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 4),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, 2),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord3, VertexAttributeFormat.Float32, 1),
+        };
+        static readonly VertexAttributeDescriptor[] MassLayoutHalf =
+        {
+            new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
+            new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 1),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float16, 4),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float16, 2),
+            new VertexAttributeDescriptor(VertexAttribute.TexCoord3, VertexAttributeFormat.Float32, 1),
+        };
+        static bool? halfMassing;
+        /// <summary>Whether the GPU reads 16-bit float vertex attributes (all but the oldest; asked once).</summary>
+        static bool HalfMassing => halfMassing ??= SystemInfo.SupportsVertexAttributeFormat(VertexAttributeFormat.Float16, 4) && SystemInfo.SupportsVertexAttributeFormat(VertexAttributeFormat.Float16, 2);
 
         const MeshUpdateFlags Quiet = MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontNotifyMeshUsers;
 
@@ -94,36 +132,52 @@ namespace Triband.Storey.Unity
         /// <summary>A wall's cutaway data as the shader reads it from the table: its start (x, z) and its normal scaled by 1 + its length.</summary>
         public static Vector4 WallData(double[] w) => new Vector4((float)w[0], (float)w[1], (float)w[2], (float)w[3]);
 
-        /// <summary>The LOD2 massing mesh. <paramref name="rowBase"/> maps the mesh's local parameter rows onto table rows.</summary>
+        /// <summary>The LOD2 massing mesh (a building's, or a merged cell's). <paramref name="rowMap"/> maps the mesh's local parameter rows onto table rows.</summary>
         public static Mesh Upload(Lod2Mesh m, string name, int[]? rowMap)
         {
             int nv = m.Verts;
             var mesh = new Mesh { name = name, indexFormat = nv > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
-            mesh.SetVertexBufferParams(nv, new[]
-            {
-                new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
-                new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.SNorm8, 4),
-                new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 1),
-                new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 4),
-                new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, 2),
-                new VertexAttributeDescriptor(VertexAttribute.TexCoord3, VertexAttributeFormat.Float32, 1),
-            });
-            var verts = new MassVertex[nv];
             var bounds = new Bounds(); bool first = true;
-            for (int i = 0; i < nv; i++)
+            void Grow(Vector3 pos) { if (first) { bounds = new Bounds(pos, Vector3.zero); first = false; } else bounds.Encapsulate(pos); }
+            if (HalfMassing)
             {
-                var p = m.P[i]; var n = m.N[i];   // already quantised × 127
-                var pos = new Vector3((float)p.x, (float)p.y, (float)p.z);
-                verts[i] = new MassVertex
+                mesh.SetVertexBufferParams(nv, MassLayoutHalf);
+                var verts = new MassVertexHalf[nv];
+                for (int i = 0; i < nv; i++)
                 {
-                    position = pos, nx = (sbyte)n.x, ny = (sbyte)n.y, nz = (sbyte)n.z, tag = m.Tags != null ? m.Tags[i] : m.Tag,
-                    fac = new Vector4((float)m.Fac[i * 4], (float)m.Fac[i * 4 + 1], (float)m.Fac[i * 4 + 2], (float)m.Fac[i * 4 + 3]),
-                    fac2 = new Vector2((float)m.Fac2[i * 2], (float)m.Fac2[i * 2 + 1]),
-                    slot = rowMap != null ? rowMap[m.Slot[i]] : m.Slot[i],   // a merged cell's slots are the table's rows already
-                };
-                if (first) { bounds = new Bounds(pos, Vector3.zero); first = false; } else bounds.Encapsulate(pos);
+                    var p = m.P[i]; var n = m.N[i];   // already quantised × 127
+                    var pos = new Vector3((float)p.x, (float)p.y, (float)p.z);
+                    int f = i * 4, g = i * 2;
+                    verts[i] = new MassVertexHalf
+                    {
+                        position = pos, nx = (sbyte)n.x, ny = (sbyte)n.y, nz = (sbyte)n.z, tag = m.Tags != null ? m.Tags[i] : m.Tag,
+                        facX = MeshPack.Half(m.Fac[f]), facY = MeshPack.Half(m.Fac[f + 1]), facZ = MeshPack.Half(m.Fac[f + 2]), facW = MeshPack.Half(m.Fac[f + 3]),
+                        fac2X = MeshPack.Half(m.Fac2[g]), fac2Y = MeshPack.Half(m.Fac2[g + 1]),
+                        slot = rowMap != null ? rowMap[m.Slot[i]] : m.Slot[i],   // a merged cell's slots are the table's rows already
+                    };
+                    Grow(pos);
+                }
+                mesh.SetVertexBufferData(verts, 0, 0, nv, 0, Quiet);
             }
-            mesh.SetVertexBufferData(verts, 0, 0, nv, 0, Quiet);
+            else
+            {
+                mesh.SetVertexBufferParams(nv, MassLayout);
+                var verts = new MassVertex[nv];
+                for (int i = 0; i < nv; i++)
+                {
+                    var p = m.P[i]; var n = m.N[i];
+                    var pos = new Vector3((float)p.x, (float)p.y, (float)p.z);
+                    verts[i] = new MassVertex
+                    {
+                        position = pos, nx = (sbyte)n.x, ny = (sbyte)n.y, nz = (sbyte)n.z, tag = m.Tags != null ? m.Tags[i] : m.Tag,
+                        fac = new Vector4((float)m.Fac[i * 4], (float)m.Fac[i * 4 + 1], (float)m.Fac[i * 4 + 2], (float)m.Fac[i * 4 + 3]),
+                        fac2 = new Vector2((float)m.Fac2[i * 2], (float)m.Fac2[i * 2 + 1]),
+                        slot = rowMap != null ? rowMap[m.Slot[i]] : m.Slot[i],
+                    };
+                    Grow(pos);
+                }
+                mesh.SetVertexBufferData(verts, 0, 0, nv, 0, Quiet);
+            }
             SetIndices(mesh, m.I, nv, Quiet);
             mesh.bounds = bounds;
             mesh.UploadMeshData(true);

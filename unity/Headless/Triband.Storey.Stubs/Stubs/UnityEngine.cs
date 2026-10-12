@@ -430,6 +430,14 @@ namespace UnityEngine
     }
 }
 
+namespace UnityEngine
+{
+    public static class SystemInfo
+    {
+        public static bool SupportsVertexAttributeFormat(UnityEngine.Rendering.VertexAttributeFormat format, int dimension) => true;
+    }
+}
+
 namespace UnityEngine.Rendering
 {
     public enum IndexFormat { UInt16 = 0, UInt32 = 1 }

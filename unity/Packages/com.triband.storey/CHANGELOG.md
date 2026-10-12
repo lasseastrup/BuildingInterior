@@ -5,6 +5,7 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Changed
+- The far city's cells store each massing's facade numbers (metres along a wall and up a run, the window span, the bay's width, the kind) as 16-bit floats: 36 bytes a vertex instead of 48, 9.8 MB of GPU memory instead of 12.8 on the 3,000-building test city. The shader reads them as it did; they are 2.5 cm off at most on the test cities, a tenth of a pixel where a massing shows. A GPU that can't read 16-bit floats in a vertex (`SystemInfo.SupportsVertexAttributeFormat`) gets the 48-byte vertex. `MeshUpload.MassVertexHalf`, `MeshPack.Half`.
 - A layout's massings are built on the worker threads, a cell ahead of the main thread, which meanwhile writes and merges the cell before: on the 3,000-building test city the main thread works about 50 ms of the load instead of about 300 ms (headless, 3 workers; the load is still one frame).
 - A building's collision mesh is made on the worker thread with its first LOD0, not on the main thread (0.4 ms a building on average on the test city, 1.9 ms in the walk-in one).
 - A building built again (its LOD0 or LOD1 dropped and wanted back) is made at the size of its last build, without growing its lists: LOD0 and LOD1 together allocate 4.8 MB, not 8.7 (10.5, not 18, in the walk-in city). `MeshBuilder`'s `vertices` and `indices`.
@@ -22,7 +23,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - A building's row in the building table is its index in the layout, so party walls find their neighbour in the shader.
 
 ### Fixed
-- Memory: Storey kept the generator's working data after the meshes were uploaded, at 4.7 to 5 times the meshes' size. On the 3,000-building test city after a five-minute walk that was 277 MB of C# memory never read again, beside 45 MB of GPU meshes. It now keeps none of it: 59 MB in all (headless .NET; docs/CITY.md §7).
+- Memory: Storey kept the generator's working data after the meshes were uploaded, at 4.7 to 5 times the meshes' size. On the 3,000-building test city after a five-minute walk that was 277 MB of C# memory never read again, beside 45 MB of GPU meshes. It now keeps none of it: 55 MB in all, with the smaller cells and LOD0 parts under Changed (headless .NET; docs/CITY.md §7).
   - The renderer kept each LOD0 building's whole generator result (3.5 to 7.7 MB a building, 32 MB for a large tower). It keeps the building's shape, 10–25 KB.
   - Every building's massing was kept to merge its cell again (50 MB). A layout now loads cell by cell, letting each cell's massings go once it is merged; a cell merged again makes its buildings' massings again (about 1 ms for the biggest).
   - The walk model built a whole LOD0 for every building the player came near, on the main thread, and kept it until the layout changed: 170 MB and frames of up to 68 ms on that walk. It now takes the renderer's shapes (`PlayWorld.Source`, set by the Storey Occlusion), builds only a shape when there's none (`Lod0.BuildShape`, about 50 times faster than LOD0), and keeps at most `PlayWorld.Keep` (32): 1.4 MB, with a worst frame of 1 ms.

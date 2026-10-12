@@ -114,6 +114,43 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void HalfIsTheGpusHalf()
+        {
+            // bit for bit .NET's own conversion (round to nearest, ties to even): edges, every exponent, ties, and a sweep
+            var values = new List<float> { 0f, -0f, 1f, -1f, 0.5f, 65504f, 65519.99f, 65520f, 1e6f, -1e6f, float.PositiveInfinity, float.NegativeInfinity, 5.96e-8f, 2.98e-8f, 2.99e-8f, 6.1e-5f, 6.09e-5f, 1e-9f };
+            for (int e = -26; e <= 17; e++) foreach (double m in new[] { 1.0, 1.0004882812, 1.0009765625, 1.00048828125, 1.5, 1.99951171875, 1.999755859375 }) { values.Add((float)(m * Math.Pow(2, e))); values.Add((float)(-m * Math.Pow(2, e))); }
+            var rng = new Random(20261012);
+            for (int i = 0; i < 200000; i++) values.Add((float)((rng.NextDouble() - 0.5) * Math.Pow(2, rng.Next(-30, 20))));
+            foreach (var f in values)
+                Assert.True(MeshPack.Half(f) == BitConverter.HalfToUInt16Bits((Half)f), $"{f:R}: {MeshPack.Half(f):X4}, .NET {BitConverter.HalfToUInt16Bits((Half)f):X4}");
+            Assert.True(double.IsNaN(MeshPack.FromHalf(MeshPack.Half(float.NaN))));
+            foreach (var f in values.Where(v => !float.IsInfinity(v) && Math.Abs(v) < 65504)) Assert.Equal((double)(float)(Half)f, MeshPack.FromHalf(MeshPack.Half(f)));
+        }
+
+        [Fact]
+        public void TheMassingsFacadeNumbersFitHalves()
+        {
+            // a massing's facade numbers go to the GPU as 16-bit floats: metres along a wall and up a run of storeys, a
+            // window span, a bay's width, a kind. Off by a few centimetres at most on the test city: a tenth of a pixel where
+            // a massing shows (under 4 px a metre)
+            double worst = 0, largest = 0; long n = 0; string at = "";
+            foreach (var site in new[] { City(3000, false), City(1000, true) })
+                foreach (var b in site.Buildings)
+                {
+                    var m = Lod2.Build(site, b);
+                    foreach (var list in new[] { m.Fac, m.Fac2 })
+                        foreach (var v in list)
+                        {
+                            double err = Math.Abs(MeshPack.FromHalf(MeshPack.Half(v)) - v); n++;
+                            if (err > worst) { worst = err; at = $"{b.name}: {v:0.###}"; }
+                            largest = Math.Max(largest, Math.Abs(v));
+                        }
+                }
+            output.WriteLine($"{n:N0} numbers, the largest {largest:0.0}: off by {worst * 100:0.00} cm at most ({at})");
+            Assert.True(worst < 0.07, $"{worst:0.000} m off ({at})");
+        }
+
+        [Fact]
         public void APackedMeshIsTheSizeOfItsGpuMesh()
         {
             var site = City(300, true);
