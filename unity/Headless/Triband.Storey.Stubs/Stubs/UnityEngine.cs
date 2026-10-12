@@ -68,7 +68,7 @@ namespace UnityEngine
         public static RuntimePlatform platform => RuntimePlatform.LinuxEditor;
         public static bool isPlaying => false;
         public static bool isMobilePlatform => false;
-        public static event System.Action? quitting { add { } remove { } }
+        public static event System.Action quitting { add { } remove { } }
     }
 
     public class ScriptableObject : Object
@@ -651,7 +651,7 @@ namespace Unity.Jobs
 {
     public interface IJobParallelFor { void Execute(int index); }
 
-    public struct JobHandle { public void Complete() { } public bool IsCompleted => true; }
+    public struct JobHandle { public void Complete() { } public bool IsCompleted => true; public static void ScheduleBatchedJobs() { } }
 
     public static class IJobParallelForExtensions
     {

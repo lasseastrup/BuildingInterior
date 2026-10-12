@@ -267,7 +267,7 @@ namespace Triband.Storey.Unity
                 if (colliders == value) return;
                 colliders = value;
                 if (value) foreach (var id in built.Keys) colliderPending.Add(id);
-                else { colliderPending.Clear(); foreach (var b in built.Values) { RemoveCollider(b); b.collisionMade = null; } }
+                else { FinishBake(true, discard: true); colliderPending.Clear(); foreach (var b in built.Values) { RemoveCollider(b); b.collisionMade = null; } }
             }
         }
 
@@ -366,6 +366,7 @@ namespace Triband.Storey.Unity
         /// <summary>Per frame: the view globals (neutral unless the editor set a view), the palette, the LODs, the table upload.</summary>
         public void Frame(bool lodTint, SiteView? view = null)
         {
+            FinishBake(false);
             if (colliderPending.Count > 0) BuildColliders();
             if (lods != null) UpdateLods();
             else if (shownLod != lod)
@@ -855,6 +856,7 @@ namespace Triband.Storey.Unity
 
         void Release(Built b)
         {
+            FinishBake(true);   // its collider may be cooking: no mesh is destroyed while a bake reads it
             table.SetState(b.idx, new Vector4(3, 3, 1, 0));
             if (b.wallBase >= 0) table.ReleaseWalls(b.wallBase, b.wallCount);
             foreach (var r in b.rows) table.ReleaseRow(r);
@@ -865,15 +867,20 @@ namespace Triband.Storey.Unity
             if (b.inCell && cells.TryGetValue(b.cell, out var c)) { c.members.Remove(b.idx); dirtyCells.Add(b.cell); }
         }
 
+        // the colliders being cooked on Unity's job workers, one batch at a time, and their buildings
+        readonly List<(Built bt, Mesh mesh)> baking = new List<(Built, Mesh)>();
+        JobHandle bakeJob; NativeArray<int> bakeIds;
+
         /// <summary>
-        /// The colliders of every building built since the last frame, at once: their meshes made with their LOD0 on the
-        /// worker threads (on the main thread only when colliders are switched on: 0.4 to 2 ms a building), then cooked
-        /// together across the worker threads, then assigned already cooked.
+        /// The colliders of every building built since the last batch, together: their meshes made with their LOD0 on the
+        /// build threads (on the main thread only when colliders are switched on: 0.4 to 2 ms a building), then cooked
+        /// across Unity's job workers while the frames go on, and assigned, already cooked, once the batch has finished
+        /// (<see cref="FinishBake"/>). In edit mode, which only updates when asked, at once.
         /// </summary>
         void BuildColliders()
         {
+            if (baking.Count > 0) return;   // the batch before is still cooking
             using var _t = StoreyTimings.Time("site: colliders");
-            var todo = new List<(Built bt, Mesh mesh)>();
             foreach (var id in colliderPending)
             {
                 if (!built.TryGetValue(id, out var bt) || (bt.shape == null && bt.collisionMade == null) || bt.root == null || site == null) continue;
@@ -882,34 +889,43 @@ namespace Triband.Storey.Unity
                 var cm = bt.collisionMade ?? CollisionMesh.Build(site, b, bt.shape!);   // made on the worker, as a rule
                 bt.collisionMade = null;
                 if (cm.Tris == 0) continue;
-                todo.Add((bt, ToMesh(cm, b.name + " collision")));
+                baking.Add((bt, ToMesh(cm, b.name + " collision")));
             }
             colliderPending.Clear();
-            if (todo.Count == 0) return;
-            var ids = new int[todo.Count];
-            for (int i = 0; i < ids.Length; i++) ids[i] = todo[i].mesh.GetInstanceID();
-#pragma warning disable CS0618   // BakeMesh(int, …): Unity 6.3 prefers an EntityId; the int form still works there and before
-            if (ids.Length == 1) Physics.BakeMesh(ids[0], false, Cooking);
-#pragma warning restore CS0618
-            else
+            if (baking.Count == 0) return;
+            var ids = new int[baking.Count];
+            for (int i = 0; i < ids.Length; i++) ids[i] = baking[i].mesh.GetInstanceID();
+            bakeIds = new NativeArray<int>(ids, Allocator.Persistent);   // it may outlive the four frames a TempJob array may
+            bakeJob = new BakeJob { meshes = bakeIds }.Schedule(ids.Length, 1);
+            JobHandle.ScheduleBatchedJobs();
+            if (!Application.isPlaying) FinishBake(true);
+        }
+
+        /// <summary>
+        /// The batch of colliders being cooked, assigned once it has finished (<paramref name="now"/>: waited for). A
+        /// building released or rebuilt meanwhile, or every one when <paramref name="discard"/>, has its mesh destroyed
+        /// instead.
+        /// </summary>
+        void FinishBake(bool now, bool discard = false)
+        {
+            if (baking.Count == 0 || (!now && !bakeJob.IsCompleted)) return;
+            using var _t = StoreyTimings.Time("site: colliders");
+            bakeJob.Complete(); bakeIds.Dispose();
+            foreach (var (bt, mesh) in baking)
             {
-                var na = new NativeArray<int>(ids, Allocator.TempJob);
-                new BakeJob { meshes = na }.Schedule(ids.Length, 1).Complete();
-                na.Dispose();
-            }
-            foreach (var (bt, mesh) in todo)
-            {
+                if (discard || !colliders || bt.root == null || bt.collision != null || !built.TryGetValue(bt.id, out var cur) || !ReferenceEquals(cur, bt)) { Kill(mesh); continue; }
                 bt.collision = mesh;
-                var mc = bt.root!.AddComponent<MeshCollider>();
+                var mc = bt.root.AddComponent<MeshCollider>();
                 mc.cookingOptions = Cooking;   // before the mesh: the same options as the bake, so nothing is cooked again
                 mc.sharedMesh = mesh;
             }
+            baking.Clear();
         }
 
         struct BakeJob : IJobParallelFor
         {
             [ReadOnly] public NativeArray<int> meshes;
-#pragma warning disable CS0618   // as above
+#pragma warning disable CS0618   // BakeMesh(int, …): Unity 6.3 prefers an EntityId; the int form still works there and before
             public void Execute(int i) => Physics.BakeMesh(meshes[i], false, Cooking);
 #pragma warning restore CS0618
         }
@@ -961,6 +977,7 @@ namespace Triband.Storey.Unity
 
         void Clear()
         {
+            FinishBake(true, discard: true);
             foreach (var b in built.Values) Release(b);
             built.Clear(); byIdx.Clear();
             foreach (var key in new List<(int, int)>(cells.Keys)) { cells[key].members.Clear(); BuildCell(key); }

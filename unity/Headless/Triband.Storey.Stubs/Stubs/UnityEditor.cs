@@ -55,7 +55,7 @@ namespace UnityEditor
     public static class AssemblyReloadEvents
     {
         public delegate void AssemblyReloadCallback();
-        public static event AssemblyReloadCallback? beforeAssemblyReload { add { } remove { } }
+        public static event AssemblyReloadCallback beforeAssemblyReload { add { } remove { } }
     }
 
     public static class ProjectWindowUtil
