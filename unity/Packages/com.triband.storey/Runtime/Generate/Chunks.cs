@@ -12,7 +12,9 @@ namespace Triband.Storey.Generate
     /// <see cref="ChunkList{T}"/> grows a chunk at a time and never copies, and gives its chunks back here when it is
     /// emptied; any chunk of a type fits any list of it, so a build takes the chunks the last one gave back instead of
     /// making garbage, whatever the sizes of the two buildings. The chunks kept between builds are capped
-    /// (<see cref="KeepBytes"/>); one given back past that is let go.
+    /// (<see cref="KeepBytes"/>), each type to its share of what builds take: a builder gives its chunks back before its
+    /// packed mesh does, and would otherwise fill the cap and leave none for the next packing. One given back past that is
+    /// let go.
     /// </summary>
     public static class Chunks
     {
@@ -20,10 +22,10 @@ namespace Triband.Storey.Generate
         public const int Shift = 11, Size = 1 << Shift, Mask = Size - 1;
 
         /// <summary>The most bytes of chunks kept for the next builds, on all threads together.</summary>
-        public static long KeepBytes = 24L << 20;
+        public static long KeepBytes = 16L << 20;
 
         internal static readonly object Gate = new object();
-        internal static long Kept, made;
+        internal static long Kept, made, Taken;   // Taken: the bytes of chunks every type has handed out so far
         static readonly List<Action> clears = new List<Action>();
 
         internal static void Register(Action clear) { lock (Gate) clears.Add(clear); }
@@ -34,34 +36,47 @@ namespace Triband.Storey.Generate
         /// <summary>The chunks made so far, of every type (one taken from those kept isn't made again).</summary>
         public static long Made => Interlocked.Read(ref made);
 
-        /// <summary>Let every kept chunk go (the tests' allocation counts start from none).</summary>
-        public static void Clear() { lock (Gate) { foreach (var c in clears) c(); Kept = 0; } }
+        /// <summary>Let every kept chunk go, and what each type has handed out (the tests' counts start from none).</summary>
+        public static void Clear() { lock (Gate) { foreach (var c in clears) c(); Kept = 0; Taken = 0; } }
     }
 
     /// <summary>The chunks of one element type (<see cref="Chunks"/>).</summary>
     public static class Chunks<T> where T : struct
     {
         static readonly Stack<T[]> free = new Stack<T[]>();
+        static long taken;   // the bytes of chunks of this type handed out so far: its share of the cap
 
         /// <summary>A chunk's bytes.</summary>
         public static readonly int Bytes = Chunks.Size * Marshal.SizeOf(typeof(T));
 
-        static Chunks() => Chunks.Register(() => free.Clear());
+        static Chunks() => Chunks.Register(() => { free.Clear(); taken = 0; });
+
+        /// <summary>The bytes of chunks of this type kept now.</summary>
+        public static long KeptBytes { get { lock (Chunks.Gate) return (long)free.Count * Bytes; } }
 
         /// <summary>A chunk, holding what it last held: whoever takes it writes an element before reading it.</summary>
         public static T[] Rent()
         {
-            lock (Chunks.Gate) if (free.Count > 0) { Chunks.Kept -= Bytes; return free.Pop(); }
+            lock (Chunks.Gate)
+            {
+                taken += Bytes; Chunks.Taken += Bytes;
+                if (free.Count > 0) { Chunks.Kept -= Bytes; return free.Pop(); }
+            }
             Interlocked.Increment(ref Chunks.made);
             return new T[Chunks.Size];
         }
 
-        /// <summary>Give a chunk back (one from <see cref="Rent"/>). Nothing may use it after.</summary>
+        /// <summary>
+        /// Give a chunk back (one from <see cref="Rent"/>). Nothing may use it after. It is kept while the chunks kept are
+        /// under the cap, and this type's under its share of it: what it has handed out of all the chunks handed out.
+        /// </summary>
         public static void Return(T[] chunk)
         {
             lock (Chunks.Gate)
             {
                 if (Chunks.Kept + Bytes > Chunks.KeepBytes) return;
+                long kept = (long)free.Count * Bytes;
+                if (kept + Bytes > (double)Chunks.KeepBytes * taken / Math.Max(1, Chunks.Taken)) return;
                 free.Push(chunk); Chunks.Kept += Bytes;
             }
         }

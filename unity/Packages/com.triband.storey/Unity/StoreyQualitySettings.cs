@@ -56,8 +56,8 @@ namespace Triband.Storey.Unity
         [Min(0)] public int buildThreads = 0;
 
         [Header("Memory")]
-        [Tooltip("Megabytes of mesh memory kept between detail builds for the next ones: the builders' lists and the packed meshes waiting for upload are made of the same fixed-size chunks. Past this, a chunk given back is garbage. The test city's five-minute walk needs 23 on one build thread; 8 on the minimum tier.")]
-        [Min(0)] public int meshChunksKeptMB = 24;
+        [Tooltip("Megabytes of mesh memory kept between detail builds for the next ones: the builders' lists and the packed meshes waiting for upload are made of the same fixed-size chunks. Past this, a chunk given back is garbage: the test city's five-minute walk makes 101 MB of garbage with 16 and 237 MB with 8. 12 on the minimum tier.")]
+        [Min(0)] public int meshChunksKeptMB = 16;
 
         [Header("Occlusion")]
         [Tooltip("Cut and fade massings (LOD2 and the cells) in the way like near buildings. Off, far geometry always draws without discard (the steady variant), which tile-based GPUs treat as opaque; off on the minimum tier.")]

@@ -145,5 +145,23 @@ namespace Triband.Storey.Tests
             }
             finally { Chunks.KeepBytes = keep; }
         }
+
+        [Fact]
+        public void EachKindOfChunkKeepsItsShareOfTheLimit()
+        {
+            // a build takes as much of two kinds of chunk and gives the first kind back first, as a builder's lists go back
+            // before its packed mesh: the first must not fill the limit and leave the second none
+            long keep = Chunks.KeepBytes;
+            try
+            {
+                Chunks.KeepBytes = 16L * Chunks<long>.Bytes; Chunks.Clear();
+                var first = new ChunkList<long>(); var then = new ChunkList<double>();
+                first.Resize(16 * Chunks.Size); then.Resize(16 * Chunks.Size);
+                first.Clear(); then.Clear();
+                Assert.True(Chunks<double>.KeptBytes >= 7L * Chunks<double>.Bytes, $"the second kind kept {Chunks<double>.KeptBytes} bytes");
+                Assert.True(Chunks.KeptBytes <= Chunks.KeepBytes);
+            }
+            finally { Chunks.KeepBytes = keep; Chunks.Clear(); }
+        }
     }
 }
