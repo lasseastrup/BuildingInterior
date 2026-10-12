@@ -872,12 +872,13 @@ namespace Triband.Storey.Unity
             if (cellRoot == null) { cellRoot = new GameObject("Cells") { hideFlags = flags, layer = layer }; cellRoot.transform.SetParent(parent, false); }
             var members = new List<Cells.Member>(c.members.Count);
             foreach (var bt in c.members.Values) members.Add(new Cells.Member(MassingOf(bt), bt.idx + 2 * Lod1.LOD_TAG, bt.rowMap!));
-            var pieces = Cells.Merge(members);
+            // packed straight into the upload's layout, in chunks that go back once uploaded (no merged lists in between)
+            var pieces = Cells.Pack(members, MeshUpload.HalfMassing);
             foreach (var bt in c.members.Values) bt.l2 = null;
             for (int i = 0; i < pieces.Count; i++)
             {
                 string name = $"Cell {key.x},{key.z}" + (pieces.Count > 1 ? $" ({i + 1})" : "");
-                var mesh = MeshUpload.Upload(pieces[i], name, null); mesh.hideFlags = flags;
+                var mesh = MeshUpload.Upload(pieces[i], name); mesh.hideFlags = flags;
                 c.meshes.Add(mesh);
                 var go = new GameObject(name) { hideFlags = flags, layer = layer };
                 go.transform.SetParent(cellRoot.transform, false);
