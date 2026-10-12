@@ -103,6 +103,31 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void PastTheColliderCapThoseWhoseLod0WentLongestAgoGo()
+        {
+            // buildings 0..5 come close one after another (LOD0) and go far again; 6 stays close, 7 never came close
+            var m = new LodManager();
+            for (int i = 0; i < 8; i++) Box(m, i, 5000);
+            for (int i = 0; i < 6; i++)
+            {
+                Box(m, i, 20); Step(m); Step(m);   // LOD0 now (50 px/m)
+                Box(m, i, 5000); Step(m); Step(m);   // gone far
+            }
+            Box(m, 6, 20); Step(m); Step(m);
+            Assert.Equal(0, m.Get(6)!.Shown);
+            var drop = new System.Collections.Generic.List<int>();
+            var held = Enumerable.Range(0, 8).ToList();
+            m.OldestDetail(held, 8, drop); Assert.Empty(drop);   // none past the cap
+            m.OldestDetail(held, 4, drop);
+            Assert.Equal(new[] { 7, 0, 1, 2 }, drop);   // never close first, then the longest since LOD0
+            m.OldestDetail(held, 0, drop);
+            Assert.DoesNotContain(6, drop);   // showing its LOD0: kept whatever the cap
+            Assert.Equal(7, drop.Count);
+            m.OldestDetail(new[] { 99, 5 }, 1, drop);
+            Assert.Equal(new[] { 99 }, drop);   // one no longer in the layout goes first
+        }
+
+        [Fact]
         public void SelectionStaysCheapForTheCity()
         {
             var m = new LodManager(); var r = new Random(1);

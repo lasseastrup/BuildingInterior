@@ -23,6 +23,12 @@ namespace Triband.Storey.Lod
         /// <summary>How many LOD0 and LOD1 meshes stay resident in all (shown or not); the least recently shown go first.</summary>
         public int MaxLod0 = 16, MaxLod1 = 260;
         /// <summary>
+        /// How many buildings keep their collider (docs/CITY.md §7). A collider comes with a building's LOD0 and stays when
+        /// the LOD0 goes, so it isn't cooked again as the building comes and goes; past this many, those whose LOD0 went
+        /// longest ago go (<see cref="LodManager.OldestDetail"/>), and are made again with their next LOD0. 0 keeps them all.
+        /// </summary>
+        public int MaxColliders = 64;
+        /// <summary>
         /// Milliseconds a frame may spend building LOD0 and LOD1 meshes (at least one is built when any is wanted). With
         /// worker threads, only the upload counts: the meshes are generated off the main thread.
         /// </summary>
@@ -283,6 +289,30 @@ namespace Triband.Storey.Lod
             double far = Math.Max(1, Math.Sqrt(fx * fx + fy * fy + fz * fz));
             if (sq.settled == 2) return pxm / near < s.PX[1] * (1 + H) && pxm / far >= s.PX[2] * (1 - H) && far <= s.Far;
             return pxm / near < s.PX[2] * (1 + H) || near > s.Far;   // 3: none near enough for its massing, or all past the far distance
+        }
+
+        /// <summary>
+        /// Of the buildings in <paramref name="held"/> (those holding what outlives their LOD0: a collider), the ones to let
+        /// go so that <paramref name="max"/> stay, into <paramref name="drop"/>: never one showing its LOD0, and of the rest
+        /// the longest since it did first. None while there are no more than <paramref name="max"/>.
+        /// </summary>
+        public void OldestDetail(IReadOnlyList<int> held, int max, List<int> drop)
+        {
+            drop.Clear();
+            int count = held.Count; if (count <= max) return;
+            idle.Clear();
+            for (int i = 0; i < held.Count; i++)
+            {
+                int idx = held[i];
+                if (!entries.TryGetValue(idx, out var e)) { idle.Add((idx, long.MinValue)); continue; }   // no longer in the layout
+                if (!e.Visible(0)) idle.Add((idx, e.Used0));
+            }
+            idle.Sort(leastRecent);
+            foreach (var (idx, _) in idle)
+            {
+                if (count <= max) break;
+                drop.Add(idx); count--;
+            }
         }
 
         /// <summary>Past the cap, the meshes not on screen go, least recently shown first.</summary>

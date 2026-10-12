@@ -43,6 +43,9 @@ namespace Triband.Storey.Unity
         [Tooltip("How many buildings may hold LOD1 geometry at once.")]
         [Min(1)] public int lod1Residency = 260;
 
+        [Tooltip("How many buildings keep their collider. A collider comes with a building's LOD0 and stays when the LOD0 goes; past this many, those whose LOD0 went longest ago lose theirs, made again with their next LOD0. 0 keeps every one for the session.")]
+        [Min(0)] public int collidersKept = 64;
+
         [Tooltip("Milliseconds a frame may spend building LOD0 and LOD1 meshes (one is always built when any is wanted).")]
         [Range(0.5f, 33)] public float buildBudgetMs = 6f;
 
@@ -76,7 +79,7 @@ namespace Triband.Storey.Unity
             if (s.PX.Length != 3) s.PX = new double[3];   // into the array it has: the site applies this every frame
             s.PX[0] = lod0PixelsPerMetre; s.PX[1] = lod1PixelsPerMetre; s.PX[2] = lod2PixelsPerMetre;
             s.Hysteresis = hysteresis; s.Fade = Mathf.Max(0.01f, fadeSeconds); s.Far = farDistance;
-            s.GlassClear = windowsClearAt; s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.BudgetMs = buildBudgetMs;
+            s.GlassClear = windowsClearAt; s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.MaxColliders = collidersKept; s.BudgetMs = buildBudgetMs;
             s.Threads = !buildOnWorkerThreads ? 0 : buildThreads > 0 ? buildThreads : -1;
             s.KeepChunkBytes = (long)meshChunksKeptMB << 20;
             s.FarOcclusion = occlusionOnFarMaterials;

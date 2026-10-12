@@ -1003,6 +1003,23 @@ namespace Triband.Storey.Unity
                 mc.sharedMesh = mesh;
             }
             baking.Clear();
+            if (lods != null) TrimColliders();
+        }
+
+        readonly List<int> collided = new List<int>(), colliderDrop = new List<int>();
+
+        /// <summary>
+        /// Past the settings' cap (<see cref="LodSettings.MaxColliders"/>), the colliders of the buildings whose LOD0 went
+        /// longest ago go: a collider stays when its building's LOD0 goes, and they piled up for the session (docs/CITY.md §7).
+        /// One is made again with the building's next LOD0.
+        /// </summary>
+        void TrimColliders()
+        {
+            int max = lods!.Settings.MaxColliders; if (max <= 0) return;
+            collided.Clear(); foreach (var bt in built.Values) if (bt.collision != null) collided.Add(bt.idx);
+            if (collided.Count <= max) return;
+            lods.OldestDetail(collided, max, colliderDrop);
+            foreach (int idx in colliderDrop) if (byIdx.TryGetValue(idx, out var bt)) RemoveCollider(bt);
         }
 
         struct BakeJob : IJobParallelFor

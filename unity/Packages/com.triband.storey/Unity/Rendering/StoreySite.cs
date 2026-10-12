@@ -280,7 +280,7 @@ namespace Triband.Storey.Unity
             {
                 // the quality asset was taken away: back to the defaults
                 settings.PX = (double[])defaults.PX.Clone(); settings.Hysteresis = defaults.Hysteresis; settings.Fade = defaults.Fade; settings.Far = defaults.Far;
-                settings.MaxLod0 = defaults.MaxLod0; settings.MaxLod1 = defaults.MaxLod1; settings.GlassClear = defaults.GlassClear; settings.BudgetMs = defaults.BudgetMs; settings.Threads = defaults.Threads;
+                settings.MaxLod0 = defaults.MaxLod0; settings.MaxLod1 = defaults.MaxLod1; settings.MaxColliders = defaults.MaxColliders; settings.GlassClear = defaults.GlassClear; settings.BudgetMs = defaults.BudgetMs; settings.Threads = defaults.Threads;
                 settings.KeepChunkBytes = defaults.KeepChunkBytes; settings.FarOcclusion = defaults.FarOcclusion;
             }
             if (Application.platform == RuntimePlatform.WebGLPlayer) settings.Threads = 0;   // no threads there
