@@ -32,8 +32,6 @@ namespace Triband.Storey.Generate
         public readonly List<P3> N = new List<P3>();
         /// <summary>Colour per vertex, by reference (docs/COLOURS.md §3.2); <see cref="ColorResolver"/> gives the RGB.</summary>
         public readonly List<Swatch> C = new List<Swatch>();
-        /// <summary>Cutaway data per vertex: wall start (x, z) and normal scaled by 1 + length.</summary>
-        public readonly List<double> W = new List<double>();
         /// <summary>Kind per vertex: 0 slab/roof, 1 wall, 2 tall part; + 8 × (neighbour index + 1) for party walls.</summary>
         public readonly List<int> K = new List<int>();
         /// <summary>Wall id per vertex, 1-based within the building; 0 = none.</summary>
@@ -82,24 +80,30 @@ namespace Triband.Storey.Generate
         {
             Welded = true;
             int n = P.Count;
-            var map = new int[n]; var keep = new List<int>(n);
-            var seen = new Dictionary<VertexKey, int>(n);
+            if (n == 0) return 0;
+            // each vertex's first equal, through a table of vertex indices (open addressing, at least twice as many slots as
+            // vertices; 0 is empty, else the index + 1): no keys copied, a few bytes a vertex
+            int size = 4; while (size < n * 2) size <<= 1;
+            var slots = new int[size]; var map = new int[n]; int kept = 0;
+            for (int i = 0; i < n; i++)
+                for (int h = Hash(i) & (size - 1); ; h = (h + 1) & (size - 1))
+                {
+                    int s = slots[h];
+                    if (s == 0) { slots[h] = i + 1; map[i] = kept++; break; }
+                    if (Same(i, s - 1)) { map[i] = map[s - 1]; break; }
+                }
+            int gone = n - kept;
+            if (gone == 0) return 0;
+            // in place: the kept vertices move down, in order (a later copy of one already kept maps below the next place)
+            int at = 0;
             for (int i = 0; i < n; i++)
             {
-                var key = new VertexKey(P[i], N[i], C[i], Lean ? -1 : K[i], Lean ? -1 : WI[i]);
-                if (seen.TryGetValue(key, out int j)) { map[i] = j; continue; }
-                seen[key] = map[i] = keep.Count; keep.Add(i);
+                if (map[i] != at) continue;
+                if (at != i) { P[at] = P[i]; N[at] = N[i]; C[at] = C[i]; if (!Lean) { K[at] = K[i]; WI[at] = WI[i]; } }
+                at++;
             }
-            int gone = n - keep.Count;
-            if (gone == 0) return 0;
-            var p = keep.ConvertAll(i => P[i]); var nn = keep.ConvertAll(i => N[i]); var c = keep.ConvertAll(i => C[i]);
-            P.Clear(); P.AddRange(p); N.Clear(); N.AddRange(nn); C.Clear(); C.AddRange(c);
-            if (!Lean)
-            {
-                var w = new List<double>(keep.Count * 4); foreach (int i in keep) { w.Add(W[i * 4]); w.Add(W[i * 4 + 1]); w.Add(W[i * 4 + 2]); w.Add(W[i * 4 + 3]); }
-                var k = keep.ConvertAll(i => K[i]); var wi = keep.ConvertAll(i => WI[i]);
-                W.Clear(); W.AddRange(w); K.Clear(); K.AddRange(k); WI.Clear(); WI.AddRange(wi);
-            }
+            P.RemoveRange(kept, gone); N.RemoveRange(kept, gone); C.RemoveRange(kept, gone);
+            if (!Lean) { K.RemoveRange(kept, gone); WI.RemoveRange(kept, gone); }
             for (int t = 0; t < I.Count; t++) I[t] = map[I[t]];
             if (PaneUV.Count > 0)
             {
@@ -113,14 +117,21 @@ namespace Triband.Storey.Generate
         /// <summary>Set by <see cref="Weld"/> (a build thread welds before the upload; the upload then skips it). Add nothing after.</summary>
         public bool Welded { get; private set; }
 
-        /// <summary>A vertex's identity for <see cref="Weld"/>. The wall id stands for the wall data: one id, one wall.</summary>
-        readonly struct VertexKey : IEquatable<VertexKey>
+        // a vertex's identity for Weld: position, normal, colour, and the cutaway's kind and wall id (the id stands for
+        // the wall's data: one id, one wall). Exact: the same doubles, as the generator made them
+        int Hash(int i)
         {
-            readonly double px, py, pz, nx, ny, nz; readonly Swatch c; readonly int k, wi;
-            public VertexKey(P3 p, P3 n, Swatch c, int k, int wi) { px = p.x; py = p.y; pz = p.z; nx = n.x; ny = n.y; nz = n.z; this.c = c; this.k = k; this.wi = wi; }
-            public bool Equals(VertexKey o) => px == o.px && py == o.py && pz == o.pz && nx == o.nx && ny == o.ny && nz == o.nz && k == o.k && wi == o.wi && c.Equals(o.c);
-            public override bool Equals(object? o) => o is VertexKey v && Equals(v);
-            public override int GetHashCode() => HashCode.Combine(px, py, pz, nx, ny, nz, c, HashCode.Combine(k, wi));
+            var p = P[i]; var q = N[i];
+            return HashCode.Combine(p.x, p.y, p.z, q.x, q.y, q.z, C[i], Lean ? 0 : HashCode.Combine(K[i], WI[i]));
+        }
+
+        bool Same(int i, int j)
+        {
+            P3 a = P[i], b = P[j];
+            if (a.x != b.x || a.y != b.y || a.z != b.z) return false;
+            a = N[i]; b = N[j];
+            if (a.x != b.x || a.y != b.y || a.z != b.z) return false;
+            return (Lean || (K[i] == K[j] && WI[i] == WI[j])) && C[i].Equals(C[j]);
         }
 
         /// <summary>Set the cutaway context for what follows. A wall (kind 1) gets an id so it can slide.</summary>
@@ -135,7 +146,7 @@ namespace Triband.Storey.Generate
         void V(P3 q, P3 nr, Swatch c)
         {
             P.Add(q); N.Add(nr); C.Add(c);
-            if (!Lean) { W.Add(curW[0]); W.Add(curW[1]); W.Add(curW[2]); W.Add(curW[3]); K.Add(curK); WI.Add(curI); }
+            if (!Lean) { K.Add(curK); WI.Add(curI); }
         }
 
         /// <summary>
@@ -163,6 +174,16 @@ namespace Triband.Storey.Generate
             for (int j = 1; j < pts.Length - 1; j++) { I.Add(bse); I.Add(bse + j); I.Add(bse + j + 1); }
         }
 
+        /// <summary><see cref="Poly"/> for a quad, without an array: the same vertices, in the same order.</summary>
+        public void Quad(P3 p0, P3 p1, P3 p2, P3 p3, P3 nr, Swatch c)
+        {
+            if (ShapeOnly) return;
+            if (P3.Dot(P3.Cross(p1 - p0, p2 - p0), nr) < 0) { var t = p0; p0 = p3; p3 = t; t = p1; p1 = p2; p2 = t; }
+            int bse = P.Count;
+            V(p0, nr, c); V(p1, nr, c); V(p2, nr, c); V(p3, nr, c);
+            I.Add(bse); I.Add(bse + 1); I.Add(bse + 2); I.Add(bse); I.Add(bse + 2); I.Add(bse + 3);
+        }
+
         /// <summary>A triangulated planar polygon (earcut output): one vertex per corner, shared by its triangles.</summary>
         public void PolyTris(List<P3> pts, List<int> tris, P3 nr, Swatch c)
         {
@@ -186,12 +207,12 @@ namespace Triband.Storey.Generate
             Solids?.Add(new Solid { F = F, u0 = u0, u1 = u1, y0 = y0, y1 = y1, w0 = w0, w1 = w1 });
             P3 Pt(double a, double y, double b) => F.At(a, y, b);
             var nu = new P3(F.u.x, 0, F.u.z); var nw = new P3(F.w.x, 0, F.w.z);
-            if ((skip & Skip.Out) == 0) Poly(new[] { Pt(u0, y0, w1), Pt(u1, y0, w1), Pt(u1, y1, w1), Pt(u0, y1, w1) }, nw, c);
-            if ((skip & Skip.In) == 0) Poly(new[] { Pt(u0, y0, w0), Pt(u1, y0, w0), Pt(u1, y1, w0), Pt(u0, y1, w0) }, new P3(-nw.x, 0, -nw.z), ci);
-            if ((skip & Skip.UEnd) == 0) Poly(new[] { Pt(u1, y0, w0), Pt(u1, y0, w1), Pt(u1, y1, w1), Pt(u1, y1, w0) }, nu, c);
-            if ((skip & Skip.UStart) == 0) Poly(new[] { Pt(u0, y0, w0), Pt(u0, y0, w1), Pt(u0, y1, w1), Pt(u0, y1, w0) }, new P3(-nu.x, 0, -nu.z), c);
-            if ((skip & Skip.Top) == 0) Poly(new[] { Pt(u0, y1, w0), Pt(u1, y1, w0), Pt(u1, y1, w1), Pt(u0, y1, w1) }, new P3(0, 1, 0), c);
-            if ((skip & Skip.Bot) == 0) Poly(new[] { Pt(u0, y0, w0), Pt(u1, y0, w0), Pt(u1, y0, w1), Pt(u0, y0, w1) }, new P3(0, -1, 0), c);
+            if ((skip & Skip.Out) == 0) Quad(Pt(u0, y0, w1), Pt(u1, y0, w1), Pt(u1, y1, w1), Pt(u0, y1, w1), nw, c);
+            if ((skip & Skip.In) == 0) Quad(Pt(u0, y0, w0), Pt(u1, y0, w0), Pt(u1, y1, w0), Pt(u0, y1, w0), new P3(-nw.x, 0, -nw.z), ci);
+            if ((skip & Skip.UEnd) == 0) Quad(Pt(u1, y0, w0), Pt(u1, y0, w1), Pt(u1, y1, w1), Pt(u1, y1, w0), nu, c);
+            if ((skip & Skip.UStart) == 0) Quad(Pt(u0, y0, w0), Pt(u0, y0, w1), Pt(u0, y1, w1), Pt(u0, y1, w0), new P3(-nu.x, 0, -nu.z), c);
+            if ((skip & Skip.Top) == 0) Quad(Pt(u0, y1, w0), Pt(u1, y1, w0), Pt(u1, y1, w1), Pt(u0, y1, w1), new P3(0, 1, 0), c);
+            if ((skip & Skip.Bot) == 0) Quad(Pt(u0, y0, w0), Pt(u1, y0, w0), Pt(u1, y0, w1), Pt(u0, y0, w1), new P3(0, -1, 0), c);
         }
 
         /// <summary>A box whose start and end faces are slanted: u_start(w) = sA + kA·w, u_end(w) = eB + kB·w.</summary>
@@ -203,12 +224,12 @@ namespace Triband.Storey.Generate
             Solids?.Add(new Solid { F = F, Mitred = true, sA = sA, kA = kA, eB = eB, kB = kB, y0 = y0, y1 = y1, w0 = w0, w1 = w1 });
             P3 Pt(double a, double y, double b) => F.At(a, y, b);
             var nw = new P3(F.w.x, 0, F.w.z);
-            if ((skip & Skip.Out) == 0) Poly(new[] { Pt(s1, y0, w1), Pt(e1, y0, w1), Pt(e1, y1, w1), Pt(s1, y1, w1) }, nw, c);
-            if ((skip & Skip.In) == 0) Poly(new[] { Pt(s0, y0, w0), Pt(e0, y0, w0), Pt(e0, y1, w0), Pt(s0, y1, w0) }, new P3(-nw.x, 0, -nw.z), ci);
-            if ((skip & Skip.UEnd) == 0) Poly(new[] { Pt(e0, y0, w0), Pt(e1, y0, w1), Pt(e1, y1, w1), Pt(e0, y1, w0) }, Geo.EndNormal(F, e0, e1, w0, w1, 1), c);
-            if ((skip & Skip.UStart) == 0) Poly(new[] { Pt(s0, y0, w0), Pt(s1, y0, w1), Pt(s1, y1, w1), Pt(s0, y1, w0) }, Geo.EndNormal(F, s0, s1, w0, w1, -1), c);
-            if ((skip & Skip.Top) == 0) Poly(new[] { Pt(s0, y1, w0), Pt(e0, y1, w0), Pt(e1, y1, w1), Pt(s1, y1, w1) }, new P3(0, 1, 0), c);
-            if ((skip & Skip.Bot) == 0) Poly(new[] { Pt(s0, y0, w0), Pt(e0, y0, w0), Pt(e1, y0, w1), Pt(s1, y0, w1) }, new P3(0, -1, 0), c);
+            if ((skip & Skip.Out) == 0) Quad(Pt(s1, y0, w1), Pt(e1, y0, w1), Pt(e1, y1, w1), Pt(s1, y1, w1), nw, c);
+            if ((skip & Skip.In) == 0) Quad(Pt(s0, y0, w0), Pt(e0, y0, w0), Pt(e0, y1, w0), Pt(s0, y1, w0), new P3(-nw.x, 0, -nw.z), ci);
+            if ((skip & Skip.UEnd) == 0) Quad(Pt(e0, y0, w0), Pt(e1, y0, w1), Pt(e1, y1, w1), Pt(e0, y1, w0), Geo.EndNormal(F, e0, e1, w0, w1, 1), c);
+            if ((skip & Skip.UStart) == 0) Quad(Pt(s0, y0, w0), Pt(s1, y0, w1), Pt(s1, y1, w1), Pt(s0, y1, w0), Geo.EndNormal(F, s0, s1, w0, w1, -1), c);
+            if ((skip & Skip.Top) == 0) Quad(Pt(s0, y1, w0), Pt(e0, y1, w0), Pt(e1, y1, w1), Pt(s1, y1, w1), new P3(0, 1, 0), c);
+            if ((skip & Skip.Bot) == 0) Quad(Pt(s0, y0, w0), Pt(e0, y0, w0), Pt(e1, y0, w1), Pt(s1, y0, w1), new P3(0, -1, 0), c);
         }
     }
 }
