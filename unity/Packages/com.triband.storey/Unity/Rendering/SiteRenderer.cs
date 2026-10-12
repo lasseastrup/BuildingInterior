@@ -127,12 +127,15 @@ namespace Triband.Storey.Unity
             public int queued, generating, builtThisFrame;
             /// <summary>Milliseconds the LOD work took this frame (picking, building, cells).</summary>
             public double ms;
+            /// <summary>Cells of a layout loading over frames still to load (<see cref="LoadOverFrames"/>).</summary>
+            public int loading;
 
             public override string ToString() =>
                 $"{buildings:N0} buildings: LOD0 {lod0}, LOD1 {lod1}, LOD2 {lod2}, not drawn {culled}\n" +
                 $"Resident: LOD0 {resident0}, LOD1 {resident1}\n" +
                 $"Cells: {cellsShown} of {cells} drawn ({cellMeshes} meshes)\n" +
-                $"Built this frame {builtThisFrame}, generating {generating}, waiting {queued}; LOD {ms:0.00} ms";
+                $"Built this frame {builtThisFrame}, generating {generating}, waiting {queued}; LOD {ms:0.00} ms" +
+                (loading > 0 ? $"\nLoading: {loading} cells to go" : "");
         }
 
         /// <summary>Whether the LOD is automatic (made with settings).</summary>
@@ -261,11 +264,23 @@ namespace Triband.Storey.Unity
         /// </summary>
         public const MeshColliderCookingOptions Cooking = MeshColliderCookingOptions.UseFastMidphase;
 
+        /// <summary>
+        /// A site's first load in Play mode (a district streamed in, a scene starting) goes over several frames, nearest
+        /// cells first, within the build budget, so it never holds a frame (docs/CITY.md §2); the buildings appear as their
+        /// cells are taken. Off, or after an edit or in the editor, a load is done at once. On by default.
+        /// </summary>
+        public bool LoadOverFrames { get; set; } = true;
+
+        /// <summary>The layout is still loading over frames: some of its buildings are not built yet.</summary>
+        public bool Loading => load != null;
+        LayoutLoad? load;
+
         /// <summary>Build everything again.</summary>
         public void Show(StoreyDocument doc)
         {
             Version++; AnyVersion++;
             using var _t = StoreyTimings.Time("site: full rebuild (every building)");
+            bool first = built.Count == 0 && load == null;   // nothing shown yet: loading over frames makes nothing vanish
             // automatic LOD: the detail each building showed is built again at once, so a structural edit (a building
             // added or removed) doesn't fade the buildings in view through their massings
             carry.Clear();
@@ -286,25 +301,32 @@ namespace Triband.Storey.Unity
             book?.Dispose();
             book = new ColorRowBook(new ColorResolver(site), palette, table);
             foreach (var kv in remaps) book.SetRemap(kv.Key, kv.Value.original, kv.Value.overwrite);
-            if (lods == null) foreach (var b in doc.buildings) Build(b);
-            else
+            if (lods == null) { foreach (var b in doc.buildings) Build(b); carry.Clear(); return; }
+            // cell by cell, each merged as soon as its buildings are built: a few cells' massings are held at a time, not
+            // every building's (docs/CITY.md §7), built on the workers ahead of the cell being taken. A massing reaching
+            // into another cell only has that one merged again
+            var o = parent.position;
+            load = new LayoutLoad(site, doc.buildings, Threads, Eye is LodEye eye ? (eye.position.x - o.x, eye.position.z - o.z) : ((double, double)?)null);
+            if (!(first && LoadOverFrames && Application.isPlaying)) TakeLoad(null);
+        }
+
+        /// <summary>
+        /// The loading layout's cells, built and merged: every one now (<paramref name="sw"/> null), or as many as are ready
+        /// within the frame's build budget. When the last is taken, the buildings' order is final (<see cref="Version"/>).
+        /// </summary>
+        void TakeLoad(System.Diagnostics.Stopwatch? sw)
+        {
+            var l = load!;
+            using var _t = StoreyTimings.Time("site: layout loaded cell by cell");
+            while (l.TryTake(sw == null, out var bs, out var made))
             {
-                // cell by cell, each merged as soon as its buildings are built: two cells' massings are held at a time, not
-                // every building's (docs/CITY.md §7). A massing reaching into the next cell only has that one merged again.
-                // The worker threads build the next cell's massings while this one's are written and merged.
-                var groups = doc.buildings.GroupBy(b => { var bb = global::Triband.Storey.Generate.Site.BoundsOf(b); return Cells.KeyOf((bb.x0 + bb.x1) / 2, (bb.z0 + bb.z1) / 2); }).Select(g => g.ToArray()).ToList();
-                var s0 = site; int threads = Threads;
-                System.Threading.Tasks.Task<Lod2Mesh[]>? ahead = null;
-                for (int g = 0; g < groups.Count; g++)
-                {
-                    var made = ahead != null ? ahead.GetAwaiter().GetResult() : Massings(s0, groups[g], 0);   // a worker's exception as itself
-                    var next = g + 1 < groups.Count ? groups[g + 1] : null;
-                    ahead = next != null && threads > 0 ? System.Threading.Tasks.Task.Run(() => Massings(s0, next, threads)) : null;
-                    for (int i = 0; i < made.Length; i++) Build(groups[g][i], made[i]);
-                    MergeCells();
-                }
+                for (int i = 0; i < bs.Length; i++) Build(bs[i], made[i]);
+                MergeCells();
+                if (sw != null && sw.Elapsed.TotalMilliseconds > lods!.Settings.BudgetMs) break;
             }
-            carry.Clear();
+            if (!l.Done) return;
+            load = null; carry.Clear();
+            if (sw != null) { Version++; AnyVersion++; }   // over frames: the props and the occlusion find their buildings again
         }
 
         /// <summary>
@@ -446,15 +468,6 @@ namespace Triband.Storey.Unity
         {
             if (original.Length == 0) remaps.Remove(building); else remaps[building] = (original, overwrite);
             book?.SetRemap(building, original, overwrite);
-        }
-
-        /// <summary>A cell's massings, on <paramref name="threads"/> worker threads (0: here).</summary>
-        static Lod2Mesh[] Massings(Site site, BuildingData[] bs, int threads)
-        {
-            var made = new Lod2Mesh[bs.Length];
-            if (threads > 1 && bs.Length > 1) System.Threading.Tasks.Parallel.For(0, bs.Length, new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = threads }, i => made[i] = Lod2.Build(site, bs[i]));
-            else for (int i = 0; i < bs.Length; i++) made[i] = Lod2.Build(site, bs[i]);
-            return made;
         }
 
         /// <summary>A building's table row, root object and massing (<paramref name="made"/> when made already), and its detail if it showed one.</summary>
@@ -664,6 +677,7 @@ namespace Triband.Storey.Unity
                     l.SetBuilt(bt.idx, 0, true); made++;
                 }
             }
+            if (load != null) TakeLoad(sw);   // a layout loading over frames: the cells ready, within the budget
             int threads = Threads;
             if (jobs.Count > 0) made = TakeJobs(sw, made);
             if (Eye is LodEye eye)
@@ -705,7 +719,8 @@ namespace Triband.Storey.Unity
                 pieces += c.renderers.Count;
             }
             var (r0, r1) = l.Resident();
-            lodBusy = fading || queued > 0 || jobs.Count > 0;
+            lodBusy = fading || queued > 0 || jobs.Count > 0 || load != null;
+            stats.loading = load != null ? load.Count - load.Taken : 0;
             stats.buildings = built.Count; stats.resident0 = r0; stats.resident1 = r1;
             stats.cells = cells.Count; stats.cellMeshes = pieces; stats.cellsShown = shown;
             stats.queued = queued; stats.generating = jobs.Count; stats.builtThisFrame = made; stats.ms = sw.Elapsed.TotalMilliseconds;
@@ -903,6 +918,7 @@ namespace Triband.Storey.Unity
             cells.Clear(); dirtyCells.Clear();
             lods?.Clear();
             jobs.Clear(); busy.Clear();   // what they make is for the old layout: let them finish unread
+            load = null;
             book?.Clear();
             shownLod = -1;
         }

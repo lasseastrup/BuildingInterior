@@ -133,6 +133,16 @@ namespace Triband.Storey.Unity
         public int TableIndexOf(string id) => site?.TableIndexOf(id) ?? -1;
 
         /// <summary>
+        /// Load the layout over several frames when the site starts in Play mode, nearest cells first, rather than all in
+        /// the frame it starts (docs/CITY.md §2). On by default, so a district streamed in never holds a frame; turn it off
+        /// to have every building at once (behind a loading screen, say), or wait for <see cref="Loading"/> to clear.
+        /// </summary>
+        public bool LoadOverFrames { get; set; } = true;
+
+        /// <summary>The layout is still loading over frames: some of its buildings aren't built yet.</summary>
+        public bool Loading => site != null && site.Loading;
+
+        /// <summary>
         /// Show an edited layout that is not saved yet, building again what <paramref name="change"/> names (all of it
         /// when null). Null <paramref name="doc"/> shows the asset again. <paramref name="text"/> is the layout's text:
         /// once the asset holds the same, nothing is rebuilt.
@@ -204,6 +214,7 @@ namespace Triband.Storey.Unity
                 shownJson = null; pendingAll = true;
             }
             site.Layer = gameObject.layer;   // everything the site makes is on its layer
+            site.LoadOverFrames = LoadOverFrames;
             site.Colliders = generateColliders && (Application.isPlaying || collidersInEditMode);
             // the neighbouring districts, for party walls along the edge: a change builds everything again
             // (the layouts' texts compared as objects: a reimport makes a new one, and nothing is read or hashed)
@@ -223,6 +234,8 @@ namespace Triband.Storey.Unity
             // an artist's window or door was added or changed: everything is built again with it
             foreach (var o in openings) if (o != null && Generate.OpeningKinds.Get(o.Id) == null) o.Register();
             if (Generate.OpeningKinds.Version != kindsSeen) { kindsSeen = Generate.OpeningKinds.Version; shownJson = null; pendingAll = true; }
+            // the camera before a load, so one over frames starts with the cells nearest it
+            if (auto && Application.isPlaying && (pendingAll || (preview == null && shownJson != layout.Json))) EyeFor(site);
             if (preview == null)
             {
                 if (shownJson != layout.Json) { site.Show(layout.Document); shownJson = layout.Json; }
@@ -238,6 +251,13 @@ namespace Triband.Storey.Unity
             using (StoreyTimings.Time("site: frame")) site.Frame(lodTint, v);
         }
 
+        /// <summary>The automatic LOD's camera: the LOD camera or the main one in Play mode, the Scene view's in the editor.</summary>
+        void EyeFor(SiteRenderer s)
+        {
+            var cam = Application.isPlaying ? (lodCamera != null ? lodCamera : Camera.main) : EditorCamera?.Invoke();
+            if (cam != null) s.Eye = SiteRenderer.LodEye.Of(cam);
+        }
+
         /// <summary>The automatic LOD's camera and the buildings kept at full detail, this frame.</summary>
         void PickFor(SiteRenderer s, SiteView? v)
         {
@@ -250,8 +270,7 @@ namespace Triband.Storey.Unity
                 settings.MaxLod0 = defaults.MaxLod0; settings.MaxLod1 = defaults.MaxLod1; settings.GlassClear = defaults.GlassClear; settings.BudgetMs = defaults.BudgetMs; settings.Threads = defaults.Threads;
             }
             if (Application.platform == RuntimePlatform.WebGLPlayer) settings.Threads = 0;   // no threads there
-            var cam = Application.isPlaying ? (lodCamera != null ? lodCamera : Camera.main) : EditorCamera?.Invoke();
-            if (cam != null) s.Eye = SiteRenderer.LodEye.Of(cam);
+            EyeFor(s);
             var f = s.Forced; f.Clear();
             foreach (var id in keepDetail) f.Add(id);
             if (v is SiteView sv)

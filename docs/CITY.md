@@ -32,8 +32,10 @@ A Storey Site's **LOD mode** is *Automatic* by default; *Fixed* shows one LOD ev
 - **Hysteresis of 12%** stops buildings flickering at a boundary.
 - **Changes cross-fade** (dithered) over 0.35 s. The shader hides a building's other LODs through its row in the building table (shown, fading from, fade), so nothing is enabled or disabled per building.
 - **Windows don't change at the switch.** LOD1's windows are opaque panes showing a painted room; LOD0's, in a building with an interior, are see-through glass onto the real rooms. LOD0's glass starts as LOD1's pane (the same painted room, opaque) at the distance LOD0 takes over (`LodSettings.Lod0Distance`) and clears to glass by **Windows Clear At** (0.6) of that distance, blended by each pixel's distance (`_StoreyGlassFill`). So the cross-fade swaps the geometry while the windows look the same, and the rooms behind them fade in as the camera comes closer.
+- **Loading.** Only the massings are built when a layout loads, cell by cell, each cell merged as soon as its buildings are built. The worker threads build the massings a few cells ahead of the one the main thread is writing and merging (`LayoutLoad`).
+  - In Play mode a site's first load (a district streamed in, a scene starting) goes over several frames, nearest cells first, within the build budget, so it never holds a frame: the buildings appear as their cells come (**Storey Site** `LoadOverFrames`, on by default; `Loading` while it goes on, and the stats overlay counts the cells to go). Turn it off to have every building at once, behind a loading screen say.
+  - After an edit, and in the editor, a load is done at once, so nothing vanishes for a frame.
 - **Detail is built on demand.**
-  - Only the massings are built when a layout loads.
   - A building that wants LOD0 or LOD1 asks for it, and the ones covering the most pixels go first.
   - It shows the best LOD it already has meanwhile.
   - The meshes are generated on worker threads, one fewer than the cores, and one building at a time each. The main thread only uploads them, for up to 6 ms a frame (at least one when any is ready).
@@ -72,7 +74,7 @@ Headless numbers (`CityBenchTests`, `LodManagerTests`). They are CPU only, witho
 
 | | Time |
 |---|---|
-| Loading 3,000 buildings: every massing | 0.1–0.2 ms a building. The workers build each cell's massings while the main thread writes and merges the cell before: the main thread works about 50 ms of the load instead of about 300 ms (4 cores; the load is still one frame) |
+| Loading 3,000 buildings: every massing | 0.1–0.2 ms a building, built on the workers ahead of the main thread, which works about 50 ms of the load (writing and merging) instead of about 300 ms (4 cores). In Play mode a site's first load is spread over frames within the build budget |
 | Merging the 307 cells | 43 ms |
 | Picking every building's LOD | 0.4–0.9 ms a frame |
 | One LOD1 | about 6–8 ms |
@@ -156,7 +158,7 @@ Both budgets in the package plan (§6.6: 120 MB on iPhone 7, 200 MB on iPhone 14
 - Occluders across a district edge: the occlusion works on the district the player is in, so a building of the next district in the camera's way doesn't sink.
 - Bridges between districts: a bridge reaches only buildings of its own layout.
 - A neighbour district edited in the same session: its party walls along the edge update when this site next rebuilds everything (the neighbour's file is saved and reimported).
-- Cells baked at import. They are merged when the layout loads, which takes tens of milliseconds for the test city.
+- Cells baked at import. They are merged when the layout loads: over frames in Play mode, at once after an edit or in the editor.
 - Memory measured in Unity and on a device (the Memory Profiler, Xcode's gauge). §7 is headless.
 - Unity's own copy and upload of a mesh (§4).
 - None of the above is measured in Unity yet; the numbers in §4 are headless.
