@@ -20,7 +20,7 @@ namespace Triband.Storey.Generate
         public const int Shift = 11, Size = 1 << Shift, Mask = Size - 1;
 
         /// <summary>The most bytes of chunks kept for the next builds, on all threads together.</summary>
-        public static long KeepBytes = 32L << 20;
+        public static long KeepBytes = 24L << 20;
 
         internal static readonly object Gate = new object();
         internal static long Kept, made;
@@ -172,5 +172,71 @@ namespace Triband.Storey.Generate
             public void Reset() => i = -1;
             public void Dispose() { }
         }
+    }
+
+    /// <summary>
+    /// A per-vertex value that repeats (a normal, a colour), held as an index into a table of the distinct values: 4 bytes a
+    /// vertex in <see cref="Chunks"/> instead of the value's 24. Values the comparer calls equal are one entry, the first
+    /// added. Reads as a list of the values.
+    /// </summary>
+    public sealed class IndexedList<T> : IReadOnlyList<T> where T : struct
+    {
+        /// <summary>Each element's entry in <see cref="Values"/>.</summary>
+        public readonly ChunkList<int> Index = new ChunkList<int>();
+        /// <summary>The distinct values, in the order first added.</summary>
+        public readonly List<T> Values = new List<T>();
+        readonly Dictionary<T, int> lookup;
+        readonly IEqualityComparer<T> eq;
+        T last;
+        int lastEntry = -1;
+
+        public IndexedList(IEqualityComparer<T> eq) { this.eq = eq; lookup = new Dictionary<T, int>(eq); }
+
+        public int Count => Index.Count;
+        /// <summary>The chunks the indices hold now.</summary>
+        public int ChunkCount => Index.ChunkCount;
+        public T this[int i] => Values[Index[i]];
+
+        public void Add(T value) => Index.Add(EntryOf(value));
+
+        /// <summary>The entry of <paramref name="value"/> in <see cref="Values"/>, added if there is none equal to it.</summary>
+        public int EntryOf(T value)
+        {
+            if (lastEntry >= 0 && eq.Equals(value, last)) return lastEntry;
+            if (!lookup.TryGetValue(value, out int e)) { e = Values.Count; Values.Add(value); lookup.Add(value, e); }
+            last = value; lastEntry = e;
+            return e;
+        }
+
+        /// <summary>Keep the first <paramref name="n"/> elements (the table keeps every value).</summary>
+        public void Truncate(int n) => Index.Truncate(n);
+
+        /// <summary>Empty, the table too, every chunk given back.</summary>
+        public void Clear() { Index.Clear(); Values.Clear(); lookup.Clear(); lastEntry = -1; }
+
+        public Enumerator GetEnumerator() => new Enumerator(this);
+        IEnumerator<T> IEnumerable<T>.GetEnumerator() => GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        public struct Enumerator : IEnumerator<T>
+        {
+            readonly IndexedList<T> list;
+            int i;
+            internal Enumerator(IndexedList<T> list) { this.list = list; i = -1; }
+            public bool MoveNext() => ++i < list.Count;
+            public T Current => list[i];
+            object IEnumerator.Current => Current;
+            public void Reset() => i = -1;
+            public void Dispose() { }
+        }
+    }
+
+    /// <summary>Points equal to the bit: a table of them keeps each value as it was made, 0 and −0 apart.</summary>
+    public sealed class P3Bits : IEqualityComparer<P3>
+    {
+        public static readonly P3Bits Instance = new P3Bits();
+        public bool Equals(P3 a, P3 b) => Bits(a.x) == Bits(b.x) && Bits(a.y) == Bits(b.y) && Bits(a.z) == Bits(b.z);
+        public int GetHashCode(P3 p) => HashCode.Combine(Bits(p.x), Bits(p.y), Bits(p.z));
+        static long Bits(double v) => BitConverter.DoubleToInt64Bits(v);
     }
 }

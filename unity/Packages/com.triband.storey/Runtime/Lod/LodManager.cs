@@ -44,7 +44,7 @@ namespace Triband.Storey.Lod
         /// §7): the builders' lists and the packed meshes waiting for upload are made of them. More saves garbage when
         /// several builds are under way at once, less saves memory.
         /// </summary>
-        public long KeepChunkBytes = 32L << 20;
+        public long KeepChunkBytes = 24L << 20;
 
         /// <summary>
         /// Massings (LOD2 and the cells) in the way are cut and faded like near buildings. Off, they draw with the steady

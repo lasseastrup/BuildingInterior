@@ -30,9 +30,13 @@ namespace Triband.Storey.Generate
     public sealed class MeshBuilder
     {
         public readonly ChunkList<P3> P = new ChunkList<P3>();
-        public readonly ChunkList<P3> N = new ChunkList<P3>();
-        /// <summary>Colour per vertex, by reference (docs/COLOURS.md §3.2); <see cref="ColorResolver"/> gives the RGB.</summary>
-        public readonly ChunkList<Swatch> C = new ChunkList<Swatch>();
+        /// <summary>Normal per vertex, an index into the builder's table of its normals (a building has few), each as made.</summary>
+        public readonly IndexedList<P3> N = new IndexedList<P3>(P3Bits.Instance);
+        /// <summary>
+        /// Colour per vertex, by reference (docs/COLOURS.md §3.2); <see cref="ColorResolver"/> gives the RGB. An index into the
+        /// builder's table of its swatches.
+        /// </summary>
+        public readonly IndexedList<Swatch> C = new IndexedList<Swatch>(EqualityComparer<Swatch>.Default);
         /// <summary>Kind per vertex: 0 slab/roof, 1 wall, 2 tall part; + 8 × (neighbour index + 1) for party walls.</summary>
         public readonly ChunkList<int> K = new ChunkList<int>();
         /// <summary>Wall id per vertex, 1-based within the building; 0 = none.</summary>
@@ -143,7 +147,7 @@ namespace Triband.Storey.Generate
                 for (int i = 0; i < n; i++)
                 {
                     if (map[i] != at) continue;
-                    if (at != i) { P[at] = P[i]; N[at] = N[i]; C[at] = C[i]; if (!Lean) { K[at] = K[i]; WI[at] = WI[i]; } }
+                    if (at != i) { P[at] = P[i]; N.Index[at] = N.Index[i]; C.Index[at] = C.Index[i]; if (!Lean) { K[at] = K[i]; WI[at] = WI[i]; } }
                     at++;
                 }
                 P.Truncate(kept); N.Truncate(kept); C.Truncate(kept);
@@ -170,20 +174,22 @@ namespace Triband.Storey.Generate
         public bool Welded { get; private set; }
 
         // a vertex's identity for Weld: position, normal, colour, and the cutaway's kind and wall id (the id stands for
-        // the wall's data: one id, one wall). Exact: the same doubles, as the generator made them
+        // the wall's data: one id, one wall). Exact: the same doubles, as the generator made them (0 and −0 alike, as == has
+        // them); a colour by its entry in the builder's table, which holds each swatch once, equal as Swatch.Equals has it
         int Hash(int i)
         {
             var p = P[i]; var q = N[i];
-            return HashCode.Combine(p.x, p.y, p.z, q.x, q.y, q.z, C[i], Lean ? 0 : HashCode.Combine(K[i], WI[i]));
+            return HashCode.Combine(p.x, p.y, p.z, q.x, q.y, q.z, C.Index[i], Lean ? 0 : HashCode.Combine(K[i], WI[i]));
         }
 
         bool Same(int i, int j)
         {
             P3 a = P[i], b = P[j];
             if (a.x != b.x || a.y != b.y || a.z != b.z) return false;
+            if (C.Index[i] != C.Index[j] || (!Lean && (K[i] != K[j] || WI[i] != WI[j]))) return false;
+            if (N.Index[i] == N.Index[j]) return true;
             a = N[i]; b = N[j];
-            if (a.x != b.x || a.y != b.y || a.z != b.z) return false;
-            return (Lean || (K[i] == K[j] && WI[i] == WI[j])) && C[i].Equals(C[j]);
+            return a.x == b.x && a.y == b.y && a.z == b.z;
         }
 
         /// <summary>Set the cutaway context for what follows. A wall (kind 1) gets an id so it can slide.</summary>
