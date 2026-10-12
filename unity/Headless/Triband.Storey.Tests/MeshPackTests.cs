@@ -72,9 +72,9 @@ namespace Triband.Storey.Tests
                         var pm = Assert.Single(parts);
                         pm.Finish(pm.Styles.Select(RowOf).ToArray(), wallBase);
                         var (rv, rc) = Reference(m, windows, mates, wallBase);
-                        Assert.True(rv.SequenceEqual(pm.V), $"{what}: the vertices differ");
-                        Assert.True(rc == null ? pm.Cut == null : rc.SequenceEqual(pm.Cut!), $"{what}: the cutaway stream differs");
-                        var ix = pm.I16 != null ? pm.I16.Select(i => (int)i).ToArray() : pm.I32!;
+                        Assert.True(rv.SequenceEqual(pm.V.Take(pm.Verts)), $"{what}: the vertices differ");
+                        Assert.True(rc == null ? pm.Cut == null : rc.SequenceEqual(pm.Cut!.Take(pm.Verts)), $"{what}: the cutaway stream differs");
+                        var ix = pm.I16 != null ? pm.I16.Take(pm.Indices).Select(i => (int)i).ToArray() : pm.I32!.Take(pm.Indices).ToArray();
                         Assert.True(ix.SequenceEqual(m.I), $"{what}: the indices differ");
                         Assert.Equal(m.Verts > MeshPack.MaxVerts, pm.I32 != null);
                         Assert.Equal((m.P.Min(p => (float)p.x), m.P.Max(p => (float)p.y)), (pm.X0, pm.Y1));
@@ -105,10 +105,10 @@ namespace Triband.Storey.Tests
                 {
                     Assert.True(p.Verts <= max && p.I16 != null);
                     p.Finish(p.Styles.Select(RowOf).ToArray(), 0);
-                    tris.AddRange(p.I16!.Select(i => p.V[i]));
-                    Assert.True(p.V.All(v => v.x >= p.X0 && v.x <= p.X1 && v.z >= p.Z0 && v.z <= p.Z1));
+                    tris.AddRange(p.I16!.Take(p.Indices).Select(i => p.V[i]));
+                    Assert.True(p.V.Take(p.Verts).All(v => v.x >= p.X0 && v.x <= p.X1 && v.z >= p.Z0 && v.z <= p.Z1));
                 }
-                Assert.True(tris.SequenceEqual(whole.I32 != null ? whole.I32.Select(i => whole.V[i]) : whole.I16!.Select(i => whole.V[i])), "the parts draw other triangles");
+                Assert.True(tris.SequenceEqual(whole.I32 != null ? whole.I32.Take(whole.Indices).Select(i => whole.V[i]) : whole.I16!.Take(whole.Indices).Select(i => whole.V[i])), "the parts draw other triangles");
                 Assert.True(extra < m.Verts / 20, $"{extra} vertices copied");
             }
         }
@@ -157,11 +157,20 @@ namespace Triband.Storey.Tests
             // a large building that fits 16-bit indices: one part, its vertices as welded
             var (b, l0) = site.Buildings.Select(x => (x, l0: Lod0.Build(site, x))).First(x => { x.l0.Op.Weld(); return x.l0.Op.Verts > 20000 && x.l0.Op.Verts <= MeshPack.MaxVerts; });
             int nv = l0.Op.Verts, ni = l0.Op.I.Count;
+            ArrayShelf.Clear();
             long a0 = GC.GetAllocatedBytesForCurrentThread();
             var pm = MeshPack.Pack(l0.Op, true, null).Single();
             long made = GC.GetAllocatedBytesForCurrentThread() - a0, gpu = 32L * nv + 2L * ni;
-            output.WriteLine($"{b.name}: {nv:N0} vertices; packed {made / 1024:N0} KB made for a {gpu / 1024:N0} KB mesh");
-            Assert.True(made < gpu * 1.25, $"{made} bytes made for a {gpu}-byte mesh");
+            // uploaded, its arrays go back to the shelf, and the next packing takes them
+            pm.Release();
+            long a1 = GC.GetAllocatedBytesForCurrentThread();
+            var again = MeshPack.Pack(l0.Op, true, null).Single();
+            long remade = GC.GetAllocatedBytesForCurrentThread() - a1;
+            output.WriteLine($"{b.name}: {nv:N0} vertices; packed {made / 1024:N0} KB made for a {gpu / 1024:N0} KB mesh, {remade / 1024:N0} KB packed again after an upload");
+            Assert.True(made < gpu * 1.5, $"{made} bytes made for a {gpu}-byte mesh");
+            Assert.True(remade < gpu / 10, $"{remade} bytes made packing again");
+            Assert.True(again.V.Length >= nv && again.V.Length <= nv * 1.25 + 1024);
+            again.Release(); ArrayShelf.Clear();
         }
     }
 }

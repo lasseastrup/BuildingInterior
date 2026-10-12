@@ -552,11 +552,20 @@ namespace Triband.Storey.Unity
         /// </summary>
         static object Generate(Site site, BuildingData b, int idx, int which, (int start, int count) mates, bool collider)
         {
-            if (which == 1) { var m = Lod1.Build(site, b); m.RetagForUpload(idx + Lod1.LOD_TAG); return new Detail { opaque = MeshPack.Pack(m, windows: true) }; }
+            // once packed, the builders' lists go to this thread's next build (MeshBuilder.Recycle)
+            if (which == 1)
+            {
+                var m = Lod1.Build(site, b); m.RetagForUpload(idx + Lod1.LOD_TAG);
+                var shell = new Detail { opaque = MeshPack.Pack(m, windows: true) };
+                m.Recycle();
+                return shell;
+            }
             var l0 = Lod0.Build(site, b);
             l0.Op.RetagForUpload(idx); l0.Glass.RetagForUpload(idx);
             // the glass's panes carry their place too, to start as LOD1's; neither is welded (it would find almost nothing)
-            return new Detail { opaque = MeshPack.Pack(l0.Op, true, mates, weld: false), glass = MeshPack.Pack(l0.Glass, true, mates, weld: false), shape = l0.Shape, collision = collider ? CollisionMesh.Build(site, b, l0.Shape) : null };
+            var full = new Detail { opaque = MeshPack.Pack(l0.Op, true, mates, weld: false), glass = MeshPack.Pack(l0.Glass, true, mates, weld: false), shape = l0.Shape, collision = collider ? CollisionMesh.Build(site, b, l0.Shape) : null };
+            l0.Op.Recycle(); l0.Glass.Recycle();
+            return full;
         }
 
         /// <summary>
@@ -585,6 +594,14 @@ namespace Triband.Storey.Unity
             if (lods != null && colliders && bt.collision == null) colliderPending.Add(bt.id);
         }
 
+        /// <summary>A finished build that won't be uploaded after all: its packed arrays go back for the next build's.</summary>
+        static void Discard(object made)
+        {
+            if (!(made is Detail d)) return;
+            foreach (var p in d.opaque) p.Release();
+            if (d.glass != null) foreach (var p in d.glass) p.Release();
+        }
+
         /// <summary>A mesh's name, numbered when it comes in parts.</summary>
         static string Part(string name, int i, int n) => n > 1 ? $"{name} ({i + 1})" : name;
 
@@ -608,7 +625,7 @@ namespace Triband.Storey.Unity
                 jobs.RemoveAt(i--); busy.Remove(j.bt.idx);
                 // a build of a layout edited under it may throw, and is dropped; one of the layout shown is a fault to report
                 if (j.task.IsFaulted) { var ex = j.task.Exception!; if (current) Debug.LogException(ex.InnerException ?? ex); }
-                if (!ok) continue;
+                if (!ok) { if (j.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion) Discard(j.task.Result); continue; }
                 FinishDetail(j.bt, j.name, j.which, j.task.Result); l.SetBuilt(j.bt.idx, j.which, true); made++;
             }
             return made;
@@ -622,7 +639,8 @@ namespace Triband.Storey.Unity
                 var j = jobs[i]; if (j.bt != bt || j.which != which) continue;
                 try { j.task.Wait(); } catch (AggregateException) { }
                 jobs.RemoveAt(i); busy.Remove(bt.idx);
-                if (j.task.Status != System.Threading.Tasks.TaskStatus.RanToCompletion || !ReferenceEquals(j.site, site)) return false;
+                if (j.task.Status != System.Threading.Tasks.TaskStatus.RanToCompletion) return false;
+                if (!ReferenceEquals(j.site, site)) { Discard(j.task.Result); return false; }
                 FinishDetail(bt, j.name, which, j.task.Result);
                 return true;
             }
@@ -661,6 +679,8 @@ namespace Triband.Storey.Unity
             var sw = lodClock; sw.Restart();
             float now = Time.realtimeSinceStartup, dt = lastLod < 0 ? 0 : Mathf.Min(0.1f, now - lastLod); lastLod = now;
             var l = lods!; int made = 0, queued = 0; bool fading = false;
+            // the build memory kept for reuse: one limit for every site (the quality asset's)
+            MeshBuilder.KeepBytes = l.Settings.KeepBuilderBytes; ArrayShelf.KeepBytes = l.Settings.KeepArrayBytes;
             forcedIdx.Clear();
             foreach (var id in Forced)
             {

@@ -52,6 +52,13 @@ namespace Triband.Storey.Unity
         [Tooltip("Generate LOD0 and LOD1 on worker threads, one fewer than the cores; only the upload is on the main thread. Off builds on the main thread (WebGL always does).")]
         public bool buildOnWorkerThreads = true;
 
+        [Header("Memory")]
+        [Tooltip("Megabytes of mesh-builder lists kept for the next detail builds, on all build threads together. Reusing them saves over half the garbage a detail build makes; lower it on small devices (8 on the minimum tier).")]
+        [Min(0)] public int buildListsKeptMB = 24;
+
+        [Tooltip("Megabytes of packed vertex and index arrays kept between uploads for the next builds (8 on the minimum tier).")]
+        [Min(0)] public int uploadArraysKeptMB = 16;
+
         [Header("Occlusion")]
         [Tooltip("Compile the occlusion discard into the LOD2 and cell materials. Off on the minimum tier: alpha clipping costs early-Z on tile-based GPUs.")]
         public bool occlusionOnFarMaterials = true;
@@ -73,6 +80,7 @@ namespace Triband.Storey.Unity
             s.PX[0] = lod0PixelsPerMetre; s.PX[1] = lod1PixelsPerMetre; s.PX[2] = lod2PixelsPerMetre;
             s.Hysteresis = hysteresis; s.Fade = Mathf.Max(0.01f, fadeSeconds); s.Far = farDistance;
             s.GlassClear = windowsClearAt; s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.BudgetMs = buildBudgetMs; s.Threads = buildOnWorkerThreads ? -1 : 0;
+            s.KeepBuilderBytes = (long)buildListsKeptMB << 20; s.KeepArrayBytes = (long)uploadArraysKeptMB << 20;
         }
     }
 }

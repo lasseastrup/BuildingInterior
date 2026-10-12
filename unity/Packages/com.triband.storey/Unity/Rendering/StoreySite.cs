@@ -268,6 +268,7 @@ namespace Triband.Storey.Unity
                 // the quality asset was taken away: back to the defaults
                 settings.PX = (double[])defaults.PX.Clone(); settings.Hysteresis = defaults.Hysteresis; settings.Fade = defaults.Fade; settings.Far = defaults.Far;
                 settings.MaxLod0 = defaults.MaxLod0; settings.MaxLod1 = defaults.MaxLod1; settings.GlassClear = defaults.GlassClear; settings.BudgetMs = defaults.BudgetMs; settings.Threads = defaults.Threads;
+                settings.KeepBuilderBytes = defaults.KeepBuilderBytes; settings.KeepArrayBytes = defaults.KeepArrayBytes;
             }
             if (Application.platform == RuntimePlatform.WebGLPlayer) settings.Threads = 0;   // no threads there
             EyeFor(s);

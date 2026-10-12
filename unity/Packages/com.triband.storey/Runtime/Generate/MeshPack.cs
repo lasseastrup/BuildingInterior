@@ -33,28 +33,39 @@ namespace Triband.Storey.Generate
         [StructLayout(LayoutKind.Sequential)]
         public struct Cutaway { public float kind, wid; }
 
-        public readonly Vertex[] V;
-        /// <summary>LOD0's cutaway stream; null for a lean mesh (LOD1).</summary>
-        public readonly Cutaway[]? Cut;
-        /// <summary>The indices: 16-bit (<see cref="I16"/>) when there are 65,535 vertices or fewer, else 32-bit.</summary>
-        public readonly ushort[]? I16;
-        public readonly int[]? I32;
+        /// <summary>The vertices, the first <see cref="Verts"/> of the array (it may be longer: <see cref="ArrayShelf"/>).</summary>
+        public Vertex[] V { get; private set; }
+        /// <summary>LOD0's cutaway stream, the first <see cref="Verts"/>; null for a lean mesh (LOD1).</summary>
+        public Cutaway[]? Cut { get; private set; }
+        /// <summary>The indices, the first <see cref="Indices"/>: 16-bit (<see cref="I16"/>) when there are 65,535 vertices or fewer, else 32-bit.</summary>
+        public ushort[]? I16 { get; private set; }
+        public int[]? I32 { get; private set; }
         /// <summary>The styles whose colour rows the vertices name, by index.</summary>
         public readonly StyleRef[] Styles;
         /// <summary>The bounds of the positions.</summary>
         public readonly float X0, Y0, Z0, X1, Y1, Z1;
         bool finished;
 
-        public int Verts => V.Length;
-        public int Indices => I16 != null ? I16.Length : I32!.Length;
+        public int Verts { get; }
+        public int Indices { get; }
 
-        internal PackedMesh(Vertex[] v, Cutaway[]? cut, ushort[]? i16, int[]? i32, StyleRef[] styles)
+        internal PackedMesh(Vertex[] v, int verts, Cutaway[]? cut, ushort[]? i16, int[]? i32, int indices, StyleRef[] styles)
         {
-            V = v; Cut = cut; I16 = i16; I32 = i32; Styles = styles;
+            V = v; Cut = cut; I16 = i16; I32 = i32; Styles = styles; Verts = verts; Indices = indices;
             float x0 = float.MaxValue, y0 = x0, z0 = x0, x1 = float.MinValue, y1 = x1, z1 = x1;
-            foreach (var q in v) { x0 = Math.Min(x0, q.x); y0 = Math.Min(y0, q.y); z0 = Math.Min(z0, q.z); x1 = Math.Max(x1, q.x); y1 = Math.Max(y1, q.y); z1 = Math.Max(z1, q.z); }
-            if (v.Length == 0) x0 = y0 = z0 = x1 = y1 = z1 = 0;
+            for (int i = 0; i < verts; i++) { var q = v[i]; x0 = Math.Min(x0, q.x); y0 = Math.Min(y0, q.y); z0 = Math.Min(z0, q.z); x1 = Math.Max(x1, q.x); y1 = Math.Max(y1, q.y); z1 = Math.Max(z1, q.z); }
+            if (verts == 0) x0 = y0 = z0 = x1 = y1 = z1 = 0;
             X0 = x0; Y0 = y0; Z0 = z0; X1 = x1; Y1 = y1; Z1 = z1;
+        }
+
+        /// <summary>
+        /// Uploaded: the arrays go back to <see cref="ArrayShelf"/> for the next build's packing. Nothing may read them
+        /// after; the mesh is left empty.
+        /// </summary>
+        public void Release()
+        {
+            ArrayShelf<Vertex>.Return(V); ArrayShelf<Cutaway>.Return(Cut); ArrayShelf<ushort>.Return(I16);
+            V = Array.Empty<Vertex>(); Cut = null; I16 = null; I32 = null;
         }
 
         /// <summary>
@@ -68,11 +79,11 @@ namespace Triband.Storey.Generate
             finished = true;
             var lo = new byte[rows.Length]; var hi = new byte[rows.Length];
             for (int s = 0; s < rows.Length; s++) { var (r, g, _, _) = ColorRows.EncodeVertex(rows[s], ColorSlot.Wall, 1); lo[s] = r; hi[s] = g; }
-            var v = V;
-            for (int i = 0; i < v.Length; i++) { int s = v[i].r | v[i].g << 8; v[i].r = lo[s]; v[i].g = hi[s]; }
+            var v = V; int n = Verts;
+            for (int i = 0; i < n; i++) { int s = v[i].r | v[i].g << 8; v[i].r = lo[s]; v[i].g = hi[s]; }
             if (Cut == null) return;
             var c = Cut;
-            for (int i = 0; i < c.Length; i++) { float wi = c[i].wid; c[i].wid = wi > 0 && wallBase >= 0 ? wallBase + wi - 1 : 0; }
+            for (int i = 0; i < n; i++) { float wi = c[i].wid; c[i].wid = wi > 0 && wallBase >= 0 ? wallBase + wi - 1 : 0; }
         }
     }
 
@@ -141,8 +152,9 @@ namespace Triband.Storey.Generate
             var I = gb.I;
             for (int i = 0; i < ni; i++) if ((uint)I[i] >= (uint)nv) throw new InvalidOperationException($"index {I[i]} of {nv} vertices");
 
-            // every vertex once, with its style's index where its colour row goes
-            var verts = new PackedMesh.Vertex[nv];
+            // every vertex once, with its style's index where its colour row goes; the arrays are rented (ArrayShelf), so
+            // every field of every vertex is written
+            var verts = ArrayShelf<PackedMesh.Vertex>.Rent(nv);
             var styleIx = new Dictionary<StyleRef, int>(); var styles = new List<StyleRef>();
             StyleRef last = default; int lastIx = -1;
             float tag = gb.Tag;
@@ -158,6 +170,7 @@ namespace Triband.Storey.Generate
                 }
                 var (_, _, cb, ca) = ColorRows.EncodeVertex(0, s.slot, s.tone);   // the slot and tone, checked
                 ref var v = ref verts[i];
+                v = default;
                 v.x = (float)p.x; v.y = (float)p.y; v.z = (float)p.z;
                 v.nx = S8(n.x); v.ny = S8(n.y); v.nz = S8(n.z);
                 v.r = (byte)(si & 255); v.g = (byte)(si >> 8); v.b = cb; v.a = ca; v.tag = tag;
@@ -167,28 +180,28 @@ namespace Triband.Storey.Generate
             PackedMesh.Cutaway[]? cut = null;
             if (!gb.Lean)
             {
-                cut = new PackedMesh.Cutaway[nv];
+                cut = ArrayShelf<PackedMesh.Cutaway>.Rent(nv);
                 for (int i = 0; i < nv; i++) cut[i] = new PackedMesh.Cutaway { kind = mates is (int ms, int mc) ? MateIndex.Shift(gb.K[i], ms, mc) : gb.K[i], wid = gb.WI[i] };
             }
             var st = styles.ToArray();
 
             if (nv <= maxVerts)
             {
-                if (nv <= MaxVerts) { var i16 = new ushort[ni]; for (int i = 0; i < ni; i++) i16[i] = (ushort)I[i]; out_.Add(new PackedMesh(verts, cut, i16, null, st)); }
-                else out_.Add(new PackedMesh(verts, cut, null, I.ToArray(), st));
+                if (nv <= MaxVerts) { var i16 = ArrayShelf<ushort>.Rent(ni); for (int i = 0; i < ni; i++) i16[i] = (ushort)I[i]; out_.Add(new PackedMesh(verts, nv, cut, i16, null, ni, st)); }
+                else out_.Add(new PackedMesh(verts, nv, cut, null, I.ToArray(), ni, st));
                 return out_;
             }
 
             // in parts: each vertex's place in the part being filled (-1: not in it)
             int cap = Math.Min(maxVerts, MaxVerts);
-            var local = new int[nv]; for (int i = 0; i < nv; i++) local[i] = -1;
+            var local = ArrayShelf<int>.Rent(nv); for (int i = 0; i < nv; i++) local[i] = -1;
             var pv = new List<int>(cap); var pi = new List<int>(Math.Min(ni, cap * 3));
             void Close()
             {
-                var v = new PackedMesh.Vertex[pv.Count]; var c = cut != null ? new PackedMesh.Cutaway[pv.Count] : null;
+                var v = ArrayShelf<PackedMesh.Vertex>.Rent(pv.Count); var c = cut != null ? ArrayShelf<PackedMesh.Cutaway>.Rent(pv.Count) : null;
                 for (int k = 0; k < pv.Count; k++) { v[k] = verts[pv[k]]; if (c != null) c[k] = cut![pv[k]]; local[pv[k]] = -1; }
-                var ix = new ushort[pi.Count]; for (int k = 0; k < pi.Count; k++) ix[k] = (ushort)pi[k];
-                out_.Add(new PackedMesh(v, c, ix, null, st));
+                var ix = ArrayShelf<ushort>.Rent(pi.Count); for (int k = 0; k < pi.Count; k++) ix[k] = (ushort)pi[k];
+                out_.Add(new PackedMesh(v, pv.Count, c, ix, null, pi.Count, st));
                 pv.Clear(); pi.Clear();
             }
             for (int t = 0; t < ni; t += 3)
@@ -204,6 +217,8 @@ namespace Triband.Storey.Generate
                 pi.Add(local[x]);
             }
             if (pi.Count > 0) Close();
+            // the whole mesh's arrays were for splitting it
+            ArrayShelf<PackedMesh.Vertex>.Return(verts); ArrayShelf<PackedMesh.Cutaway>.Return(cut); ArrayShelf<int>.Return(local);
             return out_;
         }
     }

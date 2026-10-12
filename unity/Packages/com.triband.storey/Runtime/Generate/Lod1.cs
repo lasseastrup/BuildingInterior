@@ -22,7 +22,7 @@ namespace Triband.Storey.Generate
         {
             int idx = site.IndexOf(b), N = b.floors.Count; double T = Dim.T_EXT;
             var size = site.SizeOf(idx, 1);   // the building's last LOD1: its lists made at that size
-            var op = new MeshBuilder(idx + LOD_TAG, lean: true, vertices: size.v, indices: size.i);
+            var op = MeshBuilder.Make(idx + LOD_TAG, lean: true, vertices: size.v, indices: size.i);
             if (solids) op.Solids = new List<Solid>();
             site.partyMemo.TryRemove(b.id, out _);
             var L0 = new Lod0.Shared(site, b);

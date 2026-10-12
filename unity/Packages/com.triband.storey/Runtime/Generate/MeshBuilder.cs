@@ -75,6 +75,88 @@ namespace Triband.Storey.Generate
             K = new List<int>(lean ? 0 : v); WI = new List<int>(lean ? 0 : v); I = new List<int>(shapeOnly ? 0 : indices);
         }
 
+        // ---- reuse (docs/CITY.md §7) ----
+
+        /// <summary>
+        /// The most bytes of builder lists kept for the next builds (<see cref="Recycle"/>), on all threads together. A
+        /// detail build's own lists are over half of what it allocates, and a worker builds one building after another;
+        /// a builder past this is let go, so one large tower doesn't keep its lists. Each thread keeps its own builders
+        /// (none is handed between threads).
+        /// </summary>
+        public static long KeepBytes = 24L << 20;
+
+        [ThreadStatic] static List<MeshBuilder>? spares;
+        static long keptAll;
+        long keptBytes;
+
+        /// <summary>The bytes of builder lists kept now, on all threads.</summary>
+        public static long KeptBytes => System.Threading.Interlocked.Read(ref keptAll);
+
+        /// <summary>
+        /// A builder as the constructor makes it, reusing the lists of one this thread let go with <see cref="Recycle"/>
+        /// when there is one: the smallest with room for <paramref name="vertices"/>, else the largest (the largest too
+        /// when the size isn't known, 0: a first build's).
+        /// </summary>
+        public static MeshBuilder Make(int tag = 0, bool lean = false, bool shapeOnly = false, int vertices = 0, int indices = 0)
+        {
+            var s = spares;
+            if (!shapeOnly && s != null)
+            {
+                int best = -1;
+                for (int k = 0; k < s.Count; k++)
+                {
+                    if (s[k].Lean != lean) continue;
+                    if (best < 0) { best = k; continue; }
+                    int cap = s[k].P.Capacity, bc = s[best].P.Capacity;
+                    bool fits = vertices > 0 && cap >= vertices, bestFits = vertices > 0 && bc >= vertices;
+                    if (fits ? !bestFits || cap < bc : !bestFits && cap > bc) best = k;
+                }
+                if (best >= 0)
+                {
+                    var m = s[best]; s.RemoveAt(best);
+                    System.Threading.Interlocked.Add(ref keptAll, -m.keptBytes); m.keptBytes = 0;
+                    m.Tag = tag;
+                    if (m.P.Capacity < vertices) { m.P.Capacity = vertices; m.N.Capacity = vertices; m.C.Capacity = vertices; if (!lean) { m.K.Capacity = vertices; m.WI.Capacity = vertices; } }
+                    if (m.I.Capacity < indices) m.I.Capacity = indices;
+                    return m;
+                }
+            }
+            return new MeshBuilder(tag, lean, shapeOnly, vertices, indices);
+        }
+
+        /// <summary>
+        /// Done with this builder (its meshes packed): its lists are emptied and kept for this thread's next
+        /// <see cref="Make"/>, within <see cref="KeepBytes"/> (this thread's oldest kept going first). Nothing may use the
+        /// builder after this. What it handed out stays as it was: the wall lists (a LOD0's shape holds them) are
+        /// replaced, not emptied.
+        /// </summary>
+        public void Recycle()
+        {
+            if (ShapeOnly) return;
+            var s = spares ??= new List<MeshBuilder>();
+            if (s.Contains(this)) return;
+            long bytes = Bytes;
+            if (bytes > KeepBytes) return;
+            while (s.Count > 0 && KeptBytes + bytes > KeepBytes) { System.Threading.Interlocked.Add(ref keptAll, -s[0].keptBytes); s[0].keptBytes = 0; s.RemoveAt(0); }
+            if (KeptBytes + bytes > KeepBytes) return;   // the other threads keep the rest
+            P.Clear(); N.Clear(); C.Clear(); K.Clear(); WI.Clear(); I.Clear(); PaneUV.Clear();
+            Walls = new List<(double[], int)>(); WallBase = new List<double>(); Solids = null;
+            StoreyBase = 0; curW = Zero4; curK = curI = 0; Welded = false;
+            keptBytes = bytes; System.Threading.Interlocked.Add(ref keptAll, bytes);
+            s.Add(this);
+        }
+
+        /// <summary>Let go of the builders this thread keeps (the tests' allocation counts start from none).</summary>
+        public static void ForgetSpares()
+        {
+            var s = spares; if (s == null) return;
+            foreach (var m in s) { System.Threading.Interlocked.Add(ref keptAll, -m.keptBytes); m.keptBytes = 0; }
+            s.Clear();
+        }
+
+        /// <summary>The bytes the lists have room for: positions, normals and colours 24 each a vertex, the rest 4.</summary>
+        long Bytes => 24L * (P.Capacity + N.Capacity + C.Capacity) + 4L * (K.Capacity + WI.Capacity + I.Capacity);
+
         public int Tris => I.Count / 3;
         public int Verts => P.Count;
 

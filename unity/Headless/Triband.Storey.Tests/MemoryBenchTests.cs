@@ -71,11 +71,12 @@ namespace Triband.Storey.Tests
                 {
                     gpu += Gpu(m);
                     builder += m.Verts * (24L + 24 + 24 + 8) + 4L * m.I.Count;   // P, N, C, K and WI, I: what the builder held
-                    foreach (var p in MeshPack.Pack(m, true, weld: false)) packed += 24L * p.Verts + (p.Cut != null ? 8L * p.Verts : 0) + 2L * p.Indices;
+                    // the arrays as rented (ArrayShelf): up to a quarter longer than the mesh
+                    foreach (var p in MeshPack.Pack(m, true, weld: false)) packed += 24L * p.V.Length + 8L * (p.Cut?.Length ?? 0) + 2L * (p.I16?.Length ?? 0) + 4L * (p.I32?.Length ?? 0);
                 }
             }
             log.WriteLine($"a finished LOD0 waiting for its upload: {MB(packed) / n:0.00} MB packed, {MB(builder) / n:0.00} MB as the builder held it; its GPU meshes {MB(gpu) / n:0.00} MB");
-            Assert.True(packed <= gpu, "packed bigger than its meshes");
+            Assert.True(packed <= gpu * 1.3, "packed well past the size of its meshes");
             Assert.True(packed * 2 < builder);
         }
 

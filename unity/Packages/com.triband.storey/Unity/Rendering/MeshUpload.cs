@@ -108,6 +108,7 @@ namespace Triband.Storey.Unity
             // no Mesh.Optimize: it crashed the editor natively in its vertex-cache pass on valid LOD0 meshes, and the generator's
             // own order is within a few percent of a vertex-cache optimiser's (measured with Forsyth's: 1.88 → 1.80 misses a triangle)
             mesh.UploadMeshData(true);
+            pm.Release();   // its arrays are copied: they go to the next build's packing
             return mesh;
         }
 

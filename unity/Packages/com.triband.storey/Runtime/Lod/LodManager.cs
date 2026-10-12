@@ -38,6 +38,13 @@ namespace Triband.Storey.Lod
 
         /// <summary>Worker threads generating detail at once: 0 builds on the main thread, -1 one fewer than the cores (at least one).</summary>
         public int Threads = -1;
+
+        /// <summary>
+        /// Bytes of build memory kept for reuse (docs/CITY.md §7): mesh-builder lists for the next detail builds, on all
+        /// build threads together (<see cref="Generate.MeshBuilder.KeepBytes"/>), and packed vertex and index arrays
+        /// between uploads (<see cref="Generate.ArrayShelf.KeepBytes"/>). More saves garbage, less saves memory.
+        /// </summary>
+        public long KeepBuilderBytes = 24L << 20, KeepArrayBytes = 16L << 20;
     }
 
     /// <summary>
