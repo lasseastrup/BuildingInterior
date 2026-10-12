@@ -56,11 +56,8 @@ namespace Triband.Storey.Unity
         [Min(0)] public int buildThreads = 0;
 
         [Header("Memory")]
-        [Tooltip("Megabytes of mesh-builder lists kept for the next detail builds, on all build threads together. Reusing them saves over half the garbage a detail build makes; lower it on small devices (8 on the minimum tier).")]
-        [Min(0)] public int buildListsKeptMB = 24;
-
-        [Tooltip("Megabytes of packed vertex and index arrays kept between uploads for the next builds (8 on the minimum tier).")]
-        [Min(0)] public int uploadArraysKeptMB = 16;
+        [Tooltip("Megabytes of mesh memory kept between detail builds for the next ones: the builders' lists and the packed meshes waiting for upload are made of the same fixed-size chunks. Past this, a chunk given back is garbage. The test city's five-minute walk needs 33 on one build thread; 8 on the minimum tier.")]
+        [Min(0)] public int meshChunksKeptMB = 32;
 
         [Header("Occlusion")]
         [Tooltip("Cut and fade massings (LOD2 and the cells) in the way like near buildings. Off, far geometry always draws without discard (the steady variant), which tile-based GPUs treat as opaque; off on the minimum tier.")]
@@ -81,7 +78,7 @@ namespace Triband.Storey.Unity
             s.Hysteresis = hysteresis; s.Fade = Mathf.Max(0.01f, fadeSeconds); s.Far = farDistance;
             s.GlassClear = windowsClearAt; s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.BudgetMs = buildBudgetMs;
             s.Threads = !buildOnWorkerThreads ? 0 : buildThreads > 0 ? buildThreads : -1;
-            s.KeepBuilderBytes = (long)buildListsKeptMB << 20; s.KeepArrayBytes = (long)uploadArraysKeptMB << 20;
+            s.KeepChunkBytes = (long)meshChunksKeptMB << 20;
             s.FarOcclusion = occlusionOnFarMaterials;
         }
     }

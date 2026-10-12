@@ -157,11 +157,11 @@ namespace Triband.Storey.Tests
             // a large building that fits 16-bit indices: one part, its vertices as welded
             var (b, l0) = site.Buildings.Select(x => (x, l0: Lod0.Build(site, x))).First(x => { x.l0.Op.Weld(); return x.l0.Op.Verts > 20000 && x.l0.Op.Verts <= MeshPack.MaxVerts; });
             int nv = l0.Op.Verts, ni = l0.Op.I.Count;
-            ArrayShelf.Clear();
+            Chunks.Clear();
             long a0 = GC.GetAllocatedBytesForCurrentThread();
             var pm = MeshPack.Pack(l0.Op, true, null).Single();
             long made = GC.GetAllocatedBytesForCurrentThread() - a0, gpu = 32L * nv + 2L * ni;
-            // uploaded, its arrays go back to the shelf, and the next packing takes them
+            // uploaded, its chunks go back (Chunks), and the next packing takes them
             pm.Release();
             long a1 = GC.GetAllocatedBytesForCurrentThread();
             var again = MeshPack.Pack(l0.Op, true, null).Single();
@@ -169,8 +169,8 @@ namespace Triband.Storey.Tests
             output.WriteLine($"{b.name}: {nv:N0} vertices; packed {made / 1024:N0} KB made for a {gpu / 1024:N0} KB mesh, {remade / 1024:N0} KB packed again after an upload");
             Assert.True(made < gpu * 1.5, $"{made} bytes made for a {gpu}-byte mesh");
             Assert.True(remade < gpu / 10, $"{remade} bytes made packing again");
-            Assert.True(again.V.Length >= nv && again.V.Length <= nv * 1.25 + 1024);
-            again.Release(); ArrayShelf.Clear();
+            Assert.True(again.V.Capacity >= nv && again.V.Capacity < nv + Chunks.Size);
+            again.Release(); Chunks.Clear();
         }
     }
 }

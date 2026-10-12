@@ -33,12 +33,15 @@ namespace Triband.Storey.Generate
         [StructLayout(LayoutKind.Sequential)]
         public struct Cutaway { public float kind, wid; }
 
-        /// <summary>The vertices, the first <see cref="Verts"/> of the array (it may be longer: <see cref="ArrayShelf"/>).</summary>
-        public Vertex[] V { get; private set; }
-        /// <summary>LOD0's cutaway stream, the first <see cref="Verts"/>; null for a lean mesh (LOD1).</summary>
-        public Cutaway[]? Cut { get; private set; }
-        /// <summary>The indices, the first <see cref="Indices"/>: 16-bit (<see cref="I16"/>) when there are 65,535 vertices or fewer, else 32-bit.</summary>
-        public ushort[]? I16 { get; private set; }
+        /// <summary>The vertices, in <see cref="Chunks"/> given back when the mesh is uploaded (<see cref="Release"/>).</summary>
+        public ChunkList<Vertex> V { get; private set; }
+        /// <summary>LOD0's cutaway stream, a vertex each; null for a lean mesh (LOD1).</summary>
+        public ChunkList<Cutaway>? Cut { get; private set; }
+        /// <summary>
+        /// The indices: 16-bit (<see cref="I16"/>) when there are 65,535 vertices or fewer, else 32-bit (one array: only a
+        /// mesh packed whole has as many vertices, <see cref="MeshPack.Pack"/>'s <c>maxVerts</c>).
+        /// </summary>
+        public ChunkList<ushort>? I16 { get; private set; }
         public int[]? I32 { get; private set; }
         /// <summary>The styles whose colour rows the vertices name, by index.</summary>
         public readonly StyleRef[] Styles;
@@ -54,23 +57,27 @@ namespace Triband.Storey.Generate
         public int Verts { get; }
         public int Indices { get; }
 
-        internal PackedMesh(Vertex[] v, int verts, Cutaway[]? cut, ushort[]? i16, int[]? i32, int indices, StyleRef[] styles)
+        internal PackedMesh(ChunkList<Vertex> v, ChunkList<Cutaway>? cut, ChunkList<ushort>? i16, int[]? i32, int indices, StyleRef[] styles)
         {
-            V = v; Cut = cut; I16 = i16; I32 = i32; Styles = styles; Verts = verts; Indices = indices;
+            V = v; Cut = cut; I16 = i16; I32 = i32; Styles = styles; Verts = v.Count; Indices = indices;
             float x0 = float.MaxValue, y0 = x0, z0 = x0, x1 = float.MinValue, y1 = x1, z1 = x1;
-            for (int i = 0; i < verts; i++) { var q = v[i]; x0 = Math.Min(x0, q.x); y0 = Math.Min(y0, q.y); z0 = Math.Min(z0, q.z); x1 = Math.Max(x1, q.x); y1 = Math.Max(y1, q.y); z1 = Math.Max(z1, q.z); }
-            if (verts == 0) x0 = y0 = z0 = x1 = y1 = z1 = 0;
+            for (int c = 0, at = 0; at < Verts; c++, at += Chunks.Size)
+            {
+                var a = v.Chunk(c); int m = Math.Min(Chunks.Size, Verts - at);
+                for (int i = 0; i < m; i++) { var q = a[i]; x0 = Math.Min(x0, q.x); y0 = Math.Min(y0, q.y); z0 = Math.Min(z0, q.z); x1 = Math.Max(x1, q.x); y1 = Math.Max(y1, q.y); z1 = Math.Max(z1, q.z); }
+            }
+            if (Verts == 0) x0 = y0 = z0 = x1 = y1 = z1 = 0;
             X0 = x0; Y0 = y0; Z0 = z0; X1 = x1; Y1 = y1; Z1 = z1;
         }
 
         /// <summary>
-        /// Uploaded: the arrays go back to <see cref="ArrayShelf"/> for the next build's packing. Nothing may read them
-        /// after; the mesh is left empty.
+        /// Uploaded: the chunks go back to <see cref="Chunks"/> for the next build. Nothing may read them after; the mesh
+        /// is left empty.
         /// </summary>
         public void Release()
         {
-            ArrayShelf<Vertex>.Return(V); ArrayShelf<Cutaway>.Return(Cut); ArrayShelf<ushort>.Return(I16);
-            V = Array.Empty<Vertex>(); Cut = null; I16 = null; I32 = null;
+            V.Clear(); Cut?.Clear(); I16?.Clear();
+            Cut = null; I16 = null; I32 = null;
         }
 
         /// <summary>
@@ -84,11 +91,18 @@ namespace Triband.Storey.Generate
             finished = true;
             var lo = new byte[rows.Length]; var hi = new byte[rows.Length];
             for (int s = 0; s < rows.Length; s++) { var (r, g, _, _) = ColorRows.EncodeVertex(rows[s], ColorSlot.Wall, 1); lo[s] = r; hi[s] = g; }
-            var v = V; int n = Verts;
-            for (int i = 0; i < n; i++) { int s = v[i].r | v[i].g << 8; v[i].r = lo[s]; v[i].g = hi[s]; }
+            int n = Verts;
+            for (int k = 0, at = 0; at < n; k++, at += Chunks.Size)
+            {
+                var v = V.Chunk(k); int m = Math.Min(Chunks.Size, n - at);
+                for (int i = 0; i < m; i++) { int s = v[i].r | v[i].g << 8; v[i].r = lo[s]; v[i].g = hi[s]; }
+            }
             if (Cut == null) return;
-            var c = Cut;
-            for (int i = 0; i < n; i++) { float wi = c[i].wid; c[i].wid = wi > 0 && wallBase >= 0 ? wallBase + wi - 1 : 0; }
+            for (int k = 0, at = 0; at < n; k++, at += Chunks.Size)
+            {
+                var c = Cut.Chunk(k); int m = Math.Min(Chunks.Size, n - at);
+                for (int i = 0; i < m; i++) { float wi = c[i].wid; c[i].wid = wi > 0 && wallBase >= 0 ? wallBase + wi - 1 : 0; }
+            }
         }
     }
 
@@ -157,81 +171,133 @@ namespace Triband.Storey.Generate
             var I = gb.I;
             for (int i = 0; i < ni; i++) if ((uint)I[i] >= (uint)nv) throw new InvalidOperationException($"index {I[i]} of {nv} vertices");
 
-            // every vertex once, with its style's index where its colour row goes; the arrays are rented (ArrayShelf), so
-            // every field of every vertex is written
-            var verts = ArrayShelf<PackedMesh.Vertex>.Rent(nv);
-            var styleIx = new Dictionary<StyleRef, int>(); var styles = new List<StyleRef>();
-            StyleRef last = default; int lastIx = -1;
-            float tag = gb.Tag;
-            for (int i = 0; i < nv; i++)
+            var pk = packer ??= new Packer();
+            pk.Start(gb, windows, mates);
+            try
             {
-                var p = gb.P[i]; var n = gb.N[i]; var s = gb.C[i];
-                int si;
-                if (lastIx >= 0 && s.style.Equals(last)) si = lastIx;
-                else
+                // the styles, numbered in the order the vertices first name them (each vertex holds its style's number until
+                // Finish gives it the style's colour row), and the neighbours the party walls name, in the order first named
+                // (the builder's lists, and the packed mesh's, are chunked alike: element i is in chunk i >> Chunks.Shift)
+                for (int c = 0, at = 0; at < nv; c++, at += Chunks.Size)
                 {
-                    if (!styleIx.TryGetValue(s.style, out si)) { si = styles.Count; styleIx[s.style] = si; styles.Add(s.style); }
-                    last = s.style; lastIx = si;
+                    var C = gb.C.Chunk(c); int m = Math.Min(Chunks.Size, nv - at);
+                    for (int j = 0; j < m; j++) pk.Style(C[j].style);
                 }
+                if (pk.Styles.Count > 65536) throw new InvalidOperationException($"{pk.Styles.Count} styles in one mesh");
+                var neighbours = Array.Empty<int>();
+                if (!gb.Lean)
+                {
+                    for (int i = 0; i < nv; i++) { int k = pk.Kind(gb.K[i]); if (k >= 8) { int m = (k >> 3) - 1; if (!pk.Found.Contains(m)) pk.Found.Add(m); } }
+                    if (pk.Found.Count > 0) neighbours = pk.Found.ToArray();
+                }
+                var st = pk.Styles.ToArray();
+
+                if (nv <= maxVerts)
+                {
+                    var v = new ChunkList<PackedMesh.Vertex>(); v.Resize(nv);
+                    var cut = gb.Lean ? null : new ChunkList<PackedMesh.Cutaway>(); cut?.Resize(nv);
+                    for (int c = 0, at = 0; at < nv; c++, at += Chunks.Size)
+                    {
+                        var P = gb.P.Chunk(c); var N = gb.N.Chunk(c); var C = gb.C.Chunk(c); var V = v.Chunk(c); int m = Math.Min(Chunks.Size, nv - at);
+                        for (int j = 0; j < m; j++) pk.Vertex(at + j, in P[j], in N[j], in C[j], ref V[j]);
+                        if (cut == null) continue;
+                        var K = gb.K.Chunk(c); var W = gb.WI.Chunk(c); var U = cut.Chunk(c);
+                        for (int j = 0; j < m; j++) U[j] = new PackedMesh.Cutaway { kind = pk.Kind(K[j]), wid = W[j] };
+                    }
+                    if (nv <= MaxVerts)
+                    {
+                        var i16 = new ChunkList<ushort>(); i16.Resize(ni);
+                        for (int c = 0, at = 0; at < ni; c++, at += Chunks.Size)
+                        {
+                            var src = I.Chunk(c); var dst = i16.Chunk(c); int m = Math.Min(Chunks.Size, ni - at);
+                            for (int j = 0; j < m; j++) dst[j] = (ushort)src[j];
+                        }
+                        out_.Add(new PackedMesh(v, cut, i16, null, ni, st) { Mates = neighbours });
+                    }
+                    else out_.Add(new PackedMesh(v, cut, null, I.ToArray(), ni, st) { Mates = neighbours });
+                    return out_;
+                }
+
+                // in parts: each vertex's place in the part being filled (-1: not in it). A vertex is packed into each part
+                // that takes it, as it would be packed whole.
+                int cap = Math.Min(maxVerts, MaxVerts);
+                var local = pk.Local; local.Resize(nv); for (int i = 0; i < nv; i++) local[i] = -1;
+                var pv = pk.Pv; var pi = pk.Pi;
+                void Close()
+                {
+                    int n = pv.Count, m = pi.Count;
+                    var v = new ChunkList<PackedMesh.Vertex>(); v.Resize(n);
+                    var c = gb.Lean ? null : new ChunkList<PackedMesh.Cutaway>(); c?.Resize(n);
+                    for (int k = 0; k < n; k++) { int x = pv[k]; pk.Vertex(x, in gb.P[x], in gb.N[x], in gb.C[x], ref v[k]); if (c != null) c[k] = new PackedMesh.Cutaway { kind = pk.Kind(gb.K[x]), wid = gb.WI[x] }; local[x] = -1; }
+                    var ix = new ChunkList<ushort>(); ix.Resize(m); for (int k = 0; k < m; k++) ix[k] = (ushort)pi[k];
+                    out_.Add(new PackedMesh(v, c, ix, null, m, st) { Mates = neighbours });
+                    pv.Clear(); pi.Clear();
+                }
+                for (int t = 0; t < ni; t += 3)
+                {
+                    int a = I[t], b = I[t + 1], c = I[t + 2];
+                    int need = (local[a] < 0 ? 1 : 0) + (local[b] < 0 && b != a ? 1 : 0) + (local[c] < 0 && c != a && c != b ? 1 : 0);
+                    if (pv.Count + need > cap) Close();
+                    Take(a); Take(b); Take(c);
+                }
+                void Take(int x)
+                {
+                    if (local[x] < 0) { local[x] = pv.Count; pv.Add(x); }
+                    pi.Add(local[x]);
+                }
+                if (pi.Count > 0) Close();
+                return out_;
+            }
+            finally { pk.Done(); }
+        }
+
+        // what packing a mesh works with, kept by each thread for its next (the lists' chunks go back after each mesh)
+        [ThreadStatic] static Packer? packer;
+
+        sealed class Packer
+        {
+            public readonly Dictionary<StyleRef, int> StyleIx = new Dictionary<StyleRef, int>();
+            public readonly List<StyleRef> Styles = new List<StyleRef>();
+            public readonly List<int> Found = new List<int>();
+            public readonly ChunkList<int> Local = new ChunkList<int>(), Pv = new ChunkList<int>(), Pi = new ChunkList<int>();
+            MeshBuilder gb = null!;
+            bool windows;
+            float tag;
+            (int start, int count)? mates;
+            StyleRef last;
+            int lastIx;
+
+            public void Start(MeshBuilder gb, bool windows, (int start, int count)? mates)
+            {
+                this.gb = gb; this.windows = windows; this.mates = mates; tag = gb.Tag;
+                StyleIx.Clear(); Styles.Clear(); Found.Clear(); lastIx = -1;
+            }
+
+            public void Done() { gb = null!; Local.Clear(); Pv.Clear(); Pi.Clear(); }
+
+            /// <summary>A style's number, given the next one the first time it is named.</summary>
+            public int Style(StyleRef s)
+            {
+                if (lastIx >= 0 && s.Equals(last)) return lastIx;
+                if (!StyleIx.TryGetValue(s, out int si)) { si = Styles.Count; StyleIx[s] = si; Styles.Add(s); }
+                last = s; lastIx = si;
+                return si;
+            }
+
+            /// <summary>A vertex's cutaway kind as packed: a party wall's neighbour moved into the table's block.</summary>
+            public int Kind(int k) => mates is (int ms, int mc) ? MateIndex.Shift(k, ms, mc) : k;
+
+            /// <summary>Vertex <paramref name="i"/> (at <paramref name="p"/>, <paramref name="n"/>, <paramref name="s"/>) in the upload's layout, every field written (the chunk held another's).</summary>
+            public void Vertex(int i, in P3 p, in P3 n, in Swatch s, ref PackedMesh.Vertex v)
+            {
+                int si = Style(s.style);
                 var (_, _, cb, ca) = ColorRows.EncodeVertex(0, s.slot, s.tone);   // the slot and tone, checked
-                ref var v = ref verts[i];
                 v = default;
                 v.x = (float)p.x; v.y = (float)p.y; v.z = (float)p.z;
                 v.nx = S8(n.x); v.ny = S8(n.y); v.nz = S8(n.z);
                 v.r = (byte)(si & 255); v.g = (byte)(si >> 8); v.b = cb; v.a = ca; v.tag = tag;
                 if (windows && s.slot == ColorSlot.Glass && gb.PaneUV.TryGetValue(i, out var uv)) { var (pa, pw, pb) = ColorRows.EncodePane(uv.u, uv.v, uv.id); v.a = pa; v.nw = pw; v.b = pb; }
             }
-            if (styles.Count > 65536) throw new InvalidOperationException($"{styles.Count} styles in one mesh");
-            PackedMesh.Cutaway[]? cut = null; var neighbours = Array.Empty<int>();
-            if (!gb.Lean)
-            {
-                cut = ArrayShelf<PackedMesh.Cutaway>.Rent(nv);
-                List<int>? found = null;
-                for (int i = 0; i < nv; i++)
-                {
-                    int k = mates is (int ms, int mc) ? MateIndex.Shift(gb.K[i], ms, mc) : gb.K[i];
-                    cut[i] = new PackedMesh.Cutaway { kind = k, wid = gb.WI[i] };
-                    if (k >= 8) { int m = (k >> 3) - 1; found ??= new List<int>(); if (!found.Contains(m)) found.Add(m); }
-                }
-                if (found != null) neighbours = found.ToArray();
-            }
-            var st = styles.ToArray();
-
-            if (nv <= maxVerts)
-            {
-                if (nv <= MaxVerts) { var i16 = ArrayShelf<ushort>.Rent(ni); for (int i = 0; i < ni; i++) i16[i] = (ushort)I[i]; out_.Add(new PackedMesh(verts, nv, cut, i16, null, ni, st) { Mates = neighbours }); }
-                else out_.Add(new PackedMesh(verts, nv, cut, null, I.ToArray(), ni, st) { Mates = neighbours });
-                return out_;
-            }
-
-            // in parts: each vertex's place in the part being filled (-1: not in it)
-            int cap = Math.Min(maxVerts, MaxVerts);
-            var local = ArrayShelf<int>.Rent(nv); for (int i = 0; i < nv; i++) local[i] = -1;
-            var pv = new List<int>(cap); var pi = new List<int>(Math.Min(ni, cap * 3));
-            void Close()
-            {
-                var v = ArrayShelf<PackedMesh.Vertex>.Rent(pv.Count); var c = cut != null ? ArrayShelf<PackedMesh.Cutaway>.Rent(pv.Count) : null;
-                for (int k = 0; k < pv.Count; k++) { v[k] = verts[pv[k]]; if (c != null) c[k] = cut![pv[k]]; local[pv[k]] = -1; }
-                var ix = ArrayShelf<ushort>.Rent(pi.Count); for (int k = 0; k < pi.Count; k++) ix[k] = (ushort)pi[k];
-                out_.Add(new PackedMesh(v, pv.Count, c, ix, null, pi.Count, st) { Mates = neighbours });
-                pv.Clear(); pi.Clear();
-            }
-            for (int t = 0; t < ni; t += 3)
-            {
-                int a = I[t], b = I[t + 1], c = I[t + 2];
-                int need = (local[a] < 0 ? 1 : 0) + (local[b] < 0 && b != a ? 1 : 0) + (local[c] < 0 && c != a && c != b ? 1 : 0);
-                if (pv.Count + need > cap) Close();
-                Take(a); Take(b); Take(c);
-            }
-            void Take(int x)
-            {
-                if (local[x] < 0) { local[x] = pv.Count; pv.Add(x); }
-                pi.Add(local[x]);
-            }
-            if (pi.Count > 0) Close();
-            // the whole mesh's arrays were for splitting it
-            ArrayShelf<PackedMesh.Vertex>.Return(verts); ArrayShelf<PackedMesh.Cutaway>.Return(cut); ArrayShelf<int>.Return(local);
-            return out_;
         }
     }
 }

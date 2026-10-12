@@ -633,7 +633,7 @@ namespace Triband.Storey.Unity
         /// </summary>
         static object Generate(Site site, BuildingData b, int idx, int which, (int start, int count) mates, bool collider)
         {
-            // once packed, the builders' lists go to this thread's next build (MeshBuilder.Recycle)
+            // once packed, the builders' lists give their chunks back for the next build (MeshBuilder.Recycle)
             if (which == 1)
             {
                 MeshBuilder m;
@@ -781,8 +781,8 @@ namespace Triband.Storey.Unity
             var sw = lodClock; sw.Restart();
             float now = Time.realtimeSinceStartup, dt = lastLod < 0 ? 0 : Mathf.Min(0.1f, now - lastLod); lastLod = now;
             var l = lods!; int made = 0, queued = 0; bool fading = false;
-            // the build memory kept for reuse: one limit for every site (the quality asset's)
-            MeshBuilder.KeepBytes = l.Settings.KeepBuilderBytes; ArrayShelf.KeepBytes = l.Settings.KeepArrayBytes;
+            // the mesh chunks kept for reuse: one limit for every site (the quality asset's)
+            Chunks.KeepBytes = l.Settings.KeepChunkBytes;
             forcedIdx.Clear();
             foreach (var id in Forced)
             {

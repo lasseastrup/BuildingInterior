@@ -40,11 +40,11 @@ namespace Triband.Storey.Lod
         public int Threads = -1;
 
         /// <summary>
-        /// Bytes of build memory kept for reuse (docs/CITY.md §7): mesh-builder lists for the next detail builds, on all
-        /// build threads together (<see cref="Generate.MeshBuilder.KeepBytes"/>), and packed vertex and index arrays
-        /// between uploads (<see cref="Generate.ArrayShelf.KeepBytes"/>). More saves garbage, less saves memory.
+        /// Bytes of mesh chunks kept between detail builds for the next (<see cref="Generate.Chunks.KeepBytes"/>, docs/CITY.md
+        /// §7): the builders' lists and the packed meshes waiting for upload are made of them. More saves garbage when
+        /// several builds are under way at once, less saves memory.
         /// </summary>
-        public long KeepBuilderBytes = 24L << 20, KeepArrayBytes = 16L << 20;
+        public long KeepChunkBytes = 32L << 20;
 
         /// <summary>
         /// Massings (LOD2 and the cells) in the way are cut and faded like near buildings. Off, they draw with the steady

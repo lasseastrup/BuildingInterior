@@ -98,9 +98,14 @@ namespace Triband.Storey.Unity
             int nv = pm.Verts, ni = pm.Indices;
             var mesh = new Mesh { name = name, indexFormat = pm.I16 != null ? IndexFormat.UInt16 : IndexFormat.UInt32 };
             mesh.SetVertexBufferParams(nv, pm.Cut != null ? Lod0Layout : LeanLayout);
-            mesh.SetVertexBufferData(pm.V, 0, 0, nv, 0, Quiet);
-            if (pm.Cut != null) mesh.SetVertexBufferData(pm.Cut, 0, 0, nv, 1, Quiet);
-            if (pm.I16 != null) { mesh.SetIndexBufferParams(ni, IndexFormat.UInt16); mesh.SetIndexBufferData(pm.I16, 0, 0, ni, Quiet); }
+            // a chunk at a time (Chunks): each fills its part of the buffer
+            for (int c = 0, at = 0; at < nv; c++, at += Chunks.Size) mesh.SetVertexBufferData(pm.V.Chunk(c), 0, at, Math.Min(Chunks.Size, nv - at), 0, Quiet);
+            if (pm.Cut != null) for (int c = 0, at = 0; at < nv; c++, at += Chunks.Size) mesh.SetVertexBufferData(pm.Cut.Chunk(c), 0, at, Math.Min(Chunks.Size, nv - at), 1, Quiet);
+            if (pm.I16 != null)
+            {
+                mesh.SetIndexBufferParams(ni, IndexFormat.UInt16);
+                for (int c = 0, at = 0; at < ni; c++, at += Chunks.Size) mesh.SetIndexBufferData(pm.I16.Chunk(c), 0, at, Math.Min(Chunks.Size, ni - at), Quiet);
+            }
             else { mesh.SetIndexBufferParams(ni, IndexFormat.UInt32); mesh.SetIndexBufferData(pm.I32!, 0, 0, ni, Quiet); }
             mesh.subMeshCount = 1;
             mesh.SetSubMesh(0, new SubMeshDescriptor(0, ni), Quiet);
@@ -108,7 +113,7 @@ namespace Triband.Storey.Unity
             // no Mesh.Optimize: it crashed the editor natively in its vertex-cache pass on valid LOD0 meshes, and the generator's
             // own order is within a few percent of a vertex-cache optimiser's (measured with Forsyth's: 1.88 → 1.80 misses a triangle)
             mesh.UploadMeshData(true);
-            pm.Release();   // its arrays are copied: they go to the next build's packing
+            pm.Release();   // its chunks are copied: they go to the next build
             return mesh;
         }
 

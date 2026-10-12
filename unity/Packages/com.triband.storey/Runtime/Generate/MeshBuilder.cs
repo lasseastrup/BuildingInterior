@@ -25,18 +25,19 @@ namespace Triband.Storey.Generate
     /// <summary>
     /// Geometry builder: boxes and polygons with per-vertex colour, building tag and occlusion
     /// data (the prototype's <c>GB</c>). Positions are doubles here; the Unity layer packs them.
+    /// The lists are made of <see cref="Chunks"/>, given back when the builder is recycled.
     /// </summary>
     public sealed class MeshBuilder
     {
-        public readonly List<P3> P;
-        public readonly List<P3> N;
+        public readonly ChunkList<P3> P = new ChunkList<P3>();
+        public readonly ChunkList<P3> N = new ChunkList<P3>();
         /// <summary>Colour per vertex, by reference (docs/COLOURS.md §3.2); <see cref="ColorResolver"/> gives the RGB.</summary>
-        public readonly List<Swatch> C;
+        public readonly ChunkList<Swatch> C = new ChunkList<Swatch>();
         /// <summary>Kind per vertex: 0 slab/roof, 1 wall, 2 tall part; + 8 × (neighbour index + 1) for party walls.</summary>
-        public readonly List<int> K;
+        public readonly ChunkList<int> K = new ChunkList<int>();
         /// <summary>Wall id per vertex, 1-based within the building; 0 = none.</summary>
-        public readonly List<int> WI;
-        public readonly List<int> I;
+        public readonly ChunkList<int> WI = new ChunkList<int>();
+        public readonly ChunkList<int> I = new ChunkList<int>();
         /// <summary>The walls given ids, in id order.</summary>
         public List<(double[] W, int K)> Walls = new List<(double[], int)>();
         /// <summary>The floor height of the storey each wall in <see cref="Walls"/> was made on (the editor slides only the active storey's).</summary>
@@ -65,97 +66,45 @@ namespace Triband.Storey.Generate
         int curK, curI;
         public static readonly double[] Zero4 = { 0, 0, 0, 0 };
 
-        /// <param name="vertices">Room for this many vertices from the start (what the building's last build came to).</param>
-        /// <param name="indices">Room for this many indices.</param>
-        public MeshBuilder(int tag = 0, bool lean = false, bool shapeOnly = false, int vertices = 0, int indices = 0)
-        {
-            Tag = tag; Lean = lean; ShapeOnly = shapeOnly;
-            int v = shapeOnly ? 0 : vertices;
-            P = new List<P3>(v); N = new List<P3>(v); C = new List<Swatch>(v);
-            K = new List<int>(lean ? 0 : v); WI = new List<int>(lean ? 0 : v); I = new List<int>(shapeOnly ? 0 : indices);
-        }
+        public MeshBuilder(int tag = 0, bool lean = false, bool shapeOnly = false) { Tag = tag; Lean = lean; ShapeOnly = shapeOnly; }
 
         // ---- reuse (docs/CITY.md §7) ----
 
-        /// <summary>
-        /// The most bytes of builder lists kept for the next builds (<see cref="Recycle"/>), on all threads together. A
-        /// detail build's own lists are over half of what it allocates, and a worker builds one building after another;
-        /// a builder past this is let go, so one large tower doesn't keep its lists. Each thread keeps its own builders
-        /// (none is handed between threads).
-        /// </summary>
-        public static long KeepBytes = 24L << 20;
-
+        /// <summary>The builders a thread keeps for its next <see cref="Make"/>, their lists empty.</summary>
+        const int Spares = 6;
         [ThreadStatic] static List<MeshBuilder>? spares;
-        static long keptAll;
-        long keptBytes;
-
-        /// <summary>The bytes of builder lists kept now, on all threads.</summary>
-        public static long KeptBytes => System.Threading.Interlocked.Read(ref keptAll);
 
         /// <summary>
-        /// A builder as the constructor makes it, reusing the lists of one this thread let go with <see cref="Recycle"/>
-        /// when there is one: the smallest with room for <paramref name="vertices"/>, else the largest (the largest too
-        /// when the size isn't known, 0: a first build's).
+        /// A builder as the constructor makes it: one this thread let go with <see cref="Recycle"/> when there is one, else
+        /// a new one. Either way its lists take their memory from <see cref="Chunks"/>, a chunk at a time.
         /// </summary>
-        public static MeshBuilder Make(int tag = 0, bool lean = false, bool shapeOnly = false, int vertices = 0, int indices = 0)
+        public static MeshBuilder Make(int tag = 0, bool lean = false, bool shapeOnly = false)
         {
             var s = spares;
             if (!shapeOnly && s != null)
-            {
-                int best = -1;
-                for (int k = 0; k < s.Count; k++)
-                {
-                    if (s[k].Lean != lean) continue;
-                    if (best < 0) { best = k; continue; }
-                    int cap = s[k].P.Capacity, bc = s[best].P.Capacity;
-                    bool fits = vertices > 0 && cap >= vertices, bestFits = vertices > 0 && bc >= vertices;
-                    if (fits ? !bestFits || cap < bc : !bestFits && cap > bc) best = k;
-                }
-                if (best >= 0)
-                {
-                    var m = s[best]; s.RemoveAt(best);
-                    System.Threading.Interlocked.Add(ref keptAll, -m.keptBytes); m.keptBytes = 0;
-                    m.Tag = tag;
-                    if (m.P.Capacity < vertices) { m.P.Capacity = vertices; m.N.Capacity = vertices; m.C.Capacity = vertices; if (!lean) { m.K.Capacity = vertices; m.WI.Capacity = vertices; } }
-                    if (m.I.Capacity < indices) m.I.Capacity = indices;
-                    return m;
-                }
-            }
-            return new MeshBuilder(tag, lean, shapeOnly, vertices, indices);
+                for (int k = s.Count - 1; k >= 0; k--)
+                    if (s[k].Lean == lean) { var m = s[k]; s.RemoveAt(k); m.Tag = tag; return m; }
+            return new MeshBuilder(tag, lean, shapeOnly);
         }
 
         /// <summary>
-        /// Done with this builder (its meshes packed): its lists are emptied and kept for this thread's next
-        /// <see cref="Make"/>, within <see cref="KeepBytes"/> (this thread's oldest kept going first). Nothing may use the
-        /// builder after this. What it handed out stays as it was: the wall lists (a LOD0's shape holds them) are
-        /// replaced, not emptied.
+        /// Done with this builder (its meshes packed): its lists give their chunks back for the next build
+        /// (<see cref="Chunks"/>), and the builder is kept for this thread's next <see cref="Make"/>. Nothing may use it
+        /// after. What it handed out stays as it was: the wall lists (a LOD0's shape holds them) are replaced, not emptied.
         /// </summary>
         public void Recycle()
         {
             if (ShapeOnly) return;
             var s = spares ??= new List<MeshBuilder>();
             if (s.Contains(this)) return;
-            long bytes = Bytes;
-            if (bytes > KeepBytes) return;
-            while (s.Count > 0 && KeptBytes + bytes > KeepBytes) { System.Threading.Interlocked.Add(ref keptAll, -s[0].keptBytes); s[0].keptBytes = 0; s.RemoveAt(0); }
-            if (KeptBytes + bytes > KeepBytes) return;   // the other threads keep the rest
             P.Clear(); N.Clear(); C.Clear(); K.Clear(); WI.Clear(); I.Clear(); PaneUV.Clear();
             Walls = new List<(double[], int)>(); WallBase = new List<double>(); Solids = null;
             StoreyBase = 0; curW = Zero4; curK = curI = 0; Welded = false;
-            keptBytes = bytes; System.Threading.Interlocked.Add(ref keptAll, bytes);
-            s.Add(this);
+            if (s.Count < Spares) s.Add(this);
         }
 
         /// <summary>Let go of the builders this thread keeps (the tests' allocation counts start from none).</summary>
-        public static void ForgetSpares()
-        {
-            var s = spares; if (s == null) return;
-            foreach (var m in s) { System.Threading.Interlocked.Add(ref keptAll, -m.keptBytes); m.keptBytes = 0; }
-            s.Clear();
-        }
-
-        /// <summary>The bytes the lists have room for: positions, normals and colours 24 each a vertex, the rest 4.</summary>
-        long Bytes => 24L * (P.Capacity + N.Capacity + C.Capacity) + 4L * (K.Capacity + WI.Capacity + I.Capacity);
+        public static void ForgetSpares() => spares?.Clear();
 
         public int Tris => I.Count / 3;
         public int Verts => P.Count;
@@ -172,37 +121,50 @@ namespace Triband.Storey.Generate
             int n = P.Count;
             if (n == 0) return 0;
             // each vertex's first equal, through a table of vertex indices (open addressing, at least twice as many slots as
-            // vertices; 0 is empty, else the index + 1): no keys copied, a few bytes a vertex
+            // vertices; 0 is empty, else the index + 1): no keys copied, a few bytes a vertex, in chunks given back after
             int size = 4; while (size < n * 2) size <<= 1;
-            var slots = new int[size]; var map = new int[n]; int kept = 0;
-            for (int i = 0; i < n; i++)
-                for (int h = Hash(i) & (size - 1); ; h = (h + 1) & (size - 1))
+            var slots = weldSlots ??= new ChunkList<int>(); var map = weldMap ??= new ChunkList<int>();
+            try
+            {
+                slots.Resize(size); for (int c = 0; c < slots.ChunkCount; c++) Array.Clear(slots.Chunk(c), 0, Chunks.Size);
+                map.Resize(n);
+                int kept = 0;
+                for (int i = 0; i < n; i++)
+                    for (int h = Hash(i) & (size - 1); ; h = (h + 1) & (size - 1))
+                    {
+                        int s = slots[h];
+                        if (s == 0) { slots[h] = i + 1; map[i] = kept++; break; }
+                        if (Same(i, s - 1)) { map[i] = map[s - 1]; break; }
+                    }
+                int gone = n - kept;
+                if (gone == 0) return 0;
+                // in place: the kept vertices move down, in order (a later copy of one already kept maps below the next place)
+                int at = 0;
+                for (int i = 0; i < n; i++)
                 {
-                    int s = slots[h];
-                    if (s == 0) { slots[h] = i + 1; map[i] = kept++; break; }
-                    if (Same(i, s - 1)) { map[i] = map[s - 1]; break; }
+                    if (map[i] != at) continue;
+                    if (at != i) { P[at] = P[i]; N[at] = N[i]; C[at] = C[i]; if (!Lean) { K[at] = K[i]; WI[at] = WI[i]; } }
+                    at++;
                 }
-            int gone = n - kept;
-            if (gone == 0) return 0;
-            // in place: the kept vertices move down, in order (a later copy of one already kept maps below the next place)
-            int at = 0;
-            for (int i = 0; i < n; i++)
-            {
-                if (map[i] != at) continue;
-                if (at != i) { P[at] = P[i]; N[at] = N[i]; C[at] = C[i]; if (!Lean) { K[at] = K[i]; WI[at] = WI[i]; } }
-                at++;
+                P.Truncate(kept); N.Truncate(kept); C.Truncate(kept);
+                if (!Lean) { K.Truncate(kept); WI.Truncate(kept); }
+                for (int t = 0; t < I.Count; t++) I[t] = map[I[t]];
+                if (PaneUV.Count > 0)
+                {
+                    // each pane vertex's place moves with it, the first of those welded into one kept
+                    var panes = weldPanes ??= new List<KeyValuePair<int, (double, double, byte)>>();
+                    foreach (var kv in PaneUV) panes.Add(kv);
+                    PaneUV.Clear();
+                    foreach (var kv in panes) { int to = map[kv.Key]; if (!PaneUV.ContainsKey(to)) PaneUV[to] = kv.Value; }
+                    panes.Clear();
+                }
+                return gone;
             }
-            P.RemoveRange(kept, gone); N.RemoveRange(kept, gone); C.RemoveRange(kept, gone);
-            if (!Lean) { K.RemoveRange(kept, gone); WI.RemoveRange(kept, gone); }
-            for (int t = 0; t < I.Count; t++) I[t] = map[I[t]];
-            if (PaneUV.Count > 0)
-            {
-                var uv = new Dictionary<int, (double, double, byte)>(PaneUV.Count);
-                foreach (var kv in PaneUV) if (!uv.ContainsKey(map[kv.Key])) uv[map[kv.Key]] = kv.Value;
-                PaneUV.Clear(); foreach (var kv in uv) PaneUV[kv.Key] = kv.Value;
-            }
-            return gone;
+            finally { slots.Clear(); map.Clear(); }
         }
+
+        [ThreadStatic] static ChunkList<int>? weldSlots, weldMap;
+        [ThreadStatic] static List<KeyValuePair<int, (double u, double v, byte id)>>? weldPanes;
 
         /// <summary>Set by <see cref="Weld"/> (a build thread welds before the upload; the upload then skips it). Add nothing after.</summary>
         public bool Welded { get; private set; }

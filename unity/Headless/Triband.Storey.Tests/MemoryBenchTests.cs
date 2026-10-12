@@ -71,8 +71,8 @@ namespace Triband.Storey.Tests
                 {
                     gpu += Gpu(m);
                     builder += m.Verts * (24L + 24 + 24 + 8) + 4L * m.I.Count;   // P, N, C, K and WI, I: what the builder held
-                    // the arrays as rented (ArrayShelf): up to a quarter longer than the mesh
-                    foreach (var p in MeshPack.Pack(m, true, weld: false)) packed += 24L * p.V.Length + 8L * (p.Cut?.Length ?? 0) + 2L * (p.I16?.Length ?? 0) + 4L * (p.I32?.Length ?? 0);
+                    // the chunks as held (Chunks): each stream up to a chunk longer than the mesh
+                    foreach (var p in MeshPack.Pack(m, true, weld: false)) { packed += 24L * p.V.Capacity + 8L * (p.Cut?.Capacity ?? 0) + 2L * (p.I16?.Capacity ?? 0) + 4L * (p.I32?.Length ?? 0); p.Release(); }
                 }
             }
             log.WriteLine($"a finished LOD0 waiting for its upload: {MB(packed) / n:0.00} MB packed, {MB(builder) / n:0.00} MB as the builder held it; its GPU meshes {MB(gpu) / n:0.00} MB");
@@ -80,27 +80,34 @@ namespace Triband.Storey.Tests
             Assert.True(packed * 2 < builder);
         }
 
-        static long Make(Site site, BuildingData b)
+        /// <summary>A building's LOD0 and LOD1 built and packed as the renderer does; <paramref name="reuse"/>: the builders recycled and the meshes given back, as an upload does.</summary>
+        static long Make(Site site, BuildingData b, bool reuse)
         {
             long a0 = GC.GetAllocatedBytesForCurrentThread();
-            var r = Lod0.Build(site, b); MeshPack.Pack(r.Op, true, (0, 10), weld: false); MeshPack.Pack(r.Glass, true, (0, 10), weld: false);
-            MeshPack.Pack(Lod1.Build(site, b), true);
+            var r = Lod0.Build(site, b); var meshes = MeshPack.Pack(r.Op, true, (0, 10), weld: false); meshes.AddRange(MeshPack.Pack(r.Glass, true, (0, 10), weld: false));
+            var s = Lod1.Build(site, b); meshes.AddRange(MeshPack.Pack(s, true));
+            if (reuse) { r.Op.Recycle(); r.Glass.Recycle(); s.Recycle(); foreach (var p in meshes) p.Release(); }
             return GC.GetAllocatedBytesForCurrentThread() - a0;
         }
 
         [Fact]
-        public void BuildingAgainAllocatesLess()
+        public void BuildingOneAfterAnotherReusesTheMemory()
         {
-            var (d, _) = City.Value; var site = new Site(d.buildings);   // its own: no building built yet
+            var (_, site) = City.Value;
             var bs = site.Buildings.Where((x, i) => i % 15 == 0).ToList();
-            Make(site, bs[0]);
-            long first = 0, again = 0;
-            foreach (var b in bs.Skip(1)) first += Make(site, b);
-            foreach (var b in bs.Skip(1)) again += Make(site, b);
-            double f = MB(first) / (bs.Count - 1), g = MB(again) / (bs.Count - 1);
-            log.WriteLine($"LOD0 and LOD1 built and packed as the renderer does: {f:0.00} MB allocated the first time, {g:0.00} MB built again");
-            Assert.True(f < 16, $"{f:0.0} MB allocated building a LOD0 and LOD1");
-            Assert.True(g < f * 0.75, $"{g:0.0} MB built again, {f:0.0} the first time");
+            MeshBuilder.ForgetSpares(); Chunks.Clear();
+            try
+            {
+                Make(site, bs[0], false);
+                long first = 0, again = 0;
+                foreach (var b in bs.Skip(1)) { MeshBuilder.ForgetSpares(); Chunks.Clear(); first += Make(site, b, false); }
+                foreach (var b in bs.Skip(1)) again += Make(site, b, true);
+                double f = MB(first) / (bs.Count - 1), g = MB(again) / (bs.Count - 1);
+                log.WriteLine($"LOD0 and LOD1 built and packed as the renderer does: {f:0.00} MB allocated with nothing kept, {g:0.00} MB built one after another; {MB(Chunks.KeptBytes):0.0} MB of chunks kept");
+                Assert.True(f < 16, $"{f:0.0} MB allocated building a LOD0 and LOD1");
+                Assert.True(g < f * 0.5, $"{g:0.0} MB built one after another, {f:0.0} with nothing kept");
+            }
+            finally { MeshBuilder.ForgetSpares(); Chunks.Clear(); }
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
