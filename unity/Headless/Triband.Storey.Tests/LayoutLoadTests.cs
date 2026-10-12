@@ -52,6 +52,23 @@ namespace Triband.Storey.Tests
             for (int i = 1; i < cells.Count; i++) Assert.True(Dist(cells[i]) >= Dist(cells[i - 1]));
         }
 
+        [Theory]
+        [InlineData(0)]
+        [InlineData(1)]
+        [InlineData(2)]
+        public void CellsAreBuiltAFewAheadOnEachThread(int threads)
+        {
+            // one cell a thread left the threads idle most of a load (the renderer takes the cells ready when its frame comes)
+            var (d, site) = City();
+            var load = new LayoutLoad(site, d.buildings, threads, (40, -20));
+            int ahead = Math.Min(threads * LayoutLoad.AheadPerThread, load.Count);
+            Assert.Equal(ahead, load.InFlight);
+            Assert.True(load.TryTake(true, out _, out _));
+            Assert.Equal(Math.Min(ahead, load.Count - 1), load.InFlight);
+            while (load.TryTake(true, out _, out _)) { }
+            Assert.Equal(0, load.InFlight);
+        }
+
         [Fact]
         public void WithoutAPointTheCellsComeInTheLayoutsOrder()
         {

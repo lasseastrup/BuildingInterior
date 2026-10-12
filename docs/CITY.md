@@ -35,6 +35,7 @@ A Storey Site's **LOD mode** is *Automatic* by default; *Fixed* shows one LOD ev
 - **Windows don't change at the switch.** LOD1's windows are opaque panes showing a painted room; LOD0's, in a building with an interior, are see-through glass onto the real rooms. LOD0's glass starts as LOD1's pane (the same painted room, opaque) at the distance LOD0 takes over (`LodSettings.Lod0Distance`) and clears to glass by **Windows Clear At** (0.6) of that distance, blended by each pixel's distance (`_StoreyGlassFill`). So the cross-fade swaps the geometry while the windows look the same, and the rooms behind them fade in as the camera comes closer.
 - **Loading.** Only the massings are built when a layout loads, cell by cell, each cell merged as soon as its buildings are built. The worker threads build the massings a few cells ahead of the one the main thread is writing and merging (`LayoutLoad`).
   - In Play mode a site's first load (a district streamed in, a scene starting) goes over several frames, nearest cells first, within the build budget, so it never holds a frame: the buildings appear as their cells come (**Storey Site** `LoadOverFrames`, on by default; `Loading` while it goes on, and the stats overlay counts the cells to go). Turn it off to have every building at once, behind a loading screen say.
+  - The build threads make the massings four cells a thread ahead of the cell taken (`LayoutLoad.AheadPerThread`), so each frame takes as many cells as its budget allows. Headless, the 3,000-building test city loads in 30–45 frames: every cell shows after 0.9–1.1 s with two build threads at 60 fps and 1.2–1.3 s at 30 fps. With one cell a thread ahead, a frame took the few that were ready and the threads sat idle the rest: about 130 frames, 2.4 s and 4.5 s. A load's frames now spend up to the build budget on it (**Build Budget Ms**, 6 ms), where they spent 1–3 ms.
   - After an edit, and in the editor, a load is done at once, so nothing vanishes for a frame.
 - **Detail is built on demand.**
   - A building that wants LOD0 or LOD1 asks for it, and the ones covering the most pixels go first.
@@ -77,7 +78,7 @@ Headless numbers (`CityBenchTests`, `LodManagerTests`). They are CPU only, witho
 
 | | Time |
 |---|---|
-| Loading 3,000 buildings: every massing | 0.1–0.2 ms a building, built on the workers ahead of the main thread, which works about 50 ms of the load (writing and merging) instead of about 300 ms (4 cores). In Play mode a site's first load is spread over frames within the build budget |
+| Loading 3,000 buildings: every massing | 0.1–0.2 ms a building, built on the workers ahead of the main thread, which works about 50 ms of the load (writing and merging) instead of about 300 ms (4 cores). In Play mode a site's first load is spread over frames within the build budget: 30–45 frames for this city (§2) |
 | Merging the 307 cells | 43 ms |
 | Picking every building's LOD | about 0.05 ms a frame walking the street (Release build; 0.16 ms when every building was looked at every frame) |
 | One LOD1 | about 6–8 ms |

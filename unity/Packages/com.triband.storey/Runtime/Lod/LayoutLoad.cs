@@ -10,11 +10,21 @@ namespace Triband.Storey.Lod
     /// <summary>
     /// A layout's buildings in the order a renderer loads them (docs/CITY.md §2): cell by cell (<see cref="Cells"/>, by
     /// the centre of each building's bounds), the nearest first when a point is given, each cell's massings built on
-    /// the worker threads a few cells ahead of the one taken. The renderer takes the cells all at once, or a few a frame
-    /// as their massings are ready, so loading a district never holds a frame. Engine-free.
+    /// the worker threads a few cells ahead of the one taken (<see cref="AheadPerThread"/>). The renderer takes the cells
+    /// all at once, or a few a frame as their massings are ready, so loading a district never holds a frame. Engine-free.
     /// </summary>
     public sealed class LayoutLoad
     {
+        /// <summary>
+        /// Cells whose massings are built ahead of the one taken, for each worker thread. A cell's massings take about a
+        /// millisecond, and a renderer takes the cells that are ready when its frame comes: with one cell a thread it
+        /// took about that many a frame and the threads sat idle the rest, so a layout took as many frames to load whatever
+        /// the threads' speed (the 3,000-building test city about 130 with two threads: 2.4 s at 60 fps, 4.5 s at 30). With
+        /// four, a frame takes as many as its budget allows. A few cells' massings more are held meanwhile, 0.4 MB at most
+        /// each on the test city.
+        /// </summary>
+        public const int AheadPerThread = 4;
+
         readonly Site site;
         readonly List<BuildingData[]> cells;
         readonly Task<Lod2Mesh[]>?[] made;
@@ -33,7 +43,7 @@ namespace Triband.Storey.Lod
                 groups = groups.OrderBy(g => { double cx = (g.Key.x + 0.5) * Cells.Size - fx, cz = (g.Key.z + 0.5) * Cells.Size - fz; return cx * cx + cz * cz; });
             cells = groups.Select(g => g.ToArray()).ToList();
             made = new Task<Lod2Mesh[]>?[cells.Count];
-            ahead = Math.Max(0, threads);
+            ahead = Math.Max(0, threads) * AheadPerThread;
             Buildings = cells.Sum(c => c.Length);
             Start();
         }
@@ -42,6 +52,8 @@ namespace Triband.Storey.Lod
         public int Count => cells.Count;
         public int Taken => next;
         public bool Done => next >= cells.Count;
+        /// <summary>The cells whose massings are being built, or are ready, past the ones taken.</summary>
+        public int InFlight => started - next;
         /// <summary>The buildings in all the cells.</summary>
         public int Buildings { get; }
 
