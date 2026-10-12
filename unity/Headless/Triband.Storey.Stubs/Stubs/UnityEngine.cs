@@ -407,6 +407,7 @@ namespace UnityEngine
         [System.Flags] public enum Target { Vertex = 1, Index = 2, Structured = 16, Raw = 32 }
         public GraphicsBuffer(Target target, int count, int stride) { }
         public void SetData(System.Array data) { }
+        public void SetData(System.Array data, int managedBufferStartIndex, int graphicsBufferStartIndex, int count) { }
         public void Dispose() { }
     }
 

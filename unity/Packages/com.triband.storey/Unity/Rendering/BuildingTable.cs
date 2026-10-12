@@ -11,7 +11,8 @@ namespace Triband.Storey.Unity
     /// cutaway slide per wall id, the LOD2 parameter rows, and the colour rows that name each style's
     /// palette entries (docs/COLOURS.md §3.3). All are global structured buffers,
     /// so thousands of buildings need no per-object material state and merged meshes can still
-    /// switch individual buildings. Written on the CPU into arrays, uploaded when dirty, once per frame.
+    /// switch individual buildings. Written on the CPU into arrays; once per frame, the chunks that changed are
+    /// uploaded (<see cref="Lod.DirtyChunks"/>), not the whole buffers (docs/CITY.md §7).
     ///
     /// Global buffers mean one table for everything drawn (docs/CITY.md §5): every Storey Site in the loaded scenes
     /// shares the one from <see cref="Acquire"/>, each with its own block of building indices (<see cref="AllocBlock"/>).
@@ -44,7 +45,7 @@ namespace Triband.Storey.Unity
         {
             if (n <= 0 || start < 0) return;
             for (int i = start; i < start + n; i++) State[i] = new Vector4(3, 3, 1, 0);
-            stateDirty = true;
+            stateDirty.Mark(start, n);
             blocks.Release(start, n);
         }
         public const int MaxBuildings = 8192;
@@ -53,7 +54,10 @@ namespace Triband.Storey.Unity
         public const int Capacity = MaxBuildings - OccSlots;
         /// <summary>The row the footprint of the occluder in <paramref name="slot"/> draws through: its own, so it can fade.</summary>
         public static int FootprintRow(int slot) => MaxBuildings - 1 - slot;
+        /// <summary>The most wall ids there can be (a vertex carries its wall's id as a float).</summary>
         public const int WallIds = 65536;
+        /// <summary>The wall tables start this big and double when full, up to <see cref="WallIds"/>: the walls of the buildings at LOD0, a few thousand.</summary>
+        public const int WallIdsStart = 8192;
         /// <summary>
         /// The parameter (LOD2 massing) and colour-row tables start this big and double when full. They used to be fixed,
         /// and a big layout (the 3,000-building test city) wrote every row past the last into the last one, so many
@@ -66,10 +70,10 @@ namespace Triband.Storey.Unity
         public readonly Vector4[] State = new Vector4[MaxBuildings];
         /// <summary>Per occluder slot, OccWidth texels: header (segments, dark, clip height, base height) then storey rows.</summary>
         public readonly Vector4[] Occ = new Vector4[OccSlots * OccWidth];
-        /// <summary>How far each wall has slid down, 0 up .. 1 down, by global wall id.</summary>
-        public readonly float[] Wall = new float[WallIds];
-        /// <summary>Per wall id: the wall's start (x, z) and its normal scaled by 1 + its length, for the cutaway (written once, at upload).</summary>
-        public readonly Vector4[] WallData = new Vector4[WallIds];
+        /// <summary>How far each wall has slid down, 0 up .. 1 down, by global wall id. Write through <see cref="SetWall"/>.</summary>
+        public float[] Wall { get; private set; } = new float[WallIdsStart];
+        /// <summary>Per wall id: the wall's start (x, z) and its normal scaled by 1 + its length, for the cutaway (written once, at upload; <see cref="SetWallData"/>).</summary>
+        public Vector4[] WallData { get; private set; } = new Vector4[WallIdsStart];
         /// <summary>LOD2 parameter rows: wall, trim, glass, roof colours, window spec, run data.</summary>
         public Vector4[] Params { get; private set; } = new Vector4[ParamRowsStart * ParamTexels];
         /// <summary>Colour rows: per style, the palette index of each slot and the remap row, 24 16-bit entries in 12 words.</summary>
@@ -77,9 +81,16 @@ namespace Triband.Storey.Unity
         /// <summary>Palette indices of facade-detail model colours (slots 24 and up). Empty until detail models exist.</summary>
         public readonly uint[] DetailColors = new uint[1];
 
-        readonly GraphicsBuffer state, occ, wall, wallData, details;
-        GraphicsBuffer prms, colors;   // these two grow (ParamRowsStart)
-        bool stateDirty = true, occDirty = true, wallDirty = true, wallDataDirty = true, paramsDirty = true, colorsDirty = true, detailsDirty = true;
+        readonly GraphicsBuffer state, occ, details;
+        GraphicsBuffer wall, wallData, prms, colors;   // these grow (WallIdsStart, ParamRowsStart)
+        // what changed since the last upload, chunk by chunk: a frame uploads a few kilobytes, not every buffer whole
+        readonly Lod.DirtyChunks stateDirty = new Lod.DirtyChunks(MaxBuildings, 64), wallDirty = new Lod.DirtyChunks(WallIdsStart, 256),
+            wallDataDirty = new Lod.DirtyChunks(WallIdsStart, 64), paramsDirty = new Lod.DirtyChunks(ParamRowsStart * ParamTexels, 16 * ParamTexels);
+        // partial uploads only where an array element is a buffer element; the colour rows (words in 16-byte elements,
+        // written on loads and edits only) go up whole
+        readonly Lod.DirtyChunks occDirty = new Lod.DirtyChunks(OccSlots * OccWidth, OccWidth);   // a chunk an occluder slot
+        bool colorsDirty = true, detailsDirty = true;
+        readonly List<(int start, int count)> runs = new List<(int, int)>();
 
         // free lists, as the prototype keeps them
         readonly Stack<int> freeRow = new Stack<int>(); int nextRow;
@@ -91,11 +102,12 @@ namespace Triband.Storey.Unity
         {
             for (int i = 0; i < MaxBuildings; i++) State[i] = new Vector4(3, 3, 1, 0);   // culled, culled, faded in, no occluder
             for (int s = OccSlots - 1; s >= 0; s--) freeSlot.Push(s);
-            freeWalls.Add((1, WallIds - 1));   // id 0 = none
+            freeWalls.Add((1, WallIdsStart - 1));   // id 0 = none
             state = new GraphicsBuffer(GraphicsBuffer.Target.Structured, MaxBuildings, 16);
             occ = new GraphicsBuffer(GraphicsBuffer.Target.Structured, OccSlots * OccWidth, 16);
-            wall = new GraphicsBuffer(GraphicsBuffer.Target.Structured, WallIds, 4);
-            wallData = new GraphicsBuffer(GraphicsBuffer.Target.Structured, WallIds, 16);
+            wall = new GraphicsBuffer(GraphicsBuffer.Target.Structured, WallIdsStart, 4);
+            wallData = new GraphicsBuffer(GraphicsBuffer.Target.Structured, WallIdsStart, 16);
+            stateDirty.MarkAll(); occDirty.MarkAll(); wallDirty.MarkAll(); wallDataDirty.MarkAll(); paramsDirty.MarkAll();
             prms = new GraphicsBuffer(GraphicsBuffer.Target.Structured, ParamRowsStart * ParamTexels, 16);
             colors = new GraphicsBuffer(GraphicsBuffer.Target.Structured, ColorRowsStart * Generate.ColorRows.Uint4s, 16);
             details = new GraphicsBuffer(GraphicsBuffer.Target.Structured, DetailColors.Length, 4);
@@ -111,6 +123,24 @@ namespace Triband.Storey.Unity
         public int AllocWalls(int n)
         {
             if (n <= 0) return -1;
+            int got = TakeWalls(n);
+            // full: the wall tables twice the size (up to WallIds), new buffers of them next upload
+            while (got < 0 && Wall.Length < WallIds)
+            {
+                int was = Wall.Length, now = Math.Min(WallIds, was * 2);
+                var w = Wall; Array.Resize(ref w, now); Wall = w;
+                var wd = WallData; Array.Resize(ref wd, now); WallData = wd;
+                wall.Dispose(); wall = new GraphicsBuffer(GraphicsBuffer.Target.Structured, now, 4);
+                wallData.Dispose(); wallData = new GraphicsBuffer(GraphicsBuffer.Target.Structured, now, 16);
+                wallDirty.Grow(now); wallDataDirty.Grow(now);
+                ReleaseWalls(was, now - was);
+                got = TakeWalls(n);
+            }
+            return got;
+        }
+
+        int TakeWalls(int n)
+        {
             for (int i = 0; i < freeWalls.Count; i++)
             {
                 var f = freeWalls[i];
@@ -125,7 +155,7 @@ namespace Triband.Storey.Unity
         public void ReleaseWalls(int start, int n)
         {
             if (start < 0 || n <= 0) return;
-            Array.Clear(Wall, start, n); wallDirty = true;
+            Array.Clear(Wall, start, n); wallDirty.Mark(start, n);
             freeWalls.Add((start, n));
             freeWalls.Sort((a, b) => a.start.CompareTo(b.start));
             for (int i = freeWalls.Count - 2; i >= 0; i--)
@@ -141,10 +171,11 @@ namespace Triband.Storey.Unity
                 // full: twice the size, a new buffer of it next upload
                 var grown = new Vector4[Params.Length * 2]; Array.Copy(Params, grown, Params.Length); Params = grown;
                 prms.Dispose(); prms = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Params.Length, 16);
+                paramsDirty.Grow(Params.Length);
             }
             var t = row.GpuTexels(colorRow); int o = x * ParamTexels;
             for (int i = 0; i < ParamTexels; i++) Params[o + i] = new Vector4((float)t[i * 4], (float)t[i * 4 + 1], (float)t[i * 4 + 2], (float)t[i * 4 + 3]);
-            paramsDirty = true;
+            paramsDirty.Mark(o, ParamTexels);
             return x;
         }
         public void ReleaseRow(int row) => freeRow.Push(row);
@@ -172,27 +203,35 @@ namespace Triband.Storey.Unity
 
         // ---- writes ---------------------------------------------------------------------------
 
-        public void SetLod(int idx, int displayed, int from, float fade)
-        {
-            var s = State[idx]; State[idx] = new Vector4(displayed, from, fade, s.w); stateDirty = true;
-        }
-        public void SetOccluder(int idx, int slotOrMinusOne)
-        {
-            var s = State[idx]; State[idx] = new Vector4(s.x, s.y, s.z, slotOrMinusOne + 1); stateDirty = true;
-        }
-        public void MarkOccDirty() => occDirty = true;
-        public void MarkStateDirty() => stateDirty = true;
-        public void MarkWallDirty() => wallDirty = true;
-        public void MarkWallDataDirty() => wallDataDirty = true;
+        public void SetLod(int idx, int displayed, int from, float fade) => SetState(idx, new Vector4(displayed, from, fade, State[idx].w));
+        public void SetOccluder(int idx, int slotOrMinusOne) { var s = State[idx]; SetState(idx, new Vector4(s.x, s.y, s.z, slotOrMinusOne + 1)); }
+
+        /// <summary>A building's state row (the chunk is uploaded only when it changed).</summary>
+        public void SetState(int idx, Vector4 v) { if (State[idx] == v) return; State[idx] = v; stateDirty.Mark(idx); }
+
+        /// <summary>A wall's slide (uploaded only when it changed).</summary>
+        public void SetWall(int id, float slide) { if (Wall[id] == slide) return; Wall[id] = slide; wallDirty.Mark(id); }
+
+        /// <summary>A wall's cutaway data.</summary>
+        public void SetWallData(int id, Vector4 v) { WallData[id] = v; wallDataDirty.Mark(id); }
+
+        /// <summary>The occluder rows written straight into <see cref="Occ"/>: all of them go up.</summary>
+        public void MarkOccDirty() => occDirty.MarkAll();
+        /// <summary>One occluder slot's row written into <see cref="Occ"/>: it goes up.</summary>
+        public void MarkOccDirty(int slot) => occDirty.Mark(slot * OccWidth, OccWidth);
+        /// <summary>Everything written straight into the arrays: the whole buffer goes up (use the setters, which upload only what changed).</summary>
+        public void MarkStateDirty() => stateDirty.MarkAll();
+        public void MarkWallDirty() => wallDirty.MarkAll();
+        public void MarkWallDataDirty() => wallDataDirty.MarkAll();
 
         /// <summary>Upload what changed and bind the buffers globally. Call once per frame before rendering.</summary>
         public void Upload()
         {
-            if (stateDirty) { state.SetData(State); stateDirty = false; }
-            if (occDirty) { occ.SetData(Occ); occDirty = false; }
-            if (wallDirty) { wall.SetData(Wall); wallDirty = false; }
-            if (wallDataDirty) { wallData.SetData(WallData); wallDataDirty = false; }
-            if (paramsDirty) { prms.SetData(Params); paramsDirty = false; }
+            Send(state, State, stateDirty);
+            Send(occ, Occ, occDirty);
+            Send(wall, Wall, wallDirty);
+            Send(wallData, WallData, wallDataDirty);
+            Send(prms, Params, paramsDirty);
             if (colorsDirty) { colors.SetData(Colors); colorsDirty = false; }
             if (detailsDirty) { details.SetData(DetailColors); detailsDirty = false; }
             Shader.SetGlobalBuffer(StoreyShaderIds.State, state);
@@ -202,6 +241,14 @@ namespace Triband.Storey.Unity
             Shader.SetGlobalBuffer(StoreyShaderIds.Params, prms);
             Shader.SetGlobalBuffer(StoreyShaderIds.Colors, colors);
             Shader.SetGlobalBuffer(StoreyShaderIds.DetailColors, details);
+        }
+
+        /// <summary>The changed chunks of one buffer, uploaded.</summary>
+        void Send(GraphicsBuffer buffer, Array data, Lod.DirtyChunks dirty)
+        {
+            if (!dirty.Any) return;
+            dirty.Take(runs);
+            foreach (var (start, count) in runs) buffer.SetData(data, start, start, count);
         }
 
         public void Dispose() { state.Dispose(); occ.Dispose(); wall.Dispose(); wallData.Dispose(); prms.Dispose(); colors.Dispose(); details.Dispose(); }

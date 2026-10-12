@@ -37,7 +37,7 @@ namespace Triband.Storey.Unity
         readonly List<GameObject> shownFootprints = new List<GameObject>();
         readonly Stack<GameObject> spareFootprints = new Stack<GameObject>();
         readonly HashSet<int> occluding = new HashSet<int>();
-        readonly HashSet<int> wallsSet = new HashSet<int>();
+        HashSet<int> wallsSet = new HashSet<int>(), wallsNow = new HashSet<int>();
         readonly PlayerState playerState = new PlayerState();
 
         /// <summary>The walk model for this layout (where the player is, what they stand on, what stops them), for a controller.</summary>
@@ -140,15 +140,16 @@ namespace Triband.Storey.Unity
             }
             else StoreyGlobals.SetCut(false, 1, 0, 0, active >= 0 ? (float)v.clipY + lift : 1e9f);
 
-            // walls: every slide into the table, the ones that came back up to zero
-            foreach (int id in wallsSet) table.Wall[id] = 0;
-            wallsSet.Clear();
+            // walls: every slide into the table, the ones that came back up to zero (only the chunks where a slide changed
+            // are uploaded: a wall held down isn't written again)
+            wallsNow.Clear();
             foreach (var kv in o.Walls)
             {
                 int wb = r.WallBaseOf(kv.Key.id); if (wb < 0) continue;
-                int id = wb + kv.Key.wall; table.Wall[id] = (float)kv.Value; wallsSet.Add(id);
+                int id = wb + kv.Key.wall; table.SetWall(id, (float)kv.Value); wallsNow.Add(id);
             }
-            table.MarkWallDirty();
+            foreach (int id in wallsSet) if (!wallsNow.Contains(id)) table.SetWall(id, 0);
+            (wallsSet, wallsNow) = (wallsNow, wallsSet);
 
             // buildings in the way: the slot in each one's state row, the rows with world heights
             foreach (int i in occluding) table.SetOccluder(i, -1);
@@ -163,6 +164,7 @@ namespace Triband.Storey.Unity
                 int at = oc.slot * OcclusionCore.RowTexels, n = (int)o.Rows[at * 4];
                 var hd = new Vector4(o.Rows[at * 4], o.Rows[at * 4 + 1], o.Rows[at * 4 + 2] + lift, o.Rows[at * 4 + 3] + lift);
                 table.Occ[at] = hd;
+                table.MarkOccDirty(oc.slot);
                 for (int i = 1; i < OcclusionCore.RowTexels; i++)
                 {
                     int q = (at + i) * 4;
@@ -175,7 +177,6 @@ namespace Triband.Storey.Unity
                     table.SetLod(BuildingTable.FootprintRow(oc.slot), 0, 0, core.mode == OccluderMode.Dissolve ? (float)oc.a : 1);
                 }
             }
-            table.MarkOccDirty();
             var modeG = core.mode switch
             {
                 OccluderMode.Off => StoreyGlobals.OcclusionMode.Off,

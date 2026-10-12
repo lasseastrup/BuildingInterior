@@ -445,19 +445,17 @@ namespace Triband.Storey.Unity
                     }
                 }
             }
-            bool changed = false, moving = false;
+            bool moving = false;
             foreach (int id in down) if (!editSlide.ContainsKey(id)) editSlide[id] = 0;
             foreach (var id in new List<int>(editSlide.Keys))
             {
                 float a = editSlide[id], to = down.Contains(id) ? 1 : 0;
                 float n = to > a ? Mathf.Min(to, a + step) : Mathf.Max(to, a - step);
-                if (n != a) changed = true;
                 if (n != to) moving = true;
-                table.Wall[id] = n;
+                table.SetWall(id, n);
                 if (n <= 0 && to == 0) editSlide.Remove(id); else editSlide[id] = n;
             }
             wallsMoving = moving;
-            if (changed) table.MarkWallDirty();
         }
 
         /// <summary>
@@ -578,8 +576,7 @@ namespace Triband.Storey.Unity
             bt.wallCount = shape.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
             if (bt.wallBase >= 0)
             {
-                for (int i = 0; i < bt.wallCount; i++) table.WallData[bt.wallBase + i] = MeshUpload.WallData(shape.Walls[i].W);
-                table.MarkWallDataDirty();
+                for (int i = 0; i < bt.wallCount; i++) table.SetWallData(bt.wallBase + i, MeshUpload.WallData(shape.Walls[i].W));
             }
             for (int i = 0; i < d.opaque.Count; i++) Add(bt, 0, Part("LOD0", i, d.opaque.Count), MeshUpload.Upload(d.opaque[i], Part(name + " LOD0", i, d.opaque.Count), RowOf, bt.wallBase), opaque, true);
             for (int i = 0; i < d.glass!.Count; i++) Add(bt, 0, Part("LOD0 glass", i, d.glass.Count), MeshUpload.Upload(d.glass[i], Part(name + " glass", i, d.glass.Count), RowOf, bt.wallBase), glass, false);
@@ -806,7 +803,7 @@ namespace Triband.Storey.Unity
 
         void Release(Built b)
         {
-            table.State[b.idx] = new Vector4(3, 3, 1, 0); table.MarkStateDirty();
+            table.SetState(b.idx, new Vector4(3, 3, 1, 0));
             if (b.wallBase >= 0) table.ReleaseWalls(b.wallBase, b.wallCount);
             foreach (var r in b.rows) table.ReleaseRow(r);
             if (b.root != null) Kill(b.root);
