@@ -116,5 +116,60 @@ namespace Triband.Storey.Tests
             }
             finally { MeshBuilder.ForgetSpares(); }
         }
+    
+
+        static bool SameMassing(Lod2Mesh a, Lod2Mesh b) =>
+            a.P.SequenceEqual(b.P) && a.N.SequenceEqual(b.N) && a.I.SequenceEqual(b.I) && a.Fac.SequenceEqual(b.Fac) && a.Fac2.SequenceEqual(b.Fac2)
+            && a.Slot.SequenceEqual(b.Slot) && a.Tag == b.Tag && a.Tags == null && b.Tags == null
+            && a.Rows.Count == b.Rows.Count && a.Rows.Zip(b.Rows).All(r => r.First.GpuTexels(1).SequenceEqual(r.Second.GpuTexels(1)));
+
+        [Fact]
+        public void ReusedMassingsAreTheSameForLessGarbage()
+        {
+            // a layout load's massings: built on the workers, let go once their cell is packed, and taken again by the next
+            var site = City(400, false); var bs = site.Buildings.Where((x, i) => i % 2 == 0).ToList();
+            Lod2Mesh.ForgetSpares();
+            try
+            {
+                var fresh = bs.Select(b => Lod2.Build(site, b)).ToList();   // nothing kept: each from nothing, the references
+                long a0 = GC.GetAllocatedBytesForCurrentThread();
+                var given = bs.Select(b => Lod2.Build(site, b)).ToList();
+                long none = GC.GetAllocatedBytesForCurrentThread() - a0;
+                // given back, and each built again into one let go (as a load does, a cell's after another's)
+                foreach (var m in given) m.Recycle();
+                long a1 = GC.GetAllocatedBytesForCurrentThread();
+                foreach (var b in bs) Lod2.Build(site, b).Recycle();
+                long reused = GC.GetAllocatedBytesForCurrentThread() - a1;
+                log.WriteLine($"{bs.Count} massings: {none / 1024} KB built from nothing, {reused / 1024} KB with the massings reused");
+                Assert.True(reused < none * 0.6, $"{reused} bytes reused, {none} from nothing");
+                // the same massings, each built into one that held another building's (the opposite order)
+                for (int i = bs.Count - 1; i >= 0; i--)
+                {
+                    var again = Lod2.Build(site, bs[i]);
+                    Assert.True(SameMassing(fresh[i], again), $"{bs[i].name}: its massing differs built into a reused one");
+                    again.Recycle();
+                }
+            }
+            finally { Lod2Mesh.ForgetSpares(); }
+        }
+
+        [Fact]
+        public void AMassingIsKeptOnceAndNoMoreThanTheSpares()
+        {
+            Lod2Mesh.ForgetSpares();
+            try
+            {
+                var m = Lod2Mesh.Make(); m.P.Add(new P3(1, 2, 3)); m.Tags = new List<int> { 4 }; m.Tag = 9;
+                m.Recycle(); m.Recycle();   // twice: kept once
+                var a = Lod2Mesh.Make(); var b = Lod2Mesh.Make();
+                Assert.Same(m, a); Assert.NotSame(m, b);
+                Assert.Equal(0, a.Verts); Assert.Null(a.Tags); Assert.Equal(0, a.Tag);
+                var many = Enumerable.Range(0, 100).Select(_ => new Lod2Mesh()).ToList();
+                foreach (var x in many) x.Recycle();
+                int kept = 0; while (!many.Contains(Lod2Mesh.Make()) ? false : ++kept < 1000) { }
+                Assert.InRange(kept, 1, 99);   // a cap, below the hundred let go
+            }
+            finally { Lod2Mesh.ForgetSpares(); }
+        }
     }
 }

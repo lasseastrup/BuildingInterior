@@ -58,6 +58,36 @@ namespace Triband.Storey.Generate
         public List<int>? Tags;
         public int Tris => I.Count / 3;
         public int Verts => P.Count;
+
+        // ---- reuse (docs/CITY.md §7) ----
+
+        /// <summary>The massings kept for the next <see cref="Make"/>, their lists empty, on any thread (a lock each way).</summary>
+        const int Spares = 32;
+        static readonly Stack<Lod2Mesh> spares = new Stack<Lod2Mesh>();
+
+        /// <summary>
+        /// A massing as the constructor makes it: one let go with <see cref="Recycle"/> when there is one, its lists keeping
+        /// their room, else a new one. Building a massing's lists from nothing made most of a layout load's garbage: 0.06 MB
+        /// a building, 186 MB for the 3,000-building test city.
+        /// </summary>
+        public static Lod2Mesh Make()
+        {
+            lock (spares) if (spares.Count > 0) return spares.Pop();
+            return new Lod2Mesh();
+        }
+
+        /// <summary>
+        /// Done with this massing (its cell packed, or it uploaded): its lists are emptied and it is kept for the next
+        /// <see cref="Make"/>, on any thread. Nothing may use it after.
+        /// </summary>
+        public void Recycle()
+        {
+            P.Clear(); N.Clear(); Fac.Clear(); Fac2.Clear(); Slot.Clear(); I.Clear(); Rows.Clear(); Tag = 0; Tags = null;
+            lock (spares) if (spares.Count < Spares && !spares.Contains(this)) spares.Push(this);
+        }
+
+        /// <summary>Let go of the massings kept (the tests' allocation counts start from none).</summary>
+        public static void ForgetSpares() { lock (spares) spares.Clear(); }
     }
 
     /// <summary>
@@ -73,33 +103,36 @@ namespace Triband.Storey.Generate
         {
             double T = Dim.T_EXT; int N = b.floors.Count; double ox = b.pos.x, oz = b.pos.z, top = Derived.RoofY(b);
             var stTop = Derived.StyleAt(b, N); bool pitched = Roofs.IsPitched(b); double yTop = pitched ? top : top + (stTop.parapet ? 1.1 : 0.3);
-            var M = new Lod2Mesh { Tag = site.IndexOf(b) + 2 * Lod1.LOD_TAG };
+            var M = Lod2Mesh.Make(); M.Tag = site.IndexOf(b) + 2 * Lod1.LOD_TAG;
             int slot = 0;
-            var Z = new double[] { 0, 0, 0, 0 };
             site.partyMemo.TryRemove(b.id, out _);
             var L0 = new Lod0.Shared(site, b);
 
-            void Vtx(P3 p, P3 nr, double[] fac, double bay, double kind)
+            void Vtx(P3 p, P3 nr, double u, double h, double s0, double s1, double bay, double kind)
             {
                 // JavaScript's Math.round (ties toward +∞), which the prototype's Int8 normals were made with
                 static double Q(double v) => Math.Floor(v * 127 + 0.5);
                 M.P.Add(p); M.N.Add(new P3(Q(nr.x), Q(nr.y), Q(nr.z)));
-                M.Fac.AddRange(fac); M.Fac2.Add(bay); M.Fac2.Add(kind); M.Slot.Add(slot);
+                M.Fac.Add(u); M.Fac.Add(h); M.Fac.Add(s0); M.Fac.Add(s1); M.Fac2.Add(bay); M.Fac2.Add(kind); M.Slot.Add(slot);
             }
-            void Quad(P3[] q, P3 nr, double[][] fac, double bay, double kind)
+            // a quad's corners in order; a facade's carry u along the wall (s at the first and last corner, e at the other
+            // two), the height up the run (0, then h at the last two) and the window span (uS to uE); the rest carry none.
+            // No arrays: a massing's quads made most of its garbage once its lists were reused
+            void Quad(P3 q0, P3 q1, P3 q2, P3 q3, P3 nr, double bay, double kind, double s = 0, double e = 0, double h = 0, double uS = 0, double uE = 0)
             {
-                bool flip = P3.Dot(P3.Cross(q[1] - q[0], q[2] - q[0]), nr) < 0; int bse = M.P.Count;
-                for (int j = 0; j < 4; j++) Vtx(q[j], nr, fac[j], bay, kind);
-                if (flip) M.I.AddRange(new[] { bse, bse + 2, bse + 1, bse, bse + 3, bse + 2 }); else M.I.AddRange(new[] { bse, bse + 1, bse + 2, bse, bse + 2, bse + 3 });
+                bool flip = P3.Dot(P3.Cross(q1 - q0, q2 - q0), nr) < 0; int bse = M.P.Count;
+                Vtx(q0, nr, s, 0, uS, uE, bay, kind); Vtx(q1, nr, e, 0, uS, uE, bay, kind); Vtx(q2, nr, e, h, uS, uE, bay, kind); Vtx(q3, nr, s, h, uS, uE, bay, kind);
+                var I = M.I;
+                if (flip) { I.Add(bse); I.Add(bse + 2); I.Add(bse + 1); I.Add(bse); I.Add(bse + 3); I.Add(bse + 2); }
+                else { I.Add(bse); I.Add(bse + 1); I.Add(bse + 2); I.Add(bse); I.Add(bse + 2); I.Add(bse + 3); }
             }
-            var ZZ = new[] { Z, Z, Z, Z };
             void Flat(List<List<Vec2>> rings, double y, double kind, bool down)
             {
                 var v2 = new List<List<Vec2>>(); foreach (var r in rings) { var l = new List<Vec2>(r.Count); foreach (var q in r) l.Add(new Vec2(q.x + ox, q.z + oz)); v2.Add(l); }
                 var tris = Triangulate.Shape(v2[0], v2.GetRange(1, v2.Count - 1));
                 var all = new List<Vec2>(); foreach (var r in v2) all.AddRange(r);
                 int bse = M.P.Count; var nr = new P3(0, down ? -1 : 1, 0);
-                foreach (var p in all) Vtx(new P3(p.x, y, p.z), nr, Z, 0, kind);
+                foreach (var p in all) Vtx(new P3(p.x, y, p.z), nr, 0, 0, 0, 0, 0, kind);
                 for (int t = 0; t < tris.Count; t += 3)
                 {
                     int x = tris[t], yy = tris[t + 1], z = tris[t + 2]; var A = all[x]; var B = all[yy]; var D = all[z];
@@ -114,7 +147,7 @@ namespace Triband.Storey.Generate
                     if (p.Dormer) continue;   // massing: the roof's shape only
                     double K = p.Kind == RoofKind.Roof ? 2 : p.Kind == RoofKind.Wall ? 4 : 3;
                     var all = new List<P3>(p.Pts); foreach (var h in p.Holes) all.AddRange(h);
-                    int bse = M.P.Count; foreach (var q in all) Vtx(q, p.N, Z, 0, K);
+                    int bse = M.P.Count; foreach (var q in all) Vtx(q, p.N, 0, 0, 0, 0, 0, K);
                     var tris = Triangulate.Planar(p.Pts, p.Holes, p.N);
                     for (int t = 0; t < tris.Count; t += 3)
                     {
@@ -144,8 +177,8 @@ namespace Triband.Storey.Generate
                     foreach (var r in L0.OverhangRuns(t.k0))
                     {
                         var F = new Frame(r.a, r.u, r.w); double s0 = r.S.s, e0 = r.E.s, s1 = r.S.At(T), e1 = r.E.At(T);
-                        Quad(new[] { F.At(s1, yb, T), F.At(e1, yb, T), F.At(e1, y0, T), F.At(s1, y0, T) }, new P3(r.w.x, 0, r.w.z), ZZ, 0, 4);
-                        Quad(new[] { F.At(s0, yb, 0), F.At(e0, yb, 0), F.At(e1, yb, T), F.At(s1, yb, T) }, new P3(0, -1, 0), ZZ, 0, 4);
+                        Quad(F.At(s1, yb, T), F.At(e1, yb, T), F.At(e1, y0, T), F.At(s1, y0, T), new P3(r.w.x, 0, r.w.z), 0, 4);
+                        Quad(F.At(s0, yb, 0), F.At(e0, yb, 0), F.At(e1, yb, T), F.At(s1, yb, T), new P3(0, -1, 0), 0, 4);
                     }
                 }
                 var runs = new List<(int k0, int k1, double h, bool g, int slot, bool top)>();
@@ -174,14 +207,13 @@ namespace Triband.Storey.Generate
                     foreach (var r in runs)
                     {
                         double y0 = Derived.FloorBase(b, r.k0), y1 = r.top ? yTop : Derived.FloorBase(b, r.k1), H = y1 - y0; slot = r.slot;
-                        Quad(new[] { F.At(s1, y0, T), F.At(e1, y0, T), F.At(e1, y1, T), F.At(s1, y1, T) }, outN,
-                            new[] { new[] { s1, 0, uS, uE }, new[] { e1, 0, uS, uE }, new[] { e1, H, uS, uE }, new[] { s1, H, uS, uE } }, bay, 1);
+                        Quad(F.At(s1, y0, T), F.At(e1, y0, T), F.At(e1, y1, T), F.At(s1, y1, T), outN, bay, 1, s1, e1, H, uS, uE);
                     }
                     slot = tierSlot;
                     if (last && !pitched)
                     {
-                        Quad(new[] { F.At(s0, top, 0), F.At(e0, top, 0), F.At(e0, yTop, 0), F.At(s0, yTop, 0) }, new P3(-e.w.x, 0, -e.w.z), ZZ, 0, st.parapet ? 4 : 3);
-                        Quad(new[] { F.At(s0, yTop, 0), F.At(e0, yTop, 0), F.At(e1, yTop, T), F.At(s1, yTop, T) }, new P3(0, 1, 0), ZZ, 0, 3);
+                        Quad(F.At(s0, top, 0), F.At(e0, top, 0), F.At(e0, yTop, 0), F.At(s0, yTop, 0), new P3(-e.w.x, 0, -e.w.z), 0, st.parapet ? 4 : 3);
+                        Quad(F.At(s0, yTop, 0), F.At(e0, yTop, 0), F.At(e1, yTop, T), F.At(s1, yTop, T), new P3(0, 1, 0), 0, 3);
                     }
                 }
                 if (b.details.Exists(d => d.kind == DetailKind.Escape))
@@ -190,11 +222,11 @@ namespace Triband.Storey.Generate
                         {
                             if (d.kind != DetailKind.Escape || d.ladder) continue;
                             var e = Geo.EdgeInfo(g.Wp, d.i, g.ccw); var F = e.F; double yk = Derived.FloorBase(b, k), u0 = d.u - 1.3, u1 = d.u + 1.3, y0 = yk + 0.16, y1 = yk + 0.24, w0 = T, w1 = T + 1.1;
-                            Quad(new[] { F.At(u0, y1, w0), F.At(u1, y1, w0), F.At(u1, y1, w1), F.At(u0, y1, w1) }, new P3(0, 1, 0), ZZ, 0, 3);
-                            Quad(new[] { F.At(u0, y0, w0), F.At(u1, y0, w0), F.At(u1, y0, w1), F.At(u0, y0, w1) }, new P3(0, -1, 0), ZZ, 0, 3);
-                            Quad(new[] { F.At(u0, y0, w1), F.At(u1, y0, w1), F.At(u1, y1, w1), F.At(u0, y1, w1) }, new P3(e.w.x, 0, e.w.z), ZZ, 0, 3);
-                            Quad(new[] { F.At(u0, y0, w0), F.At(u0, y0, w1), F.At(u0, y1, w1), F.At(u0, y1, w0) }, new P3(-e.u.x, 0, -e.u.z), ZZ, 0, 3);
-                            Quad(new[] { F.At(u1, y0, w0), F.At(u1, y0, w1), F.At(u1, y1, w1), F.At(u1, y1, w0) }, new P3(e.u.x, 0, e.u.z), ZZ, 0, 3);
+                            Quad(F.At(u0, y1, w0), F.At(u1, y1, w0), F.At(u1, y1, w1), F.At(u0, y1, w1), new P3(0, 1, 0), 0, 3);
+                            Quad(F.At(u0, y0, w0), F.At(u1, y0, w0), F.At(u1, y0, w1), F.At(u0, y0, w1), new P3(0, -1, 0), 0, 3);
+                            Quad(F.At(u0, y0, w1), F.At(u1, y0, w1), F.At(u1, y1, w1), F.At(u0, y1, w1), new P3(e.w.x, 0, e.w.z), 0, 3);
+                            Quad(F.At(u0, y0, w0), F.At(u0, y0, w1), F.At(u0, y1, w1), F.At(u0, y1, w0), new P3(-e.u.x, 0, -e.u.z), 0, 3);
+                            Quad(F.At(u1, y0, w0), F.At(u1, y0, w1), F.At(u1, y1, w1), F.At(u1, y1, w0), new P3(e.u.x, 0, e.u.z), 0, 3);
                         }
                 if (last && !pitched)
                 {
@@ -214,9 +246,9 @@ namespace Triband.Storey.Generate
                         foreach (var r in L0.TerraceRuns(t.k1))
                         {
                             var F = new Frame(r.a, r.u, r.w); double s0 = r.S.s, e0 = r.E.s, s1 = r.S.At(T), e1 = r.E.At(T), yp = y1 + 1.1;
-                            Quad(new[] { F.At(s1, y1, T), F.At(e1, y1, T), F.At(e1, yp, T), F.At(s1, yp, T) }, new P3(r.w.x, 0, r.w.z), ZZ, 0, 4);
-                            Quad(new[] { F.At(s0, y1, 0), F.At(e0, y1, 0), F.At(e0, yp, 0), F.At(s0, yp, 0) }, new P3(-r.w.x, 0, -r.w.z), ZZ, 0, 4);
-                            Quad(new[] { F.At(s0, yp, 0), F.At(e0, yp, 0), F.At(e1, yp, T), F.At(s1, yp, T) }, new P3(0, 1, 0), ZZ, 0, 3);
+                            Quad(F.At(s1, y1, T), F.At(e1, y1, T), F.At(e1, yp, T), F.At(s1, yp, T), new P3(r.w.x, 0, r.w.z), 0, 4);
+                            Quad(F.At(s0, y1, 0), F.At(e0, y1, 0), F.At(e0, yp, 0), F.At(s0, yp, 0), new P3(-r.w.x, 0, -r.w.z), 0, 4);
+                            Quad(F.At(s0, yp, 0), F.At(e0, yp, 0), F.At(e1, yp, T), F.At(s1, yp, T), new P3(0, 1, 0), 0, 3);
                         }
                     }
                 }
@@ -236,7 +268,7 @@ namespace Triband.Storey.Generate
                     {
                         var a = ring[i]; var c = ring[(i + 1) % n]; double L = Geo.Hypot(c.x - a.x, c.z - a.z); if (L < 1e-4) continue;
                         double ux = (c.x - a.x) / L, uz = (c.z - a.z) / L; var nIn = ccw ? new P3(-uz, 0, ux) : new P3(uz, 0, -ux);
-                        Quad(new[] { new P3(a.x + ox, y0, a.z + oz), new P3(c.x + ox, y0, c.z + oz), new P3(c.x + ox, y1, c.z + oz), new P3(a.x + ox, y1, a.z + oz) }, nIn, ZZ, 0, 4);
+                        Quad(new P3(a.x + ox, y0, a.z + oz), new P3(c.x + ox, y0, c.z + oz), new P3(c.x + ox, y1, c.z + oz), new P3(a.x + ox, y1, a.z + oz), nIn, 0, 4);
                     }
                     Flat(new List<List<Vec2>> { ring }, y0, 2, false);
                 }
@@ -250,10 +282,10 @@ namespace Triband.Storey.Generate
                 double hw = s.W / 2, y0 = -Bridges.Deck, y1 = br.open ? 1.02 : Bridges.Inside + Bridges.Roof; var F = s.F;
                 P3 At(double a, double o, double dy) => F.At(a, s.Y(a) + dy, o);
                 var up = new P3(-s.Slope * s.u.x, 1, -s.Slope * s.u.z).Normalized; var lft = new P3(s.w.x, 0, s.w.z);
-                Quad(new[] { At(0, -hw, y1), At(s.sLeft, -hw, y1), At(s.sRight, hw, y1), At(0, hw, y1) }, up, ZZ, 0, 2);
-                Quad(new[] { At(0, -hw, y0), At(0, hw, y0), At(s.sRight, hw, y0), At(s.sLeft, -hw, y0) }, up * -1, ZZ, 0, 4);
-                Quad(new[] { At(0, hw, y0), At(0, hw, y1), At(s.sRight, hw, y1), At(s.sRight, hw, y0) }, lft, ZZ, 0, 4);
-                Quad(new[] { At(0, -hw, y0), At(s.sLeft, -hw, y0), At(s.sLeft, -hw, y1), At(0, -hw, y1) }, lft * -1, ZZ, 0, 4);
+                Quad(At(0, -hw, y1), At(s.sLeft, -hw, y1), At(s.sRight, hw, y1), At(0, hw, y1), up, 0, 2);
+                Quad(At(0, -hw, y0), At(0, hw, y0), At(s.sRight, hw, y0), At(s.sLeft, -hw, y0), up * -1, 0, 4);
+                Quad(At(0, hw, y0), At(0, hw, y1), At(s.sRight, hw, y1), At(s.sRight, hw, y0), lft, 0, 4);
+                Quad(At(0, -hw, y0), At(s.sLeft, -hw, y0), At(s.sLeft, -hw, y1), At(0, -hw, y1), lft * -1, 0, 4);
             }
             return M;
         }

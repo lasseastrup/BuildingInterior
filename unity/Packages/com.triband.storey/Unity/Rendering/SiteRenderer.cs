@@ -571,6 +571,7 @@ namespace Triband.Storey.Unity
             {
                 BuildDetail(bt, b, 0); BuildDetail(bt, b, 1);
                 Add(bt, 2, "LOD2", MeshUpload.Upload(l2, b.name + " LOD2", rowMap), massing, true);
+                l2.Recycle();   // uploaded: its lists go to the next massing
                 table.SetLod(bt.idx, lod, lod, 1);
                 if (colliders) colliderPending.Add(b.id);
                 return;
@@ -874,6 +875,9 @@ namespace Triband.Storey.Unity
             foreach (var bt in c.members.Values) members.Add(new Cells.Member(MassingOf(bt), bt.idx + 2 * Lod1.LOD_TAG, bt.rowMap!));
             // packed straight into the upload's layout, in chunks that go back once uploaded (no merged lists in between)
             var pieces = Cells.Pack(members, MeshUpload.HalfMassing);
+            // the massings are in the packed cell now: their lists go to the next ones built (a member's is made again from
+            // the layout when its cell is merged again)
+            foreach (var m in members) m.Mesh.Recycle();
             foreach (var bt in c.members.Values) bt.l2 = null;
             for (int i = 0; i < pieces.Count; i++)
             {
