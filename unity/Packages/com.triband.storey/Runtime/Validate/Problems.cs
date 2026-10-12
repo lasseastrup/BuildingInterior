@@ -192,12 +192,24 @@ namespace Triband.Storey.Validate
         static void Overlaps(Site site, List<Problem> o, Func<BuildingData, bool> In)
         {
             var bs = site.Buildings;
-            var box = bs.Select(Site.BoundsOf).ToArray();
+            var box = new (double x0, double z0, double x1, double z1)[bs.Count]; var checkedB = new bool[bs.Count];
+            for (int i = 0; i < bs.Count; i++) { box[i] = Site.BoundsOf(bs[i]); checkedB[i] = In(bs[i]); }
+            // the pairs (i, j), i < j, in that order, as every pair was: the candidates are the buildings sharing a cell of
+            // the site's grid with i (boxes that overlap share one), so an edit's check no longer looks at all 4.5 million
+            // pairs of a 3,000-building city
+            var near = new List<int>(); var seen = new HashSet<int>();
             for (int i = 0; i < bs.Count; i++)
-                for (int j = i + 1; j < bs.Count; j++)
+            {
+                near.Clear(); seen.Clear();
+                foreach (var nb in site.InBox(box[i].x0, box[i].z0, box[i].x1, box[i].z1))
+                {
+                    int j = site.IndexOf(nb);
+                    if (j > i && (checkedB[i] || checkedB[j]) && seen.Add(j)) near.Add(j);
+                }
+                near.Sort();
+                foreach (int j in near)
                 {
                     var a = bs[i]; var c = bs[j];
-                    if (!In(a) && !In(c)) continue;
                     // only footprints whose boxes overlap can share area: the clip is for those
                     if (box[i].x0 >= box[j].x1 || box[j].x0 >= box[i].x1 || box[i].z0 >= box[j].z1 || box[j].z0 >= box[i].z1) continue;
                     var A = Courtyards.World(a, a.footprint); var C = Courtyards.World(c, c.footprint);
@@ -208,6 +220,7 @@ namespace Triband.Storey.Validate
                         o.Add(new Problem { severity = Severity.Error, buildingId = a.id, building = a.name, k = 0, code = "overlap", otherId = c.id, message = $"Overlaps {c.name} by {area:0} m²", x = m.x, y = 1, z = m.z });
                     }
                 }
+            }
         }
 
         // ---- who can get where ----

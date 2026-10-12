@@ -109,6 +109,17 @@ namespace Triband.Storey.Generate
             return (x0 + b.pos.x, z0 + b.pos.z, x1 + b.pos.x, z1 + b.pos.z);
         }
 
+        /// <summary>
+        /// The buildings listed in the grid cells a box covers: every building whose box overlaps it, and some more. One
+        /// listed in several of those cells comes once per cell.
+        /// </summary>
+        public IEnumerable<BuildingData> InBox(double x0, double z0, double x1, double z1)
+        {
+            for (int gx = (int)Math.Floor(x0 / BGRID); gx <= (int)Math.Floor(x1 / BGRID); gx++)
+                for (int gz = (int)Math.Floor(z0 / BGRID); gz <= (int)Math.Floor(z1 / BGRID); gz++)
+                    if (grid.TryGetValue((gx, gz), out var l)) foreach (var b in l) yield return b;
+        }
+
         /// <summary>Buildings whose grid cells touch a circle (a superset of the ones within it).</summary>
         public HashSet<BuildingData> Near(double x, double z, double rad)
         {

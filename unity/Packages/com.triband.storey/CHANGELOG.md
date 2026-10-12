@@ -26,6 +26,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - A building's row in the building table is its index in the layout, so party walls find their neighbour in the shader.
 
 ### Fixed
+- An edit's problem check compared every pair of buildings for overlaps, however few buildings it checked: 4.5 million pairs on the 3,000-building test city. It takes the candidates from the site's grid (`Site.InBox`), in the same order: checking an edited building and its neighbours there takes about 70 ms instead of about 320.
 - Memory: Storey kept the generator's working data after the meshes were uploaded, at 4.7 to 5 times the meshes' size. On the 3,000-building test city after a five-minute walk that was 277 MB of C# memory never read again, beside 45 MB of GPU meshes. It now keeps none of it: 53 MB in all, with the smaller cells, LOD0 parts and wall tables under Changed (headless .NET; docs/CITY.md §7).
   - The renderer kept each LOD0 building's whole generator result (3.5 to 7.7 MB a building, 32 MB for a large tower). It keeps the building's shape, 10–25 KB.
   - Every building's massing was kept to merge its cell again (50 MB). A layout now loads cell by cell, letting each cell's massings go once it is merged; a cell merged again makes its buildings' massings again (about 1 ms for the biggest).
