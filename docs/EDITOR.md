@@ -228,6 +228,7 @@ The **Bridge** tool in the Facade tab adds a bridge:
 - Click an upper floor's wall. The bridge goes straight out from it to the first building whose wall faces back within 15°, and arrives on that building's floor nearest this one's.
 - A ghost shows it before you click. A click that can't make one says why: no wall faces this one, too long (at most 40 m), too steep (at most 1 in 5), another building in the way, or a bridge already there.
 - A door opens at each end. If the two floors are at different heights, the bridge ramps between them.
+- The floor band under the bridge's floor stops at its deck; a band deeper than the deck goes on beneath it.
 - Click a bridge's door, on either building, to remove it.
 
 **Bridges** in the Facade tab lists every bridge from or to the building. For each you can set **Enclosed** (glass sides with mullions, and a roof) or **Open** (a deck with rails), and its width (1.5 to 4 m).
@@ -314,7 +315,7 @@ Engine-free: `Buildings.AsTemplate`, `Buildings.FromTemplate` (`TemplateTests`).
 - **Head shape:** *Flat* (the thin head strip) or *Arch*, the artist's cap over each window and door. It's a solid hood standing 14 cm out from the wall and reaching 10 cm past the opening each side. Its top is arched (7 cm thick at the ends, rising about a twelfth of its span in the middle), and its underside dips 4 cm at the ends, so it hangs over the window.
 - **Glazing bars:** *Panes across* × *Panes up* (2 × 3 like the artist's) divides every window into panes.
 - **Frames:** a frame all round each window and door, in the new *Frames* colour. Sills and heads take that colour too.
-- **Band:** its height (*Band height*), how far it stands out (*Band stands out*, at least 1 cm), and *Band in a wall shade* instead of the trim colour. Windows and their arched heads stay under a band you've set.
+- **Band:** its height (*Band height*), how far it stands out (*Band stands out*, at least 1 cm), and *Band in a wall shade* instead of the trim colour. Windows and their arched heads, and doors with their posts, stay under a band you've set.
 - **Street doors** (base): *Canopy*, as before, or *Glazed*: double doors with a frame, a transom bar and a fanlight above it, and no canopy. On a filled or shell storey the doors are closed: two glazed leaves with a centre stile, bottom rails and pull handles. On a walk-in storey the doorway stays open, because the player walks through it; the frame, transom and fanlight still show.
 - **Plinth height** (base), and the new optional *Plinth* colour (unset, it's a shade of the wall, as before). Ground-floor windows start above a plinth you've set.
 - **Foundation** (base): a band along the foot of the ground floor, under the doors too, in the new *Foundation* colour. *Below ground* sets how deep it goes (for terrain that isn't flat), *Above ground* how much of it shows, and *Stands out* how far it reaches out from the wall (0.01 to 1 m; 8 cm by default).

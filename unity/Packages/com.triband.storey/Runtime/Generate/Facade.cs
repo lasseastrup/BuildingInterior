@@ -102,6 +102,9 @@ namespace Triband.Storey.Generate
         public static List<Opening> Ops(Site site, BuildingData b, int k, int i, double L, double uS, double uE, List<Opening> ops, OpeningPool? pool)
         {
             var st = Derived.StyleAt(b, k); double h = Derived.FloorH(b, k), spn = uE - uS;
+            // a band of the style's own height: doors stay under it as windows do (WindowSpec), their posts too (Dress: 8 cm
+            // above the door, standing out as far as a band does by default, so they would lie in its face)
+            double under = st.bandH is double bh && st.bands ? h - bh - 0.08 : double.MaxValue;
             ops.Clear();
             Opening New() => pool != null ? pool.Take() : new Opening();
             foreach (var e in b.entrances)
@@ -109,13 +112,13 @@ namespace Triband.Storey.Generate
                 if (e.k != k || e.edge != i || spn <= Dim.DOOR_EXT + 0.6 || !DoorOpen(site, b, e)) continue;
                 double c = Math.Max(uS + Dim.DOOR_EXT / 2 + 0.3, Math.Min(uE - Dim.DOOR_EXT / 2 - 0.3, e.t * L));
                 var land = k > 0 && !TerraceAt(b, k, i, e.t) ? LandingAt(site, b, k, i, e.t) : null;
-                ops.Add(New().Set(c - Dim.DOOR_EXT / 2, c + Dim.DOOR_EXT / 2, 0, Math.Min(2.6, h - 0.4), door: true, thr: land != null && land.y < Derived.FloorBase(b, k) - 0.02));
+                ops.Add(New().Set(c - Dim.DOOR_EXT / 2, c + Dim.DOOR_EXT / 2, 0, Math.Min(Math.Min(2.6, h - 0.4), under), door: true, thr: land != null && land.y < Derived.FloorBase(b, k) - 0.02));
             }
             foreach (var (bk, bi, bt) in Bridges.Doors(site, b))
             {
                 if (bk != k || bi != i || spn <= Dim.DOOR_EXT + 0.6) continue;
                 double c = Math.Max(uS + Dim.DOOR_EXT / 2 + 0.3, Math.Min(uE - Dim.DOOR_EXT / 2 - 0.3, bt * L));
-                ops.Add(New().Set(c - Dim.DOOR_EXT / 2, c + Dim.DOOR_EXT / 2, 0, Math.Min(2.5, h - 0.4), door: true, bare: true));
+                ops.Add(New().Set(c - Dim.DOOR_EXT / 2, c + Dim.DOOR_EXT / 2, 0, Math.Min(Math.Min(2.5, h - 0.4), under), door: true, bare: true));
             }
             var shaftHere = new List<Cores.Flush>();
             foreach (var s in b.shafts)

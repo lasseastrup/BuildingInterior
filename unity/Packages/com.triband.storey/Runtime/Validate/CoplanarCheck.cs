@@ -46,10 +46,14 @@ namespace Triband.Storey.Validate
                 }
             }
             var report = new Report { Triangles = tris.Count };
-            var buckets = new Dictionary<string, List<Tri>>(StringComparer.Ordinal);
+            // grouped by normal and plane, rounded as the prototype's checker rounds (JavaScript's Math.round, ties toward +∞)
+            // into a number key. The text key printed a rounded −0 apart from 0 (JavaScript prints both as 0), so faces in
+            // one plane fell into two groups and their overlaps were missed; and .NET's Math.Round rounds ties to even
+            static long R(double v) => (long)Math.Floor(v + 0.5);
+            var buckets = new Dictionary<(long, long, long, long), List<Tri>>();
             foreach (var t in tris)
             {
-                string key = $"{Math.Round(t.n.x * 1000)},{Math.Round(t.n.y * 1000)},{Math.Round(t.n.z * 1000)}|{Math.Round(t.d * 500)}";
+                var key = (R(t.n.x * 1000), R(t.n.y * 1000), R(t.n.z * 1000), R(t.d * 500));
                 if (!buckets.TryGetValue(key, out var l)) buckets[key] = l = new List<Tri>();
                 l.Add(t);
             }

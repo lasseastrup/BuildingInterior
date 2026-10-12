@@ -71,6 +71,45 @@ namespace Triband.Storey.Tests
         }
 
         [Theory]
+        [InlineData(0.22)]
+        [InlineData(0.5)]
+        public void TheBandUnderABridgesFloorStopsAtItsDeck(double bandH)
+        {
+            var (d, A, B) = Street();
+            foreach (var b in new[] { A, B }) { var st = b.style.Clone(); st.bands = true; st.bandH = bandH; st.bandDepth = 0.06; b.style = st; }
+            Add(d, A);
+            var site = new Site(d.buildings);
+            double y = Derived.FloorBase(A, 2);
+            // the band under storey 1's ceiling, its top at the bridge's floor, faces the other building 0.06 m out from each wall
+            foreach (var (b, nx, x) in new[] { (A, 1.0, 12 + Dim.T_EXT + 0.06), (B, -1.0, 20 - Dim.T_EXT - 0.06) })
+                foreach (var m in new[] { Lod0.Build(site, b, solids: true).Op, Lod1.Build(site, b, solids: true) })
+                {
+                    var rep = CoplanarCheck.Run(m);
+                    Assert.True(rep.Overlaps.Count == 0, string.Join("\n", rep.Overlaps.Take(8)));
+                    // either side of the deck (z 3.8 to 6.2) it runs on; at the deck, only a band deeper than the deck, beneath it
+                    Assert.True(BandFace(m, nx, x, 2, y - 0.1)); Assert.True(BandFace(m, nx, x, 8, y - 0.1));
+                    Assert.False(BandFace(m, nx, x, 5, y - 0.1));
+                    Assert.Equal(bandH > Bridges.Deck, BandFace(m, nx, x, 5, y - 0.4));
+                }
+        }
+
+        /// <summary>A face of the mesh facing along x (nx: which way) in the plane at x covers the point (z, y).</summary>
+        static bool BandFace(MeshBuilder m, double nx, double x, double z, double y)
+        {
+            for (int t = 0; t < m.I.Count; t += 3)
+            {
+                int a = m.I[t];
+                if (m.N[a].x * nx < 0.99) continue;
+                P3 p = m.P[a], q = m.P[m.I[t + 1]], r = m.P[m.I[t + 2]];
+                if (Math.Abs(p.x - x) > 1e-3 || Math.Abs(q.x - x) > 1e-3 || Math.Abs(r.x - x) > 1e-3) continue;
+                double S(P3 e0, P3 e1) => (e1.z - e0.z) * (y - e0.y) - (e1.y - e0.y) * (z - e0.z);
+                double s0 = S(p, q), s1 = S(q, r), s2 = S(r, p);
+                if ((s0 >= 0 && s1 >= 0 && s2 >= 0) || (s0 <= 0 && s1 <= 0 && s2 <= 0)) return true;
+            }
+            return false;
+        }
+
+        [Theory]
         [InlineData(false)]
         [InlineData(true)]
         public void YouWalkAcross(bool open)

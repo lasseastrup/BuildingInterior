@@ -75,6 +75,21 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void DoorsAndTheirPostsKeepUnderATallBand()
+        {
+            // a 3 m ground floor and a half-metre band of the default depth: the door's posts would reach into its face
+            var st = Styles.Preset("brick").Clone(); st.ground = GroundType.Match; st.bandH = 0.5;
+            var (_, b, site) = Block(st); b.groundHeight = 3.0;
+            var door = Facade.Ops(site, b, 0, 0, 14, 0, 14).Single(o => o.door);
+            Assert.True(door.y1 + 0.08 <= 3.0 - 0.5 + 1e-9, $"posts up to {door.y1 + 0.08}, under a band from 2.5");
+            var rep = CoplanarCheck.Run(Lod0.Build(site, b, solids: true).Op);
+            Assert.True(rep.Overlaps.Count == 0, string.Join("\n", rep.Overlaps.Take(10)));
+            // the prototype's styles keep their doors
+            var (_, b0, s0) = Block(Styles.Preset("brick")); b0.groundHeight = 3.0;
+            Assert.Equal(2.6, Facade.Ops(s0, b0, 0, 0, 14, 0, 14).Single(o => o.door).y1, 9);
+        }
+
+        [Fact]
         public void TheFoundationGoesAsDeepAsAsked()
         {
             var st = Artist(); st.foundation = 1.2; st.foundationH = 0.3;

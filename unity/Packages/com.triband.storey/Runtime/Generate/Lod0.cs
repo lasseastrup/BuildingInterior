@@ -86,6 +86,8 @@ namespace Triband.Storey.Generate
         internal readonly OpeningPool WallPool = new OpeningPool();
         internal readonly List<Opening> WallOps = new List<Opening>(), PieceOps = new List<Opening>(), CutOps = new List<Opening>();
         internal readonly Facade.PanelOpt Panel = new Facade.PanelOpt();
+        List<BridgeSpan>? bridges;   // the bridges that meet this building, looked up when a band first asks
+        static readonly List<BridgeSpan> NoBridges = new List<BridgeSpan>();
 
         /// <summary>The openings of a piece of wall: those of <paramref name="all"/> between lo and hi, in order (none on a party wall).</summary>
         internal List<Opening> Piece(List<Opening> all, bool party, double lo, double hi)
@@ -386,9 +388,19 @@ namespace Triband.Storey.Generate
                 if (Derived.IsSetback(b, k + 1))
                     foreach (var (s0, e0) in Geo.ExposedRanges(Derived.OutlineAt(b, k), Derived.OutlineAt(b, k + 1), i, true))
                         under.Add((s0 < 0.06 ? -1e9 : s0, e0 > L - 0.06 ? 1e9 : e0));
-                var rs = Geo.MinusRanges(new List<(double, double)> { Clip(m.Span(T, T + bd)) }, under);
+                var band = Geo.MinusRanges(new List<(double, double)> { Clip(m.Span(T, T + bd)) }, under);
+                // a bridge's deck at the floor above lies where the band's top would: the band stops at the deck's sides,
+                // and one deeper than the deck goes on beneath it
+                var decks = Decks(k + 1, F, T, T + bd);
+                var rs = decks == null ? band : Geo.MinusRanges(band, decks);
                 rs.RemoveAll(r => r.Item2 - r.Item1 <= 0.02);
                 if (rs.Count > 0) Facade.StripPieces(op, F, m, rs, y + h - bh, y + h, T, T + bd, bc, bc, Skip.In);
+                if (decks != null && bh > Bridges.Deck + 0.01)
+                {
+                    var below = new List<(double, double)>();
+                    foreach (var (a0, a1) in band) foreach (var (d0, d1) in decks) if (Math.Min(a1, d1) - Math.Max(a0, d0) > 0.02) below.Add((Math.Max(a0, d0), Math.Min(a1, d1)));
+                    if (below.Count > 0) Facade.StripPieces(op, F, m, below, y + h - bh, y + h - Bridges.Deck, T, T + bd, bc, bc, Skip.In);
+                }
             }
             if (k == 0)
             {
@@ -407,6 +419,49 @@ namespace Triband.Storey.Generate
                     var pc0 = st.plinth != null ? new Swatch(C.style, ColorSlot.Plinth) : C.plinth;
                     Facade.StripPieces(op, F, m, Facade.SolidRanges(r.Item1, r.Item2, widened), y + fTop, y + pTop, T, T + 0.04, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Along a wall (frame F, its line at w = 0), the stretch each deck of a bridge at storey k's floor covers between w0
+        /// and w1 out from the line, or null when none does: where the band under the storey below, its top at that floor,
+        /// would lie flush with a deck's walking surface.
+        /// </summary>
+        List<(double, double)>? Decks(int k, Frame F, double w0, double w1)
+        {
+            bridges ??= b.bridges.Count == 0 && !site.Bridged(b.id) ? NoBridges : Bridges.Touching(site, b);
+            List<(double, double)>? o = null;
+            foreach (var s in bridges)
+            {
+                if (!(ReferenceEquals(s.A, b) && s.br.k == k) && !(ReferenceEquals(s.B, b) && s.br.toK == k)) continue;
+                // the deck's outline in plan (Bridges.Corners), cut to the strip between w0 and w1: how far along the wall it goes
+                var D = s.F; double hw = s.W / 2;
+                Vec2 p0 = D.At2(0, -hw), p1 = D.At2(0, hw), p2 = D.At2(s.sRight, hw), p3 = D.At2(s.sLeft, -hw);
+                double lo = double.MaxValue, hi = double.MinValue, wl = double.MaxValue, wh = double.MinValue;
+                Within(F, w0, w1, p0, p1, ref lo, ref hi, ref wl, ref wh); Within(F, w0, w1, p1, p2, ref lo, ref hi, ref wl, ref wh);
+                Within(F, w0, w1, p2, p3, ref lo, ref hi, ref wl, ref wh); Within(F, w0, w1, p3, p0, ref lo, ref hi, ref wl, ref wh);
+                if (hi - lo > 1e-3 && wh - wl > 1e-3) (o ??= new List<(double, double)>()).Add((lo, hi));
+            }
+            return o;
+        }
+
+        /// <summary>The part of segment pq between w0 and w1 out from frame F's line, widening the range it spans along and out.</summary>
+        static void Within(Frame F, double w0, double w1, Vec2 p, Vec2 q, ref double lo, ref double hi, ref double wl, ref double wh)
+        {
+            double pu = (p.x - F.O.x) * F.u.x + (p.z - F.O.z) * F.u.z, pw = (p.x - F.O.x) * F.w.x + (p.z - F.O.z) * F.w.z;
+            double qu = (q.x - F.O.x) * F.u.x + (q.z - F.O.z) * F.u.z, qw = (q.x - F.O.x) * F.w.x + (q.z - F.O.z) * F.w.z;
+            double t0 = 0, t1 = 1;
+            if (Math.Abs(qw - pw) < 1e-12) { if (pw < w0 || pw > w1) return; }
+            else
+            {
+                double ta = (w0 - pw) / (qw - pw), tb = (w1 - pw) / (qw - pw);
+                t0 = Math.Max(0, Math.Min(ta, tb)); t1 = Math.Min(1, Math.Max(ta, tb));
+                if (t0 > t1) return;
+            }
+            for (int j = 0; j < 2; j++)
+            {
+                double t = j == 0 ? t0 : t1, u = pu + (qu - pu) * t, w = pw + (qw - pw) * t;
+                lo = Math.Min(lo, u); hi = Math.Max(hi, u); wl = Math.Min(wl, w); wh = Math.Max(wh, w);
             }
         }
 
