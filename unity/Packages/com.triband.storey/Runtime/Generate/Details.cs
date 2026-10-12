@@ -78,9 +78,20 @@ namespace Triband.Storey.Generate
         public static EdgeFrame EdgeFrameAt(BuildingData b, int k, int i)
         {
             var fp = Derived.OutlineAt(b, k); bool ccw = Geo.Area2(fp) > 0;
-            var Wp = new List<Vec2>(fp.Count); foreach (var p in fp) Wp.Add(new Vec2(p.x + b.pos.x, p.z + b.pos.z));
-            var e = Geo.EdgeInfo(Wp, i, ccw); var m = Geo.MiterOf(Geo.Corners(fp, ccw), i, e.L); var (uS, uE) = Facade.Span(m, e.L);
+            return EdgeFrameAt(SiteOutline(b, fp), ccw, Geo.Corners(fp, ccw), i);
+        }
+
+        /// <summary>Edge i's frame from its storey's outline in site space and corners, worked out once for all its edges.</summary>
+        static EdgeFrame EdgeFrameAt(List<Vec2> Wp, bool ccw, Geo.Corner[] cor, int i)
+        {
+            var e = Geo.EdgeInfo(Wp, i, ccw); var m = Geo.MiterOf(cor, i, e.L); var (uS, uE) = Facade.Span(m, e.L);
             return new EdgeFrame { e = e, m = m, uS = uS, uE = uE };
+        }
+
+        static List<Vec2> SiteOutline(BuildingData b, List<Vec2> fp)
+        {
+            var Wp = new List<Vec2>(fp.Count); foreach (var p in fp) Wp.Add(new Vec2(p.x + b.pos.x, p.z + b.pos.z));
+            return Wp;
         }
 
         public struct Step { public int k, i; public double u; public double? s; }
@@ -131,9 +142,11 @@ namespace Triband.Storey.Generate
                 if (d.man == null) foreach (var m in out_) if (m.man != null && m.i == d.i && Math.Abs(m.u - d.u) < (m.Width + d.Width) / 2 + 0.15) return;   // rules keep clear of hand-placed items
                 out_.Add(d);
             }
-            // one edge's openings at a time, each let go before the next edge's are made
+            // one edge's openings at a time, each let go before the next edge's are made; the outline's frames from its
+            // points and corners worked out once
             var opsList = new List<Opening>(); var opsPool = new OpeningPool();
-            (EdgeFrame f, List<Opening> ops) OpsOf(int i) { var f = EdgeFrameAt(b, k, i); opsPool.Reset(); return (f, Facade.Ops(site, b, k, i, f.e.L, f.uS, f.uE, opsList, opsPool)); }
+            bool ccw = Geo.Area2(fp) > 0; var Wp = SiteOutline(b, fp); var cor = Geo.Corners(fp, ccw);
+            (EdgeFrame f, List<Opening> ops) OpsOf(int i) { var f = EdgeFrameAt(Wp, ccw, cor, i); opsPool.Reset(); return (f, Facade.Ops(site, b, k, i, f.e.L, f.uS, f.uE, opsList, opsPool)); }
             Item Mk(DetailKind kind, int i, double u, DetailData? man) => new Item { kind = kind, spec = Catalogue[kind], i = i, u = u, man = man };
 
             foreach (var d in b.details)

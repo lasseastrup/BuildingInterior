@@ -18,7 +18,7 @@ namespace Triband.Storey.Generate
         readonly Dictionary<string, BuildingData> byId = new Dictionary<string, BuildingData>(StringComparer.Ordinal);
         readonly Dictionary<(int, int), List<BuildingData>> grid = new Dictionary<(int, int), List<BuildingData>>();
         // the memos are filled as buildings are generated, which may be on several threads at once (docs/CITY.md §2)
-        internal readonly ConcurrentDictionary<string, ConcurrentDictionary<string, List<Party.Range>>> partyMemo = new ConcurrentDictionary<string, ConcurrentDictionary<string, List<Party.Range>>>(StringComparer.Ordinal);
+        internal readonly ConcurrentDictionary<string, ConcurrentDictionary<long, List<Party.Range>>> partyMemo = new ConcurrentDictionary<string, ConcurrentDictionary<long, List<Party.Range>>>(StringComparer.Ordinal);
         internal readonly ConcurrentDictionary<string, BridgeSpan?> bridgeMemo = new ConcurrentDictionary<string, BridgeSpan?>(StringComparer.Ordinal);
         readonly HashSet<string> bridged = new HashSet<string>(StringComparer.Ordinal);
         const double BGRID = 32;
@@ -182,8 +182,8 @@ namespace Triband.Storey.Generate
         /// <summary>Party ranges along tier k0's edge i, sorted by start.</summary>
         public static List<Range> Ranges(Site site, BuildingData b, int k0, int i)
         {
-            var m = site.partyMemo.GetOrAdd(b.id, _ => new ConcurrentDictionary<string, List<Range>>(StringComparer.Ordinal));
-            string key = k0 + ":" + i;
+            var m = site.partyMemo.GetOrAdd(b.id, _ => new ConcurrentDictionary<long, List<Range>>());
+            long key = (long)k0 << 32 | (uint)i;   // the tier and the edge, without making text
             if (m.TryGetValue(key, out var hit)) return hit;
 
             var fp = Derived.OutlineAt(b, k0); var a = fp[i]; var c = fp[(i + 1) % fp.Count];
