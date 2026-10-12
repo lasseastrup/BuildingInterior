@@ -17,6 +17,14 @@ namespace Triband.Storey.Generate
         /// <summary>How far a flat wall's window pane stands proud of the wall (metres): clear of it at LOD1's distances.</summary>
         public const double PaneProud = 0.03;
 
+        /// <summary>The doors of <paramref name="ops"/>, in order, into <paramref name="into"/> (emptied first).</summary>
+        static List<Opening> Doors(List<Opening> ops, List<Opening> into)
+        {
+            into.Clear();
+            foreach (var o in ops) if (o.door) into.Add(o);
+            return into;
+        }
+
         /// <param name="recessed">The prototype's LOD1: every window cut into the wall with its reveals (the parity tests).</param>
         public static MeshBuilder Build(Site site, BuildingData b, bool solids = false, bool recessed = false)
         {
@@ -38,17 +46,18 @@ namespace Triband.Storey.Generate
                 for (int i = 0; i < g.Wp.Count; i++)
                 {
                     var e = Geo.EdgeInfo(g.Wp, i, g.ccw); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L); var (uS, uE) = Facade.Span(m, e.L);
-                    var all = Facade.Ops(site, b, k, i, e.L, uS, uE);
+                    L0.WallPool.Reset();
+                    var all = Facade.Ops(site, b, k, i, e.L, uS, uE, L0.WallOps, L0.WallPool);
                     foreach (var pc in Party.WallPieces(site, b, k, i, e.L, m))
                     {
                         if (pc.kind == Party.PieceKind.Skip) continue;
                         bool party = pc.kind == Party.PieceKind.Party;
-                        var ops = party ? new List<Opening>() : all.FindAll(o => o.u0 >= pc.lo && o.u1 <= pc.hi);
+                        var ops = L0.Piece(all, party, pc.lo, pc.hi);
                         var stk = Derived.StyleAt(b, k);
                         var wk = OpeningKinds.Of(stk, false); var dk = OpeningKinds.Of(stk, true);
                         // the wall is cut for doors and artist-made windows only; a plain window lies on it (recessed: all)
-                        var cut = recessed ? ops : ops.FindAll(o => o.door || wk?.lod1 != null);
-                        Facade.WallPanel(op, F, new Miter(pc.S, pc.E), 0, T, y, h, cut, party ? pc.r!.pInner : C.wall, C.wall, new Facade.PanelOpt { inner = false, revealFrom = T * 0.45, threshold = k == 0 });
+                        var cut = recessed || wk?.lod1 != null ? ops : Doors(ops, L0.CutOps);
+                        Facade.WallPanel(op, F, new Miter(pc.S, pc.E), 0, T, y, h, cut, party ? pc.r!.pInner : C.wall, C.wall, L0.Panel.Set(inner: false, revealFrom: T * 0.45, threshold: k == 0));
                         foreach (var o in ops)
                         {
                             // an artist's window or door with a LOD1 mesh takes the opening; without one, the plain pane

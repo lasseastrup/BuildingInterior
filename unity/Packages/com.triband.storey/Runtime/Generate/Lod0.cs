@@ -81,6 +81,19 @@ namespace Triband.Storey.Generate
         {
         readonly Site site; readonly BuildingData b; readonly int N; readonly bool shell;
         readonly Dictionary<int, TierCtx> tiers = new Dictionary<int, TierCtx>();
+        // what one wall's facade works in, used again wall after wall (a wall's openings are let go before the next's):
+        // its openings, those of the piece being built, and the panel's options
+        internal readonly OpeningPool WallPool = new OpeningPool();
+        internal readonly List<Opening> WallOps = new List<Opening>(), PieceOps = new List<Opening>(), CutOps = new List<Opening>();
+        internal readonly Facade.PanelOpt Panel = new Facade.PanelOpt();
+
+        /// <summary>The openings of a piece of wall: those of <paramref name="all"/> between lo and hi, in order (none on a party wall).</summary>
+        internal List<Opening> Piece(List<Opening> all, bool party, double lo, double hi)
+        {
+            PieceOps.Clear();
+            if (!party) foreach (var o in all) if (o.u0 >= lo && o.u1 <= hi) PieceOps.Add(o);
+            return PieceOps;
+        }
 
         public Shared(Site site, BuildingData b) { this.site = site; this.b = b; N = b.floors.Count; shell = !b.interior; }
 
@@ -330,15 +343,16 @@ namespace Triband.Storey.Generate
             {
                 var e = Geo.EdgeInfo(Wp, i, g.ccw); var F = e.F;
                 var m = Geo.MiterOf(g.cor, i, e.L); var (uS, uE) = Facade.Span(m, e.L);
-                var all = Facade.Ops(site, b, k, i, e.L, uS, uE);
+                WallPool.Reset();
+                var all = Facade.Ops(site, b, k, i, e.L, uS, uE, WallOps, WallPool);
                 foreach (var pc in Party.WallPieces(site, b, k, i, e.L, m))
                 {
                     if (pc.kind == Party.PieceKind.Skip) continue;
                     var pm = new Miter(pc.S, pc.E); bool party = pc.kind == Party.PieceKind.Party;
-                    var ops = party ? new List<Opening>() : all.FindAll(o => o.u0 >= pc.lo && o.u1 <= pc.hi);
+                    var ops = Piece(all, party, pc.lo, pc.hi);
                     var wc = Geo.WallCtx(e.a, e.u, e.w, e.L);
                     op.Ctx(wc, party ? 1 + 8 * (pc.r!.pIdx + 1) : 1); gl.Ctx(wc, 1);
-                    Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : C.wall, C.inner, new Facade.PanelOpt { inner = !shell, threshold = k == 0, revealFrom = shell ? T * 0.45 : 0 });
+                    Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : C.wall, C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? T * 0.45 : 0));
                     var stk = Derived.StyleAt(b, k);
                     Facade.Dress(op, gl, F, ops, y, C, shell, stk);
                     if (!party && stk.bricks is double density && density > 0)

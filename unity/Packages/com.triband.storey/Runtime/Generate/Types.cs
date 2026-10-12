@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 
 namespace Triband.Storey.Generate
 {
@@ -65,6 +66,28 @@ namespace Triband.Storey.Generate
         public Opening Clone() => (Opening)MemberwiseClone();
         /// <summary>This opening made a copy of <paramref name="o"/>, every field (as <see cref="Clone"/>, into one already made).</summary>
         public Opening Set(Opening o) { u0 = o.u0; u1 = o.u1; y0 = o.y0; y1 = o.y1; door = o.door; full = o.full; thr = o.thr; bare = o.bare; return this; }
+        /// <summary>Every field set, as a new opening with these would be (one taken from an <see cref="OpeningPool"/>).</summary>
+        public Opening Set(double u0, double u1, double y0, double y1, bool door = false, bool full = false, bool thr = false, bool bare = false)
+        {
+            this.u0 = u0; this.u1 = u1; this.y0 = y0; this.y1 = y1; this.door = door; this.full = full; this.thr = thr; this.bare = bare;
+            return this;
+        }
+    }
+
+    /// <summary>
+    /// Openings made again for one wall after another (<see cref="Facade.Ops(Site, BuildingData, int, int, double, double, double, List{Opening}, OpeningPool)"/>):
+    /// <see cref="Reset"/> before each wall, and the last wall's are taken again. Only for openings let go before the next reset.
+    /// </summary>
+    public sealed class OpeningPool
+    {
+        readonly List<Opening> made = new List<Opening>();
+        int used;
+        public void Reset() => used = 0;
+        public Opening Take()
+        {
+            if (used == made.Count) made.Add(new Opening());
+            return made[used++];
+        }
     }
 
     /// <summary>A collision segment (world XZ) with a radius.</summary>

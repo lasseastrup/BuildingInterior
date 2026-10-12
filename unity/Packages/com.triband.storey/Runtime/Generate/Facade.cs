@@ -93,22 +93,29 @@ namespace Triband.Storey.Generate
             e.k == 0 || TerraceAt(b, e.k, e.edge, e.t) || LandingAt(site, b, e.k, e.edge, e.t) != null;
 
         /// <summary>The openings along edge i of storey k between uS and uE, sorted by start.</summary>
-        public static List<Opening> Ops(Site site, BuildingData b, int k, int i, double L, double uS, double uE)
+        public static List<Opening> Ops(Site site, BuildingData b, int k, int i, double L, double uS, double uE) => Ops(site, b, k, i, L, uS, uE, new List<Opening>(), null);
+
+        /// <summary>
+        /// <see cref="Ops(Site, BuildingData, int, int, double, double, double)"/> into <paramref name="ops"/> (emptied first), the
+        /// openings taken from <paramref name="pool"/> (new ones when it is null): for a caller doing one wall after another.
+        /// </summary>
+        public static List<Opening> Ops(Site site, BuildingData b, int k, int i, double L, double uS, double uE, List<Opening> ops, OpeningPool? pool)
         {
             var st = Derived.StyleAt(b, k); double h = Derived.FloorH(b, k), spn = uE - uS;
-            var ops = new List<Opening>();
+            ops.Clear();
+            Opening New() => pool != null ? pool.Take() : new Opening();
             foreach (var e in b.entrances)
             {
                 if (e.k != k || e.edge != i || spn <= Dim.DOOR_EXT + 0.6 || !DoorOpen(site, b, e)) continue;
                 double c = Math.Max(uS + Dim.DOOR_EXT / 2 + 0.3, Math.Min(uE - Dim.DOOR_EXT / 2 - 0.3, e.t * L));
                 var land = k > 0 && !TerraceAt(b, k, i, e.t) ? LandingAt(site, b, k, i, e.t) : null;
-                ops.Add(new Opening { u0 = c - Dim.DOOR_EXT / 2, u1 = c + Dim.DOOR_EXT / 2, y0 = 0, y1 = Math.Min(2.6, h - 0.4), door = true, thr = land != null && land.y < Derived.FloorBase(b, k) - 0.02 });
+                ops.Add(New().Set(c - Dim.DOOR_EXT / 2, c + Dim.DOOR_EXT / 2, 0, Math.Min(2.6, h - 0.4), door: true, thr: land != null && land.y < Derived.FloorBase(b, k) - 0.02));
             }
             foreach (var (bk, bi, bt) in Bridges.Doors(site, b))
             {
                 if (bk != k || bi != i || spn <= Dim.DOOR_EXT + 0.6) continue;
                 double c = Math.Max(uS + Dim.DOOR_EXT / 2 + 0.3, Math.Min(uE - Dim.DOOR_EXT / 2 - 0.3, bt * L));
-                ops.Add(new Opening { u0 = c - Dim.DOOR_EXT / 2, u1 = c + Dim.DOOR_EXT / 2, y0 = 0, y1 = Math.Min(2.5, h - 0.4), door = true, bare = true });
+                ops.Add(New().Set(c - Dim.DOOR_EXT / 2, c + Dim.DOOR_EXT / 2, 0, Math.Min(2.5, h - 0.4), door: true, bare: true));
             }
             var shaftHere = new List<Cores.Flush>();
             foreach (var s in b.shafts)
@@ -132,7 +139,7 @@ namespace Triband.Storey.Generate
                         foreach (var o in ops) if (o.door && u1 > o.u0 - 0.3 && u0 < o.u1 + 0.3) blocked = true;
                         foreach (var f in shaftHere) if (u1 > f.s0 - 0.1 && u0 < f.s1 + 0.1) blocked = true;
                         if (blocked) continue;
-                        ops.Add(new Opening { u0 = u0, u1 = u1, y0 = ws.y0, y1 = ws.y1, full = ws.full != null });
+                        ops.Add(New().Set(u0, u1, ws.y0, ws.y1, full: ws.full != null));
                     }
                 }
             }
@@ -385,6 +392,13 @@ namespace Triband.Storey.Generate
         {
             public bool outer = true, inner = true, ends, threshold;
             public double? revealFrom; public Swatch? revealC;
+
+            /// <summary>Every option set, as a new one with these would be (for options used again panel after panel).</summary>
+            public PanelOpt Set(bool outer = true, bool inner = true, bool ends = false, bool threshold = false, double? revealFrom = null, Swatch? revealC = null)
+            {
+                this.outer = outer; this.inner = inner; this.ends = ends; this.threshold = threshold; this.revealFrom = revealFrom; this.revealC = revealC;
+                return this;
+            }
         }
 
         static readonly PanelOpt DefaultPanel = new PanelOpt();   // read only: WallPanel never changes its options

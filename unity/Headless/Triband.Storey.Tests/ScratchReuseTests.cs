@@ -61,6 +61,34 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void SettingAnOpeningOrPanelOptionsSetsEveryField()
+        {
+            // the openings and panel options made again wall after wall are set whole: a field added must be a parameter too
+            int fields(Type t) => t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Length;
+            var openingSet = typeof(Opening).GetMethods().Single(m => m.Name == nameof(Opening.Set) && m.GetParameters().Length > 1);
+            Assert.Equal(fields(typeof(Opening)), openingSet.GetParameters().Length);
+            Assert.Equal(fields(typeof(Facade.PanelOpt)), typeof(Facade.PanelOpt).GetMethod(nameof(Facade.PanelOpt.Set))!.GetParameters().Length);
+            var used = new Opening().Set(new Opening { u0 = 1, u1 = 2, y0 = 3, y1 = 4, door = true, full = true, thr = true, bare = true });
+            var again = used.Set(5, 6, 0.5, 2, full: true);
+            Assert.True(again.u0 == 5 && again.u1 == 6 && again.y0 == 0.5 && again.y1 == 2 && again.full && !again.door && !again.thr && !again.bare);
+            var p = new Facade.PanelOpt { outer = false, ends = true, revealC = new Swatch(new StyleRef(1, 0), ColorSlot.Wall) }.Set(inner: false);
+            Assert.True(p.outer && !p.inner && !p.ends && !p.threshold && p.revealFrom == null && p.revealC == null);
+        }
+
+        [Fact]
+        public void TheTypedHashIsTheTextOne()
+        {
+            var rnd = new Random(11);
+            foreach (var id in new[] { "b", "tower-17", "" })
+                foreach (var tag in new[] { "ac", "vent" })
+                    for (int n = 0; n < 200; n++)
+                    {
+                        int k = rnd.Next(-5, 300), i = n % 7 == 0 ? 0 : rnd.Next(0, 100000), j = n % 11 == 0 ? int.MinValue + n : rnd.Next(-1000, 1000);
+                        Assert.Equal(Details.Hash01(id, tag, (object)k, i, j), Details.Hash01(id, tag, k, i, j));
+                    }
+        }
+
+        [Fact]
         public void EarcutGivesTheSameTrianglesReusingItsNodes()
         {
             // a square with two square holes, and a long notched strip, each triangulated new and with a list reused,

@@ -38,6 +38,25 @@ namespace Triband.Storey.Generate
             return (h % 10000) / 10000.0;
         }
 
+        /// <summary><see cref="Hash01(object[])"/> of two strings and three integers, without making their text.</summary>
+        public static double Hash01(string a, string b, int k, int i, int j)
+        {
+            uint h = Feed(Feed(Feed(Feed(Feed(2166136261, a), b), k), i), j);
+            return (h % 10000) / 10000.0;
+        }
+
+        static uint Feed(uint h, char c) => unchecked((h ^ c) * 16777619);
+        static uint Feed(uint h, string s) { foreach (char c in s) h = Feed(h, c); return h; }
+        // the decimal digits of v as its invariant text has them
+        static uint Feed(uint h, int v)
+        {
+            long x = v;
+            if (x < 0) { h = Feed(h, '-'); x = -x; }
+            long p = 1; while (p * 10 <= x) p *= 10;
+            for (; p > 0; p /= 10) h = Feed(h, (char)('0' + x / p % 10));
+            return h;
+        }
+
         public static (double ac, double vents) Rules(FacadeStyle st) => ((st.details?.ac ?? 30) / 100, (st.details?.vents ?? 12) / 100);
 
         /// <summary>A detail resolved to metres along its edge on one storey.</summary>
@@ -112,7 +131,9 @@ namespace Triband.Storey.Generate
                 if (d.man == null) foreach (var m in out_) if (m.man != null && m.i == d.i && Math.Abs(m.u - d.u) < (m.Width + d.Width) / 2 + 0.15) return;   // rules keep clear of hand-placed items
                 out_.Add(d);
             }
-            (EdgeFrame f, List<Opening> ops) OpsOf(int i) { var f = EdgeFrameAt(b, k, i); return (f, Facade.Ops(site, b, k, i, f.e.L, f.uS, f.uE)); }
+            // one edge's openings at a time, each let go before the next edge's are made
+            var opsList = new List<Opening>(); var opsPool = new OpeningPool();
+            (EdgeFrame f, List<Opening> ops) OpsOf(int i) { var f = EdgeFrameAt(b, k, i); opsPool.Reset(); return (f, Facade.Ops(site, b, k, i, f.e.L, f.uS, f.uE, opsList, opsPool)); }
             Item Mk(DetailKind kind, int i, double u, DetailData? man) => new Item { kind = kind, spec = Catalogue[kind], i = i, u = u, man = man };
 
             foreach (var d in b.details)
