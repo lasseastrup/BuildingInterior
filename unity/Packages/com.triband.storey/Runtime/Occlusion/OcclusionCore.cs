@@ -247,10 +247,10 @@ namespace Triband.Storey.Occlusion
             if (View.cutOn && act != null)
             {
                 int ai = World.Site.IndexOf(act);
-                // only the buildings next to it can share a wall with it: the rest's LOD0s are never built for this
+                // only the buildings next to it can share a wall with it: the rest's shapes are never made for this
                 foreach (var b in World.Touching(act))
                 {
-                    var walls = World.Lod0Of(b).Op.Walls;
+                    var walls = World.ShapeOf(b).Walls;
                     for (int i = 0; i < walls.Count; i++)
                     {
                         // the active building's walls, and the neighbours' party walls shared with it

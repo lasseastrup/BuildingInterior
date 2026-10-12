@@ -13,6 +13,34 @@ namespace Triband.Storey.Generate
         public List<List<Seg>> Segs = new List<List<Seg>>();
         /// <summary>Collision segments outside the storeys (a bridge's sides), each with the heights it stands between.</summary>
         public List<(Seg s, double y0, double y1)> Extra = new List<(Seg, double, double)>();
+        /// <summary>What is kept of it once the meshes are uploaded (made with the result: its lists, not copies).</summary>
+        public Lod0Shape Shape = null!;
+    }
+
+    /// <summary>
+    /// What is read of a building's LOD0 after its meshes are uploaded (docs/CITY.md §7): the collision segments (the walk
+    /// model, colliders, the problem list) and the walls given ids (the cutaway). Tens of kilobytes, about 1% of the LOD0's
+    /// GPU meshes, where the generator's whole result is several megabytes. <see cref="Lod0.BuildShape"/> makes it
+    /// without the meshes.
+    /// </summary>
+    public sealed class Lod0Shape
+    {
+        /// <summary>Collision segments per storey (index = floor; the last entry is the roof).</summary>
+        public readonly List<List<Seg>> Segs;
+        /// <summary>Collision segments outside the storeys (a bridge's sides), each with the heights it stands between.</summary>
+        public readonly List<(Seg s, double y0, double y1)> Extra;
+        /// <summary>The walls given ids, in id order (wall i carries id i + 1 in the mesh): the cutaway's data and kind.</summary>
+        public readonly List<(double[] W, int K)> Walls;
+        /// <summary>The floor height of the storey each wall was made on.</summary>
+        public readonly List<double> WallBase;
+
+        /// <summary>The lists themselves, trimmed to their length: nothing is added to a built building's.</summary>
+        public Lod0Shape(List<List<Seg>> segs, List<(Seg s, double y0, double y1)> extra, List<(double[] W, int K)> walls, List<double> wallBase)
+        {
+            foreach (var l in segs) l.TrimExcess();
+            segs.TrimExcess(); extra.TrimExcess(); walls.TrimExcess(); wallBase.TrimExcess();
+            Segs = segs; Extra = extra; Walls = walls; WallBase = wallBase;
+        }
     }
 
     /// <summary>
@@ -23,16 +51,25 @@ namespace Triband.Storey.Generate
     public static class Lod0
     {
         /// <summary>Build a building's LOD0. <paramref name="solids"/> records volumes for the coplanar checker.</summary>
-        public static Lod0Result Build(Site site, BuildingData b, bool solids = false)
+        public static Lod0Result Build(Site site, BuildingData b, bool solids = false) => Make(site, b, solids, false);
+
+        /// <summary>
+        /// A building's LOD0 shape alone: the segments and walls <see cref="Build"/> makes, the same to the last bit,
+        /// without its meshes. For the walk model when no renderer has built the building (docs/PLAY.md §1).
+        /// </summary>
+        public static Lod0Shape BuildShape(Site site, BuildingData b) => Make(site, b, false, true).Shape;
+
+        static Lod0Result Make(Site site, BuildingData b, bool solids, bool shapeOnly)
         {
             var self = new Shared(site, b);
             int idx = site.IndexOf(b);
-            var r = new Lod0Result { Op = new MeshBuilder(idx), Glass = new MeshBuilder(idx) };
+            var r = new Lod0Result { Op = new MeshBuilder(idx, shapeOnly: shapeOnly), Glass = new MeshBuilder(idx, shapeOnly: shapeOnly) };
             r.Glass.Walls = r.Op.Walls;   // glass shares the wall ids of the walls it sits in
             r.Glass.WallBase = r.Op.WallBase;
             if (solids) r.Op.Solids = new List<Solid>();
             site.partyMemo.TryRemove(b.id, out _);
             foreach (var _ in self.Steps(r)) { }
+            r.Shape = new Lod0Shape(r.Segs, r.Extra, r.Op.Walls, r.Op.WallBase);
             return r;
         }
 
@@ -69,7 +106,7 @@ namespace Triband.Storey.Generate
                 op.StoreyBase = gl.StoreyBase = Derived.FloorBase(b, k);
                 // a filled storey is built as a shell-only building's storeys are; a slab between two of them is not needed
                 bool sh = Derived.ShellAt(b, k), shBelow = Derived.ShellAt(b, k - 1);
-                if (!(sh && shBelow) || k == N || sb) Slab(op, k, Cb, sh, false);
+                if ((!(sh && shBelow) || k == N || sb) && !op.ShapeOnly) Slab(op, k, Cb, sh, false);   // no walls or segments: none for a shape
                 if (sb) { if (!Roofs.Draw(op, Roofs.TerraceRoof(site, b, k), Cb)) Terrace(op, sg, k, Cb); Overhang(op, k, g.C); }
                 foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && k == v.bottom && Courtyards.Live(b, v)) Courtyards.Pave(op, b, v, g.C);
                 if (k < N)

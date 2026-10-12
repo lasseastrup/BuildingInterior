@@ -54,6 +54,11 @@ namespace Triband.Storey.Generate
         /// <summary>Building index + 65536 × LOD, written into every vertex at upload.</summary>
         public int Tag { get; private set; }
         public readonly bool Lean;
+        /// <summary>
+        /// Keeps no geometry: the walls are numbered as always (<see cref="Ctx"/>), every triangle is dropped. What
+        /// <see cref="Lod0.BuildShape"/> builds with, for the segments and the wall list alone.
+        /// </summary>
+        public readonly bool ShapeOnly;
 
         /// <summary>Change the tag before upload: the generator tags with the site index, a table with its own.</summary>
         public void RetagForUpload(int tag) => Tag = tag;
@@ -62,7 +67,7 @@ namespace Triband.Storey.Generate
         int curK, curI;
         public static readonly double[] Zero4 = { 0, 0, 0, 0 };
 
-        public MeshBuilder(int tag = 0, bool lean = false) { Tag = tag; Lean = lean; }
+        public MeshBuilder(int tag = 0, bool lean = false, bool shapeOnly = false) { Tag = tag; Lean = lean; ShapeOnly = shapeOnly; }
 
         public int Tris => I.Count / 3;
         public int Verts => P.Count;
@@ -140,6 +145,7 @@ namespace Triband.Storey.Generate
         public int Mesh(IReadOnlyList<P3> pts, IReadOnlyList<P3> nrm, IReadOnlyList<int> tris, Swatch c)
         {
             int bse = P.Count;
+            if (ShapeOnly) return bse;
             for (int i = 0; i < pts.Count; i++) V(pts[i], nrm[i], c);
             foreach (int t in tris) I.Add(bse + t);
             return bse;
@@ -148,6 +154,7 @@ namespace Triband.Storey.Generate
         /// <summary>A convex planar polygon, fanned; winding fixed to face along <paramref name="nr"/>.</summary>
         public void Poly(P3[] pts, P3 nr, Swatch c)
         {
+            if (ShapeOnly) return;
             P3 a = pts[0], b = pts[1], d = pts[2];
             var cr = P3.Cross(b - a, d - a);
             if (P3.Dot(cr, nr) < 0) { pts = (P3[])pts.Clone(); Array.Reverse(pts); }
@@ -159,7 +166,7 @@ namespace Triband.Storey.Generate
         /// <summary>A triangulated planar polygon (earcut output): one vertex per corner, shared by its triangles.</summary>
         public void PolyTris(List<P3> pts, List<int> tris, P3 nr, Swatch c)
         {
-            if (tris.Count == 0) return;
+            if (tris.Count == 0 || ShapeOnly) return;
             int bse = P.Count;
             foreach (var q in pts) V(q, nr, c);
             for (int t = 0; t < tris.Count; t += 3)
@@ -174,7 +181,7 @@ namespace Triband.Storey.Generate
         /// <summary>An axis-aligned box in frame F: u0..u1 along, y0..y1 up, w0..w1 across.</summary>
         public void OBox(Frame F, double u0, double u1, double y0, double y1, double w0, double w1, Swatch c, Swatch? cIn = null, Skip skip = Skip.None)
         {
-            if (u1 - u0 < 1e-4 || y1 - y0 < 1e-4 || w1 - w0 < 1e-4) return;
+            if (u1 - u0 < 1e-4 || y1 - y0 < 1e-4 || w1 - w0 < 1e-4 || ShapeOnly) return;
             Swatch ci = cIn ?? c;
             Solids?.Add(new Solid { F = F, u0 = u0, u1 = u1, y0 = y0, y1 = y1, w0 = w0, w1 = w1 });
             P3 Pt(double a, double y, double b) => F.At(a, y, b);
@@ -191,7 +198,7 @@ namespace Triband.Storey.Generate
         public void MBox(Frame F, double sA, double kA, double eB, double kB, double y0, double y1, double w0, double w1, Swatch c, Swatch? cIn = null, Skip skip = Skip.None)
         {
             double s0 = sA + kA * w0, s1 = sA + kA * w1, e0 = eB + kB * w0, e1 = eB + kB * w1;
-            if (e0 - s0 < 1e-4 || e1 - s1 < 1e-4 || y1 - y0 < 1e-4 || w1 - w0 < 1e-4) return;
+            if (e0 - s0 < 1e-4 || e1 - s1 < 1e-4 || y1 - y0 < 1e-4 || w1 - w0 < 1e-4 || ShapeOnly) return;
             Swatch ci = cIn ?? c;
             Solids?.Add(new Solid { F = F, Mitred = true, sA = sA, kA = kA, eB = eB, kB = kB, y0 = y0, y1 = y1, w0 = w0, w1 = w1 });
             P3 Pt(double a, double y, double b) => F.At(a, y, b);

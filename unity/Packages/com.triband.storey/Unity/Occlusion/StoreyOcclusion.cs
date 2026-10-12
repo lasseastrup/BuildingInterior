@@ -102,9 +102,12 @@ namespace Triband.Storey.Unity
             if (s == null || cam == null || site == null) { Neutral(r); return; }
             if (s != builtFor)
             {
-                // the layout changed: a new walk model on the renderer's own LOD0s, and occlusion starts afresh
+                // the layout changed: a new walk model, taking each building's shape from the renderer's LOD0 when it has one
+                // (built on a worker as the camera nears, long before the player is close enough to touch), and occlusion
+                // starts afresh
                 builtFor = s; world = new PlayWorld(s);
-                foreach (var b in s.Buildings) { var l0 = r.Lod0Of(b.id); if (l0 != null) world.UseLod0(b, l0); }
+                var shown = s;
+                world.Source = b => ReferenceEquals(r.Site, shown) ? r.ShapeOf(b.id) : null;
                 occ = new OcclusionCore(world, core);
                 foreach (var m in footprints.Values) Destroy(m);
                 footprints.Clear();

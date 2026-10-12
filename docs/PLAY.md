@@ -16,6 +16,8 @@ The prototype exposes these through `__sb.play`, and its frame loop can be held 
 
 The walk model's collision is the prototype's model, not physics: walkable surfaces by height, and 2D wall segments with a radius per storey. A project with its own character can ask the same queries, or use the mesh colliders (§5).
 
+**The walls the walk model knows.** A building's segments and its wall list (for the cutaway) are its LOD0 shape (`Lod0Shape`). The walk model asks for a building's shape the first time the player comes within 3 m of it, or enters the building next to it, and keeps it while the player is near. It keeps at most `PlayWorld.Keep` (32) shapes, letting go of the one used longest ago, so its memory doesn't grow however far the player walks. In Unity the Storey Occlusion hands it the renderer's shapes (`PlayWorld.Source`), made with the LOD0 the renderer builds on a worker as the camera nears. When the renderer has none (the building isn't at LOD0, or there's no renderer: the problem list, tests), the walk model builds the shape itself without any meshes (`Lod0.BuildShape`): about 0.3 ms for a typical building, 3 ms at worst, against 14–16 ms for a whole LOD0 (docs/CITY.md §7).
+
 ## 2. Order of work
 
 | # | Slice | Contents | Done when |

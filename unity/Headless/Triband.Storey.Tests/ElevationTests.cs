@@ -78,7 +78,7 @@ namespace Triband.Storey.Tests
                 // heights are site heights now, so a storey's height is a difference of two raised numbers: equal to rounding
                 Assert.True(m2a.I.SequenceEqual(m2b.I) && Near(m2a.Fac, m2b.Fac) && Near(m2a.Fac2, m2b.Fac2) && m2a.Slot.SequenceEqual(m2b.Slot), $"{n}: LOD2's facade data differs");
                 Assert.True(m2a.Rows.Count == m2b.Rows.Count && m2a.Rows.Zip(m2b.Rows, (p, q) => Near(p.spec, q.spec) && Near(p.run, q.run)).All(x => x), $"{n}: LOD2's rows differ");
-                var ca = CollisionMesh.Build(flat, a, l0a); var cb = CollisionMesh.Build(raised, b, l0b);
+                var ca = CollisionMesh.Build(flat, a, l0a.Shape); var cb = CollisionMesh.Build(raised, b, l0b.Shape);
                 Shifted(ca.P, cb.P, n + " collision"); Assert.True(ca.I.SequenceEqual(cb.I) && ca.Kind.SequenceEqual(cb.Kind), $"{n}: collision triangles differ");
                 for (int k = 0; k < a.floors.Count; k++) Same(SinkFootprint.Build(flat, a, k), SinkFootprint.Build(raised, b, k), $"{n} footprint {k}");
             }

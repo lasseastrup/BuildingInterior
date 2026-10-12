@@ -148,6 +148,7 @@ namespace Triband.Storey.Generate
         /// </summary>
         public static void Dress(MeshBuilder op, MeshBuilder gl, Frame F, List<Opening> ops, double y, Palette C, bool shell, FacadeStyle? st = null)
         {
+            if (op.ShapeOnly) return;   // faces only: no walls numbered, no segments
             double T = Dim.T_EXT;
             bool frames = st != null && st.frames, arch = st != null && st.head == HeadType.Arch, glazed = st != null && st.doorType == DoorType.Glazed;
             bool bars = st != null && (st.paneCols > 1 || st.paneRows > 1);
@@ -384,6 +385,7 @@ namespace Triband.Storey.Generate
         /// </summary>
         public static void WallPanel(MeshBuilder gb, Frame F, Miter m, double w0, double w1, double y0, double h, List<Opening> ops, Swatch cOut, Swatch cIn, PanelOpt? opt = null)
         {
+            if (gb.ShapeOnly) return;   // faces only: no walls numbered, no segments
             opt ??= new PanelOpt();
             var os = MergeOps(ops);
             P3 X(double uu, double yy, double wv) => F.At(uu, y0 + yy, wv);

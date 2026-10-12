@@ -20,7 +20,7 @@ namespace Triband.Storey.Play
     /// <item>Stairs: a ramp up each flight, a flat mid landing.</item>
     /// <item>Pitched roofs: their planes.</item>
     /// </list>
-    /// Engine-free, from the building's LOD0 result (already built for rendering), in the layout's coordinates. One-sided:
+    /// Engine-free, from the building's LOD0 shape (kept from the LOD0 built for rendering), in the layout's coordinates. One-sided:
     /// each triangle faces out of what it bounds (floors and ramps up). Vertices are shared within a piece; there are no
     /// normals or colours.
     /// </summary>
@@ -35,7 +35,7 @@ namespace Triband.Storey.Play
         /// <summary>A roof storey's walls (parapets, roof edges): high enough to stop the player, not a bulkhead's full height.</summary>
         public const double RoofWallHeight = 1.2;
 
-        public static CollisionMesh Build(Site site, BuildingData b, Lod0Result l0)
+        public static CollisionMesh Build(Site site, BuildingData b, Lod0Shape l0)
         {
             var m = new CollisionMesh();
             m.Walls(b, l0);
@@ -64,7 +64,7 @@ namespace Triband.Storey.Play
 
         // ---- walls ----
 
-        void Walls(BuildingData b, Lod0Result l0)
+        void Walls(BuildingData b, Lod0Shape l0)
         {
             int N = b.floors.Count;
             // runs of the same segment up consecutive storeys: (key) -> (seg, y0, y1)
@@ -194,7 +194,7 @@ namespace Triband.Storey.Play
         // ---- pitched roofs ----
 
         /// <summary>The bridges this building builds: the deck to walk on, an enclosed one's roof, and their sides.</summary>
-        void Bridged(Site site, BuildingData b, Lod0Result l0)
+        void Bridged(Site site, BuildingData b, Lod0Shape l0)
         {
             foreach (var br in b.bridges)
             {

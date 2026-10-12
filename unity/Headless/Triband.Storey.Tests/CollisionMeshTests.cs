@@ -28,7 +28,7 @@ namespace Triband.Storey.Tests
             {
                 if (Built.TryGetValue(corpus, out var l)) return l;
                 var (doc, world) = PlayWorldTests.World(corpus);
-                l = doc.buildings.Select(b => (b, CollisionMesh.Build(world.Site, b, world.Lod0Of(b)))).ToList();
+                l = doc.buildings.Select(b => (b, CollisionMesh.Build(world.Site, b, world.ShapeOf(b)))).ToList();
                 return Built[corpus] = l;
             }
         }
@@ -108,7 +108,7 @@ namespace Triband.Storey.Tests
             var bad = new List<string>(); int n = 0;
             foreach (var (b, m) in meshes)
             {
-                var segs = world.Lod0Of(b).Segs; int N = b.floors.Count;
+                var segs = world.ShapeOf(b).Segs; int N = b.floors.Count;
                 for (int k = 0; k < segs.Count; k++)
                     foreach (var s in segs[k])
                     {
@@ -147,13 +147,13 @@ namespace Triband.Storey.Tests
         public void ItIsSmallAndQuickToBuild()
         {
             var (doc, world) = PlayWorldTests.World("demo");
-            foreach (var b in doc.buildings) world.Lod0Of(b);   // LOD0 exists already when colliders are made
+            var l0 = doc.buildings.ToDictionary(b => b, b => Lod0.Build(world.Site, b));   // LOD0 exists already when colliders are made
             var sw = Stopwatch.StartNew();
-            var ms = doc.buildings.Select(b => (b, m: CollisionMesh.Build(world.Site, b, world.Lod0Of(b)))).ToList();
+            var ms = doc.buildings.Select(b => (b, m: CollisionMesh.Build(world.Site, b, l0[b].Shape))).ToList();
             sw.Stop();
             foreach (var (b, m) in ms)
             {
-                int render = world.Lod0Of(b).Op.Tris;
+                int render = l0[b].Op.Tris;
                 output.WriteLine($"{b.name,-16} {m.Tris,6} collision triangles ({m.P.Count} vertices), LOD0 {render}: {100.0 * m.Tris / render:0.0}%");
                 Assert.True(m.Tris < render / 4, $"{b.name}: {m.Tris} collision triangles for {render} rendered");
             }

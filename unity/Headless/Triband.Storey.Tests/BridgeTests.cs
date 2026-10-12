@@ -23,14 +23,14 @@ namespace Triband.Storey.Tests
         }
 
         // A at x 0..12, B at x 20..32: walls 8 m apart, facing each other across x = 12 and x = 20
-        static (StoreyDocument d, BuildingData A, BuildingData B) Street(double bFloorH = 3.0)
+        internal static (StoreyDocument d, BuildingData A, BuildingData B) Street(double bFloorH = 3.0)
         {
             var d = new StoreyDocument();
             var A = Box(d, 0, 0, 12, 10); var B = Box(d, 20, 0, 12, 10, 4, bFloorH);
             return (d, A, B);
         }
 
-        static BridgeData Add(StoreyDocument d, BuildingData A, int k = 2, bool open = false)
+        internal static BridgeData Add(StoreyDocument d, BuildingData A, int k = 2, bool open = false)
         {
             var (br, why) = BridgeEdits.Add(new Site(d.buildings), A, k, new Vec2(12, 5), open);
             Assert.True(br != null, why);
@@ -168,7 +168,7 @@ namespace Triband.Storey.Tests
             var (d, A, _) = Street();
             Add(d, A);
             var site = new Site(d.buildings);
-            var m = CollisionMesh.Build(site, A, Lod0.Build(site, A));
+            var m = CollisionMesh.Build(site, A, Lod0.BuildShape(site, A));
             double y = Derived.FloorBase(A, 2);
             Assert.Contains(Enumerable.Range(0, m.Tris), t => m.Kind[t] == CollisionKind.Floor && Math.Abs(m.P[m.I[3 * t]].y - y) < 1e-6 && m.P[m.I[3 * t]].x > 12.2 && m.P[m.I[3 * t]].x < 19.8);
         }

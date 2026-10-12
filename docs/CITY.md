@@ -117,7 +117,34 @@ A city too big for one layout is split into districts: one Storey Site each, a s
    - Turn on **LOD tint** to see the LODs in colour.
 4. Press Play with the play kit. The stats show in the Game view, and the player's building and the buildings in the way stay at LOD0.
 
-## 7. Not yet
+## 7. Memory
+
+What a Storey Site keeps, measured headlessly (.NET, not Unity) on the 3,000-building test city after a five-minute walk along the allocation test's route. MB = 2²⁰ bytes.
+
+| | Before | Now |
+|---|---|---|
+| GPU: cells, 260 shells, 16 LOD0s (typical buildings), the building table | 45.0 MB | 45.0 MB |
+| C# the game reads: the layout and its site, the generator's memos, the table's CPU copy, the LOD0 shapes | 12.1 MB | 13.6 MB |
+| C# kept but never read again | 276.5 MB | none |
+| Total | 333.6 MB | 58.6 MB |
+
+Both budgets in the package plan (§6.6: 120 MB on iPhone 7, 200 MB on iPhone 14 and newer) hold for the typical view and the densest one (about 104 MB). With the 16 largest towers of the city all at LOD0 (156 MB on the GPU) only the newer phones' budget holds; the minimum tier needs lower residency caps.
+
+**Nothing is kept from the generator but a building's shape.**
+- **LOD0 and LOD1.** The meshes are uploaded from the generator's result, with no CPU copy kept (`UploadMeshData(true)`), and the result is let go. While a building has its LOD0, the renderer keeps its shape (`Lod0Shape`, `SiteRenderer.ShapeOf`): the collision segments and the wall list, for the walk model, the colliders and the cutaway. A shape is 10–25 KB, about 1% of its LOD0's GPU meshes, and 40–70 KB for the largest towers. The generator's whole result, kept before, was 4.7 to 5 times the GPU meshes: 3.5 to 7.7 MB a building, 32 to 35 MB for the largest towers.
+- **Massings.** A layout loads cell by cell: each cell is merged as soon as its buildings' massings are built, and the massings are let go. One cell's massings are held at a time, 0.4 MB at most on the test city; all 3,000 were kept before (50 MB). When a cell is merged again (a building in it was edited or removed), its other buildings' massings are made again from the layout: about 1 ms for the test city's biggest cell (24 buildings).
+- **The walk model** (`PlayWorld`, docs/PLAY.md §1) keeps the shapes of the buildings the player has been near, at most `PlayWorld.Keep` (32), the least recently used going first. It takes the renderer's shape while the building has its LOD0 (built on a worker as the camera nears, long before the player can touch it) and otherwise builds the shape itself without meshes (`Lod0.BuildShape`: exactly the full build's segments and walls, about 50 times faster). The walk above holds 14 shapes, 1.4 MB. It kept 14 whole LOD0 results before, 170 MB, and built them on the main thread: five frames over 16.7 ms, the worst 68 ms. The walk's worst frame is now 1.0 ms with the walk model building its own shapes, 0.6 ms with the renderer's.
+- **The problem list** builds shapes too: a full check of the 3,000-building city takes 0.7 s instead of 2.7 s, of the walk-in city of 1,000 6 s instead of 16 s (Release build).
+
+| One building's | Plain city of 1,000 | Walk-in city of 1,000 |
+|---|---|---|
+| LOD0, made by the generator: average (worst) | 13.6 ms (62 ms), 13.4 MB allocated | 15.8 ms (95 ms), 17.8 MB allocated |
+| Its shape alone (`Lod0.BuildShape`) | 0.28 ms (2.8 ms), 0.22 MB allocated | 0.31 ms (3.0 ms), 0.28 MB allocated |
+| Kept after upload: the shape | 13 KB | 24 KB |
+
+`Lod0ShapeTests` checks that a shape built alone is the full build's to the last bit (the demo street, the variants, a walk-in city, bridges, courtyards and atria), that the walk model walks the same keeping two shapes as keeping all, and that a massing made again is the one built first.
+
+## 8. Not yet
 
 - Measuring the upload in Unity, and moving the vertex buffers onto the workers if it hitches (§4).
 - Loading districts through Addressables. They load as scenes from the build's scene list today (§5).
@@ -125,5 +152,6 @@ A city too big for one layout is split into districts: one Storey Site each, a s
 - Bridges between districts: a bridge reaches only buildings of its own layout.
 - A neighbour district edited in the same session: its party walls along the edge update when this site next rebuilds everything (the neighbour's file is saved and reimported).
 - Cells baked at import. They are merged when the layout loads, which takes tens of milliseconds for the test city.
-- Memory accounting against the budgets in the package plan §6.6.
+- Memory measured in Unity and on a device (the Memory Profiler, Xcode's gauge). §7 is headless.
+- The generator's result while it waits for its upload: about 5 times its GPU meshes, for as many buildings as there are worker threads. Packing the vertices on the worker would make it the size of the meshes (and take the packing off the main thread).
 - None of the above is measured in Unity yet; the numbers in §4 are headless.

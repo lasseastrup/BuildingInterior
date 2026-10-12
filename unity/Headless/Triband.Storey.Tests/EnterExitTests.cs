@@ -87,7 +87,7 @@ namespace Triband.Storey.Tests
             var p = new PlayerState(); p.Spawn(cx, Derived.FloorBase(b, 0), cz);
             core.Frame(p, (cx, 6, cz - 8), (cx, 1.4, cz), Dt);
             Assert.True(core.View.active == b, $"the player is in {core.View.active?.name ?? "nothing"}, not {b.name}");
-            Assert.True(world.Lod0Count <= world.Touching(b).Count && world.Lod0Count < 30, $"{world.Lod0Count} LOD0s built of {world.Site.Buildings.Count}");
+            Assert.True(world.ShapeCount <= world.Touching(b).Count && world.ShapeCount < 30, $"{world.ShapeCount} shapes made of {world.Site.Buildings.Count}");
         }
     }
 }

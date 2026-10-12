@@ -39,16 +39,19 @@ namespace Triband.Storey.Unity
         {
             public string id = "";
             public int idx, wallBase = -1, wallCount;
-            public Lod0Result? l0;
+            // while LOD0 is built: what is read of it after upload (collision segments, the wall list), not the generator's result
+            public Lod0Shape? shape;
             public readonly List<int> rows = new List<int>();
             // per LOD: the meshes and the objects drawing them
             public readonly List<Mesh>[] meshes = { new List<Mesh>(), new List<Mesh>(), new List<Mesh>() };
             public readonly List<GameObject>[] objs = { new List<GameObject>(), new List<GameObject>(), new List<GameObject>() };
             public GameObject? root;
             public Mesh? collision;
-            // automatic LOD: the massing (drawn in its cell) with its rows' places in the table, and the cell
+            // automatic LOD: the massing until its cell is merged (made again if the cell is merged again), its rows'
+            // places in the table, and the cell it is drawn in
             public Lod2Mesh? l2;
             public int[]? rowMap;
+            public bool inCell;
             public (int x, int z) cell;
         }
 
@@ -184,8 +187,11 @@ namespace Triband.Storey.Unity
             return e == null || e.Visible(0);
         }
 
-        /// <summary>A building's LOD0 as built: its collision segments and its wall list (for the cutaway).</summary>
-        public Lod0Result? Lod0Of(string id) => built.TryGetValue(id, out var b) ? b.l0 : null;
+        /// <summary>
+        /// A building's LOD0 shape while its LOD0 is built: its collision segments and its wall list (the walk model's, the
+        /// cutaway's). Null when the building shows no LOD0.
+        /// </summary>
+        public Lod0Shape? ShapeOf(string id) => built.TryGetValue(id, out var b) ? b.shape : null;
 
         /// <summary>The first global wall id of a building's LOD0 walls (wall i is this + i), or -1.</summary>
         public int WallBaseOf(string id) => built.TryGetValue(id, out var b) ? b.wallBase : -1;
@@ -278,7 +284,15 @@ namespace Triband.Storey.Unity
             book?.Dispose();
             book = new ColorRowBook(new ColorResolver(site), palette, table);
             foreach (var kv in remaps) book.SetRemap(kv.Key, kv.Value.original, kv.Value.overwrite);
-            foreach (var b in doc.buildings) Build(b);
+            if (lods == null) foreach (var b in doc.buildings) Build(b);
+            else
+                // cell by cell, each merged as soon as its buildings are built: one cell's massings are held at a time, not
+                // every building's (docs/CITY.md §7). A massing reaching into the next cell only has that one merged again.
+                foreach (var cell in doc.buildings.GroupBy(b => { var bb = global::Triband.Storey.Generate.Site.BoundsOf(b); return Cells.KeyOf((bb.x0 + bb.x1) / 2, (bb.z0 + bb.z1) / 2); }))
+                {
+                    foreach (var b in cell) Build(b);
+                    MergeCells();
+                }
             carry.Clear();
         }
 
@@ -385,8 +399,8 @@ namespace Triband.Storey.Unity
                 int ai = site!.IndexOf(act);
                 foreach (var bt in built)
                 {
-                    if (bt.Value.l0 == null || bt.Value.wallBase < 0) continue;
-                    var walls = bt.Value.l0.Op.Walls; var bases = bt.Value.l0.Op.WallBase; bool own = bt.Key == act.id;
+                    if (bt.Value.shape == null || bt.Value.wallBase < 0) continue;
+                    var walls = bt.Value.shape.Walls; var bases = bt.Value.shape.WallBase; bool own = bt.Key == act.id;
                     for (int i = 0; i < walls.Count; i++)
                     {
                         if (!own && (walls[i].K < 8 || (walls[i].K >> 3) - 1 != ai)) continue;
@@ -436,8 +450,7 @@ namespace Triband.Storey.Unity
             StoreyTimings.Count("buildings built");
             var t2 = StoreyTimings.Time("build: massing and its rows");
             var l2 = Lod2.Build(site!, b);
-            var rowMap = new int[l2.Rows.Count];
-            for (int r = 0; r < l2.Rows.Count; r++) { rowMap[r] = table.WriteRow(l2.Rows[r], RowOf(l2.Rows[r].wall.style)); bt.rows.Add(rowMap[r]); }
+            var rowMap = WriteRows(bt, l2);
             l2.Tag = bt.idx + 2 * Lod1.LOD_TAG;
             t2.Dispose();
 
@@ -450,8 +463,8 @@ namespace Triband.Storey.Unity
                 return;
             }
 
-            // automatic: the massing goes into its cell, and the detail the building showed (an edit) is built again at
-            // once, so it doesn't fade through its massing
+            // automatic: the massing goes into its cell (and is let go once the cell is merged), and the detail the building
+            // showed (an edit) is built again at once, so it doesn't fade through its massing
             bt.l2 = l2; bt.rowMap = rowMap;
             double x0 = double.MaxValue, z0 = x0, x1 = double.MinValue, z1 = x1, y1 = 0;
             foreach (var p in l2.P) { x0 = Math.Min(x0, p.x); z0 = Math.Min(z0, p.z); x1 = Math.Max(x1, p.x); z1 = Math.Max(z1, p.z); y1 = Math.Max(y1, p.y); }
@@ -466,10 +479,18 @@ namespace Triband.Storey.Unity
             }
             bt.cell = Cells.KeyOf((x0 + x1) / 2, (z0 + z1) / 2);
             if (!cells.TryGetValue(bt.cell, out var c)) cells[bt.cell] = c = new Cell();
-            c.members[bt.idx] = bt; dirtyCells.Add(bt.cell);
+            c.members[bt.idx] = bt; bt.inCell = true; dirtyCells.Add(bt.cell);
             if (e.Visible(1)) { BuildDetail(bt, b, 1); lods.SetBuilt(bt.idx, 1, true); }
             if (e.Visible(0) || forced) { BuildDetail(bt, b, 0); lods.SetBuilt(bt.idx, 0, true); }
             table.SetLod(bt.idx, e.Shown, e.From, (float)e.T);
+        }
+
+        /// <summary>A massing's parameter rows written into the table: the table row of each of the massing's rows.</summary>
+        int[] WriteRows(Built bt, Lod2Mesh l2)
+        {
+            var rowMap = new int[l2.Rows.Count];
+            for (int r = 0; r < l2.Rows.Count; r++) { rowMap[r] = table.WriteRow(l2.Rows[r], RowOf(l2.Rows[r].wall.style)); bt.rows.Add(rowMap[r]); }
+            return rowMap;
         }
 
         /// <summary>A building's LOD0 (with its glass and its walls in the table) or LOD1, generated and uploaded now.</summary>
@@ -503,7 +524,8 @@ namespace Triband.Storey.Unity
                 if (m1.Tris > 0) Add(bt, 1, "LOD1", MeshUpload.Upload(m1, name + " LOD1", RowOf, -1, opt, windows: true), opaque, true);
                 return;
             }
-            var l0 = (Lod0Result)made; bt.l0 = l0;
+            // the meshes are uploaded from the generator's result, and only its shape is kept (docs/CITY.md §7)
+            var l0 = (Lod0Result)made; bt.shape = l0.Shape;
             bt.wallCount = l0.Op.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
             if (bt.wallBase >= 0)
             {
@@ -551,7 +573,7 @@ namespace Triband.Storey.Unity
             bt.objs[which].Clear(); bt.meshes[which].Clear();
             if (which != 0) return;
             if (bt.wallBase >= 0) table.ReleaseWalls(bt.wallBase, bt.wallCount);
-            bt.wallBase = -1; bt.wallCount = 0; bt.l0 = null;
+            bt.wallBase = -1; bt.wallCount = 0; bt.shape = null;
         }
 
         /// <summary>
@@ -613,8 +635,7 @@ namespace Triband.Storey.Unity
                 }
                 stats.lod0 = f.Count[0]; stats.lod1 = f.Count[1]; stats.lod2 = f.Count[2]; stats.culled = f.Count[3];
             }
-            foreach (var key in dirtyCells) BuildCell(key);
-            dirtyCells.Clear();
+            MergeCells();
             int shown = 0, pieces = 0;
             foreach (var c in cells.Values)
             {
@@ -631,7 +652,17 @@ namespace Triband.Storey.Unity
             stats.queued = queued; stats.generating = jobs.Count; stats.builtThisFrame = made; stats.ms = sw.Elapsed.TotalMilliseconds;
         }
 
-        /// <summary>A cell's massings merged again (a member was built, rebuilt or removed).</summary>
+        /// <summary>The cells a building was built into, rebuilt in or removed from, merged again.</summary>
+        void MergeCells()
+        {
+            foreach (var key in dirtyCells) BuildCell(key);
+            dirtyCells.Clear();
+        }
+
+        /// <summary>
+        /// A cell's massings merged again (a member was built, rebuilt or removed). Once merged, the members' massings are
+        /// let go: the cell's meshes hold them. A member's is made again when its cell is next merged (docs/CITY.md §7).
+        /// </summary>
         void BuildCell((int x, int z) key)
         {
             using var _t = StoreyTimings.Time("site: cells merged");
@@ -643,7 +674,10 @@ namespace Triband.Storey.Unity
             if (c.members.Count == 0) { cells.Remove(key); return; }
             c.order = c.members.Keys.ToArray();
             if (cellRoot == null) { cellRoot = new GameObject("Cells") { hideFlags = flags, layer = layer }; cellRoot.transform.SetParent(parent, false); }
-            var pieces = Cells.Merge(c.members.Values.Select(bt => new Cells.Member(bt.l2!, bt.idx + 2 * Lod1.LOD_TAG, bt.rowMap!)));
+            var members = new List<Cells.Member>(c.members.Count);
+            foreach (var bt in c.members.Values) members.Add(new Cells.Member(MassingOf(bt), bt.idx + 2 * Lod1.LOD_TAG, bt.rowMap!));
+            var pieces = Cells.Merge(members);
+            foreach (var bt in c.members.Values) bt.l2 = null;
             for (int i = 0; i < pieces.Count; i++)
             {
                 string name = $"Cell {key.x},{key.z}" + (pieces.Count > 1 ? $" ({i + 1})" : "");
@@ -659,6 +693,25 @@ namespace Triband.Storey.Unity
                 mr.enabled = c.shown;
                 c.renderers.Add(mr);
             }
+        }
+
+        /// <summary>
+        /// A cell member's massing: the one it was built with, or made again from the layout. The layout's buildings are the
+        /// ones shown (a building that changed is built again, with its own), so it is the same massing, with the same
+        /// rows; if its rows ever differ in number, they are written again.
+        /// </summary>
+        Lod2Mesh MassingOf(Built bt)
+        {
+            if (bt.l2 != null) return bt.l2;
+            StoreyTimings.Count("massings made again for a cell");
+            var l2 = Lod2.Build(site!, site!.ById(bt.id)!);
+            l2.Tag = bt.idx + 2 * Lod1.LOD_TAG;
+            if (l2.Rows.Count != bt.rowMap!.Length)
+            {
+                foreach (var r in bt.rows) table.ReleaseRow(r);
+                bt.rows.Clear(); bt.rowMap = WriteRows(bt, l2);
+            }
+            return l2;
         }
 
         int RowOf(StyleRef s) => book!.RowOf(s);
@@ -686,7 +739,7 @@ namespace Triband.Storey.Unity
             if (b.collision != null) Kill(b.collision);
             foreach (var list in b.meshes) foreach (var m in list) Kill(m);   // edit mode rebuilds often: meshes are not left behind
             byIdx.Remove(b.idx);
-            if (b.l2 != null && cells.TryGetValue(b.cell, out var c)) { c.members.Remove(b.idx); dirtyCells.Add(b.cell); }
+            if (b.inCell && cells.TryGetValue(b.cell, out var c)) { c.members.Remove(b.idx); dirtyCells.Add(b.cell); }
         }
 
         /// <summary>
@@ -699,10 +752,10 @@ namespace Triband.Storey.Unity
             var todo = new List<(Built bt, Mesh mesh)>();
             foreach (var id in colliderPending)
             {
-                if (!built.TryGetValue(id, out var bt) || bt.l0 == null || bt.root == null || site == null) continue;
+                if (!built.TryGetValue(id, out var bt) || bt.shape == null || bt.root == null || site == null) continue;
                 var b = site.ById(id); if (b == null) continue;
                 RemoveCollider(bt);
-                var cm = CollisionMesh.Build(site, b, bt.l0);
+                var cm = CollisionMesh.Build(site, b, bt.shape);
                 if (cm.Tris == 0) continue;
                 todo.Add((bt, ToMesh(cm, b.name + " collision")));
             }
@@ -722,7 +775,7 @@ namespace Triband.Storey.Unity
             foreach (var (bt, mesh) in todo)
             {
                 bt.collision = mesh;
-                var mc = bt.root.AddComponent<MeshCollider>();
+                var mc = bt.root!.AddComponent<MeshCollider>();
                 mc.cookingOptions = Cooking;   // before the mesh: the same options as the bake, so nothing is cooked again
                 mc.sharedMesh = mesh;
             }

@@ -233,7 +233,7 @@ namespace Triband.Storey.Validate
             }
         }
 
-        static Grid Raster(BuildingData b, int k, Lod0Result l0)
+        static Grid Raster(BuildingData b, int k, Lod0Shape l0)
         {
             var fp = Derived.OutlineAt(b, k); var bb = Tiers.Bbox(fp);
             var g = new Grid { b = b, k = k, x0 = bb.x0, z0 = bb.z0, nx = Math.Max(1, (int)Math.Ceiling((bb.x1 - bb.x0) / Cell)), nz = Math.Max(1, (int)Math.Ceiling((bb.z1 - bb.z0) / Cell)) };
@@ -313,7 +313,7 @@ namespace Triband.Storey.Validate
             Grid? G(BuildingData b, int k)
             {
                 if (!b.interior || k < 0 || k >= b.floors.Count || Derived.Filled(b, k)) return null;
-                if (!grids.TryGetValue((b.id, k), out var g)) grids[(b.id, k)] = g = Raster(b, k, world.Lod0Of(b));
+                if (!grids.TryGetValue((b.id, k), out var g)) grids[(b.id, k)] = g = Raster(b, k, world.ShapeOf(b));
                 return g;
             }
             int At(BuildingData b, int k, Vec2 local) { var g = G(b, k); if (g == null) return -1; int r = g.At(local.x, local.z); return r < 0 ? -1 : Node(b, k, r); }

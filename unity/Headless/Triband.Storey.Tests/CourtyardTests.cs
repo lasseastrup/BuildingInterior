@@ -12,7 +12,7 @@ namespace Triband.Storey.Tests
     /// <summary>Courtyards and atria (<see cref="VoidData"/>, <see cref="Courtyards"/>, <see cref="Voids"/>). Storey's own.</summary>
     public class CourtyardTests
     {
-        static (StoreyDocument d, BuildingData b) Block(int floors = 4, RoofType roof = RoofType.Flat)
+        internal static (StoreyDocument d, BuildingData b) Block(int floors = 4, RoofType roof = RoofType.Flat)
         {
             var d = new StoreyDocument();
             var b = Buildings.Add(d, "rect", new Vec2(0, 0));
@@ -25,7 +25,7 @@ namespace Triband.Storey.Tests
             return (d, b);
         }
 
-        static VoidData Court(BuildingData b, VoidKind kind = VoidKind.Courtyard, int bottom = 0)
+        internal static VoidData Court(BuildingData b, VoidKind kind = VoidKind.Courtyard, int bottom = 0)
         {
             var v = new VoidData { id = Voids.NewId(b), kind = kind, bottom = bottom, shape = new() { new Vec2(6, 5), new Vec2(14, 5), new Vec2(14, 11), new Vec2(6, 11) } };
             Assert.Equal(VoidIssue.None, Voids.Issue(b, v));
@@ -165,7 +165,7 @@ namespace Triband.Storey.Tests
             var (d, b) = Block();
             Court(b, VoidKind.Courtyard, 1);
             var site = new Site(d.buildings);
-            var m = CollisionMesh.Build(site, b, Lod0.Build(site, b));
+            var m = CollisionMesh.Build(site, b, Lod0.BuildShape(site, b));
             double y1 = Derived.FloorBase(b, 1);
             for (int t = 0; t < m.Tris; t++)
             {

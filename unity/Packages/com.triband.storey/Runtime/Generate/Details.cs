@@ -175,6 +175,7 @@ namespace Triband.Storey.Generate
             foreach (var d in items)
             {
                 var e = Geo.EdgeInfo(Wp, d.i, ccw); var F = e.F; var u = e.u; var w = e.w; op.Ctx(Geo.WallCtx(e.a, u, w, e.L), 1);
+                if (op.ShapeOnly) continue;   // the wall is numbered; the rest is faces
                 P3 X(double uu, double yy, double ww) => F.At(uu, yy, ww);
                 void Bx(double u0, double u1, double y0, double y1, double w0, double w1, Swatch c, Swatch? cIn = null, Skip sk = Skip.None) => op.OBox(F, u0, u1, y0, y1, w0, w1, c, cIn, sk);
                 double uc = d.u;

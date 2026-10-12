@@ -10,8 +10,8 @@ namespace Triband.Storey.Play
     /// <summary>
     /// A layout as the player meets it (docs/PLAY.md, slice 5.1): which building and floor a point is in, the surface
     /// under it, and the walls that stop it. Collision is the prototype's model rather than physics: walkable heights,
-    /// and LOD0's 2D wall segments with a radius per storey. Engine-free; a port of the prototype's <c>playerLoc</c>,
-    /// <c>surfaceAt</c> and <c>collide</c>, checked against it (<c>play.json</c>).
+    /// and LOD0's 2D wall segments with a radius per storey (<see cref="ShapeOf"/>). Engine-free; a port of the
+    /// prototype's <c>playerLoc</c>, <c>surfaceAt</c> and <c>collide</c>, checked against it (<c>play.json</c>).
     /// </summary>
     public sealed class PlayWorld
     {
@@ -23,7 +23,6 @@ namespace Triband.Storey.Play
         public readonly Site Site;
         readonly Dictionary<(int, int), List<BuildingData>> grid = new Dictionary<(int, int), List<BuildingData>>();
         readonly Dictionary<string, (double x0, double z0, double x1, double z1)> bboxAll = new Dictionary<string, (double, double, double, double)>(StringComparer.Ordinal);
-        readonly Dictionary<string, Lod0Result> lod0 = new Dictionary<string, Lod0Result>(StringComparer.Ordinal);
         const double BGRID = 32;
 
         public PlayWorld(Site site)
@@ -47,12 +46,63 @@ namespace Triband.Storey.Play
             }
         }
 
-        /// <summary>The building's LOD0 (its collision segments and wall list), built on first use.</summary>
-        public Lod0Result Lod0Of(BuildingData b)
+        // ---- the buildings' walls: their LOD0 shapes, kept for the buildings in use ----
+
+        sealed class Kept { public Lod0Shape shape = null!; public long used; }
+        readonly Dictionary<string, Kept> shapes = new Dictionary<string, Kept>(StringComparer.Ordinal);
+        readonly object gate = new object();
+        long clock;
+
+        /// <summary>
+        /// Where the walk model gets a building's shape before it builds one: the renderer's, made with the LOD0 it shows
+        /// (the Storey Occlusion sets it). Null, or a null answer, and the walk model builds the shape itself. Asked on
+        /// the thread the walk model is asked on.
+        /// </summary>
+        public Func<BuildingData, Lod0Shape?>? Source { get; set; }
+
+        /// <summary>
+        /// How many buildings' shapes the walk model keeps; past it, the one used longest ago goes. Every building the
+        /// player can touch and the neighbours of the one they are in are a few dozen at most, so a walk makes each shape
+        /// once while it is near, and the walk model's memory stays the same however far the player goes.
+        /// </summary>
+        public int Keep { get; set; } = 32;
+
+        /// <summary>
+        /// The building's LOD0 shape: its collision segments and its wall list. Kept from first use; from the
+        /// <see cref="Source"/> if it has one, otherwise built without meshes (<see cref="Lod0.BuildShape"/>: well under a
+        /// millisecond for most buildings).
+        /// </summary>
+        public Lod0Shape ShapeOf(BuildingData b)
         {
-            if (!lod0.TryGetValue(b.id, out var r)) lod0[b.id] = r = Lod0.Build(Site, b);
-            return r;
+            lock (gate) if (shapes.TryGetValue(b.id, out var k)) { k.used = ++clock; return k.shape; }
+            var s = Source?.Invoke(b);
+            if (s == null) { s = Lod0.BuildShape(Site, b); System.Threading.Interlocked.Increment(ref built); }
+            Use(b, s);
+            return s;
         }
+
+        /// <summary>Hand in a building's shape made elsewhere (the renderer's), so it is not built here.</summary>
+        public void Use(BuildingData b, Lod0Shape s)
+        {
+            lock (gate)
+            {
+                if (shapes.TryGetValue(b.id, out var k)) { k.shape = s; k.used = ++clock; return; }
+                shapes[b.id] = new Kept { shape = s, used = ++clock };
+                while (shapes.Count > Math.Max(1, Keep))
+                {
+                    string? oldest = null; long at = long.MaxValue;
+                    foreach (var kv in shapes) if (kv.Value.used < at) { at = kv.Value.used; oldest = kv.Key; }
+                    shapes.Remove(oldest!);
+                }
+            }
+        }
+
+        /// <summary>How many buildings' shapes the walk model holds (built or handed in).</summary>
+        public int ShapeCount { get { lock (gate) return shapes.Count; } }
+
+        /// <summary>How many shapes the walk model has built itself, with none from its <see cref="Source"/>.</summary>
+        public int ShapesBuilt => built;
+        int built;
 
         readonly System.Collections.Concurrent.ConcurrentDictionary<string, List<BuildingData>> touching = new System.Collections.Concurrent.ConcurrentDictionary<string, List<BuildingData>>(StringComparer.Ordinal);
 
@@ -71,12 +121,6 @@ namespace Triband.Storey.Play
             }
             return touching.GetOrAdd(b.id, l);
         }
-
-        /// <summary>How many buildings' LOD0s the walk model holds (built or handed in).</summary>
-        public int Lod0Count => lod0.Count;
-
-        /// <summary>Hand in a LOD0 built elsewhere (the renderer's), so it is not built twice.</summary>
-        public void UseLod0(BuildingData b, Lod0Result r) => lod0[b.id] = r;
 
         /// <summary>The local box of the footprint and every setback outline (the prototype's <c>bboxAll</c>).</summary>
         static (double x0, double z0, double x1, double z1) BboxAll(BuildingData b)
@@ -256,9 +300,9 @@ namespace Triband.Storey.Play
                 var bb = bboxAll[b.id];
                 if (px < bb.x0 + b.pos.x - 3 || px > bb.x1 + b.pos.x + 3 || pz < bb.z0 + b.pos.z - 3 || pz > bb.z1 + b.pos.z + 3) continue;
                 if (y > Derived.RoofY(b) + 2) continue;
-                var l0 = Lod0Of(b); var st = l0.Segs; int k = FloorAtY(b, y);
+                var sh = ShapeOf(b); var st = sh.Segs; int k = FloorAtY(b, y);
                 if (k < st.Count) segs.AddRange(st[k]);
-                foreach (var (s, y0, y1) in l0.Extra) if (y >= y0 && y <= y1) segs.Add(s);   // a bridge's sides
+                foreach (var (s, y0, y1) in sh.Extra) if (y >= y0 && y <= y1) segs.Add(s);   // a bridge's sides
             }
             for (int it = 0; it < 4; it++)
                 foreach (var s in segs)

@@ -130,8 +130,7 @@ namespace Triband.Storey.Tests
         public void TheCorporaAreCheckedQuickly(string corpus)
         {
             var (doc, world) = PlayWorldTests.World(corpus);
-            foreach (var b in doc.buildings) world.Lod0Of(b);   // built already in the editor
-            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var sw = System.Diagnostics.Stopwatch.StartNew();   // the walls' shapes made as the check goes, as in the editor
             var ps = Problems.Check(world.Site, world);
             sw.Stop();
             output.WriteLine($"{corpus}: {doc.buildings.Count} buildings, {ps.Count} problems, {sw.Elapsed.TotalMilliseconds:0} ms");

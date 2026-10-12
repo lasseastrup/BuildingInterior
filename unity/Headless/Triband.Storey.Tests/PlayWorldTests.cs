@@ -44,7 +44,7 @@ namespace Triband.Storey.Tests
             {
                 var b = doc.buildings[e.GetProperty("building").GetInt32()];
                 var want = e.GetProperty("segs").EnumerateArray().Select(st => st.EnumerateArray().Select(s => s.EnumerateArray().Select(D).ToArray()).ToList()).ToList();
-                var got = world.Lod0Of(b).Segs;
+                var got = world.ShapeOf(b).Segs;
                 if (got.Count != want.Count) { bad.Add($"{b.name}: {got.Count} storeys of segments, the prototype {want.Count}"); continue; }
                 for (int k = 0; k < want.Count; k++)
                 {
