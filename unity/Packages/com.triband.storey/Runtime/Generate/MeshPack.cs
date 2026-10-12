@@ -42,6 +42,11 @@ namespace Triband.Storey.Generate
         public int[]? I32 { get; private set; }
         /// <summary>The styles whose colour rows the vertices name, by index.</summary>
         public readonly StyleRef[] Styles;
+        /// <summary>
+        /// The buildings whose party walls the mesh carries, as its cutaway kinds name them (table rows once packed with the
+        /// site's block): the cutaway of any of them cuts this mesh too (<see cref="Occlusion.Steady"/>). Empty for none.
+        /// </summary>
+        public int[] Mates { get; internal set; } = Array.Empty<int>();
         /// <summary>The bounds of the positions.</summary>
         public readonly float X0, Y0, Z0, X1, Y1, Z1;
         bool finished;
@@ -177,18 +182,25 @@ namespace Triband.Storey.Generate
                 if (windows && s.slot == ColorSlot.Glass && gb.PaneUV.TryGetValue(i, out var uv)) { var (pa, pw, pb) = ColorRows.EncodePane(uv.u, uv.v, uv.id); v.a = pa; v.nw = pw; v.b = pb; }
             }
             if (styles.Count > 65536) throw new InvalidOperationException($"{styles.Count} styles in one mesh");
-            PackedMesh.Cutaway[]? cut = null;
+            PackedMesh.Cutaway[]? cut = null; var neighbours = Array.Empty<int>();
             if (!gb.Lean)
             {
                 cut = ArrayShelf<PackedMesh.Cutaway>.Rent(nv);
-                for (int i = 0; i < nv; i++) cut[i] = new PackedMesh.Cutaway { kind = mates is (int ms, int mc) ? MateIndex.Shift(gb.K[i], ms, mc) : gb.K[i], wid = gb.WI[i] };
+                List<int>? found = null;
+                for (int i = 0; i < nv; i++)
+                {
+                    int k = mates is (int ms, int mc) ? MateIndex.Shift(gb.K[i], ms, mc) : gb.K[i];
+                    cut[i] = new PackedMesh.Cutaway { kind = k, wid = gb.WI[i] };
+                    if (k >= 8) { int m = (k >> 3) - 1; found ??= new List<int>(); if (!found.Contains(m)) found.Add(m); }
+                }
+                if (found != null) neighbours = found.ToArray();
             }
             var st = styles.ToArray();
 
             if (nv <= maxVerts)
             {
-                if (nv <= MaxVerts) { var i16 = ArrayShelf<ushort>.Rent(ni); for (int i = 0; i < ni; i++) i16[i] = (ushort)I[i]; out_.Add(new PackedMesh(verts, nv, cut, i16, null, ni, st)); }
-                else out_.Add(new PackedMesh(verts, nv, cut, null, I.ToArray(), ni, st));
+                if (nv <= MaxVerts) { var i16 = ArrayShelf<ushort>.Rent(ni); for (int i = 0; i < ni; i++) i16[i] = (ushort)I[i]; out_.Add(new PackedMesh(verts, nv, cut, i16, null, ni, st) { Mates = neighbours }); }
+                else out_.Add(new PackedMesh(verts, nv, cut, null, I.ToArray(), ni, st) { Mates = neighbours });
                 return out_;
             }
 
@@ -201,7 +213,7 @@ namespace Triband.Storey.Generate
                 var v = ArrayShelf<PackedMesh.Vertex>.Rent(pv.Count); var c = cut != null ? ArrayShelf<PackedMesh.Cutaway>.Rent(pv.Count) : null;
                 for (int k = 0; k < pv.Count; k++) { v[k] = verts[pv[k]]; if (c != null) c[k] = cut![pv[k]]; local[pv[k]] = -1; }
                 var ix = ArrayShelf<ushort>.Rent(pi.Count); for (int k = 0; k < pi.Count; k++) ix[k] = (ushort)pi[k];
-                out_.Add(new PackedMesh(v, pv.Count, c, ix, null, pi.Count, st));
+                out_.Add(new PackedMesh(v, pv.Count, c, ix, null, pi.Count, st) { Mates = neighbours });
                 pv.Clear(); pi.Clear();
             }
             for (int t = 0; t < ni; t += 3)

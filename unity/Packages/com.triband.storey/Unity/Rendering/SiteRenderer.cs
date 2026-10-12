@@ -25,6 +25,9 @@ namespace Triband.Storey.Unity
     {
         readonly Transform parent;
         readonly Material opaque, glass, massing;
+        // the opaque and massing materials' steady copies (STOREY_STEADY on: no discard), null when the shader has no such variant
+        readonly Material? opaqueSteady, massingSteady;
+        readonly UnityEngine.Rendering.LocalKeyword opaqueKw, massingKw;
         readonly HideFlags flags;
         readonly BuildingTable table = BuildingTable.Acquire();   // shared by every site (docs/CITY.md §5)
         int blockStart = -1, blockSize;   // this site's building indices there: the layout's buildings in order
@@ -45,6 +48,11 @@ namespace Triband.Storey.Unity
             // per LOD: the meshes and the objects drawing them
             public readonly List<Mesh>[] meshes = { new List<Mesh>(), new List<Mesh>(), new List<Mesh>() };
             public readonly List<GameObject>[] objs = { new List<GameObject>(), new List<GameObject>(), new List<GameObject>() };
+            // per LOD: the renderers with the opaque or massing material, whether they have its steady copy now, and (LOD0)
+            // the buildings whose party walls its meshes carry
+            public readonly List<MeshRenderer>[] solid = { new List<MeshRenderer>(), new List<MeshRenderer>(), new List<MeshRenderer>() };
+            public readonly bool[] steady = new bool[3];
+            public int[] mates = Array.Empty<int>();
             public GameObject? root;
             public Mesh? collision;
             // its collision mesh, made on the worker with its first LOD0, waiting for the colliders' turn in the frame
@@ -64,6 +72,8 @@ namespace Triband.Storey.Unity
             BuildThreads.Started = name => UnityEngine.Profiling.Profiler.BeginThreadProfiling("Storey", name);
             BuildThreads.Ended = UnityEngine.Profiling.Profiler.EndThreadProfiling;
             Application.quitting += () => BuildThreads.Shared.Resize(0);
+            // the steady variant is picked just before the cameras render: every site's frame has written the table and the view
+            UnityEngine.Rendering.RenderPipelineManager.beginContextRendering += (context, cameras) => { foreach (var s in live) s.UpdateSteady(); };
         }
 
         static readonly global::Unity.Profiling.ProfilerMarker markLod0 = new global::Unity.Profiling.ProfilerMarker("Storey.Generate LOD0"),
@@ -76,6 +86,62 @@ namespace Triband.Storey.Unity
         {
             this.parent = parent; layer = parent.gameObject.layer; this.opaque = opaque; this.glass = glass; this.massing = massing; this.flags = flags;
             if (auto != null) lods = new LodManager(auto);
+            opaqueSteady = SteadyCopy(opaque, out opaqueKw); massingSteady = SteadyCopy(massing, out massingKw);
+        }
+
+        /// <summary>A copy of <paramref name="m"/> drawing with the steady variant; null when its shader has none (a project's own).</summary>
+        static Material? SteadyCopy(Material m, out UnityEngine.Rendering.LocalKeyword kw)
+        {
+            kw = default;
+            if (m.shader == null) return null;
+            kw = m.shader.keywordSpace.FindKeyword("STOREY_STEADY");
+            if (!kw.isValid) return null;
+            var c = new Material(m) { name = m.name + " (steady)", hideFlags = HideFlags.HideAndDontSave };
+            c.SetKeyword(kw, true);
+            return c;
+        }
+
+        int steadySynced = -1;
+
+        /// <summary>
+        /// Each building's and cell's opaque and massing renderers on the steady copy of their material while nothing can
+        /// hide their pixels (<see cref="global::Triband.Storey.Occlusion.Steady"/>), on the material itself otherwise: no
+        /// discard for most of the city, so tile-based GPUs treat it as opaque. Run before the cameras render.
+        /// </summary>
+        void UpdateSteady()
+        {
+            if (opaqueSteady == null && massingSteady == null) return;
+            // the copies follow their materials' properties: always in edit mode, twice a second in Play mode
+            if (!Application.isPlaying || Time.frameCount - steadySynced >= 30)
+            {
+                steadySynced = Time.frameCount;
+                if (opaqueSteady != null) { opaqueSteady.CopyMatchingPropertiesFromMaterial(opaque); opaqueSteady.SetKeyword(opaqueKw, true); }
+                if (massingSteady != null) { massingSteady.CopyMatchingPropertiesFromMaterial(massing); massingSteady.SetKeyword(massingKw, true); }
+            }
+            int active = StoreyGlobals.ActiveIndex, isolated = StoreyGlobals.IsolatedIndex; float iso = StoreyGlobals.IsolateAmount;
+            bool farOcc = lods?.Settings.FarOcclusion ?? true;
+            var state = table.State;
+            foreach (var bt in built.Values)
+                for (int w = 0; w < 3; w++)
+                {
+                    var list = bt.solid[w]; if (list.Count == 0) continue;
+                    var copy = w == 2 ? massingSteady : opaqueSteady; if (copy == null) continue;
+                    var st = state[bt.idx];
+                    bool on = global::Triband.Storey.Occlusion.Steady.Of(bt.idx, st.z, st.w, active, iso, isolated, w == 0 ? bt.mates : null, w == 2, farOcc);
+                    if (on == bt.steady[w]) continue;
+                    bt.steady[w] = on;
+                    foreach (var r in list) if (r != null) r.sharedMaterial = on ? copy : w == 2 ? massing : opaque;
+                }
+            if (massingSteady == null) return;
+            foreach (var c in cells.Values)
+            {
+                if (c.renderers.Count == 0) continue;
+                bool on = true;
+                foreach (int idx in c.order) { var st = state[idx]; if (!global::Triband.Storey.Occlusion.Steady.Of(idx, st.z, st.w, active, iso, isolated, null, true, farOcc)) { on = false; break; } }
+                if (on == c.steady) continue;
+                c.steady = on;
+                foreach (var r in c.renderers) if (r != null) r.sharedMaterial = on ? massingSteady : massing;
+            }
         }
 
         // ---- the automatic LOD (docs/CITY.md §2, §3) ----
@@ -109,6 +175,7 @@ namespace Triband.Storey.Unity
             public readonly List<Mesh> meshes = new List<Mesh>();
             public readonly List<MeshRenderer> renderers = new List<MeshRenderer>();
             public bool shown = true;
+            public bool steady;   // its renderers have the massing's steady copy
         }
 
         /// <summary>The camera the automatic LOD picks for: where it is (world space) and how many pixels a metre covers a metre away.</summary>
@@ -602,6 +669,7 @@ namespace Triband.Storey.Unity
                 return;
             }
             var shape = d.shape!; bt.shape = shape;
+            bt.mates = d.opaque.Count > 0 ? d.opaque[0].Mates : Array.Empty<int>();
             bt.wallCount = shape.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
             if (bt.wallBase >= 0)
             {
@@ -685,8 +753,9 @@ namespace Triband.Storey.Unity
         {
             foreach (var go in bt.objs[which]) Kill(go);
             foreach (var m in bt.meshes[which]) Kill(m);
-            bt.objs[which].Clear(); bt.meshes[which].Clear();
+            bt.objs[which].Clear(); bt.meshes[which].Clear(); bt.solid[which].Clear(); bt.steady[which] = false;
             if (which != 0) return;
+            bt.mates = Array.Empty<int>();
             if (bt.wallBase >= 0) table.ReleaseWalls(bt.wallBase, bt.wallCount);
             bt.wallBase = -1; bt.wallCount = 0; bt.shape = null;
         }
@@ -811,7 +880,7 @@ namespace Triband.Storey.Unity
                 go.transform.SetParent(cellRoot.transform, false);
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
                 var mr = go.AddComponent<MeshRenderer>();
-                mr.sharedMaterial = massing;
+                mr.sharedMaterial = c.steady && massingSteady != null ? massingSteady : massing;
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
                 mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
                 mr.enabled = c.shown;
@@ -852,6 +921,12 @@ namespace Triband.Storey.Unity
             mr.sharedMaterial = mat;
             mr.shadowCastingMode = shadows ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;   // the GPU Resident Drawer wants no probes on the renderer
+            if (mat == opaque || mat == massing)
+            {
+                bt.solid[which].Add(mr);
+                var copy = mat == opaque ? opaqueSteady : massingSteady;
+                if (bt.steady[which] && copy != null) mr.sharedMaterial = copy;   // as the LOD's others are
+            }
         }
 
         void Release(Built b)
@@ -999,6 +1074,8 @@ namespace Triband.Storey.Unity
             blockStart = -1; blockSize = 0;
             live.Remove(this);
             BuildingTable.ReleaseShared(table);
+            if (opaqueSteady != null) Kill(opaqueSteady);
+            if (massingSteady != null) Kill(massingSteady);
         }
     }
 }

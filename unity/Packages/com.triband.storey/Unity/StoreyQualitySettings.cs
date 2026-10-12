@@ -63,7 +63,7 @@ namespace Triband.Storey.Unity
         [Min(0)] public int uploadArraysKeptMB = 16;
 
         [Header("Occlusion")]
-        [Tooltip("Compile the occlusion discard into the LOD2 and cell materials. Off on the minimum tier: alpha clipping costs early-Z on tile-based GPUs.")]
+        [Tooltip("Cut and fade massings (LOD2 and the cells) in the way like near buildings. Off, far geometry always draws without discard (the steady variant), which tile-based GPUs treat as opaque; off on the minimum tier.")]
         public bool occlusionOnFarMaterials = true;
 
         [Header("Rendering")]
@@ -85,6 +85,7 @@ namespace Triband.Storey.Unity
             s.GlassClear = windowsClearAt; s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.BudgetMs = buildBudgetMs;
             s.Threads = !buildOnWorkerThreads ? 0 : buildThreads > 0 ? buildThreads : -1;
             s.KeepBuilderBytes = (long)buildListsKeptMB << 20; s.KeepArrayBytes = (long)uploadArraysKeptMB << 20;
+            s.FarOcclusion = occlusionOnFarMaterials;
         }
     }
 }

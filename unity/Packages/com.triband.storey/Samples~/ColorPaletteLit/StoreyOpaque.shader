@@ -37,6 +37,7 @@ Shader "Flamingo/Storey/Opaque"
             #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
             #pragma multi_compile _ TRIBAND_SHADOWS_ON
             #pragma multi_compile _ DOTS_INSTANCING_ON
+            #pragma multi_compile_local _ STOREY_STEADY
             #include "Packages/com.triband.storey/Unity/Shaders/StoreyLit.hlsl"
             #include_with_pragmas "StoreyColorPaletteLit.hlsl"
             #include "Packages/com.triband.storey/Unity/Shaders/StoreyFragment.hlsl"
@@ -55,6 +56,7 @@ Shader "Flamingo/Storey/Opaque"
             #pragma vertex StoreyVert
             #pragma fragment StoreyDepthFrag
             #pragma multi_compile _ DOTS_INSTANCING_ON
+            #pragma multi_compile_local _ STOREY_STEADY
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
             #define STOREY_DEPTH
             #define STOREY_SHADOW
@@ -73,6 +75,7 @@ Shader "Flamingo/Storey/Opaque"
             #pragma vertex StoreyVert
             #pragma fragment StoreyDepthFrag
             #pragma multi_compile _ DOTS_INSTANCING_ON
+            #pragma multi_compile_local _ STOREY_STEADY
             #define STOREY_DEPTH
             #include "Packages/com.triband.storey/Unity/Shaders/StoreyLit.hlsl"
             ENDHLSL

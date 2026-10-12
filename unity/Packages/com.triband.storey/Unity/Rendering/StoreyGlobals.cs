@@ -29,6 +29,12 @@ namespace Triband.Storey.Unity
 
         static float activeIndex = -1;
 
+        /// <summary>The active building's row (-1: none), as last set: what the steady variant can't be given (SiteRenderer).</summary>
+        public static int ActiveIndex => (int)activeIndex;
+        /// <summary>How far the buildings other than <see cref="IsolatedIndex"/> are faded, as last set (0: none isolated).</summary>
+        public static float IsolateAmount { get; private set; }
+        public static int IsolatedIndex { get; private set; } = -1;
+
         /// <summary>The building the player is in (or the one being edited); -1 = none.</summary>
         public static void SetActive(int buildingIndex, float clipY)
         {
@@ -40,7 +46,11 @@ namespace Triband.Storey.Unity
         public static void SetCap(Color cap) => Shader.SetGlobalVector(StoreyShaderIds.Cap, new Vector4(cap.r, cap.g, cap.b, 1));
 
         /// <summary>Isolate a building: every other one fades to a screen-door ghost (0 = off, 1 = fully hidden).</summary>
-        public static void SetIsolate(float amount, int buildingIndex) => Shader.SetGlobalVector(StoreyShaderIds.Iso, new Vector4(amount, buildingIndex, 0, 0));
+        public static void SetIsolate(float amount, int buildingIndex)
+        {
+            IsolateAmount = amount; IsolatedIndex = buildingIndex;
+            Shader.SetGlobalVector(StoreyShaderIds.Iso, new Vector4(amount, buildingIndex, 0, 0));
+        }
 
         /// <summary>
         /// Buildings-in-the-way mode, the player's chest in world space (Cutout and Fade only touch what lies in front

@@ -3,8 +3,13 @@
 //
 // Everything that hides geometry is colour-pass only: the shadow caster and depth passes define
 // STOREY_DEPTH and cast from the whole building, so the light indoors is the same with or without
-// the cutaway (Plan §6.3). The Sink displacement runs in the vertex stage before projection on every
-// pass, so shadows follow a sinking building.
+// the cutaway (Plan §6.3). Sink's displacement too, as the prototype's OCC_SINK: a sinking building's
+// shadow stays whole. (Only Dissolve and the isolate ghost take shadows away, dithered.)
+//
+// STOREY_STEADY (docs/CITY.md §2): the variant a renderer draws with while nothing can hide any of its pixels,
+// with no discard and no Sink, so tile-based GPUs treat it as opaque. SiteRenderer gives it only to buildings
+// that aren't cross-fading, isolated against, in the way, or the player's (or sharing a party wall with it):
+// Triband.Storey.Occlusion.Steady holds those conditions, and must change with StoreyOcclude below.
 #ifndef STOREY_OCCLUSION_INCLUDED
 #define STOREY_OCCLUSION_INCLUDED
 
@@ -59,7 +64,7 @@ float3 StoreyLodTint(float l) { return l < 0.5 ? float3(0.16, 0.62, 0.30) : l < 
 float3 StoreySink(float3 worldPos, float tag, float kind, out float origY)
 {
     origY = worldPos.y;
-#ifndef STOREY_DEPTH
+#if !defined(STOREY_DEPTH) && !defined(STOREY_STEADY)
     int ib = (int)(fmod(tag, 65536.0) + 0.5);
     int slot = (int)(_StoreyState[ib].w + 0.5) - 1;
     int im = (int)floor(kind / 8.0) - 1;   // a party wall also belongs to the neighbour: it stays unless the neighbour is sinking too
@@ -107,6 +112,9 @@ bool StoreyVertex(float tag, float4 wall, float kind, float wid, float3 worldPos
 // prototype discards.
 float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
 {
+#ifdef STOREY_STEADY
+    return 0.0;   // nothing hides any of this building's pixels this frame (Triband.Storey.Occlusion.Steady)
+#else
     float dark = 0.0;
     // 0. LOD cross-fade: the old and new LOD draw complementary dither patterns
     if (v.fade < 2.0)
@@ -207,7 +215,7 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
         }
     }
 #else
-    // Dissolve takes its shadow and depth away with it, dithered alike (Sink's squash runs in every pass, so its shadow goes as it sinks)
+    // Dissolve takes its shadow and depth away with it, dithered alike (Sink's squash is colour-pass only: its shadow stays)
     if (_StoreyOccMode > 3.5 && !act && v.occ > -0.5 && !(mate >= 0.0 && _StoreyState[(int)mate].w < 0.5))
     {
         float4 hd = _StoreyOcc[(int)(v.occ + 0.5) * STOREY_OCC_W];
@@ -215,6 +223,7 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
     }
 #endif
     return dark;
+#endif
 }
 
 // Applied after lighting: a building in the way goes near-black (a trace of shading keeps its form).

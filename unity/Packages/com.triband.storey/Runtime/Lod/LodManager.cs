@@ -45,6 +45,12 @@ namespace Triband.Storey.Lod
         /// between uploads (<see cref="Generate.ArrayShelf.KeepBytes"/>). More saves garbage, less saves memory.
         /// </summary>
         public long KeepBuilderBytes = 24L << 20, KeepArrayBytes = 16L << 20;
+
+        /// <summary>
+        /// Massings (LOD2 and the cells) in the way are cut and faded like near buildings. Off, they draw with the steady
+        /// variant even when in the way (<see cref="Occlusion.Steady"/>): no discard on far geometry, for tile-based GPUs.
+        /// </summary>
+        public bool FarOcclusion = true;
     }
 
     /// <summary>

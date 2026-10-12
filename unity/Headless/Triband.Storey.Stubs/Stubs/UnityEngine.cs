@@ -59,7 +59,7 @@ namespace UnityEngine
     public sealed class ExecuteAlways : System.Attribute { }
 
 
-    public static class Time { public static float deltaTime => 0; public static float realtimeSinceStartup => 0; }
+    public static class Time { public static float deltaTime => 0; public static float realtimeSinceStartup => 0; public static int frameCount => 0; }
 
     public enum RuntimePlatform { OSXEditor = 0, WindowsEditor = 7, IPhonePlayer = 8, Android = 11, LinuxEditor = 16, WebGLPlayer = 17 }
 
@@ -376,6 +376,7 @@ namespace UnityEngine
         public static int GetGlobalInt(int nameID) => 0;
         public static float GetGlobalFloat(int nameID) => 0;
         public static void SetGlobalTexture(int nameID, Texture value) { }
+        public UnityEngine.Rendering.LocalKeywordSpace keywordSpace => default;
     }
 
     public enum TextureFormat { RGBAHalf = 17 }
@@ -571,6 +572,9 @@ namespace UnityEngine
         public Material(Material source) { }
         public Shader shader => null;
         public void SetColor(string name, Color value) { }
+        public void SetKeyword(in UnityEngine.Rendering.LocalKeyword keyword, bool value) { }
+        public void CopyMatchingPropertiesFromMaterial(Material mat) { }
+        public int renderQueue { get; set; }
     }
 
     public class Renderer : Component
@@ -679,5 +683,16 @@ namespace Unity.Profiling
         public void End() { }
         public AutoScope Auto() => default;
         public readonly struct AutoScope : System.IDisposable { public void Dispose() { } }
+    }
+}
+
+namespace UnityEngine.Rendering
+{
+    public readonly struct LocalKeyword { public bool isValid => false; }
+    public readonly struct LocalKeywordSpace { public LocalKeyword FindKeyword(string name) => default; }
+    public struct ScriptableRenderContext { }
+    public static class RenderPipelineManager
+    {
+        public static event System.Action<ScriptableRenderContext, System.Collections.Generic.List<UnityEngine.Camera>> beginContextRendering { add { } remove { } }
     }
 }
