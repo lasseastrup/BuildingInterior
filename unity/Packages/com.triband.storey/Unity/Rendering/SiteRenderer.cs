@@ -47,6 +47,8 @@ namespace Triband.Storey.Unity
             public readonly List<GameObject>[] objs = { new List<GameObject>(), new List<GameObject>(), new List<GameObject>() };
             public GameObject? root;
             public Mesh? collision;
+            // its collision mesh, made on the worker with its first LOD0, waiting for the colliders' turn in the frame
+            public CollisionMesh? collisionMade;
             // automatic LOD: the massing until its cell is merged (made again if the cell is merged again), its rows'
             // places in the table, and the cell it is drawn in
             public Lod2Mesh? l2;
@@ -249,7 +251,7 @@ namespace Triband.Storey.Unity
                 if (colliders == value) return;
                 colliders = value;
                 if (value) foreach (var id in built.Keys) colliderPending.Add(id);
-                else { colliderPending.Clear(); foreach (var b in built.Values) RemoveCollider(b); }
+                else { colliderPending.Clear(); foreach (var b in built.Values) { RemoveCollider(b); b.collisionMade = null; } }
             }
         }
 
@@ -286,13 +288,22 @@ namespace Triband.Storey.Unity
             foreach (var kv in remaps) book.SetRemap(kv.Key, kv.Value.original, kv.Value.overwrite);
             if (lods == null) foreach (var b in doc.buildings) Build(b);
             else
-                // cell by cell, each merged as soon as its buildings are built: one cell's massings are held at a time, not
+            {
+                // cell by cell, each merged as soon as its buildings are built: two cells' massings are held at a time, not
                 // every building's (docs/CITY.md §7). A massing reaching into the next cell only has that one merged again.
-                foreach (var cell in doc.buildings.GroupBy(b => { var bb = global::Triband.Storey.Generate.Site.BoundsOf(b); return Cells.KeyOf((bb.x0 + bb.x1) / 2, (bb.z0 + bb.z1) / 2); }))
+                // The worker threads build the next cell's massings while this one's are written and merged.
+                var groups = doc.buildings.GroupBy(b => { var bb = global::Triband.Storey.Generate.Site.BoundsOf(b); return Cells.KeyOf((bb.x0 + bb.x1) / 2, (bb.z0 + bb.z1) / 2); }).Select(g => g.ToArray()).ToList();
+                var s0 = site; int threads = Threads;
+                System.Threading.Tasks.Task<Lod2Mesh[]>? ahead = null;
+                for (int g = 0; g < groups.Count; g++)
                 {
-                    foreach (var b in cell) Build(b);
+                    var made = ahead != null ? ahead.GetAwaiter().GetResult() : Massings(s0, groups[g], 0);   // a worker's exception as itself
+                    var next = g + 1 < groups.Count ? groups[g + 1] : null;
+                    ahead = next != null && threads > 0 ? System.Threading.Tasks.Task.Run(() => Massings(s0, next, threads)) : null;
+                    for (int i = 0; i < made.Length; i++) Build(groups[g][i], made[i]);
                     MergeCells();
                 }
+            }
             carry.Clear();
         }
 
@@ -437,7 +448,17 @@ namespace Triband.Storey.Unity
             book?.SetRemap(building, original, overwrite);
         }
 
-        void Build(BuildingData b)
+        /// <summary>A cell's massings, on <paramref name="threads"/> worker threads (0: here).</summary>
+        static Lod2Mesh[] Massings(Site site, BuildingData[] bs, int threads)
+        {
+            var made = new Lod2Mesh[bs.Length];
+            if (threads > 1 && bs.Length > 1) System.Threading.Tasks.Parallel.For(0, bs.Length, new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = threads }, i => made[i] = Lod2.Build(site, bs[i]));
+            else for (int i = 0; i < bs.Length; i++) made[i] = Lod2.Build(site, bs[i]);
+            return made;
+        }
+
+        /// <summary>A building's table row, root object and massing (<paramref name="made"/> when made already), and its detail if it showed one.</summary>
+        void Build(BuildingData b, Lod2Mesh? made = null)
         {
             // the table row is the site's block plus the building's index in the layout: party walls carry their
             // neighbour's layout index, moved into the block at upload (MeshUpload's mates), and the shader looks it up
@@ -449,7 +470,7 @@ namespace Triband.Storey.Unity
 
             StoreyTimings.Count("buildings built");
             var t2 = StoreyTimings.Time("build: massing and its rows");
-            var l2 = Lod2.Build(site!, b);
+            var l2 = made ?? Lod2.Build(site!, b);
             var rowMap = WriteRows(bt, l2);
             l2.Tag = bt.idx + 2 * Lod1.LOD_TAG;
             t2.Dispose();
@@ -497,7 +518,7 @@ namespace Triband.Storey.Unity
         void BuildDetail(Built bt, BuildingData b, int which)
         {
             object made;
-            using (StoreyTimings.Time(which == 0 ? "build: LOD0 on the main thread" : "build: LOD1 on the main thread")) made = Generate(site!, b, bt.idx, which, (blockStart, blockSize));
+            using (StoreyTimings.Time(which == 0 ? "build: LOD0 on the main thread" : "build: LOD1 on the main thread")) made = Generate(site!, b, bt.idx, which, (blockStart, blockSize), colliders && bt.collision == null);
             FinishDetail(bt, b.name, which, made);
         }
 
@@ -510,20 +531,21 @@ namespace Triband.Storey.Unity
             public List<PackedMesh> opaque = null!;
             public List<PackedMesh>? glass;
             public Lod0Shape? shape;
+            public CollisionMesh? collision;
         }
 
         /// <summary>
         /// The engine-free half of a detail build: generated, tagged, welded and packed. Safe on a worker thread (the
         /// generator's memos are per site and thread-safe; ParallelBuildTests). <paramref name="mates"/>: the site's block
-        /// of the table, for party walls.
+        /// of the table, for party walls; <paramref name="collider"/>: the building's collision mesh is wanted too.
         /// </summary>
-        static object Generate(Site site, BuildingData b, int idx, int which, (int start, int count) mates)
+        static object Generate(Site site, BuildingData b, int idx, int which, (int start, int count) mates, bool collider)
         {
             if (which == 1) { var m = Lod1.Build(site, b); m.RetagForUpload(idx + Lod1.LOD_TAG); return new Detail { opaque = MeshPack.Pack(m, windows: true) }; }
             var l0 = Lod0.Build(site, b);
             l0.Op.RetagForUpload(idx); l0.Glass.RetagForUpload(idx);
             // the glass's panes carry their place too, to start as LOD1's
-            return new Detail { opaque = MeshPack.Pack(l0.Op, true, mates), glass = MeshPack.Pack(l0.Glass, true, mates), shape = l0.Shape };
+            return new Detail { opaque = MeshPack.Pack(l0.Op, true, mates), glass = MeshPack.Pack(l0.Glass, true, mates), shape = l0.Shape, collision = collider ? CollisionMesh.Build(site, b, l0.Shape) : null };
         }
 
         /// <summary>
@@ -549,6 +571,7 @@ namespace Triband.Storey.Unity
             for (int i = 0; i < d.opaque.Count; i++) Add(bt, 0, Part("LOD0", i, d.opaque.Count), MeshUpload.Upload(d.opaque[i], Part(name + " LOD0", i, d.opaque.Count), RowOf, bt.wallBase), opaque, true);
             for (int i = 0; i < d.glass!.Count; i++) Add(bt, 0, Part("LOD0 glass", i, d.glass.Count), MeshUpload.Upload(d.glass[i], Part(name + " glass", i, d.glass.Count), RowOf, bt.wallBase), glass, false);
             // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
+            if (d.collision != null && bt.collision == null) bt.collisionMade = d.collision;
             if (lods != null && colliders && bt.collision == null) colliderPending.Add(bt.id);
         }
 
@@ -581,6 +604,21 @@ namespace Triband.Storey.Unity
             return made;
         }
 
+        /// <summary>A worker's build of a building's LOD0 or LOD1, waited for and uploaded now: false when there is none, or it failed.</summary>
+        bool TakeJobNow(Built bt, int which)
+        {
+            for (int i = 0; i < jobs.Count; i++)
+            {
+                var j = jobs[i]; if (j.bt != bt || j.which != which) continue;
+                try { j.task.Wait(); } catch (AggregateException) { }
+                jobs.RemoveAt(i); busy.Remove(bt.idx);
+                if (j.task.Status != System.Threading.Tasks.TaskStatus.RanToCompletion || !ReferenceEquals(j.site, site)) return false;
+                FinishDetail(bt, j.name, which, j.task.Result);
+                return true;
+            }
+            return false;
+        }
+
         /// <summary>Drop a building's LOD0 (and its walls) or LOD1; its collider stays.</summary>
         void DropDetail(Built bt, int which)
         {
@@ -603,8 +641,8 @@ namespace Triband.Storey.Unity
         // (hundreds of buildings a frame wanting detail: about 14 KB of garbage a frame)
         void StartJob(Built bt, BuildingData b, int which)
         {
-            var s0 = site!; int ix = bt.idx; var mates = (blockStart, blockSize);
-            jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, task = System.Threading.Tasks.Task.Run(() => Generate(s0, b, ix, which, mates)) });
+            var s0 = site!; int ix = bt.idx; var mates = (blockStart, blockSize); bool collider = which == 0 && colliders && bt.collision == null;
+            jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, task = System.Threading.Tasks.Task.Run(() => Generate(s0, b, ix, which, mates, collider)) });
         }
 
         void UpdateLods()
@@ -619,7 +657,12 @@ namespace Triband.Storey.Unity
                 if (!built.TryGetValue(id, out var bt)) continue;
                 forcedIdx.Add(bt.idx);
                 var e = l.Get(bt.idx); var b = site?.ById(id);
-                if (e != null && !e.Has0 && b != null) { BuildDetail(bt, b, 0); l.SetBuilt(bt.idx, 0, true); made++; }
+                if (e != null && !e.Has0 && b != null)
+                {
+                    // one already being generated is waited for, not built a second time
+                    if (!TakeJobNow(bt, 0)) BuildDetail(bt, b, 0);
+                    l.SetBuilt(bt.idx, 0, true); made++;
+                }
             }
             int threads = Threads;
             if (jobs.Count > 0) made = TakeJobs(sw, made);
@@ -759,8 +802,9 @@ namespace Triband.Storey.Unity
         }
 
         /// <summary>
-        /// The colliders of every building built since the last frame, at once: their meshes made on the main thread
-        /// (a millisecond or so a building), then cooked together across the worker threads, then assigned already cooked.
+        /// The colliders of every building built since the last frame, at once: their meshes made with their LOD0 on the
+        /// worker threads (on the main thread only when colliders are switched on: 0.4 to 2 ms a building), then cooked
+        /// together across the worker threads, then assigned already cooked.
         /// </summary>
         void BuildColliders()
         {
@@ -768,10 +812,11 @@ namespace Triband.Storey.Unity
             var todo = new List<(Built bt, Mesh mesh)>();
             foreach (var id in colliderPending)
             {
-                if (!built.TryGetValue(id, out var bt) || bt.shape == null || bt.root == null || site == null) continue;
+                if (!built.TryGetValue(id, out var bt) || (bt.shape == null && bt.collisionMade == null) || bt.root == null || site == null) continue;
                 var b = site.ById(id); if (b == null) continue;
                 RemoveCollider(bt);
-                var cm = CollisionMesh.Build(site, b, bt.shape);
+                var cm = bt.collisionMade ?? CollisionMesh.Build(site, b, bt.shape!);   // made on the worker, as a rule
+                bt.collisionMade = null;
                 if (cm.Tris == 0) continue;
                 todo.Add((bt, ToMesh(cm, b.name + " collision")));
             }

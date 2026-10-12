@@ -21,7 +21,8 @@ namespace Triband.Storey.Generate
         public static MeshBuilder Build(Site site, BuildingData b, bool solids = false, bool recessed = false)
         {
             int idx = site.IndexOf(b), N = b.floors.Count; double T = Dim.T_EXT;
-            var op = new MeshBuilder(idx + LOD_TAG, lean: true);
+            var size = site.SizeOf(idx, 1);   // the building's last LOD1: its lists made at that size
+            var op = new MeshBuilder(idx + LOD_TAG, lean: true, vertices: size.v, indices: size.i);
             if (solids) op.Solids = new List<Solid>();
             site.partyMemo.TryRemove(b.id, out _);
             var L0 = new Lod0.Shared(site, b);
@@ -83,6 +84,7 @@ namespace Triband.Storey.Generate
                     op.OBox(f, -cx, cx, y + hh, y + hh + 0.2, -cz, cz, C.roof);
                 }
             }
+            site.Sized(idx, 1, (op.Verts, op.I.Count, 0, 0));
             return op;
         }
     }

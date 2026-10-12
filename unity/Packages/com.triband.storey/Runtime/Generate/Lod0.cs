@@ -63,12 +63,14 @@ namespace Triband.Storey.Generate
         {
             var self = new Shared(site, b);
             int idx = site.IndexOf(b);
-            var r = new Lod0Result { Op = new MeshBuilder(idx, shapeOnly: shapeOnly), Glass = new MeshBuilder(idx, shapeOnly: shapeOnly) };
+            var size = site.SizeOf(idx, 0);   // the building's last LOD0: its lists made at that size
+            var r = new Lod0Result { Op = new MeshBuilder(idx, shapeOnly: shapeOnly, vertices: size.v, indices: size.i), Glass = new MeshBuilder(idx, shapeOnly: shapeOnly, vertices: size.gv, indices: size.gi) };
             r.Glass.Walls = r.Op.Walls;   // glass shares the wall ids of the walls it sits in
             r.Glass.WallBase = r.Op.WallBase;
             if (solids) r.Op.Solids = new List<Solid>();
             site.partyMemo.TryRemove(b.id, out _);
             foreach (var _ in self.Steps(r)) { }
+            if (!shapeOnly) site.Sized(idx, 0, (r.Op.Verts, r.Op.I.Count, r.Glass.Verts, r.Glass.I.Count));
             r.Shape = new Lod0Shape(r.Segs, r.Extra, r.Op.Walls, r.Op.WallBase);
             return r;
         }

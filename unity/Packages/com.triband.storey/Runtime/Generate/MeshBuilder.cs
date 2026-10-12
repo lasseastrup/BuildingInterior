@@ -28,15 +28,15 @@ namespace Triband.Storey.Generate
     /// </summary>
     public sealed class MeshBuilder
     {
-        public readonly List<P3> P = new List<P3>();
-        public readonly List<P3> N = new List<P3>();
+        public readonly List<P3> P;
+        public readonly List<P3> N;
         /// <summary>Colour per vertex, by reference (docs/COLOURS.md §3.2); <see cref="ColorResolver"/> gives the RGB.</summary>
-        public readonly List<Swatch> C = new List<Swatch>();
+        public readonly List<Swatch> C;
         /// <summary>Kind per vertex: 0 slab/roof, 1 wall, 2 tall part; + 8 × (neighbour index + 1) for party walls.</summary>
-        public readonly List<int> K = new List<int>();
+        public readonly List<int> K;
         /// <summary>Wall id per vertex, 1-based within the building; 0 = none.</summary>
-        public readonly List<int> WI = new List<int>();
-        public readonly List<int> I = new List<int>();
+        public readonly List<int> WI;
+        public readonly List<int> I;
         /// <summary>The walls given ids, in id order.</summary>
         public List<(double[] W, int K)> Walls = new List<(double[], int)>();
         /// <summary>The floor height of the storey each wall in <see cref="Walls"/> was made on (the editor slides only the active storey's).</summary>
@@ -65,7 +65,15 @@ namespace Triband.Storey.Generate
         int curK, curI;
         public static readonly double[] Zero4 = { 0, 0, 0, 0 };
 
-        public MeshBuilder(int tag = 0, bool lean = false, bool shapeOnly = false) { Tag = tag; Lean = lean; ShapeOnly = shapeOnly; }
+        /// <param name="vertices">Room for this many vertices from the start (what the building's last build came to).</param>
+        /// <param name="indices">Room for this many indices.</param>
+        public MeshBuilder(int tag = 0, bool lean = false, bool shapeOnly = false, int vertices = 0, int indices = 0)
+        {
+            Tag = tag; Lean = lean; ShapeOnly = shapeOnly;
+            int v = shapeOnly ? 0 : vertices;
+            P = new List<P3>(v); N = new List<P3>(v); C = new List<Swatch>(v);
+            K = new List<int>(lean ? 0 : v); WI = new List<int>(lean ? 0 : v); I = new List<int>(shapeOnly ? 0 : indices);
+        }
 
         public int Tris => I.Count / 3;
         public int Verts => P.Count;

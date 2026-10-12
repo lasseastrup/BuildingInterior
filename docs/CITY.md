@@ -38,6 +38,8 @@ A Storey Site's **LOD mode** is *Automatic* by default; *Fixed* shows one LOD ev
   - It shows the best LOD it already has meanwhile.
   - The meshes are generated on worker threads, one fewer than the cores, and one building at a time each. The main thread only uploads them, for up to 6 ms a frame (at least one when any is ready).
   - A result for a layout or building that has changed since is thrown away, as is one no longer wanted.
+  - A building's collision mesh is made on the worker with its first LOD0, when colliders are on.
+  - A building that must have LOD0 at once (see Forced buildings below) while a worker is already building it waits for that build rather than starting another.
   - With **Build on worker threads** off, and always on WebGL, building happens on the main thread and stops after 6 ms a frame (at least one is always built).
   - The generator's memos and caches are thread-safe. `ParallelBuildTests` checks that building on 8 threads gives exactly the meshes that building one after another does.
 - **Residency.** At most 16 LOD0 and 260 LOD1 meshes are kept. Past that, the least recently shown ones are dropped. A building's collider comes with its first LOD0 and stays after that LOD0 is dropped.
@@ -70,7 +72,7 @@ Headless numbers (`CityBenchTests`, `LodManagerTests`). They are CPU only, witho
 
 | | Time |
 |---|---|
-| Loading 3,000 buildings: every massing | 0.21 ms a building, 0.63 s in all |
+| Loading 3,000 buildings: every massing | 0.1–0.2 ms a building. The workers build each cell's massings while the main thread writes and merges the cell before: the main thread works about 50 ms of the load instead of about 300 ms (4 cores; the load is still one frame) |
 | Merging the 307 cells | 43 ms |
 | Picking every building's LOD | 0.4–0.9 ms a frame |
 | One LOD1 | about 6–8 ms |
@@ -134,7 +136,7 @@ Both budgets in the package plan (§6.6: 120 MB on iPhone 7, 200 MB on iPhone 14
 - **LOD0 and LOD1.** The meshes are uploaded from the generator's result, with no CPU copy kept (`UploadMeshData(true)`), and the result is let go. While a building has its LOD0, the renderer keeps its shape (`Lod0Shape`, `SiteRenderer.ShapeOf`): the collision segments and the wall list, for the walk model, the colliders and the cutaway. A shape is 10–25 KB, about 1% of its LOD0's GPU meshes, and 40–70 KB for the largest towers. The generator's whole result, kept before, was 4.7 to 5 times the GPU meshes: 3.5 to 7.7 MB a building, 32 to 35 MB for the largest towers.
 - **Massings.** A layout loads cell by cell: each cell is merged as soon as its buildings' massings are built, and the massings are let go. One cell's massings are held at a time, 0.4 MB at most on the test city; all 3,000 were kept before (50 MB). When a cell is merged again (a building in it was edited or removed), its other buildings' massings are made again from the layout: about 1 ms for the test city's biggest cell (24 buildings).
 - **The walk model** (`PlayWorld`, docs/PLAY.md §1) keeps the shapes of the buildings the player has been near, at most `PlayWorld.Keep` (32), the least recently used going first. It takes the renderer's shape while the building has its LOD0 (built on a worker as the camera nears, long before the player can touch it) and otherwise builds the shape itself without meshes (`Lod0.BuildShape`: exactly the full build's segments and walls, about 50 times faster). The walk above holds 14 shapes, 1.4 MB. It kept 14 whole LOD0 results before, 170 MB, and built them on the main thread: five frames over 16.7 ms, the worst 68 ms. The walk's worst frame is now 1.0 ms with the walk model building its own shapes, 0.6 ms with the renderer's.
-- **A finished build** waits for its upload packed (§4): 0.8 MB a building on the 3,000-building test city, 1.7 MB in the walk-in one, where the generator's welded result was 3.0 and 6.5 MB. Building a LOD0 allocates half what it did (14 MB for a walk-in building, was 29): the builder no longer copies each wall's data into every vertex, and welds in place.
+- **A finished build** waits for its upload packed (§4): 0.8 MB a building on the 3,000-building test city, 1.7 MB in the walk-in one, where the generator's welded result was 3.0 and 6.5 MB. Building a LOD0 allocates half what it did (14 MB for a walk-in building, was 29): the builder no longer copies each wall's data into every vertex, and welds in place. A building built again (its LOD0 or LOD1 dropped and wanted back) is made at the size of its last build, without growing its lists: LOD0 and LOD1 together allocate 4.8 MB on the 3,000-building city instead of 8.7, 10.5 MB in the walk-in city instead of 18.
 - **Large LOD0s** come in parts: a mesh past 65,535 vertices is split into meshes with 16-bit indices instead of one with 32-bit ones (`MeshPack.Pack`; a triangle is never split, and almost no vertex is copied). The 16 largest LOD0s of the 3,000-building city take 90.5 MB on the GPU instead of 98.6, in 51 meshes instead of 32.
 - **The problem list** builds shapes too: a full check of the 3,000-building city takes 0.7 s instead of 2.7 s, of the walk-in city of 1,000 6 s instead of 16 s (Release build).
 

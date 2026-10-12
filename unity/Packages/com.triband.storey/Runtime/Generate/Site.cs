@@ -23,6 +23,12 @@ namespace Triband.Storey.Generate
         readonly HashSet<string> bridged = new HashSet<string>(StringComparer.Ordinal);
         const double BGRID = 32;
 
+        // what each building's last LOD0 and LOD1 came to (vertices and indices of each mesh, before welding), by index × 2
+        // + LOD: the next build of it makes its lists at that size, rather than growing them there (docs/CITY.md §7)
+        readonly ConcurrentDictionary<int, (int v, int i, int gv, int gi)> sizes = new ConcurrentDictionary<int, (int, int, int, int)>();
+        internal (int v, int i, int gv, int gi) SizeOf(int index, int lod) => sizes.TryGetValue(index * 2 + lod, out var s) ? s : default;
+        internal void Sized(int index, int lod, (int v, int i, int gv, int gi) size) => sizes[index * 2 + lod] = size;
+
         /// <summary>
         /// How many of <see cref="Buildings"/> are the layout's own, drawn; the rest are a neighbouring district's,
         /// there for party walls only (<see cref="WithContext"/>). They come last, so the own ones keep their indices.
