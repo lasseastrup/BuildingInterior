@@ -128,12 +128,12 @@ What a Storey Site keeps, measured headlessly (.NET, not Unity) on the 3,000-bui
 
 | | Before | Now |
 |---|---|---|
-| GPU: cells, 260 shells, 16 LOD0s (typical buildings), collision meshes, the building table | 45.0 MB | 41.7 MB |
-| C# the game reads: the layout and its site, the generator's memos, the table's CPU copy, the LOD0 shapes | 12.1 MB | 13.6 MB |
+| GPU: cells, 260 shells, 16 LOD0s (typical buildings), collision meshes, the building table | 45.0 MB | 40.6 MB |
+| C# the game reads: the layout and its site, the generator's memos, the table's CPU copy, the LOD0 shapes | 12.1 MB | 12.5 MB |
 | C# kept but never read again | 276.5 MB | none |
-| Total | 333.6 MB | 55.3 MB |
+| Total | 333.6 MB | 53.1 MB |
 
-Both budgets in the package plan (§6.6: 120 MB on iPhone 7, 200 MB on iPhone 14 and newer) hold for the typical view and the densest one (the 95th-percentile building at every LOD0 and the largest shells: 86.8 MB on the GPU, about 100 MB in all). With the 16 largest towers of the city all at LOD0 (145.1 MB on the GPU, 159 MB in all) only the newer phones' budget holds; the minimum tier needs lower residency caps.
+Both budgets in the package plan (§6.6: 120 MB on iPhone 7, 200 MB on iPhone 14 and newer) hold for the typical view and the densest one (the 95th-percentile building at every LOD0 and the largest shells: 85.7 MB on the GPU, about 98 MB in all). With the 16 largest towers of the city all at LOD0 (144.0 MB on the GPU, 157 MB in all) only the newer phones' budget holds; the minimum tier needs lower residency caps.
 
 **Nothing is kept from the generator but a building's shape.**
 - **LOD0 and LOD1.** The meshes are uploaded from the generator's result, with no CPU copy kept (`UploadMeshData(true)`), and the result is let go. While a building has its LOD0, the renderer keeps its shape (`Lod0Shape`, `SiteRenderer.ShapeOf`): the collision segments and the wall list, for the walk model, the colliders and the cutaway. A shape is 10–25 KB, about 1% of its LOD0's GPU meshes, and 40–70 KB for the largest towers. The generator's whole result, kept before, was 4.7 to 5 times the GPU meshes: 3.5 to 7.7 MB a building, 32 to 35 MB for the largest towers.
