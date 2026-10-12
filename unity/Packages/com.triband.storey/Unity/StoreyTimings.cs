@@ -8,13 +8,13 @@ using System.Text;
 namespace Triband.Storey.Unity
 {
     /// <summary>
-    /// Where an edit's time goes, by stage (docs/EDITOR.md §2.1): each stage is a Profiler sample named "Storey …" (search
+    /// Where an edit's time goes, by stage (docs/EDITOR.md §2.1): each stage is a Profiler marker named "Storey …" (search
     /// the Profiler's hierarchy for "Storey"), and, while <see cref="Enabled"/>, its time is added up for the authoring
     /// package's timing log (Tools ▸ Storey ▸ Log Edit Timings). Main thread only.
     /// </summary>
     public static class StoreyTimings
     {
-        /// <summary>Add up stage times for the log (the Profiler samples are always there).</summary>
+        /// <summary>Add up stage times for the log (the Profiler markers are always there).</summary>
         public static bool Enabled { get; set; }
 
         static readonly Dictionary<string, (double ms, int n)> acc = new Dictionary<string, (double, int)>(StringComparer.Ordinal);
@@ -22,21 +22,21 @@ namespace Triband.Storey.Unity
 
         public readonly struct Scope : IDisposable
         {
-            readonly string what; readonly long t0;
-            internal Scope(string what) { this.what = what; t0 = Stopwatch.GetTimestamp(); UnityEngine.Profiling.Profiler.BeginSample(SampleName(what)); }
+            readonly string what; readonly long t0; readonly global::Unity.Profiling.ProfilerMarker marker;
+            internal Scope(string what) { this.what = what; t0 = Stopwatch.GetTimestamp(); marker = Marker(what); marker.Begin(); }
             public void Dispose()
             {
-                UnityEngine.Profiling.Profiler.EndSample();
+                marker.End();
                 if (Enabled) Add(what, (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency);
             }
         }
 
-        // the Profiler's sample names, made once each (joining the prefix on every sample was garbage every frame)
-        static readonly Dictionary<string, string> sampleNames = new Dictionary<string, string>(StringComparer.Ordinal);
-        static string SampleName(string what)
+        // a ProfilerMarker per stage, made once each: it sends the Profiler an id, not the name, on every sample
+        static readonly Dictionary<string, global::Unity.Profiling.ProfilerMarker> markers = new Dictionary<string, global::Unity.Profiling.ProfilerMarker>(StringComparer.Ordinal);
+        static global::Unity.Profiling.ProfilerMarker Marker(string what)
         {
-            if (!sampleNames.TryGetValue(what, out var name)) sampleNames[what] = name = "Storey " + what;
-            return name;
+            if (!markers.TryGetValue(what, out var m)) markers[what] = m = new global::Unity.Profiling.ProfilerMarker("Storey " + what);
+            return m;
         }
 
         /// <summary>Time a stage: <c>using (StoreyTimings.Time("site: rebuild")) { … }</c>.</summary>

@@ -1,4 +1,5 @@
 #nullable enable
+using Triband.Storey.Lod;
 using Triband.Storey.Unity;
 using UnityEditor;
 using UnityEngine;
@@ -19,6 +20,8 @@ namespace Triband.Storey.Editor
         {
             StoreySite.EditorCamera = () => SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.camera : null;
             SceneView.duringSceneGui += OnScene;
+            // Storey's build threads end before the scripts reload, rather than being aborted with the old domain
+            AssemblyReloadEvents.beforeAssemblyReload += () => BuildThreads.Shared.Resize(0);
         }
 
         static void OnScene(SceneView sv)

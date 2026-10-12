@@ -49,8 +49,11 @@ namespace Triband.Storey.Unity
         [Tooltip("LOD0's see-through windows start as LOD1's painted rooms where LOD0 takes over, so the switch doesn't change the windows, and clear to glass by this share of that distance (0.6: clear at 60% of it). 1: clear at once.")]
         [Range(0.1f, 1f)] public float windowsClearAt = 0.6f;
 
-        [Tooltip("Generate LOD0 and LOD1 on worker threads, one fewer than the cores; only the upload is on the main thread. Off builds on the main thread (WebGL always does).")]
+        [Tooltip("Generate LOD0 and LOD1 on Storey's own build threads; only the upload is on the main thread. Off builds on the main thread (WebGL always does).")]
         public bool buildOnWorkerThreads = true;
+
+        [Tooltip("How many build threads: 0 is automatic, two on a phone or tablet and one fewer than the cores (at most four) on a desktop. They run below normal priority, beside Unity's own job workers; more brings detail in sooner and competes with the engine for cores.")]
+        [Min(0)] public int buildThreads = 0;
 
         [Header("Memory")]
         [Tooltip("Megabytes of mesh-builder lists kept for the next detail builds, on all build threads together. Reusing them saves over half the garbage a detail build makes; lower it on small devices (8 on the minimum tier).")]
@@ -79,7 +82,8 @@ namespace Triband.Storey.Unity
             if (s.PX.Length != 3) s.PX = new double[3];   // into the array it has: the site applies this every frame
             s.PX[0] = lod0PixelsPerMetre; s.PX[1] = lod1PixelsPerMetre; s.PX[2] = lod2PixelsPerMetre;
             s.Hysteresis = hysteresis; s.Fade = Mathf.Max(0.01f, fadeSeconds); s.Far = farDistance;
-            s.GlassClear = windowsClearAt; s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.BudgetMs = buildBudgetMs; s.Threads = buildOnWorkerThreads ? -1 : 0;
+            s.GlassClear = windowsClearAt; s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.BudgetMs = buildBudgetMs;
+            s.Threads = !buildOnWorkerThreads ? 0 : buildThreads > 0 ? buildThreads : -1;
             s.KeepBuilderBytes = (long)buildListsKeptMB << 20; s.KeepArrayBytes = (long)uploadArraysKeptMB << 20;
         }
     }

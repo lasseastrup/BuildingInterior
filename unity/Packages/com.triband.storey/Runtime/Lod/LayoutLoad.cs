@@ -19,13 +19,15 @@ namespace Triband.Storey.Lod
         readonly List<BuildingData[]> cells;
         readonly Task<Lod2Mesh[]>?[] made;
         readonly int ahead;
+        readonly BuildThreads on;
         int next, started;
 
         /// <param name="threads">Worker threads (0: every massing built by <see cref="TryTake"/>, on the caller's thread).</param>
         /// <param name="from">A point in the layout (the camera): the cells nearest it first; otherwise in the layout's order.</param>
-        public LayoutLoad(Site site, IEnumerable<BuildingData> buildings, int threads, (double x, double z)? from = null)
+        /// <param name="on">The threads the massings are built on: <see cref="BuildThreads.Shared"/> unless given.</param>
+        public LayoutLoad(Site site, IEnumerable<BuildingData> buildings, int threads, (double x, double z)? from = null, BuildThreads? on = null)
         {
-            this.site = site;
+            this.site = site; this.on = on ?? BuildThreads.Shared;
             var groups = buildings.GroupBy(b => { var bb = Site.BoundsOf(b); return Cells.KeyOf((bb.x0 + bb.x1) / 2, (bb.z0 + bb.z1) / 2); });
             if (from is (double fx, double fz))
                 groups = groups.OrderBy(g => { double cx = (g.Key.x + 0.5) * Cells.Size - fx, cz = (g.Key.z + 0.5) * Cells.Size - fz; return cx * cx + cz * cz; });
@@ -56,7 +58,7 @@ namespace Triband.Storey.Lod
             while (started < cells.Count && started < next + ahead)
             {
                 var c = cells[started];
-                made[started++] = Task.Run(() => Massings(site, c));
+                made[started++] = on.Run(() => Massings(site, c));
             }
         }
 

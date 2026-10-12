@@ -36,7 +36,7 @@ namespace Triband.Storey.Lod
         /// <summary>The distance at which a building's nearest point takes LOD0 coming closer, for a camera's pixels per metre.</summary>
         public double Lod0Distance(double pixelsPerMetre) => pixelsPerMetre * Bias / (PX[0] * (1 + Hysteresis));
 
-        /// <summary>Worker threads generating detail at once: 0 builds on the main thread, -1 one fewer than the cores (at least one).</summary>
+        /// <summary>Build threads generating detail (<see cref="BuildThreads"/>): 0 builds on the main thread, -1 automatic (<see cref="BuildThreads.Automatic"/>).</summary>
         public int Threads = -1;
 
         /// <summary>

@@ -57,6 +57,19 @@ namespace Triband.Storey.Unity
             public (int x, int z) cell;
         }
 
+        // Storey's build threads show in the Profiler's timeline under their own names, with the markers below, and end
+        // when the player quits
+        static SiteRenderer()
+        {
+            BuildThreads.Started = name => UnityEngine.Profiling.Profiler.BeginThreadProfiling("Storey", name);
+            BuildThreads.Ended = UnityEngine.Profiling.Profiler.EndThreadProfiling;
+            Application.quitting += () => BuildThreads.Shared.Resize(0);
+        }
+
+        static readonly global::Unity.Profiling.ProfilerMarker markLod0 = new global::Unity.Profiling.ProfilerMarker("Storey.Generate LOD0"),
+            markLod1 = new global::Unity.Profiling.ProfilerMarker("Storey.Generate LOD1"), markPack = new global::Unity.Profiling.ProfilerMarker("Storey.Pack"),
+            markCollision = new global::Unity.Profiling.ProfilerMarker("Storey.Collision mesh");
+
         /// <param name="flags">Edit mode passes <c>DontSave</c>: the meshes are a preview of the layout, never part of the scene file.</param>
         /// <param name="auto">The automatic LOD's settings; null for the fixed LOD (every LOD built, <see cref="Lod"/> shown).</param>
         public SiteRenderer(Transform parent, Material opaque, Material glass, Material massing, HideFlags flags = HideFlags.None, LodSettings? auto = null)
@@ -555,15 +568,21 @@ namespace Triband.Storey.Unity
             // once packed, the builders' lists go to this thread's next build (MeshBuilder.Recycle)
             if (which == 1)
             {
-                var m = Lod1.Build(site, b); m.RetagForUpload(idx + Lod1.LOD_TAG);
-                var shell = new Detail { opaque = MeshPack.Pack(m, windows: true) };
+                MeshBuilder m;
+                using (markLod1.Auto()) m = Lod1.Build(site, b);
+                m.RetagForUpload(idx + Lod1.LOD_TAG);
+                Detail shell;
+                using (markPack.Auto()) shell = new Detail { opaque = MeshPack.Pack(m, windows: true) };
                 m.Recycle();
                 return shell;
             }
-            var l0 = Lod0.Build(site, b);
+            Lod0Result l0;
+            using (markLod0.Auto()) l0 = Lod0.Build(site, b);
             l0.Op.RetagForUpload(idx); l0.Glass.RetagForUpload(idx);
             // the glass's panes carry their place too, to start as LOD1's; neither is welded (it would find almost nothing)
-            var full = new Detail { opaque = MeshPack.Pack(l0.Op, true, mates, weld: false), glass = MeshPack.Pack(l0.Glass, true, mates, weld: false), shape = l0.Shape, collision = collider ? CollisionMesh.Build(site, b, l0.Shape) : null };
+            var full = new Detail { shape = l0.Shape };
+            using (markPack.Auto()) { full.opaque = MeshPack.Pack(l0.Op, true, mates, weld: false); full.glass = MeshPack.Pack(l0.Glass, true, mates, weld: false); }
+            if (collider) using (markCollision.Auto()) full.collision = CollisionMesh.Build(site, b, l0.Shape);
             l0.Op.Recycle(); l0.Glass.Recycle();
             return full;
         }
@@ -605,7 +624,20 @@ namespace Triband.Storey.Unity
         /// <summary>A mesh's name, numbered when it comes in parts.</summary>
         static string Part(string name, int i, int n) => n > 1 ? $"{name} ({i + 1})" : name;
 
-        int Threads => lods == null ? 0 : lods.Settings.Threads >= 0 ? lods.Settings.Threads : Math.Max(1, Environment.ProcessorCount - 1);
+        /// <summary>
+        /// Build threads (<see cref="BuildThreads.Shared"/>, sized here: one count for every site): the settings' number, or
+        /// automatic, two on a phone or tablet and one fewer than the cores (at most four) on a desktop.
+        /// </summary>
+        int Threads
+        {
+            get
+            {
+                if (lods == null) return 0;
+                int n = lods.Settings.Threads >= 0 ? lods.Settings.Threads : BuildThreads.Automatic(SystemInfo.processorCount, SystemInfo.deviceType == DeviceType.Handheld);
+                if (BuildThreads.Shared.Count != n) BuildThreads.Shared.Resize(n);
+                return n;
+            }
+        }
 
         /// <summary>
         /// Detail finished on the worker threads, uploaded within the budget (the rest wait for the next frame). A result
@@ -670,7 +702,7 @@ namespace Triband.Storey.Unity
         void StartJob(Built bt, BuildingData b, int which)
         {
             var s0 = site!; int ix = bt.idx; var mates = (blockStart, blockSize); bool collider = which == 0 && colliders && bt.collision == null;
-            jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, task = System.Threading.Tasks.Task.Run(() => Generate(s0, b, ix, which, mates, collider)) });
+            jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, task = BuildThreads.Shared.Run(() => Generate(s0, b, ix, which, mates, collider)) });
         }
 
         void UpdateLods()

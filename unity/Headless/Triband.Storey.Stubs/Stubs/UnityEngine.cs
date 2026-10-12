@@ -68,6 +68,7 @@ namespace UnityEngine
         public static RuntimePlatform platform => RuntimePlatform.LinuxEditor;
         public static bool isPlaying => false;
         public static bool isMobilePlatform => false;
+        public static event System.Action? quitting { add { } remove { } }
     }
 
     public class ScriptableObject : Object
@@ -436,7 +437,11 @@ namespace UnityEngine
     public static class SystemInfo
     {
         public static bool SupportsVertexAttributeFormat(UnityEngine.Rendering.VertexAttributeFormat format, int dimension) => true;
+        public static int processorCount => System.Environment.ProcessorCount;
+        public static DeviceType deviceType => DeviceType.Desktop;
     }
+
+    public enum DeviceType { Unknown, Handheld, Console, Desktop }
 }
 
 namespace UnityEngine.Rendering
@@ -646,7 +651,7 @@ namespace Unity.Jobs
 {
     public interface IJobParallelFor { void Execute(int index); }
 
-    public struct JobHandle { public void Complete() { } }
+    public struct JobHandle { public void Complete() { } public bool IsCompleted => true; }
 
     public static class IJobParallelForExtensions
     {
@@ -660,5 +665,19 @@ namespace UnityEngine.Profiling
     {
         public static void BeginSample(string name) { }
         public static void EndSample() { }
+        public static void BeginThreadProfiling(string threadGroupName, string threadName) { }
+        public static void EndThreadProfiling() { }
+    }
+}
+
+namespace Unity.Profiling
+{
+    public readonly struct ProfilerMarker
+    {
+        public ProfilerMarker(string name) { }
+        public void Begin() { }
+        public void End() { }
+        public AutoScope Auto() => default;
+        public readonly struct AutoScope : System.IDisposable { public void Dispose() { } }
     }
 }

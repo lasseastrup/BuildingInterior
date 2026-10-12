@@ -52,6 +52,12 @@ namespace UnityEditor
     public sealed class InitializeOnLoadMethodAttribute : System.Attribute { }
     public sealed class InitializeOnLoadAttribute : System.Attribute { }
 
+    public static class AssemblyReloadEvents
+    {
+        public delegate void AssemblyReloadCallback();
+        public static event AssemblyReloadCallback? beforeAssemblyReload { add { } remove { } }
+    }
+
     public static class ProjectWindowUtil
     {
         public static void CreateAssetWithContent(string filename, string content) { }

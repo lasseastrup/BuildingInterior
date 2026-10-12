@@ -39,7 +39,8 @@ A Storey Site's **LOD mode** is *Automatic* by default; *Fixed* shows one LOD ev
 - **Detail is built on demand.**
   - A building that wants LOD0 or LOD1 asks for it, and the ones covering the most pixels go first.
   - It shows the best LOD it already has meanwhile.
-  - The meshes are generated on worker threads, one fewer than the cores, and one building at a time each. The main thread only uploads them, for up to 6 ms a frame (at least one when any is ready).
+  - The meshes are generated on Storey's own build threads (`BuildThreads`), one building at a time each. The main thread only uploads them, for up to 6 ms a frame (at least one when any is ready).
+  - The build threads are long-lived background threads named "Storey build 1, 2, …", below normal priority where the platform allows it, and registered with Unity's Profiler: their timeline shows `Storey.Generate LOD0`, `Storey.Generate LOD1`, `Storey.Pack` and `Storey.Collision mesh`. How many is the quality asset's **Build Threads**; automatic is two on a phone or tablet and one fewer than the cores, at most four, on a desktop. They aren't Unity's job workers: a build takes several milliseconds, longer than Unity's guidance for a job, and the job workers run the engine's own culling and physics. Waiting for a build that hasn't started (a forced building, a layout loaded at once) runs it on the waiting thread.
   - A result for a layout or building that has changed since is thrown away, as is one no longer wanted.
   - A building's collision mesh is made on the worker with its first LOD0, when colliders are on.
   - A building that must have LOD0 at once (see Forced buildings below) while a worker is already building it waits for that build rather than starting another.
