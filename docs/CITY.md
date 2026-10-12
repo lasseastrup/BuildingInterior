@@ -161,7 +161,7 @@ Both budgets in the package plan (§6.6: 120 MB on iPhone 7, 200 MB on iPhone 14
 
 ## 8. Not yet
 
-- Measuring the upload in Unity, and moving the vertex buffers onto the workers if it hitches (§4).
+- Measuring the upload in Unity, and moving the vertex buffers onto the workers if it hitches (the MeshData API, `Mesh.AllocateWritableMeshData`; §4).
 - Loading districts through Addressables. They load as scenes from the build's scene list today (§5).
 - Occluders across a district edge: the occlusion works on the district the player is in, so a building of the next district in the camera's way doesn't sink.
 - Bridges between districts: a bridge reaches only buildings of its own layout.
@@ -169,4 +169,7 @@ Both budgets in the package plan (§6.6: 120 MB on iPhone 7, 200 MB on iPhone 14
 - Cells baked at import. They are merged when the layout loads: over frames in Play mode, at once after an edit or in the editor.
 - Memory measured in Unity and on a device (the Memory Profiler, Xcode's gauge). §7 is headless.
 - Unity's own copy and upload of a mesh (§4).
+- Warming up the shaders' pipeline states before play (a `GraphicsStateCollection` traced on each device tier). The steady variant doubles the opaque and massing variants, and a variant a frame needs for the first time is compiled then, which can hitch.
+- Burst for packing (`MeshPack` works on plain arrays already).
+- The steady variant checked in the editor in every occlusion mode, and the GPU time it saves measured on a device (Xcode's GPU counters).
 - None of the above is measured in Unity yet; the numbers in §4 are headless.

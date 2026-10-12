@@ -7,8 +7,8 @@ namespace Triband.Storey.Unity
     /// Per-tier quality settings for the package (Plan §6.1, §6.6). One asset per device
     /// tier; a project selects one at startup from the device model. Nothing here changes
     /// content: the same buildings, LODs and occlusion modes exist on every tier, and
-    /// these knobs only trade detail distance and two shader features for memory and
-    /// fill rate.
+    /// these knobs only trade detail distance, far buildings' occlusion and build speed
+    /// for memory, CPU time and fill rate.
     /// </summary>
     /// <remarks>
     /// Defaults are the primary tier (desktop and iPhone 14 or newer). The minimum tier
@@ -66,12 +66,9 @@ namespace Triband.Storey.Unity
         [Tooltip("Cut and fade massings (LOD2 and the cells) in the way like near buildings. Off, far geometry always draws without discard (the steady variant), which tile-based GPUs treat as opaque; off on the minimum tier.")]
         public bool occlusionOnFarMaterials = true;
 
-        [Header("Rendering")]
-        [Tooltip("Allow URP's GPU occlusion culling for building renderers. Measured per project; off on the minimum tier.")]
-        public bool gpuOcclusionCulling = true;
-
-        [Tooltip("Target frame rate the package's budgets are measured against.")]
-        [Range(30, 120)] public int targetFrameRate = 60;
+        // No GPU occlusion culling or frame rate here. Unity has no per-renderer switch for GPU occlusion: it is each quality
+        // level's Universal Renderer setting. The frame rate is the project's (Application.targetFrameRate), and Storey's own
+        // budget is the milliseconds above. docs/SPEC.md §6.7 lists the project settings Storey needs.
 
         /// <summary>The automatic LOD's settings from these.</summary>
         public Lod.LodSettings ToLodSettings() { var s = new Lod.LodSettings(); ApplyTo(s); return s; }

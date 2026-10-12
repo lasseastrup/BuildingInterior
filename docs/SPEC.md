@@ -280,7 +280,7 @@ Why semantic LODs rather than decimation: automatic simplification of boxy archi
 ### 6.5 Generation, memory and streaming
 
 - **LOD2 and cells:** tiny; generated for every building at load or edit (3,000 buildings plus their cells in about 0.5–1 s in JS). In Unity, bake them as assets.
-- **LOD1 and LOD0:** built on demand as resumable jobs, largest on screen first. A 38-floor tower's LOD0 costs 100–150 ms in one go in the prototype, but about 3 ms per storey step. Unity: schedule Burst jobs writing into `Mesh.AllocateWritableMeshData`, apply on the main thread with `Mesh.ApplyAndDisposeWritableMeshData` (it validates little, so set bounds and submeshes yourself), then `Mesh.Optimize()`.
+- **LOD1 and LOD0:** built on demand as resumable jobs, largest on screen first. A 38-floor tower's LOD0 costs 100–150 ms in one go in the prototype, but about 3 ms per storey step. Unity (as built): generated and packed whole on Storey's build threads, not in storey steps, and uploaded on the main thread within the frame's build budget (docs/CITY.md §2). No `Mesh.Optimize()`: it crashed the editor (Plan §6.5).
 - **Caches:** least-recently-used, keeping at most 16 LOD0 and 260 LOD1 meshes that aren't on screen. The street-level test used 87 MB of geometry including caches, and the overview 12 MB.
 - **Baked or runtime?** Recommendation: bake LOD2, cells and LOD1 at edit time (static, streamable with the scene or Addressables per district), and generate LOD0 at runtime near the camera and player, since interiors are the heavy part and only a handful are ever needed at once. Hero buildings can bake LOD0 too.
 - **Colliders** come from the data, independent of the render LOD. A shell building's collider is its exterior ring; a walk-in building gets per-floor colliders, built when the player comes near.
@@ -302,8 +302,11 @@ The coplanar check passes with 0 visible overlaps at LOD0, LOD1 and LOD2 across 
 ### 6.7 Unity rendering setup for a city
 
 - **Pipeline:** URP with the Forward+ (or Deferred+) rendering path, the SRP Batcher on, and the **GPU Resident Drawer** set to *Instanced Drawing*. This needs *BatchRendererGroup Variants = Keep All*. Only MeshRenderers qualify.
-- **GPU occlusion culling** is worth turning on for dense street-level views, where most buildings hide behind the first row. It needs the GPU Resident Drawer and Render Graph, and can cost more than it saves in open views.
+- **GPU occlusion culling** is worth turning on for dense street-level views, where most buildings hide behind the first row. It needs the GPU Resident Drawer and Render Graph, and can cost more than it saves in open views. It is the Universal Renderer's *GPU Occlusion*, set per quality level: Unity has no per-renderer switch, so Storey has none.
 - **No static batching:** it isn't compatible with the GPU Resident Drawer, and cells already merge the far geometry.
+- **Depth Priming Mode: Disabled** on each Universal Renderer. Storey's depth pass draws whole buildings, as its shadows do, and only the colour pass cuts away (Plan §6.3). With priming, the colour pass draws only where its depth equals the prepass's, so the rooms the cutaway opens would stay behind the walls. URP doesn't prime on iPhones (tile-based GPUs), so this is a desktop setting.
+- **The frame rate is the project's:** `Application.targetFrameRate`. Mobile platforms ignore vsync and run below the screen's rate unless it is set (typically 30 fps), so the primary tier's 60 fps (Plan §6.6) needs it set to 60. Storey's own budget is milliseconds (`StoreyQualitySettings.buildBudgetMs`).
+- **Incremental garbage collection on** (*Player Settings › Configuration*). IL2CPP's collector isn't generational, so each collection scans the whole heap; incremental collection spreads that over frames. Storey's build threads reuse their memory, but streaming detail in still makes garbage (docs/CITY.md §7).
 - **Mesh LOD (Unity 6.2+)** is not a substitute for the semantic building LODs: it can't change materials or renderers between LODs, and Unity recommends against combining it with LODGroup. It could still help imported objects inside LOD0.
 - **Budgets to validate on target hardware** (open question 9): draw calls, triangles and geometry memory, taking the street-level numbers above as the baseline.
 
@@ -325,7 +328,7 @@ The coplanar check passes with 0 visible overlaps at LOD0, LOD1 and LOD2 across 
 | **3. Play-mode test rig** | Third-person controller, follow camera (orbit / zoom / pitch clamp), virtual joystick, stairs ramps, lift interaction. Only for testing authored buildings; game code may replace it. | Outside → lobby → stairs → roof → lift down, on device |
 | **4. Editor: shape & facade** | Scene-view handles (footprint corners, insert, delete, move, edge push), setbacks (tier list, containment rules, terrace generation with Clipper2), facade inspector with presets, entrance and blank-wall tools, undo via `Undo.RecordObject`, shell-only toggle | Designer makes a styled 3-floor building in < 2 min |
 | **5. Editor: floors & interior** | Floor overlay (count, add/remove/duplicate/delete, copy layout up), wall/door/erase tools with snapping, core placement with range inspector | 10 floors + rooftop access in < 5 min, remove floor 4 in one click |
-| **6. City scale** | LOD1 and LOD2 generators, facade shader, building table (GraphicsBuffer), LOD manager on LODGroups with feature-scale transition heights, HLOD cells, Burst generation jobs, LRU caches, city generator for tests | 3,000-building test city at the §6.6 numbers or better; coplanar and LOD-consistency tests pass |
+| **6. City scale** | LOD1 and LOD2 generators, facade shader, building table (GraphicsBuffer), LOD manager on LODGroups with feature-scale transition heights, HLOD cells, generation on worker threads, LRU caches, city generator for tests | 3,000-building test city at the §6.6 numbers or better; coplanar and LOD-consistency tests pass |
 | **7. Polish** | Per-floor overrides (height, facade per tier), baked lighting strategy, streaming districts (Addressables) | Perf budget met on target device |
 
 ## 9. Editor UI (Unity mapping)
@@ -383,7 +386,7 @@ com.triband.storey/
   package.json            name "com.triband.storey", version, displayName, unity "6000.0" (6000.3 for renderer user values), dependencies:
                           com.unity.render-pipelines.universal, com.unity.burst, com.unity.collections, com.unity.mathematics
   README.md  CHANGELOG.md  LICENSE.md
-  Runtime/                <Studio>.Storey.asmdef       data model, generators (Burst), LOD manager, building table, occlusion globals, colliders
+  Runtime/                <Studio>.Storey.asmdef       data model, generators, LOD manager, building table, occlusion globals, colliders
     Shaders/              BuildingOcclusion.hlsl, Facade.hlsl, Shader Graphs (opaque, glass, massing)
   Editor/                 <Studio>.Storey.Editor.asmdef (Editor only)  inspector tabs, EditorTools, Scene view overlays, bake-to-asset, city generator
   Tests/Editor/           coplanar-face test, topology census (internal faces, T-junctions), LOD consistency (window positions LOD1 = LOD2 shader)

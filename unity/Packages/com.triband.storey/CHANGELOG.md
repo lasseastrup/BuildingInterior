@@ -29,6 +29,9 @@ All notable changes to this package are documented here. The format follows [Kee
 - `StoreyGlobals.SetOcclusion` takes the player's chest (world space) and the hole radius in metres. The shader projects the player itself, so Cutout and Fade hold on reversed-depth platforms and flipped render targets.
 - A building's row in the building table is its index in the layout, so party walls find their neighbour in the shader.
 
+### Removed
+- `StoreyQualitySettings.gpuOcclusionCulling` and `targetFrameRate`. Nothing read them: Unity has no per-renderer switch for GPU occlusion culling (it is each quality level's Universal Renderer setting), the frame rate is the project's (`Application.targetFrameRate`), and Storey's own budget is `buildBudgetMs`. docs/SPEC.md §6.7 lists the project settings Storey needs, Depth Priming off among them.
+
 ### Fixed
 - An edit's problem check compared every pair of buildings for overlaps, however few buildings it checked: 4.5 million pairs on the 3,000-building test city. It takes the candidates from the site's grid (`Site.InBox`), in the same order: checking an edited building and its neighbours there takes about 70 ms instead of about 320.
 - Memory: Storey kept the generator's working data after the meshes were uploaded, at 4.7 to 5 times the meshes' size. On the 3,000-building test city after a five-minute walk that was 277 MB of C# memory never read again, beside 45 MB of GPU meshes. It now keeps none of it: 53 MB in all, with the smaller cells, LOD0 parts and wall tables under Changed (headless .NET; docs/CITY.md §7).
