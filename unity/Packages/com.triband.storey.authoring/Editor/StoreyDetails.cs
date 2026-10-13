@@ -11,8 +11,8 @@ namespace Triband.Storey.Editor
 {
     /// <summary>
     /// The project's facade details (<see cref="StoreyDetail"/>, docs/EDITOR.md §6.12): Storey's own five, which the
-    /// package ships as Facade Detail assets, and the artist's. Found and registered when the editor loads, each of the
-    /// project's given its asset's GUID as its id (so a copy is a kind of its own), baked again when its models are
+    /// package ships as Facade Detail assets, and the artist's. Found and registered when the editor loads, each with an
+    /// id of its own (<see cref="StoreyAssetIds"/>: a copy is a detail of its own), baked again when its models are
     /// reimported, and kept in each site's list of the ones its layout uses, so builds include them.
     /// </summary>
     [InitializeOnLoad]
@@ -35,38 +35,34 @@ namespace Triband.Storey.Editor
         public static List<StoreyDetail> All()
         {
             if (all != null && all.All(d => d != null)) return all;
-            var found = new List<StoreyDetail>();
-            foreach (var path in AssetDatabase.FindAssets("t:" + nameof(StoreyDetail)).Select(AssetDatabase.GUIDToAssetPath).Distinct())
-            {
-                var d = AssetDatabase.LoadAssetAtPath<StoreyDetail>(path);
-                if (d == null) continue;
-                Own(d, path);
-                found.Add(d);
-            }
-            // one not yet given its own id (not saved yet) is left out till it has one
+            var found = AssetDatabase.FindAssets("t:" + nameof(StoreyDetail)).Select(AssetDatabase.GUIDToAssetPath).Distinct()
+                .Select(p => AssetDatabase.LoadAssetAtPath<StoreyDetail>(p)).Where(d => d != null).Select(d => d!).ToList();
+            StoreyAssetIds.Settle(found, d => d.Id, (d, id) => d.SetId(id), d => AssetDatabase.GetAssetPath(d).StartsWith(Folder, StringComparison.Ordinal), DetailKinds.IsBuiltIn, "facade detail");
+            // one not given its own id yet (not saved yet) is left out till it has one
             return all = found.Where(d => d.Id.Length > 0 && (!d.BuiltIn || Ours(d)))
                 .OrderBy(d => d.BuiltIn ? BuiltInIndex(d.Id) : DetailKinds.BuiltIn.Count).ThenBy(d => d.name, StringComparer.OrdinalIgnoreCase).ToList();
         }
         static List<StoreyDetail>? all;
 
+        /// <summary>Search again next time (the project changed).</summary>
+        public static void Changed() => all = null;
+
+        /// <summary>The artist's details made from a model just reimported, baked again.</summary>
+        public static void Rebake(ISet<string> imported)
+        {
+            foreach (var d in All())
+            {
+                if (d.BuiltIn) continue;
+                bool hit = (d.mesh != null && imported.Contains(AssetDatabase.GetAssetPath(d.mesh))) || (d.lod1Mesh != null && imported.Contains(AssetDatabase.GetAssetPath(d.lod1Mesh)));
+                if (!hit) continue;
+                d.Bake(); EditorUtility.SetDirty(d);
+            }
+        }
+
         static int BuiltInIndex(string id) { for (int i = 0; i < DetailKinds.BuiltIn.Count; i++) if (DetailKinds.BuiltIn[i] == id) return i; return -1; }
 
         /// <summary>One of the package's five.</summary>
         internal static bool Ours(StoreyDetail d) => d.BuiltIn && AssetDatabase.GetAssetPath(d).StartsWith(Folder, StringComparison.Ordinal);
-
-        /// <summary>
-        /// The project's asset takes its GUID as its id: one made by copying another (or one of the package's five) would
-        /// otherwise share the original's, and be the same kind. The package's keep the generator's ids.
-        /// </summary>
-        internal static void Own(StoreyDetail d, string path)
-        {
-            if (path.StartsWith(Folder, StringComparison.Ordinal)) return;
-            string guid = AssetDatabase.AssetPathToGUID(path);
-            if (string.IsNullOrEmpty(guid) || d.Id == guid) return;
-            d.SetId(guid);
-            EditorUtility.SetDirty(d);
-            AssetDatabase.SaveAssetIfDirty(d);
-        }
 
         /// <summary>The palette's details: every one in <see cref="All"/>, or the generator's five if the package's assets are missing.</summary>
         public static List<(string id, string name)> Palette()
@@ -146,33 +142,6 @@ namespace Triband.Storey.Editor
     }
 
     /// <summary>
-    /// A new or copied Facade Detail asset takes its own id at once, and a reimported model bakes the details made from
-    /// its meshes again.
-    /// </summary>
-    internal sealed class StoreyDetailReimport : AssetPostprocessor
-    {
-        static void OnPostprocessAllAssets(string[] imported, string[] deleted, string[] moved, string[] movedFrom)
-        {
-            if (imported.Length == 0) return;
-            var assets = imported.Where(p => p.EndsWith(".asset", StringComparison.OrdinalIgnoreCase)).ToList();
-            if (assets.Count > 0)
-                EditorApplication.delayCall += () =>   // not while importing: saving the asset imports it again
-                {
-                    foreach (var p in assets)
-                        if (AssetDatabase.LoadAssetAtPath<StoreyDetail>(p) is StoreyDetail d) StoreyDetails.Own(d, p);
-                };
-            var set = new HashSet<string>(imported);
-            foreach (var d in StoreyDetails.All())
-            {
-                if (d.BuiltIn) continue;
-                bool hit = (d.mesh != null && set.Contains(AssetDatabase.GetAssetPath(d.mesh))) || (d.lod1Mesh != null && set.Contains(AssetDatabase.GetAssetPath(d.lod1Mesh)));
-                if (!hit) continue;
-                d.Bake(); EditorUtility.SetDirty(d);
-            }
-        }
-    }
-
-    /// <summary>
     /// A Facade Detail's inspector. One of Storey's own five says what it is. An artist's: where it goes and its rule, in
     /// words; setting a mesh names its parts from the model's materials and takes the size from its bounds; any change
     /// bakes it again. Says what it found, and what looks wrong with the pivot.
@@ -183,7 +152,7 @@ namespace Triband.Storey.Editor
         public override void OnInspectorGUI()
         {
             var d = (StoreyDetail)target;
-            StoreyDetails.Own(d, AssetDatabase.GetAssetPath(d));
+            StoreyDetails.All();   // a new or copied one takes an id of its own first
             if (d.BuiltIn && StoreyDetails.Ours(d))
             {
                 var k = DetailKinds.Get(d.Id)!;

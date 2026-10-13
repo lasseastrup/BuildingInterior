@@ -377,7 +377,15 @@ LODs: LOD0 places the mesh. LOD1 places *LOD1 mesh* if there is one, and otherwi
 
 The site lists the windows and doors its layout uses (*Openings*, kept by the editor when you save), so builds include them. The mesh is copied into the asset when set, and baked again when its model is reimported. If Unity says the mesh isn't readable, tick *Read/Write* on the model.
 
-Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`), `FacadeStyle.windowKind`/`doorKind` (layout keys `windowKind`, `doorKind`) (`OpeningKindTests`). Unity: `StoreyOpening`, `StoreySite.openings`.
+A style names its window and door by the asset's id, kept through renames and moves. The editor keeps every id unique:
+- A new window or door takes its asset's GUID as its id.
+- A copy (Ctrl+D, or the file copied in) gets an id of its own as soon as it's imported, so it's a window of its own. Before, a copy kept its original's id, and the two were one window: a style showed whichever loaded last.
+- The original keeps its id, so the styles that picked it still show it. The original is the one whose GUID the id is; for one made before ids were GUIDs, the one that wasn't just imported.
+- Two that already share an id (copies made before) are split when the editor loads: the first by path keeps it, and the Console says which got its own. A style that picked that one may show the other: pick it again.
+
+Facade details follow the same rule (§6.12).
+
+Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`), `FacadeStyle.windowKind`/`doorKind` (layout keys `windowKind`, `doorKind`) (`OpeningKindTests`); `AssetIds`, the id rule (`AssetIdsTests`). Unity: `StoreyOpening`, `StoreySite.openings`. Editor: `StoreyOpenings`, `StoreyAssetIds`.
 
 **Checks:**
 1. Make a window from a model with Glass and Frame materials. Its parts list says Glass and Frame, and its size matches the model.
@@ -385,7 +393,8 @@ Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`), `FacadeS
 3. On a walk-in building the glass is see-through.
 4. Make a door with a Leaf part and pick it under Street door. On a shell building the door shows; on a walk-in building the leaf is gone and you can walk in.
 5. Change the model in your DCC tool and reimport it: the buildings update.
-6. Enter Play mode, and make a build: the windows and doors are there.
+6. Duplicate the window and give the copy another mesh. Pick the copy under Window: buildings show the copy, and those that picked the original still show the original.
+7. Enter Play mode, and make a build: the windows and doors are there.
 
 ### 6.10 The site inspector's layout
 
@@ -465,7 +474,7 @@ The site lists the details its layout uses (*Facade Details*, under Site setting
 
 The mesh is copied into the asset when it's set, and baked again when its model is reimported. If Unity says the mesh isn't readable, tick *Read/Write* on the model.
 
-Each of the project's Facade Details takes its asset's GUID as its id, so a copy, of one of the five too, is a detail of its own. A layout keeps a detail whose asset is gone: it isn't built, and the style's chance for it shows as *Missing detail* until set to 0.
+A new Facade Detail takes its asset's GUID as its id, and a copy, of one of the five too, gets one of its own as soon as it's imported, so it's a detail of its own (the rule in §6.9). A layout keeps a detail whose asset is gone: it isn't built, and the style's chance for it shows as *Missing detail* until set to 0.
 
 Not done: palette icons, LOD2 meshes, colliders (the five have none either), and triangle budgets beyond the LOD1 warning.
 

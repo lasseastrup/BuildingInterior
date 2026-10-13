@@ -10,8 +10,9 @@ namespace Triband.Storey.Editor
 {
     /// <summary>
     /// The project's artist-made windows and doors (<see cref="StoreyOpening"/>, docs/EDITOR.md §6.9): found and
-    /// registered when the editor loads, baked again when their models are reimported, and kept in each site's list of
-    /// the ones its layout uses, so builds include them.
+    /// registered when the editor loads, each with an id of its own (<see cref="StoreyAssetIds"/>: a copy is a window of
+    /// its own), baked again when their models are reimported, and kept in each site's list of the ones its layout uses,
+    /// so builds include them.
     /// </summary>
     [InitializeOnLoad]
     internal static class StoreyOpenings
@@ -23,16 +24,32 @@ namespace Triband.Storey.Editor
         }
 
         /// <summary>
-        /// Every Storey Opening asset in the project, by name. Searched once and kept until the project changes: the
-        /// inspector asks on every redraw, and a search of a big project's AssetDatabase is slow.
+        /// Every Storey Opening asset in the project, by name, each with an id of its own. Searched once and kept until the
+        /// project changes: the inspector asks on every redraw, and a search of a big project's AssetDatabase is slow.
         /// </summary>
         public static List<StoreyOpening> All()
         {
             if (all != null && all.All(o => o != null)) return all;
-            return all = AssetDatabase.FindAssets("t:" + nameof(StoreyOpening)).Select(g => AssetDatabase.LoadAssetAtPath<StoreyOpening>(AssetDatabase.GUIDToAssetPath(g)))
-                .Where(o => o != null).Select(o => o!).OrderBy(o => o.name).ToList();
+            var found = AssetDatabase.FindAssets("t:" + nameof(StoreyOpening)).Select(AssetDatabase.GUIDToAssetPath).Distinct()
+                .Select(p => AssetDatabase.LoadAssetAtPath<StoreyOpening>(p)).Where(o => o != null).Select(o => o!).ToList();
+            StoreyAssetIds.Settle(found, o => o.Id, (o, id) => o.SetId(id), o => false, null, "window or door");
+            return all = found.Where(o => o.Id.Length > 0).OrderBy(o => o.name).ToList();   // one not saved yet waits for its id
         }
         static List<StoreyOpening>? all;
+
+        /// <summary>Search again next time (the project changed).</summary>
+        public static void Changed() => all = null;
+
+        /// <summary>The openings made from a model just reimported, baked again.</summary>
+        public static void Rebake(ISet<string> imported)
+        {
+            foreach (var o in All())
+            {
+                bool hit = (o.mesh != null && imported.Contains(AssetDatabase.GetAssetPath(o.mesh))) || (o.lod1Mesh != null && imported.Contains(AssetDatabase.GetAssetPath(o.lod1Mesh)));
+                if (!hit) continue;
+                o.Bake(); EditorUtility.SetDirty(o);
+            }
+        }
 
         /// <summary>Add an opening to a site's list, if it isn't there.</summary>
         public static void Keep(StoreySite? site, StoreyOpening o)
@@ -63,21 +80,6 @@ namespace Triband.Storey.Editor
         }
     }
 
-    /// <summary>A reimported model: the openings made from its meshes are baked again.</summary>
-    internal sealed class StoreyOpeningReimport : AssetPostprocessor
-    {
-        static void OnPostprocessAllAssets(string[] imported, string[] deleted, string[] moved, string[] movedFrom)
-        {
-            if (imported.Length == 0) return;
-            var set = new HashSet<string>(imported);
-            foreach (var o in StoreyOpenings.All())
-            {
-                bool hit = (o.mesh != null && set.Contains(AssetDatabase.GetAssetPath(o.mesh))) || (o.lod1Mesh != null && set.Contains(AssetDatabase.GetAssetPath(o.lod1Mesh)));
-                if (!hit) continue;
-                o.Bake(); EditorUtility.SetDirty(o);
-            }
-        }
-    }
 
     /// <summary>
     /// A Storey Opening's inspector: setting a mesh names its parts from the model's materials and takes the hole's size
@@ -89,6 +91,7 @@ namespace Triband.Storey.Editor
         public override void OnInspectorGUI()
         {
             var o = (StoreyOpening)target;
+            StoreyOpenings.All();   // a new or copied one takes an id of its own first
             var before = o.mesh;
             EditorGUI.BeginChangeCheck();
             DrawDefaultInspector();

@@ -55,11 +55,25 @@ namespace Triband.Storey.Unity
         [SerializeField, HideInInspector] Baked lod0 = new Baked(), lod1 = new Baked();
         [SerializeField, HideInInspector] bool hasLod1;
 
-        /// <summary>The id a style stores; made once, when the asset is first set up, and kept through renames.</summary>
+        /// <summary>
+        /// The id a style stores, kept through renames. The editor gives a new asset its GUID, and a copy its own (one
+        /// made before kept its original's: <see cref="SetId"/>).
+        /// </summary>
         public string Id => id;
 
-        /// <summary>Give the asset its id, if it has none yet.</summary>
+        /// <summary>Give the asset an id, if it has none yet (one the editor hasn't seen: a new GUID).</summary>
         public void EnsureId() { if (string.IsNullOrEmpty(id)) id = Guid.NewGuid().ToString("N"); }
+
+        /// <summary>
+        /// Give it its id (the editor does, so that no two hold one). The kind under its old id stays registered: it is the
+        /// one this was copied from.
+        /// </summary>
+        public void SetId(string value)
+        {
+            if (value == id) return;
+            id = value;
+            Register();
+        }
 
         /// <summary>The submeshes named after what they look like: the part each likely is (Glass, Door, Trim, Frame).</summary>
         public static Part Guess(string material)
