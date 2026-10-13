@@ -52,6 +52,10 @@ namespace Triband.Storey.Unity
             // the buildings whose party walls its meshes carry
             public readonly List<MeshRenderer>[] solid = { new List<MeshRenderer>(), new List<MeshRenderer>(), new List<MeshRenderer>() };
             public readonly bool[] steady = new bool[3];
+            // per LOD: every renderer, and whether they draw (automatic LOD: a LOD0 or LOD1 kept for later is switched off,
+            // see Draws)
+            public readonly List<MeshRenderer>[] rends = { new List<MeshRenderer>(), new List<MeshRenderer>(), new List<MeshRenderer>() };
+            public readonly bool[] drawn = { true, true, true };
             public int[] mates = Array.Empty<int>();
             public GameObject? root;
             public Mesh? collision;
@@ -402,7 +406,7 @@ namespace Triband.Storey.Unity
             {
                 for (int i = 0; i < bs.Length; i++) Build(bs[i], made[i]);
                 MergeCells();
-                if (sw != null && sw.Elapsed.TotalMilliseconds > lods!.Settings.BudgetMs) break;
+                if (sw != null && sw.Elapsed.TotalMilliseconds > budget) break;
             }
             if (!l.Done) return;
             load = null; carry.Clear();
@@ -733,7 +737,7 @@ namespace Triband.Storey.Unity
                 bool ok = j.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && current;
                 var e = ok ? l.Get(j.bt.idx) : null;
                 if (e == null || (j.which == 0 ? e.Has0 : e.Has1) || e.Want > j.which) ok = false;
-                if (ok && made > 0 && sw.Elapsed.TotalMilliseconds > l.Settings.BudgetMs) continue;   // next frame
+                if (ok && made > 0 && sw.Elapsed.TotalMilliseconds > budget) continue;   // next frame
                 jobs.RemoveAt(i--); busy.Remove(j.bt.idx);
                 // a build of a layout edited under it may throw, and is dropped; one of the layout shown is a fault to report
                 if (j.task.IsFaulted) { var ex = j.task.Exception!; if (current) Debug.LogException(ex.InnerException ?? ex); }
@@ -765,6 +769,7 @@ namespace Triband.Storey.Unity
             foreach (var go in bt.objs[which]) Kill(go);
             foreach (var m in bt.meshes[which]) Kill(m);
             bt.objs[which].Clear(); bt.meshes[which].Clear(); bt.solid[which].Clear(); bt.steady[which] = false;
+            bt.rends[which].Clear(); bt.drawn[which] = true;
             if (which != 0) return;
             bt.mates = Array.Empty<int>();
             if (bt.wallBase >= 0) table.ReleaseWalls(bt.wallBase, bt.wallCount);
@@ -777,6 +782,12 @@ namespace Triband.Storey.Unity
         /// state written, and the cells built again where a building changed and shown where any shows its massing.
         /// </summary>
         readonly System.Diagnostics.Stopwatch lodClock = new System.Diagnostics.Stopwatch();
+
+        // the build budget (Build Budget Ms) is a frame's, every site's together: each site was given all of it, so several
+        // loading at once took it several times over. What this frame's sites have spent of it, and this site's share now
+        static int budgetFrame = -1;
+        static double budgetSpent;
+        double budget;
 
         // its own method: a lambda capturing the build loop's locals made its closure on every pass of the loop, job or not
         // (hundreds of buildings a frame wanting detail: about 14 KB of garbage a frame)
@@ -792,6 +803,10 @@ namespace Triband.Storey.Unity
             var sw = lodClock; sw.Restart();
             float now = Time.realtimeSinceStartup, dt = lastLod < 0 ? 0 : Mathf.Min(0.1f, now - lastLod); lastLod = now;
             var l = lods!; int made = 0, queued = 0; bool fading = false;
+            if (!Application.isPlaying || budgetFrame != Time.frameCount) { budgetFrame = Time.frameCount; budgetSpent = 0; }
+            budget = Math.Max(0, l.Settings.BudgetMs - budgetSpent);
+            // the collider cap lowered: past it now, not only when the next batch is cooked
+            if (l.Settings.MaxColliders != colliderCap) { colliderCap = l.Settings.MaxColliders; TrimColliders(); }
             // the mesh chunks kept for reuse: one limit for every site (the quality asset's)
             Chunks.KeepBytes = l.Settings.KeepChunkBytes;
             forcedIdx.Clear();
@@ -828,13 +843,14 @@ namespace Triband.Storey.Unity
                         StartJob(bt, b, which); busy.Add(idx);
                         continue;
                     }
-                    if (made > 0 && sw.Elapsed.TotalMilliseconds > l.Settings.BudgetMs) { queued++; continue; }
+                    if (made > 0 && sw.Elapsed.TotalMilliseconds > budget) { queued++; continue; }
                     BuildDetail(bt, b, which); l.SetBuilt(idx, which, true); made++;
                 }
                 foreach (int idx in f.Changed)
                 {
                     var e = l.Get(idx)!; table.SetLod(idx, e.Shown, e.From, (float)e.T);
                     if (e.T < 1) fading = true;
+                    if (byIdx.TryGetValue(idx, out var cb)) ShowDetail(cb);
                 }
                 stats.lod0 = f.Count[0]; stats.lod1 = f.Count[1]; stats.lod2 = f.Count[2]; stats.culled = f.Count[3];
             }
@@ -854,6 +870,7 @@ namespace Triband.Storey.Unity
             stats.buildings = built.Count; stats.resident0 = r0; stats.resident1 = r1;
             stats.cells = cells.Count; stats.cellMeshes = pieces; stats.cellsShown = shown;
             stats.queued = queued; stats.generating = jobs.Count; stats.builtThisFrame = made; stats.ms = sw.Elapsed.TotalMilliseconds;
+            budgetSpent += sw.Elapsed.TotalMilliseconds;
         }
 
         /// <summary>The cells a building was built into, rebuilt in or removed from, merged again.</summary>
@@ -936,11 +953,31 @@ namespace Triband.Storey.Unity
             mr.sharedMaterial = mat;
             mr.shadowCastingMode = shadows ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;   // the GPU Resident Drawer wants no probes on the renderer
+            bt.rends[which].Add(mr);
+            mr.enabled = bt.drawn[which] = Draws(bt, which);
             if (mat == opaque || mat == massing)
             {
                 bt.solid[which].Add(mr);
                 var copy = mat == opaque ? opaqueSteady : massingSteady;
                 if (bt.steady[which] && copy != null) mr.sharedMaterial = copy;   // as the LOD's others are
+            }
+        }
+
+        /// <summary>
+        /// Whether a building's LOD draws. With the automatic LOD, LOD0 and LOD1 only while shown or fading out: one kept for
+        /// later (under the residency caps) drew too, every vertex fetched and clipped in the vertex shader, shadows too.
+        /// </summary>
+        bool Draws(Built bt, int which) => lods == null || which == 2 || !(lods.Get(bt.idx) is LodManager.Entry e) || e.Visible(which);
+
+        /// <summary>A building's LOD0 and LOD1 renderers switched on or off as its LOD state changed (<see cref="Draws"/>).</summary>
+        void ShowDetail(Built bt)
+        {
+            for (int w = 0; w < 2; w++)
+            {
+                bool on = Draws(bt, w);
+                if (on == bt.drawn[w]) continue;
+                bt.drawn[w] = on;
+                foreach (var r in bt.rends[w]) if (r != null) r.enabled = on;
             }
         }
 
@@ -1014,6 +1051,7 @@ namespace Triband.Storey.Unity
         }
 
         readonly List<int> collided = new List<int>(), colliderDrop = new List<int>();
+        int colliderCap = int.MinValue;   // the cap last trimmed to
 
         /// <summary>
         /// Past the settings' cap (<see cref="LodSettings.MaxColliders"/>), the colliders of the buildings whose LOD0 went
@@ -1090,7 +1128,11 @@ namespace Triband.Storey.Unity
             foreach (var key in new List<(int, int)>(cells.Keys)) { cells[key].members.Clear(); BuildCell(key); }
             cells.Clear(); dirtyCells.Clear();
             lods?.Clear();
-            jobs.Clear(); busy.Clear();   // what they make is for the old layout: let them finish unread
+            // what they make is for the old layout: they finish unread, and give their packed meshes' chunks back
+            foreach (var j in jobs)
+                j.task.ContinueWith(t => { if (t.Status == System.Threading.Tasks.TaskStatus.RanToCompletion) Discard(t.Result); },
+                    System.Threading.CancellationToken.None, System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously, System.Threading.Tasks.TaskScheduler.Default);
+            jobs.Clear(); busy.Clear();
             load = null;
             book?.Clear();
             shownLod = -1;
