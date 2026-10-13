@@ -114,15 +114,17 @@ namespace Triband.Storey.Tests
         static List<Lod2Mesh> Massings(Site site, IEnumerable<BuildingData> bs) => bs.Select(b => Lod2.Build(site, b)).ToList();
 
         [Fact]
-        public void ALoadHoldsOneCellsMassingsAtATime()
+        public void ALoadHoldsAFewCellsMassingsAtATime()
         {
             var (_, site) = City.Value;
             var cells = site.Buildings.GroupBy(b => { var bb = Site.BoundsOf(b); return Cells.KeyOf((bb.x0 + bb.x1) / 2, (bb.z0 + bb.z1) / 2); }).OrderByDescending(g => g.Count()).ToList();
             long a = Heap(); var big = Massings(site, cells[0]); long held = Heap() - a;
             long b0 = Heap(); var all = Massings(site, site.Buildings); long every = Heap() - b0; GC.KeepAlive(big); GC.KeepAlive(all);
             var sw = Stopwatch.StartNew(); Massings(site, cells[0]); double again = sw.Elapsed.TotalMilliseconds;
-            log.WriteLine($"{cells.Count} cells: the biggest's {cells[0].Count()} massings {KB(held):0} KB (every building's: {MB(every):0.0} MB), made again in {again:0.0} ms");
-            Assert.True(held * 50 < every);
+            // the cell taken and four a build thread ahead (LayoutLoad.AheadPerThread), with four threads at most
+            int most = 1 + 4 * LayoutLoad.AheadPerThread;
+            log.WriteLine($"{cells.Count} cells: the biggest's {cells[0].Count()} massings {KB(held):0} KB (every building's: {MB(every):0.0} MB; a load holds {most} cells at most), made again in {again:0.0} ms");
+            Assert.True(held * most * 5 < every);
             Assert.True(again < 50, $"{again:0} ms to make a cell's massings again");
         }
 

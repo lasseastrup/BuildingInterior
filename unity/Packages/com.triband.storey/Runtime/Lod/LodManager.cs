@@ -20,7 +20,11 @@ namespace Triband.Storey.Lod
         public double Bias = 1;
         /// <summary>Beyond this many metres a building is not drawn.</summary>
         public double Far = 1500;
-        /// <summary>How many LOD0 and LOD1 meshes stay resident in all (shown or not); the least recently shown go first.</summary>
+        /// <summary>
+        /// How many LOD0 and LOD1 meshes are held in all, shown or not, before those not shown go, the least recently shown
+        /// first. The ones shown aren't capped: every building near enough for LOD0 (<see cref="PX"/>, the screen) shows it,
+        /// so a dense view holds more (docs/CITY.md §2).
+        /// </summary>
         public int MaxLod0 = 16, MaxLod1 = 260;
         /// <summary>
         /// How many buildings keep their collider (docs/CITY.md §7). A collider comes with a building's LOD0 and stays when
@@ -29,8 +33,8 @@ namespace Triband.Storey.Lod
         /// </summary>
         public int MaxColliders = 64;
         /// <summary>
-        /// Milliseconds a frame may spend building LOD0 and LOD1 meshes (at least one is built when any is wanted). With
-        /// worker threads, only the upload counts: the meshes are generated off the main thread.
+        /// Milliseconds a frame may spend building LOD0 and LOD1 meshes, every site's together (each still builds one when any
+        /// is wanted). With worker threads, only the upload counts: the meshes are generated off the main thread.
         /// </summary>
         public double BudgetMs = 6;
         /// <summary>
@@ -63,7 +67,8 @@ namespace Triband.Storey.Lod
     /// Picks each building's LOD every frame, as the prototype's LOD system does (docs/CITY.md §2): LOD0 full detail,
     /// LOD1 the shell, LOD2 the massing (always resident, merged into cells), 3 not drawn. A LOD the building doesn't have
     /// yet is asked for (largest on screen first) and the best one it has is shown meanwhile; a change cross-fades.
-    /// LOD0 and LOD1 meshes past the resident caps are dropped, least recently shown first. Engine-free: the renderer
+    /// Past the resident caps, the LOD0 and LOD1 meshes not shown are dropped, least recently shown first (those shown are
+    /// not capped). Engine-free: the renderer
     /// builds and drops the meshes and writes the state into the building table.
     ///
     /// The buildings are kept in 128 m squares of the ground. A square whose buildings all show their massing (or nothing)
@@ -315,7 +320,7 @@ namespace Triband.Storey.Lod
             }
         }
 
-        /// <summary>Past the cap, the meshes not on screen go, least recently shown first.</summary>
+        /// <summary>Past the cap, the meshes neither shown nor fading out go, least recently shown first; those shown stay.</summary>
         void Evict(Frame f, int lod, int max)
         {
             var held = lod == 0 ? has0 : has1;

@@ -103,6 +103,27 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void TheCapsDropOnlyWhatIsNotShown()
+        {
+            // 64 small buildings packed round the camera all show LOD0 with a cap of 8: the caps bound the meshes kept for
+            // later, not those shown (docs/CITY.md §2, Residency)
+            var l = new LodManager(new LodSettings { MaxLod0 = 8, MaxLod1 = 130 });
+            for (int i = 0; i < 64; i++) l.Set(i, i % 8 * 8 - 32, i / 8 * 8 - 32, i % 8 * 8 - 26, i / 8 * 8 - 26, 25);
+            double px = LodManager.PixelsPerMetre(1080, 60);
+            void Frames(double x)
+            {
+                for (int f = 0; f < 200; f++) { var fr = l.Update(x, 8, 0, px, 1.0 / 60); foreach (var (i, lod, _) in fr.Build) l.SetBuilt(i, lod, true); }
+            }
+            Frames(0);
+            Assert.Equal(64, l.Resident().lod0);
+            Assert.All(l.Entries.Values, e => Assert.Equal(0, e.Shown));
+            // gone past the far distance: none shown, and those kept go down to the cap
+            Frames(2000);
+            Assert.All(l.Entries.Values, e => Assert.Equal(3, e.Shown));
+            Assert.Equal(8, l.Resident().lod0);
+        }
+
+        [Fact]
         public void PastTheColliderCapThoseWhoseLod0WentLongestAgoGo()
         {
             // buildings 0..5 come close one after another (LOD0) and go far again; 6 stays close, 7 never came close

@@ -37,16 +37,16 @@ namespace Triband.Storey.Unity
         [Tooltip("Beyond this many metres a building is not drawn.")]
         [Min(10)] public float farDistance = 1500f;
 
-        [Tooltip("How many buildings may hold LOD0 geometry at once. The least recently shown go first beyond this.")]
+        [Tooltip("How many buildings keep their LOD0 geometry, shown or not. Past this, those not showing it lose it, the least recently shown first. It doesn't limit how many show LOD0: that is the LOD0 distance (the pixels per metre above, and the screen's height).")]
         [Min(1)] public int lod0Residency = 16;
 
-        [Tooltip("How many buildings may hold LOD1 geometry at once.")]
+        [Tooltip("How many buildings keep their LOD1 geometry, shown or not, as for LOD0.")]
         [Min(1)] public int lod1Residency = 260;
 
         [Tooltip("How many buildings keep their collider. A collider comes with a building's LOD0 and stays when the LOD0 goes; past this many, those whose LOD0 went longest ago lose theirs, made again with their next LOD0. 0 keeps every one for the session.")]
         [Min(0)] public int collidersKept = 64;
 
-        [Tooltip("Milliseconds a frame may spend building LOD0 and LOD1 meshes (one is always built when any is wanted).")]
+        [Tooltip("Milliseconds a frame may spend building LOD0 and LOD1 meshes, every site's together (each site still builds one when any is wanted).")]
         [Range(0.5f, 33)] public float buildBudgetMs = 6f;
 
         [Tooltip("LOD0's see-through windows start as LOD1's painted rooms where LOD0 takes over, so the switch doesn't change the windows, and clear to glass by this share of that distance (0.6: clear at 60% of it). 1: clear at once.")]
