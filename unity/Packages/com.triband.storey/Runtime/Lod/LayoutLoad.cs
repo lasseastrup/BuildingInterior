@@ -92,6 +92,9 @@ namespace Triband.Storey.Lod
                 made[next] = null;
             }
             buildings = cells[next++];
+            // with no threads ahead the cell was built here, never started: none is started for it after (it was, building
+            // every cell twice and keeping the copies untaken)
+            if (started < next) started = next;
             Start();
             return true;
         }

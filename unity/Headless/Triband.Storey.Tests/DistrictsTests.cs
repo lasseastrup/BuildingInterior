@@ -75,10 +75,41 @@ namespace Triband.Storey.Tests
             Assert.Single(site.Buildings);
         }
 
+        [Theory]
+        [InlineData(2.0)]
+        [InlineData(15.0)]
+        public void TheNeighboursKeptAreThoseWithinReachOfAnOwnBuilding(double reach)
+        {
+            // found through a grid of the own buildings' boxes: the same ones, in the same order, as held against every box
+            var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document; TestCity.Generate(d, 1000);
+            var box = d.buildings.ToDictionary(b => b, Site.BoundsOf);
+            double mid = d.buildings.Average(b => box[b].x0 + box[b].x1) / 2;
+            var own = d.buildings.Where(b => box[b].x0 + box[b].x1 < 2 * mid).ToList(); var other = d.buildings.Except(own).ToList();
+            bool Within((double x0, double z0, double x1, double z1) a, (double x0, double z0, double x1, double z1) o) =>
+                a.x0 <= o.x1 + reach && o.x0 <= a.x1 + reach && a.z0 <= o.z1 + reach && o.z0 <= a.z1 + reach;
+            var want = other.Where(nb => own.Any(o => Within(box[nb], box[o]))).Select(nb => "@East/" + nb.id).ToList();
+            var site = Site.WithContext(own, "West", new[] { (other, "East", 0.0, 0.0) }, reach);
+            Assert.NotEmpty(want);
+            Assert.Equal(want, site.Buildings.Skip(own.Count).Select(b => b.id));
+        }
+
         static readonly List<Districts.Area> Row = new List<Districts.Area>
         {
             new Districts.Area(0, 0, 100, 100), new Districts.Area(400, 0, 500, 100), new Districts.Area(800, 0, 900, 100),
         };
+
+        [Fact]
+        public void PlanningEveryFrameMakesNoGarbage()
+        {
+            // the streamer plans every frame: it made three lists and boxed an enumerator each time (136 bytes)
+            var st = new List<Districts.Load> { Districts.Load.Loaded, Districts.Load.Unloaded, Districts.Load.Unloaded };
+            var load = new List<int>(); var unload = new List<int>();
+            Districts.Plan(Row, st, 50, 50, load, unload, loadRadius: 350);
+            long a = System.GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 1000; i++) Districts.Plan(Row, st, 50 + i % 7, 50, load, unload, loadRadius: 350);
+            Assert.Equal(0, System.GC.GetAllocatedBytesForCurrentThread() - a);
+            Assert.Equal(new[] { 1 }, load); Assert.Empty(unload);
+        }
 
         [Fact]
         public void StreamingLoadsTheNearestFirstOneAtATime()

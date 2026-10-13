@@ -68,14 +68,38 @@ namespace Triband.Storey.Generate
             var all = new List<BuildingData>(own);
             var keys = new Dictionary<BuildingData, string>();
             foreach (var b in own) keys[b] = district + "/" + b.id;
-            var boxes = own.Select(BoundsOf).ToList();
+            // the own buildings' boxes, each in the grid cells it covers grown by the reach: a neighbour building is held
+            // against those in the cells its box covers, not against every one (a district of 368 buildings with 2,639
+            // around it spent 11 ms on that, on the frame it was shown)
+            var boxes = new List<(double x0, double z0, double x1, double z1)>(own.Count);
+            var near = new Dictionary<(int, int), List<int>>();
+            foreach (var b in own)
+            {
+                var o = BoundsOf(b); int i = boxes.Count; boxes.Add(o);
+                for (int gx = (int)Math.Floor((o.x0 - reach) / BGRID); gx <= (int)Math.Floor((o.x1 + reach) / BGRID); gx++)
+                    for (int gz = (int)Math.Floor((o.z0 - reach) / BGRID); gz <= (int)Math.Floor((o.z1 + reach) / BGRID); gz++)
+                    {
+                        if (!near.TryGetValue((gx, gz), out var l)) near[(gx, gz)] = l = new List<int>();
+                        l.Add(i);
+                    }
+            }
+            bool Near(double x0, double z0, double x1, double z1)
+            {
+                for (int gx = (int)Math.Floor(x0 / BGRID); gx <= (int)Math.Floor(x1 / BGRID); gx++)
+                    for (int gz = (int)Math.Floor(z0 / BGRID); gz <= (int)Math.Floor(z1 / BGRID); gz++)
+                    {
+                        if (!near.TryGetValue((gx, gz), out var l)) continue;
+                        foreach (int i in l) { var o = boxes[i]; if (x0 <= o.x1 + reach && o.x0 <= x1 + reach && z0 <= o.z1 + reach && o.z0 <= z1 + reach) return true; }
+                    }
+                return false;
+            }
             foreach (var (buildings, nd, dx, dz) in neighbours)
             {
                 if (nd == district) continue;
                 foreach (var nb in buildings)
                 {
                     var bb = BoundsOf(nb); double x0 = bb.x0 + dx, z0 = bb.z0 + dz, x1 = bb.x1 + dx, z1 = bb.z1 + dz;
-                    if (!boxes.Any(o => x0 <= o.x1 + reach && o.x0 <= x1 + reach && z0 <= o.z1 + reach && o.z0 <= z1 + reach)) continue;
+                    if (!Near(x0, z0, x1, z1)) continue;
                     var c = PrototypeJson.ReadBuilding(PrototypeJson.Write(nb));
                     c.id = "@" + nd + "/" + nb.id; c.pos = new Vec2(nb.pos.x + dx, nb.pos.z + dz); c.bridges.Clear();
                     keys[c] = nd + "/" + nb.id;

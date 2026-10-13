@@ -39,6 +39,7 @@ namespace Triband.Storey.Unity
         readonly Dictionary<string, AsyncOperation> unloading = new Dictionary<string, AsyncOperation>(StringComparer.Ordinal);
         readonly List<Lod.Districts.Area> areas = new List<Lod.Districts.Area>();
         readonly List<Lod.Districts.Load> states = new List<Lod.Districts.Load>();
+        readonly List<int> toLoad = new List<int>(), toUnload = new List<int>();   // the plan, every frame, without garbage
 
         /// <summary>Where each district's scene is now (for a loading screen or a debug overlay).</summary>
         public IReadOnlyList<Lod.Districts.Load> States => states;
@@ -57,14 +58,14 @@ namespace Triband.Storey.Unity
                 states.Add(SceneManager.GetSceneByPath(d.scene).isLoaded ? Lod.Districts.Load.Loaded : Lod.Districts.Load.Unloaded);
             }
             var p = f.position;
-            var (load, unload) = Lod.Districts.Plan(areas, states, p.x, p.z, loadRadius, unloadRadius, maxLoading);
-            foreach (int i in load)
+            Lod.Districts.Plan(areas, states, p.x, p.z, toLoad, toUnload, loadRadius, unloadRadius, maxLoading);
+            foreach (int i in toLoad)
             {
                 var op = SceneManager.LoadSceneAsync(districts[i].scene, LoadSceneMode.Additive);
                 if (op == null) { Debug.LogError($"Storey: can't load district \"{districts[i].scene}\": is it in the build's scene list?"); continue; }
                 loading[districts[i].scene] = op; states[i] = Lod.Districts.Load.Loading;
             }
-            foreach (int i in unload)
+            foreach (int i in toUnload)
             {
                 var op = SceneManager.UnloadSceneAsync(districts[i].scene);
                 if (op != null) { unloading[districts[i].scene] = op; states[i] = Lod.Districts.Load.Unloading; }

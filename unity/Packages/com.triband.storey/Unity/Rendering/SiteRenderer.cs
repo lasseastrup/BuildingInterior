@@ -488,6 +488,9 @@ namespace Triband.Storey.Unity
         // the editor's wall slides, by wall id: eased over the prototype's 0.22 s, down when a wall is in the way, back up after
         readonly Dictionary<int, float> editSlide = new Dictionary<int, float>();
         float lastEdit = -1;
+        // the walls to slide down this frame, and the slides' ids to step: kept, so a frame makes no garbage
+        readonly HashSet<int> cutDown = new HashSet<int>();
+        readonly List<int> slideIds = new List<int>();
 
         /// <summary>
         /// Walls are sliding in the editor's cutaway, or the automatic LOD is fading or has detail still to build: the
@@ -506,8 +509,11 @@ namespace Triband.Storey.Unity
         {
             float now = Time.realtimeSinceStartup, dt = lastEdit < 0 ? 0 : Mathf.Min(0.05f, now - lastEdit); lastEdit = now;
             float step = dt / (float)global::Triband.Storey.Occlusion.OcclusionCore.CutSlide;
-            var down = new HashSet<int>();
             var act = activeId != null && site != null ? site.ById(activeId) : null;
+            // nothing cut and nothing sliding back: the case of every site the editor isn't cutting (every frame, in Play
+            // mode too, for one with no occlusion system)
+            if (act == null && editSlide.Count == 0) { wallsMoving = false; return; }
+            var down = cutDown; down.Clear();
             if (act != null)
             {
                 int ai = site!.IndexOf(act);
@@ -528,7 +534,8 @@ namespace Triband.Storey.Unity
             }
             bool moving = false;
             foreach (int id in down) if (!editSlide.ContainsKey(id)) editSlide[id] = 0;
-            foreach (var id in new List<int>(editSlide.Keys))
+            slideIds.Clear(); foreach (int id in editSlide.Keys) slideIds.Add(id);
+            foreach (int id in slideIds)
             {
                 float a = editSlide[id], to = down.Contains(id) ? 1 : 0;
                 float n = to > a ? Mathf.Min(to, a + step) : Mathf.Max(to, a - step);

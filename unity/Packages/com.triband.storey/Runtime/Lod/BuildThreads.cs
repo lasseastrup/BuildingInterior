@@ -43,10 +43,17 @@ namespace Triband.Storey.Lod
         /// <summary>How many threads build.</summary>
         public int Count { get { lock (queue) return want; } }
 
+        /// <summary>The builds waiting for a thread.</summary>
+        internal int Queued { get { lock (queue) return queue.Count; } }
+
         /// <summary>Run <paramref name="work"/> on a build thread (on the caller's, at once, when there are none).</summary>
         public Task<T> Run<T>(Func<T> work) => factory.StartNew(work);
 
-        /// <summary>Have <paramref name="count"/> threads: more start now; spare ones end once they finish what they run.</summary>
+        /// <summary>
+        /// Have <paramref name="count"/> threads: more start now; spare ones end once they finish what they run. With none,
+        /// the last ones run what is queued before they end, as no thread would after (a build only polled for, as the
+        /// renderer's are, would never finish); what is asked for after runs on the caller.
+        /// </summary>
         public void Resize(int count)
         {
             lock (queue)
@@ -75,7 +82,7 @@ namespace Triband.Storey.Lod
                     {
                         while (true)
                         {
-                            if (running > want) { running--; return; }
+                            if (running > want && (want > 0 || queue.First == null)) { running--; return; }
                             var first = queue.First;
                             if (first != null) { task = first.Value; queue.RemoveFirst(); break; }
                             Monitor.Wait(queue);

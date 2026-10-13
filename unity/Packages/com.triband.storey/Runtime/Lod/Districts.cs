@@ -48,17 +48,39 @@ namespace Triband.Storey.Lod
             double loadRadius = 300, double unloadRadius = 400, int maxLoading = 1)
         {
             var load = new List<int>(); var unload = new List<int>();
-            int loading = 0; foreach (var st in states) if (st == Load.Loading) loading++;
-            var want = new List<(int i, double d)>();
-            for (int i = 0; i < areas.Count && i < states.Count; i++)
+            Plan(areas, states, x, z, load, unload, loadRadius, unloadRadius, maxLoading);
+            return (load, unload);
+        }
+
+        /// <summary>
+        /// <see cref="Plan(IReadOnlyList{Area}, IReadOnlyList{Load}, double, double, double, double, int)"/> into
+        /// <paramref name="load"/> and <paramref name="unload"/> (emptied first), making no garbage: for a caller planning
+        /// every frame. Of districts as near, the first listed loads first.
+        /// </summary>
+        public static void Plan(IReadOnlyList<Area> areas, IReadOnlyList<Load> states, double x, double z, List<int> load, List<int> unload,
+            double loadRadius = 300, double unloadRadius = 400, int maxLoading = 1)
+        {
+            load.Clear(); unload.Clear();
+            int n = Math.Min(areas.Count, states.Count), loading = 0;
+            for (int i = 0; i < states.Count; i++) if (states[i] == Load.Loading) loading++;
+            // the nearest wanted, one at a time, as many as may load at once
+            while (loading < maxLoading)
+            {
+                int best = -1; double bd = double.MaxValue;
+                for (int i = 0; i < n; i++)
+                {
+                    if (states[i] != Load.Unloaded || load.Contains(i)) continue;
+                    double d = areas[i].Distance(x, z);
+                    if (d <= loadRadius && d < bd) { bd = d; best = i; }
+                }
+                if (best < 0) break;
+                load.Add(best); loading++;
+            }
+            for (int i = 0; i < n; i++)
             {
                 double d = areas[i].Distance(x, z);
-                if (states[i] == Load.Unloaded && d <= loadRadius) want.Add((i, d));
-                else if (states[i] == Load.Loaded && d > Math.Max(unloadRadius, loadRadius) && d > 0) unload.Add(i);
+                if (states[i] == Load.Loaded && d > Math.Max(unloadRadius, loadRadius) && d > 0) unload.Add(i);
             }
-            want.Sort((a, b) => a.d.CompareTo(b.d));
-            foreach (var (i, _) in want) { if (loading >= maxLoading) break; load.Add(i); loading++; }
-            return (load, unload);
         }
     }
 }

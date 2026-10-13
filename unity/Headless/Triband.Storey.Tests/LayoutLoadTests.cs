@@ -70,6 +70,28 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void WithNoThreadsEachCellIsBuiltOnceWhereItIsTaken()
+        {
+            // a cell built where it was taken was started on the threads too after it: every cell built twice, the copies
+            // never taken nor let go
+            var (d, site) = City();
+            var on = new BuildThreads(1);
+            using var started = new ManualResetEventSlim(false);
+            using var hold = new ManualResetEventSlim(false);
+            try
+            {
+                var busy = on.Run(() => { started.Set(); hold.Wait(); return 0; });   // the only thread held: a cell started waits
+                Assert.True(started.Wait(5000));
+                var load = new LayoutLoad(site, d.buildings, 0, (40, -20), on);
+                int n = 0;
+                while (load.TryTake(true, out var bs, out _)) { n += bs.Length; Assert.Equal(0, load.InFlight); }
+                Assert.Equal(d.buildings.Count, n);
+                Assert.Equal(0, on.Queued);
+            }
+            finally { hold.Set(); on.Resize(0); }
+        }
+
+        [Fact]
         public void WithoutAPointTheCellsComeInTheLayoutsOrder()
         {
             var (d, site) = City();

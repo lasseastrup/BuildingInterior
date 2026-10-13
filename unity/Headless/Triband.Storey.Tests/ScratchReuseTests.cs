@@ -147,6 +147,25 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void LoweringTheLimitLetsGoOfTheChunksPastItAtOnce()
+        {
+            // the limit was only held to as chunks came back: lowered while nothing was built, it kept what it had
+            long keep = Chunks.KeepBytes;
+            try
+            {
+                Chunks.KeepBytes = 16L * Chunks<long>.Bytes; Chunks.Clear();
+                var l = new ChunkList<long>(); l.Resize(12 * Chunks.Size); l.Clear();
+                Assert.True(Chunks.KeptBytes >= 12L * Chunks<long>.Bytes);
+                Chunks.KeepBytes = 4L * Chunks<long>.Bytes;
+                Assert.True(Chunks.KeptBytes <= Chunks.KeepBytes, $"{Chunks.KeptBytes} bytes kept past the lowered limit");
+                Assert.True(Chunks<long>.KeptBytes >= 3L * Chunks<long>.Bytes, "it kept too few");
+                Chunks.KeepBytes = 16L * Chunks<long>.Bytes;   // raised: nothing to do until chunks come back
+                Assert.True(Chunks.KeptBytes <= 4L * Chunks<long>.Bytes);
+            }
+            finally { Chunks.KeepBytes = keep; Chunks.Clear(); }
+        }
+
+        [Fact]
         public void EachKindOfChunkKeepsItsShareOfTheLimit()
         {
             // a build takes as much of two kinds of chunk and gives the first kind back first, as a builder's lists go back

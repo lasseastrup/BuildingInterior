@@ -10,7 +10,8 @@ namespace Triband.Storey.Tests
 {
     /// <summary>
     /// Storey's own build threads (<see cref="BuildThreads"/>, docs/CITY.md §2): named, at most as many at once as asked
-    /// for, a build waited for before it starts run by the waiting thread, a failure kept in its task. Storey's own.
+    /// for, a build waited for before it starts run by the waiting thread, a failure kept in its task, what is queued run before
+    /// the threads stop. Storey's own.
     /// </summary>
     public class BuildThreadsTests
     {
@@ -91,6 +92,30 @@ namespace Triband.Storey.Tests
             var t = none.Run(() => Environment.CurrentManagedThreadId);
             Assert.True(t.IsCompleted);
             Assert.Equal(Environment.CurrentManagedThreadId, t.Result);
+        }
+
+        [Fact]
+        public void StoppingTheThreadsRunsWhatIsQueuedFirst()
+        {
+            // a build queued when the threads stopped (worker builds switched off mid-load) never ran, and the renderer, which
+            // polls its builds rather than wait for them, waited for ever: on a detail job, a load's cell, a layout's parse
+            var bt = new BuildThreads(1);
+            using var started = new ManualResetEventSlim(false);
+            using var hold = new ManualResetEventSlim(false);
+            try
+            {
+                var busy = bt.Run(() => { started.Set(); hold.Wait(); return 1; });
+                Assert.True(started.Wait(5000));
+                var queued = bt.Run(() => 2);
+                bt.Resize(0); hold.Set();
+                Done(new Task[] { busy, queued });   // polled: a wait would run it here
+                Assert.Equal(2, queued.Result);
+                Assert.Equal(0, bt.Queued);
+                var after = bt.Run(() => Environment.CurrentManagedThreadId);   // with none, on the caller
+                Assert.True(after.IsCompleted);
+                Assert.Equal(Environment.CurrentManagedThreadId, after.Result);
+            }
+            finally { hold.Set(); bt.Resize(0); }
         }
     }
 }

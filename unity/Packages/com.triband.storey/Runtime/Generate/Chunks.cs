@@ -21,14 +21,23 @@ namespace Triband.Storey.Generate
         /// <summary>The elements a chunk holds, 2,048: 48 KB of positions or packed vertices, 8 KB of indices.</summary>
         public const int Shift = 11, Size = 1 << Shift, Mask = Size - 1;
 
-        /// <summary>The most bytes of chunks kept for the next builds, on all threads together.</summary>
-        public static long KeepBytes = 16L << 20;
+        /// <summary>
+        /// The most bytes of chunks kept for the next builds, on all threads together. Lowered, it lets go at once of the
+        /// chunks kept past it, each type down to its share (otherwise only a chunk given back is held to it, and a site
+        /// standing still gives none back).
+        /// </summary>
+        public static long KeepBytes
+        {
+            get { lock (Gate) return Keep; }
+            set { lock (Gate) { bool lower = value < Keep; Keep = value; if (lower) foreach (var t in trims) t(); } }
+        }
 
         internal static readonly object Gate = new object();
         internal static long Kept, made, Taken;   // Taken: the bytes of chunks every type has handed out so far
-        static readonly List<Action> clears = new List<Action>();
+        internal static long Keep = 16L << 20;
+        static readonly List<Action> clears = new List<Action>(), trims = new List<Action>();
 
-        internal static void Register(Action clear) { lock (Gate) clears.Add(clear); }
+        internal static void Register(Action clear, Action trim) { lock (Gate) { clears.Add(clear); trims.Add(trim); } }
 
         /// <summary>The bytes of chunks kept now.</summary>
         public static long KeptBytes { get { lock (Gate) return Kept; } }
@@ -49,7 +58,14 @@ namespace Triband.Storey.Generate
         /// <summary>A chunk's bytes.</summary>
         public static readonly int Bytes = Chunks.Size * Marshal.SizeOf(typeof(T));
 
-        static Chunks() => Chunks.Register(() => { free.Clear(); taken = 0; });
+        static Chunks() => Chunks.Register(() => { free.Clear(); taken = 0; }, Trim);
+
+        // down to this type's share of a lowered cap, as a chunk given back is held to (under the gate)
+        static void Trim()
+        {
+            double share = (double)Chunks.Keep * taken / Math.Max(1, Chunks.Taken);
+            while (free.Count > 0 && (long)free.Count * Bytes > share) { free.Pop(); Chunks.Kept -= Bytes; }
+        }
 
         /// <summary>The bytes of chunks of this type kept now.</summary>
         public static long KeptBytes { get { lock (Chunks.Gate) return (long)free.Count * Bytes; } }
@@ -74,9 +90,9 @@ namespace Triband.Storey.Generate
         {
             lock (Chunks.Gate)
             {
-                if (Chunks.Kept + Bytes > Chunks.KeepBytes) return;
+                if (Chunks.Kept + Bytes > Chunks.Keep) return;
                 long kept = (long)free.Count * Bytes;
-                if (kept + Bytes > (double)Chunks.KeepBytes * taken / Math.Max(1, Chunks.Taken)) return;
+                if (kept + Bytes > (double)Chunks.Keep * taken / Math.Max(1, Chunks.Taken)) return;
                 free.Push(chunk); Chunks.Kept += Bytes;
             }
         }
