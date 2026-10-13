@@ -152,42 +152,26 @@ namespace Triband.Storey.Editor
                 int cur = doc.buildings.FindIndex(x => x.id == v.selectedId);
                 int sel = EditorGUILayout.Popup(cur, doc.buildings.Select(x => $"{x.name}  ({x.floors.Count} fl)").ToArray());
                 if (sel != cur && sel >= 0) { v.Select(doc.buildings[sel].id); SceneView.RepaintAll(); }
-                if (GUILayout.Button(new GUIContent("New ▾", "A new building from a shape or a template"), EditorStyles.miniButton, GUILayout.Width(52)))
+                if (GUILayout.Button(new GUIContent("New ▾", "A new building from a template: the package's, or the project's own"), EditorStyles.miniButton, GUILayout.Width(52)))
                 {
+                    // one list, every entry a Building Template asset: the package's (the prototype's footprints), then the project's
                     var menu = new GenericMenu();
-                    for (int i = 0; i < ShapeKeys.Length; i++)
-                    {
-                        string key = ShapeKeys[i];
-                        menu.AddItem(new GUIContent(ShapeLabels[i]), false, () =>
-                        {
-                            string id = "";
-                            var near = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.pivot : Vector3.zero;
-                            // as the package's brick walk-up preset is now, should it have been edited
-                            var start = FacadeStylePreset.Default();
-                            e.Apply("Added a 3-storey building", d =>
-                            {
-                                var nb = Buildings.Add(d, key, new Vec2(near.x, near.z));
-                                if (start is (FacadeStyle sty, string sk)) Styles.Apply(nb, 0, sty, sk);
-                                id = nb.id; return true;
-                            });
-                            e.View.Select(id); SetTab(e.View, StoreyTab.Shape);
-                        });
-                    }
-                    // the project's building templates
                     var templates = StoreyBuildingTemplate.All();
-                    if (templates.Length > 0) menu.AddSeparator("");
+                    bool any = templates.Any(t => t.Own);
+                    if (!any)   // the package's own are missing: the prototype's footprints, from code
+                        for (int i = 0; i < ShapeKeys.Length; i++)
+                        {
+                            string key = ShapeKeys[i], label = ShapeLabels[i];
+                            menu.AddItem(new GUIContent(label), false, () => AddBuilding(e, label, d => Buildings.Add(d, key, Near()), true));
+                        }
+                    bool split = false;
                     foreach (var t in templates)
                     {
-                        var tb = t.Building!; string tname = t.name;
-                        menu.AddItem(new GUIContent("From template/" + tname), false, () =>
-                        {
-                            string id = "";
-                            var near = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.pivot : Vector3.zero;
-                            e.Apply("Placed " + tname, d => { id = Buildings.FromTemplate(d, tb, new Vec2(near.x, near.z)).id; return true; });
-                            e.View.Select(id); SetTab(e.View, StoreyTab.Shape);
-                        });
+                        if (!t.Own && !split) { menu.AddSeparator(""); split = true; }
+                        var tb = t.Building!; string tname = t.name; bool own = t.Own;
+                        menu.AddItem(new GUIContent(own ? tname : "Project/" + tname), false, () => AddBuilding(e, tname, d => Buildings.FromTemplate(d, tb, Near()), own));
                     }
-                    if (templates.Length == 0) menu.AddDisabledItem(new GUIContent("From template (save a building as one first)"));
+                    if (!split) { menu.AddSeparator(""); menu.AddDisabledItem(new GUIContent("Project (save a building as a template first)")); }
                     menu.ShowAsContext();
                 }
                 var b = e.Selected;
@@ -396,14 +380,21 @@ namespace Triband.Storey.Editor
                 EditorGUILayout.HelpBox("Drag the corners in the Scene view. Drag a + to add a corner, double-click a corner to remove it, drag an orange bar to push a wall. Alt: no snapping.", MessageType.None);
                 using (new EditorGUILayout.HorizontalScope())
                 {
+                    // the outline of a template: the package's as buttons, the project's in a menu
                     EditorGUILayout.PrefixLabel("Start from");
-                    for (int i = 0; i < ShapeKeys.Length; i++)
-                        if (GUILayout.Button(ShapeLabels[i], EditorStyles.miniButton))
-                        {
-                            int had = Tiers.Of(b).Count; string key = ShapeKeys[i];
-                            e.ApplyTo("Footprint replaced", bb => { Setbacks.ApplyPreset(bb, key); return true; });
-                            message = e.Selected != null && Tiers.Of(e.Selected).Count < had ? "Setbacks that no longer fit were removed." : null;
-                        }
+                    var templates = StoreyBuildingTemplate.All();
+                    if (!templates.Any(t => t.Own))   // the package's own are missing: the prototype's footprints, from code
+                        for (int i = 0; i < ShapeKeys.Length; i++)
+                            if (GUILayout.Button(ShapeLabels[i], EditorStyles.miniButton)) StartFrom(e, b, Setbacks.Preset(ShapeKeys[i]), null);
+                    foreach (var t in templates.Where(t => t.Own))
+                        if (GUILayout.Button(t.name, EditorStyles.miniButton)) { var tb = t.Building!; StartFrom(e, b, tb.footprint, tb.corners); }
+                    var mine = templates.Where(t => !t.Own).ToList();
+                    if (mine.Count > 0 && GUILayout.Button(new GUIContent("Project ▾", "The outline of one of the project's building templates"), EditorStyles.miniButton))
+                    {
+                        var menu = new GenericMenu();
+                        foreach (var t in mine) { var tb = t.Building!; menu.AddItem(new GUIContent(t.name), false, () => StartFrom(e, b, tb.footprint, tb.corners)); }
+                        menu.ShowAsContext();
+                    }
                 }
             }
             CornerSection(e, b, k0);
@@ -713,6 +704,38 @@ namespace Triband.Storey.Editor
             var k = kinds[pick - 1]; string id = k.Id;
             e.ApplyTo(label + ": " + k.name, bb => { var s = Styles.Edited(bb, k0); if (door) s.doorKind = id; else s.windowKind = id; return true; });
             StoreyOpenings.Keep(e.Site, k);
+        }
+
+        static Vec2 Near()
+        {
+            var p = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.pivot : Vector3.zero;
+            return new Vec2(p.x, p.z);
+        }
+
+        /// <summary>
+        /// A new building from a template (<paramref name="make"/> places it), selected, on the Shape tab. One of the
+        /// package's own (<paramref name="starter"/>) takes the package's Brick walk-up as it is now, as New's buildings
+        /// always have, should that preset have been edited.
+        /// </summary>
+        void AddBuilding(StoreyEdit e, string name, Func<StoreyDocument, BuildingData> make, bool starter)
+        {
+            string id = "";
+            var start = starter ? FacadeStylePreset.Default() : null;
+            e.Apply("Added a building from " + name, d =>
+            {
+                var nb = make(d);
+                if (start is (FacadeStyle sty, string sk)) Styles.Apply(nb, 0, sty, sk);
+                id = nb.id; return true;
+            });
+            e.View.Select(id); SetTab(e.View, StoreyTab.Shape);
+        }
+
+        /// <summary>The Shape tab's Start from: the footprint (and its cut corners) of a template's building.</summary>
+        void StartFrom(StoreyEdit e, BuildingData b, IReadOnlyList<Vec2> footprint, IEnumerable<CornerData>? corners)
+        {
+            int had = Tiers.Of(b).Count;
+            e.ApplyTo("Footprint replaced", bb => { Setbacks.ApplyFootprint(bb, footprint, corners); return true; });
+            message = e.Selected != null && Tiers.Of(e.Selected).Count < had ? "Setbacks that no longer fit were removed." : null;
         }
 
         void Presets(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)

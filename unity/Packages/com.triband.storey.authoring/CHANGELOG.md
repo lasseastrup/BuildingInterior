@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- The prototype's five footprints (Rect, L, U, T, Octa) ship as Building Template assets in the package's `Building Templates/` folder, the 3-storey brick buildings New made of them, the same kind of asset **Save as template…** makes. **New** lists every template, the package's first, then the project's under **Project**; it listed five shapes from code, then the project's templates apart. The Shape tab's **Start from** takes any template's outline with its cut corners (the project's under *Project ▾*), where it had the five shapes only.
 - The prototype's five facade presets (Brick walk-up, Glass office, Pastel stucco, Concrete slab, Warehouse) ship as Facade Style assets in the package's `Facade Styles/` folder, the same kind of asset **Save as preset…** makes. The Facade tab's **Preset** list is every Facade Style asset, the package's first, then the project's, and applies each the same way; they were five presets written into the code beside the project's assets. A new building starts as the package's Brick walk-up. To make a variant, apply one, change it and **Save as preset…**.
 - The Storey Prop's inspector says which building and storey it's in; *Tools ▸ Storey ▸ Props ▸ Show Prop Buildings* tints every prop by its building (docs/PROPS.md).
 - Shape ▸ *Placement*: a building's **Elevation**, and **Snap to ground**, which casts down onto the scene's colliders under it (a Terrain's too), stands it on the highest ground found and deepens its foundation to the lowest (docs/EDITOR.md §6.11).

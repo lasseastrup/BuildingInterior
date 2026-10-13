@@ -1,0 +1,15 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 47b5fe73533fef5b5feac045f60bd66a, type: 3}
+  m_Name: Octa
+  m_EditorClassIdentifier: 
+  building: '{"id":"","name":"","pos":{"x":0,"z":0},"footprint":[{"x":3.5,"z":0},{"x":8.5,"z":0},{"x":12,"z":3.5},{"x":12,"z":8.5},{"x":8.5,"z":12},{"x":3.5,"z":12},{"x":0,"z":8.5},{"x":0,"z":3.5}],"floors":[{"walls":[]},{"walls":[]},{"walls":[]}],"shafts":[],"entrances":[{"edge":0,"t":0.5}],"blank":[],"groundHeight":3.6,"floorHeight":3,"interior":true,"style":{"label":"Brick walk-up","wall":"#9A4B38","trim":"#ECE5D8","interior":"#EFECE5","floor":"#B88D62","roof":"#6E716B","core":"#C9C4BB","glass":"#8DB3C8","windows":"punched","winW":1.2,"bay":2.6,"ground":"storefront","bands":true,"parapet":true,"preset":"brick"}}'

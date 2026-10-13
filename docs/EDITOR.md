@@ -67,7 +67,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
 **Engine-free, checked against the prototype:**
 - `Edit/Facades`: facade picking, blank walls, entrances and terrace doors, details by hand with their ghosts and refusal reasons, terrace or roof.
 - `Edit/Styles`: the prototype's five presets, the style each tier edits, own style and match below, which style the roof is built with, and the preset key a style loses when a field of it is edited by hand.
-- `Edit/Buildings`: new from a footprint preset in a free spot, duplicate, delete, names.
+- `Edit/Buildings`: new from a footprint preset or a template in a free spot, duplicate, delete, names; `Edit/Setbacks` replaces a footprint with a preset or a template's.
 - `Edit/Picking`: the building under the pointer, and the Interior tab's storey clip.
 
 `unity/Fixtures/ops-facade.json` holds 14,138 prototype cases. `EditFacadeTests` and `PickingTests` check them.
@@ -293,19 +293,23 @@ Engine-free: `Validate.Problems` (`ProblemTests`). On the demo street it finds t
 
 **Save as template…** in the building bar keeps the selected building as an asset (`StoreyBuildingTemplate`): its outlines and setbacks, floors, rooms, stairs and lifts, courtyards, doors, details and style. Its place in the layout and its bridges aren't kept. Save over an existing template to update it.
 
-**New ▸ From template** places one in any layout:
+Every building **New** makes comes from a template. The package ships the prototype's five footprints as 3-storey Brick walk-up buildings (`Building Templates/`: Rect, L, U, T, Octa), listed first; the project's follow under **Project**. New places one in any layout:
 - It goes at a free spot near the Scene view's centre.
-- It gets fresh ids, and its name with a number if the layout already has one by that name.
+- It gets fresh ids, and its name with a number if the layout already has one by that name (the package's own are unnamed: the layout's next name).
+- One of the package's own takes the package's Brick walk-up preset as it is now.
 - Edit it as any other building: it isn't linked to the template.
+
+The Shape tab's **Start from** replaces the selected building's footprint with a template's outline and its cut corners: the package's as buttons, the project's under *Project ▾*.
 
 A template's inspector says what it holds (storeys, size, height, cores). *Assets ▸ Create ▸ Storey ▸ Building Template* makes an empty one to save into. The asset is Storey's JSON for one building, as the prototype copies one to the clipboard.
 
-Engine-free: `Buildings.AsTemplate`, `Buildings.FromTemplate` (`TemplateTests`).
+Engine-free: `Buildings.AsTemplate`, `Buildings.FromTemplate`, `Setbacks.ApplyFootprint` (`TemplateTests`, `BuildingTemplateAssetTests`).
 
 **Checks:**
 1. Select a building, then *Save as template…*: the asset appears and is pinged. Its inspector summarises it.
-2. In another scene's site: New ▸ From template ▸ it. The building appears near the view, named, and editable.
+2. In another scene's site: New ▸ Project ▸ it. The building appears near the view, named, and editable.
 3. Place it twice: "Name 2", "Name 3".
+4. New ▸ L: a 3-storey brick L, as New made one before. Start from ▸ Project ▸ the saved template: the selected building takes its outline.
 
 ### 6.7 Facade details
 
@@ -387,7 +391,7 @@ Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`), `FacadeS
 The site's inspector reads top to bottom in the order you work: which layout, which building, what's wrong, which mode, then that mode's settings. The rare settings come last.
 
 1. **Layout**: the `.storey` file. Selecting the site starts editing it (§4).
-2. **Building** card: pick a building, *New ▾* (a shape or a template), *Duplicate*, *Delete*, its name, *Isolate* and *Save as template…*. A box is kept for controls that act together; everything in this card acts on the building picked at its top.
+2. **Building** card: pick a building, *New ▾* (a template: the package's five shapes, or the project's), *Duplicate*, *Delete*, its name, *Isolate* and *Save as template…*. A box is kept for controls that act together; everything in this card acts on the building picked at its top.
 3. **Problems**: one quiet line when there are none, or a warning foldout with the count.
 4. **Shape / Facade / Interior**: three large buttons, each with an icon and a line saying what it's for. The selected one is tinted, with an accent bar along its bottom. On a narrow inspector the line moves under the bar.
 5. The mode's settings in named groups, each a header with a hairline and space above it, not a box:

@@ -84,6 +84,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- `Setbacks.ApplyFootprint`: replace a building's footprint with any outline and its cut corners (a building template's), as `ApplyPreset` does with a preset's.
 - The quality tiers ship as Storey Quality Settings assets (`Quality Tiers/`): **Storey Primary Tier** (the defaults, desktop and iPhone 14 and newer) and **Storey Minimum Tier** (iPhone 7: half the residency, 12 MB of mesh chunks, no occlusion on far materials, as docs/CITY.md §7 measured it). The minimum tier's values were only written in the docs, to be typed into an asset by hand. `QualityTierTests` checks them.
 - `Styles.Apply`'s `key`: the preset key the applied style carries. `Styles.Look`, `Looks` and `ForgetEdited`: a style edited in place by hand loses its preset's key, as in the prototype; the roof's shape is no part of a look.
 - Loading over frames: a site's first load in Play mode (a district streamed in, a scene starting) goes over several frames, nearest cells first, within the build budget, so it never holds a frame. After an edit, and in the editor, a load is done at once. `SiteRenderer.LoadOverFrames` and `Loading`, `StoreySite.LoadOverFrames` and `Loading`, `LodStats.loading`.

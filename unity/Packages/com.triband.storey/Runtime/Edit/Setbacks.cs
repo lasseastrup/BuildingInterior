@@ -59,10 +59,17 @@ namespace Triband.Storey.Edit
         }
 
         /// <summary>Replace the footprint with a preset: one entrance on the first edge; setbacks and cores that no longer fit go.</summary>
-        public static void ApplyPreset(BuildingData b, string key)
+        public static void ApplyPreset(BuildingData b, string key) => ApplyFootprint(b, Preset(key));
+
+        /// <summary>
+        /// Replace the footprint with another (a building template's, with its cut corners): one entrance on the first edge;
+        /// the ground tier's details go, and setbacks, cores and courtyards that no longer fit.
+        /// </summary>
+        public static void ApplyFootprint(BuildingData b, IReadOnlyList<Vec2> footprint, IEnumerable<CornerData>? corners = null)
         {
             b.details.RemoveAll(d => Derived.TierStart(b, d.k) == 0);
-            b.footprint = Preset(key); b.corners = new List<CornerData>();
+            b.footprint = new List<Vec2>(footprint);
+            b.corners = corners?.Select(c => new CornerData { at = c.at, shape = c.shape, size = c.size, door = c.door, pts = new List<Vec2>(c.pts) }).ToList() ?? new List<CornerData>();
             var kept = b.entrances.Where(e => e.k != 0 && Derived.TierStart(b, e.k) != 0).ToList();
             b.entrances = new List<EntranceData> { new EntranceData { edge = 0, t = 0.5 } };
             b.entrances.AddRange(kept);
