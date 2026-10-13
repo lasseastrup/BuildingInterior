@@ -108,8 +108,8 @@ namespace Triband.Storey.Generate
             }
         }
 
-        /// <summary>The points a part's triangles use, and its triangles into them.</summary>
-        static (P3[] p, P3[] n, int[] t) Compact(P3[] pts, P3[] nrm, int[] tris)
+        /// <summary>The points a part's triangles use, and its triangles into them (facade details' parts too).</summary>
+        internal static (P3[] p, P3[] n, int[] t) Compact(P3[] pts, P3[] nrm, int[] tris)
         {
             var map = new Dictionary<int, int>(); var p = new List<P3>(); var n = new List<P3>(); var t = new int[tris.Length];
             for (int i = 0; i < tris.Length; i++)

@@ -6,25 +6,34 @@ namespace Triband.Storey.Generate
 {
     /// <summary>
     /// Facade details: AC units, vents, dishes, fire escapes and awnings on the outside of a wall
-    /// (SPEC §4.4). Each is anchored to a storey and an outline edge, placed by hand
-    /// (<c>BuildingData.details</c>) or by the style's rules (seeded per building, storey and edge, so
-    /// nothing reshuffles when something else is edited). Geometry is built per storey with the host
-    /// wall's cutaway data. LOD0 is the full item, LOD1 a simpler one. Never on a party wall.
+    /// (SPEC §4.4), and the kinds artists make (<see cref="DetailKinds"/>). Each is anchored to a storey
+    /// and an outline edge, placed by hand (<c>BuildingData.details</c>) or by the style's rules (seeded
+    /// per building, storey and edge, so nothing reshuffles when something else is edited). Geometry is
+    /// built per storey with the host wall's cutaway data. LOD0 is the full item, LOD1 a simpler one.
+    /// Never on a party wall.
     /// </summary>
     public static class Details
     {
+        /// <summary>Where a kind goes: on a wall at a height, up the wall from a storey (a fire escape), or over a ground-floor opening (an awning).</summary>
         public enum Anchor { Wall, Tier, Opening }
 
-        public sealed class Spec { public string label = ""; public double w, h, d; public Anchor anchor; }
+        /// <summary>
+        /// Where a style's rules put a kind: under upper-floor windows (as AC units), in the stretches of wall between
+        /// windows (as vents), or over ground-floor windows (as awnings over shop windows; a door's is put by hand). The
+        /// first two are for kinds on a wall, the last for kinds over an opening.
+        /// </summary>
+        public enum Rule { None, UnderWindows, BareWall, OverOpenings }
 
-        public static readonly Dictionary<DetailKind, Spec> Catalogue = new Dictionary<DetailKind, Spec>
-        {
-            [DetailKind.Ac] = new Spec { label = "AC unit", w = 0.75, h = 0.55, d = 0.45, anchor = Anchor.Wall },
-            [DetailKind.Vent] = new Spec { label = "Vent", w = 0.5, h = 0.5, d = 0.16, anchor = Anchor.Wall },
-            [DetailKind.Dish] = new Spec { label = "Dish", w = 0.6, h = 0.6, d = 0.4, anchor = Anchor.Wall },
-            [DetailKind.Escape] = new Spec { label = "Fire escape", w = 2.6, h = 0, d = 1.1, anchor = Anchor.Tier },
-            [DetailKind.Awning] = new Spec { label = "Awning", w = 0, h = 0.5, d = 1.0, anchor = Anchor.Opening },
-        };
+        /// <summary>
+        /// How far above an opening's top an artist's detail over it has its pivot: clear of a window's head (6 cm, or an
+        /// arched hood's 17 cm over a usual window) and of a door's canopy (10 to 24 cm above the door).
+        /// </summary>
+        public const double OverLift = 0.25;
+
+        /// <summary>Whether a kind has a rule, and it fits where the kind goes.</summary>
+        public static bool RuleFits(DetailKind k) => RuleFits(k.anchor, k.rule);
+
+        public static bool RuleFits(Anchor a, Rule r) => r == Rule.OverOpenings ? a == Anchor.Opening : r != Rule.None && a == Anchor.Wall;
 
         /// <summary>FNV-1a over the decimal/ordinal text of the arguments, to 0..1, as the prototype's <c>hash01</c>.</summary>
         public static double Hash01(params object[] a)
@@ -59,18 +68,24 @@ namespace Triband.Storey.Generate
 
         public static (double ac, double vents) Rules(FacadeStyle st) => ((st.details?.ac ?? 30) / 100, (st.details?.vents ?? 12) / 100);
 
+        /// <summary>The chance, 0 to 1, a style's rules give an artist's kind; 0 when the style doesn't name it.</summary>
+        public static double Density(FacadeStyle st, string id) => st.details?.kinds != null && st.details.kinds.TryGetValue(id, out var p) ? p / 100 : 0;
+
         /// <summary>A detail resolved to metres along its edge on one storey.</summary>
         public sealed class Item
         {
-            public DetailKind kind; public Spec spec = null!;
+            public DetailKind kind = null!;
+            /// <summary>Its edge, its middle along it, and how high its pivot is above the floor (over an opening: <see cref="OverLift"/> above the opening's top).</summary>
             public int i; public double u, y;
-            /// <summary>Awnings: the opening's extent and top.</summary>
+            /// <summary>Over an opening: the opening's extent, 25 cm past it each side, and the awning's top.</summary>
             public double u0, u1, yt; public bool hasSpan;
-            /// <summary>Fire escapes: the anchor storey, the storey after the last one climbed, and whether this is the drop ladder below the first platform.</summary>
+            /// <summary>Up the wall: the anchor storey, the storey after the last one climbed, and whether this is a fire escape's drop ladder below its first platform.</summary>
             public int ka, k1; public bool ladder;
             /// <summary>The hand-placed record this came from; null for a rule's item.</summary>
             public DetailData? man;
-            public double Width => spec.w > 0 ? spec.w : hasSpan ? u1 - u0 : 1;
+            /// <summary>As wide as its opening's span (an awning, or an artist's kind fitted across).</summary>
+            public bool Spans => hasSpan && (kind.stretch || kind.w <= 0);
+            public double Width => Spans ? u1 - u0 : kind.w > 0 ? kind.w : 1;
         }
 
         public struct EdgeFrame { public Geo.Edge e; public Miter m; public double uS, uE; }
@@ -98,9 +113,10 @@ namespace Triband.Storey.Generate
 
         /// <summary>
         /// The storeys a fire escape anchored at (kA, edge i, u metres) climbs: up its own tier, then on
-        /// through any setback whose outline has an edge on the same line covering the escape's width.
+        /// through any setback whose outline has an edge on the same line covering the escape's width
+        /// (<paramref name="half"/> each side of it: 1.4 m for the fire escape).
         /// </summary>
-        public static List<Step> EscapeRun(BuildingData b, int kA, int i, double u)
+        public static List<Step> EscapeRun(BuildingData b, int kA, int i, double u, double half = 1.4)
         {
             int N = b.floors.Count; var fp0 = Derived.OutlineAt(b, kA); var a = fp0[i]; var c = fp0[(i + 1) % fp0.Count];
             double L0 = Geo.Hypot(c.x - a.x, c.z - a.z); if (L0 == 0) L0 = 1e-6; var d = new[] { (c.x - a.x) / L0, (c.z - a.z) / L0 };
@@ -117,7 +133,7 @@ namespace Triband.Storey.Generate
                         double Along(Vec2 v) => (v.x - a.x) * d[0] + (v.z - a.z) * d[1];
                         if (Off(p) > 0.03 || Off(q) > 0.03) continue;
                         double t0 = Along(p), t1 = Along(q); if (t1 <= t0) continue;
-                        if (t0 <= s - 1.4 && t1 >= s + 1.4) { found = new Step { i = j, u = s - t0, s = s }; break; }
+                        if (t0 <= s - half && t1 >= s + half) { found = new Step { i = j, u = s - t0, s = s }; break; }
                     }
                     if (found == null) break;
                     cur = found.Value;
@@ -129,12 +145,15 @@ namespace Triband.Storey.Generate
             return run;
         }
 
+        /// <summary>How much flush wall a kind going up the wall needs each side of it, in setbacks it climbs into.</summary>
+        public static double RunHalf(DetailKind k) => k.id == DetailKinds.Escape ? 1.4 : Math.Max(0.1, k.w / 2 + 0.1);
+
         /// <summary>Every detail on storey k, resolved to metres along its edge: the hand-placed ones, then the style's.</summary>
         public static List<Item> At(Site site, BuildingData b, int k)
         {
             int N = b.floors.Count; var out_ = new List<Item>(); if (k >= N) return out_;
             int k0 = Derived.TierStart(b, k); var fp = Derived.OutlineAt(b, k); int n = fp.Count; double h = Derived.FloorH(b, k);
-            var R = Rules(Derived.StyleAt(b, k));
+            var st = Derived.StyleAt(b, k); var R = Rules(st);
             bool OnParty(int i, double u) { foreach (var r in Party.Ranges(site, b, k0, i)) if (u > r.s - 0.3 && u < r.e + 0.3) return true; return false; }
             void Push(Item d)
             {
@@ -145,37 +164,69 @@ namespace Triband.Storey.Generate
             // one edge's openings at a time, each let go before the next edge's are made; the outline's frames from its
             // points and corners worked out once
             var opsList = new List<Opening>(); var opsPool = new OpeningPool();
+            var ac = DetailKinds.Get(DetailKinds.Ac)!; var vent = DetailKinds.Get(DetailKinds.Vent)!;
             bool ccw = Geo.Area2(fp) > 0; var Wp = SiteOutline(b, fp); var cor = Geo.Corners(fp, ccw);
             (EdgeFrame f, List<Opening> ops) OpsOf(int i) { var f = EdgeFrameAt(Wp, ccw, cor, i); opsPool.Reset(); return (f, Facade.Ops(site, b, k, i, f.e.L, f.uS, f.uE, opsList, opsPool)); }
-            Item Mk(DetailKind kind, int i, double u, DetailData? man) => new Item { kind = kind, spec = Catalogue[kind], i = i, u = u, man = man };
+            Item Mk(DetailKind kind, int i, double u, DetailData? man) => new Item { kind = kind, i = i, u = u, man = man };
+            Item Over(DetailKind kind, int i, Opening o, DetailData? man)
+            {
+                var it = Mk(kind, i, (o.u0 + o.u1) / 2, man); it.hasSpan = true; it.u0 = o.u0 - 0.25; it.u1 = o.u1 + 0.25; it.yt = o.y1 + 0.06; it.y = o.y1 + OverLift;
+                return it;
+            }
+            // neighbouring spans over openings meet in the middle
+            void Trim()
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    var aw = new List<Item>(); foreach (var d in out_) if (d.Spans && d.i == i) aw.Add(d);
+                    aw.Sort((p, q) => p.u.CompareTo(q.u));
+                    for (int j = 1; j < aw.Count; j++) { var p = aw[j - 1]; var q = aw[j]; if (p.u1 > q.u0 - 0.04) { double m = (p.u1 + q.u0) / 2; p.u1 = m - 0.02; q.u0 = m + 0.02; } }
+                }
+            }
 
             foreach (var d in b.details)
             {
-                if (!Catalogue.TryGetValue(d.kind, out var spec) || d.edge >= n) continue;
+                var kind = DetailKinds.Get(d.kind); if (kind == null || d.edge >= n) continue;
                 double L = Geo.EdgeLen(fp, d.edge), u = d.t * L;
-                if (spec.anchor == Anchor.Tier)
+                if (kind.anchor == Anchor.Tier)
                 {
                     if (d.k >= N) continue;
-                    var run = EscapeRun(b, d.k, d.edge, d.t * Geo.EdgeLen(Derived.OutlineAt(b, d.k), d.edge)); Step? at = null;
+                    var run = EscapeRun(b, d.k, d.edge, d.t * Geo.EdgeLen(Derived.OutlineAt(b, d.k), d.edge), RunHalf(kind)); Step? at = null;
                     foreach (var r in run) if (r.k == k) { at = r; break; }
                     int k1 = run[run.Count - 1].k + 1;
-                    if (at != null) { var it = Mk(d.kind, at.Value.i, at.Value.u, d); it.y = 0; it.ka = d.k; it.k1 = k1; Push(it); }
-                    else if (d.kind == DetailKind.Escape && k == d.k - 1 && Derived.TierStart(b, d.k) == k0) { var it = Mk(DetailKind.Escape, d.edge, u, d); it.ladder = true; it.ka = d.k; it.k1 = k1; Push(it); }
+                    if (at != null) { var it = Mk(kind, at.Value.i, at.Value.u, d); it.y = 0; it.ka = d.k; it.k1 = k1; Push(it); }
+                    else if (kind.id == DetailKinds.Escape && k == d.k - 1 && Derived.TierStart(b, d.k) == k0) { var it = Mk(kind, d.edge, u, d); it.ladder = true; it.ka = d.k; it.k1 = k1; Push(it); }
                 }
                 else if (d.k != k) continue;
-                else if (spec.anchor == Anchor.Opening)
+                else if (kind.anchor == Anchor.Opening)
                 {
                     var (_, ops) = OpsOf(d.edge); Opening? best = null; double bestD = 0;
                     foreach (var o in ops) { double c = (o.u0 + o.u1) / 2, dd = Math.Abs(c - u); if (dd < Math.Max(0.6, (o.u1 - o.u0) / 2 + 0.3) && (best == null || dd < bestD)) { best = o; bestD = dd; } }
-                    if (best != null) { var it = Mk(d.kind, d.edge, (best.u0 + best.u1) / 2, d); it.hasSpan = true; it.u0 = best.u0 - 0.25; it.u1 = best.u1 + 0.25; it.yt = best.y1 + 0.06; Push(it); }
+                    if (best != null) Push(Over(kind, d.edge, best, d));
                 }
-                else { var it = Mk(d.kind, d.edge, u, d); it.y = d.y ?? 0; Push(it); }
+                else { var it = Mk(kind, d.edge, u, d); it.y = d.y ?? 0; Push(it); }
             }
-            for (int i = 0; i < n; i++)
+            Trim();
+            // the artist's kinds the style places by rule, in id order
+            List<(DetailKind kind, double p)>? more = null;
+            if (st.details?.kinds != null)
+                foreach (var kv in st.details.kinds)
+                    if (kv.Value > 0 && DetailKinds.Get(kv.Key) is DetailKind dk && RuleFits(dk)) (more ??= new List<(DetailKind, double)>()).Add((dk, kv.Value / 100));
+            bool spans = false;
+            // an artist's kind keeps clear of everything already on the wall (spans over two openings meet in the middle instead)
+            void PushClear(Item d)
             {
-                var aw = new List<Item>(); foreach (var d in out_) if (d.kind == DetailKind.Awning && d.i == i) aw.Add(d);
-                aw.Sort((p, q) => p.u.CompareTo(q.u));
-                for (int j = 1; j < aw.Count; j++) { var p = aw[j - 1]; var q = aw[j]; if (p.u1 > q.u0 - 0.04) { double m = (p.u1 + q.u0) / 2; p.u1 = m - 0.02; q.u0 = m + 0.02; } }
+                var (lo, hi) = Rise(d, h);
+                foreach (var m in out_)
+                {
+                    if (m.i != d.i) continue;
+                    if (m.Spans && d.Spans) { if (Math.Abs(m.u - d.u) < 0.05) return; continue; }
+                    if (Math.Abs(m.u - d.u) >= (m.Width + d.Width) / 2 + 0.15) continue;
+                    var (mlo, mhi) = Rise(m, h);
+                    if (lo < mhi + 0.1 && mlo < hi + 0.1) return;
+                }
+                int was = out_.Count; Push(d);
+                spans |= out_.Count > was && d.Spans;
             }
             for (int i = 0; i < n; i++)
             {
@@ -184,7 +235,7 @@ namespace Triband.Storey.Generate
                     for (int j = 0; j < ops.Count; j++)
                     {
                         var o = ops[j]; if (o.door || o.full || Hash01(b.id, "ac", k, i, j) >= R.ac) continue;
-                        double y = o.y0 - 0.62; if (y >= 0.25) { var it = Mk(DetailKind.Ac, i, (o.u0 + o.u1) / 2, null); it.y = y; Push(it); }
+                        double y = o.y0 - 0.62; if (y >= 0.25) { var it = Mk(ac, i, (o.u0 + o.u1) / 2, null); it.y = y; Push(it); }
                     }
                 if (R.vents > 0)
                 {
@@ -192,13 +243,48 @@ namespace Triband.Storey.Generate
                     foreach (var o in ops) { if (o.u0 - prev >= 1.0) gaps.Add((prev, o.u0)); prev = Math.Max(prev, o.u1); }
                     if (uE - prev >= 1.0) gaps.Add((prev, uE));
                     for (int j = 0; j < gaps.Count; j++)
-                        if (Hash01(b.id, "vent", k, i, j) < R.vents) { var it = Mk(DetailKind.Vent, i, (gaps[j].Item1 + gaps[j].Item2) / 2, null); it.y = h - 0.95; Push(it); }
+                        if (Hash01(b.id, "vent", k, i, j) < R.vents) { var it = Mk(vent, i, (gaps[j].Item1 + gaps[j].Item2) / 2, null); it.y = h - 0.95; Push(it); }
+                }
+                if (more == null) continue;
+                foreach (var (dk, p) in more)
+                {
+                    if (dk.rule == Rule.UnderWindows && k > 0)
+                        for (int j = 0; j < ops.Count; j++)
+                        {
+                            // as an AC unit: its top 7 cm under the window
+                            var o = ops[j]; if (o.door || o.full || Hash01(b.id, dk.id, k, i, j) >= p) continue;
+                            double y = o.y0 - 0.07 - dk.h; if (y >= 0.25) { var it = Mk(dk, i, (o.u0 + o.u1) / 2, null); it.y = y; PushClear(it); }
+                        }
+                    else if (dk.rule == Rule.BareWall)
+                    {
+                        // as a vent: in a stretch of wall it fits with 25 cm to spare each side, its top 45 cm under the ceiling
+                        double need = Math.Max(1.0, dk.w + 0.5), y = h - 0.45 - dk.h, prev = uS; int j = 0;
+                        if (y < 0.15) continue;
+                        for (int g = 0; g <= ops.Count; g++)   // the gaps before each opening, then after the last
+                        {
+                            double c = g < ops.Count ? ops[g].u0 : uE;
+                            if (c - prev >= need && Hash01(b.id, dk.id, k, i, j++) < p) { var it = Mk(dk, i, (prev + c) / 2, null); it.y = y; PushClear(it); }
+                            if (g < ops.Count) prev = Math.Max(prev, ops[g].u1);
+                        }
+                    }
+                    else if (dk.rule == Rule.OverOpenings && k == 0)
+                        for (int j = 0; j < ops.Count; j++)
+                            if (!ops[j].door && !ops[j].full && Hash01(b.id, dk.id, k, i, j) < p) PushClear(Over(dk, i, ops[j], null));
                 }
             }
+            if (spans) Trim();
             return out_;
         }
 
-        /// <summary>Geometry of storey k's details; lod 0 = full, 1 = simplified.</summary>
+        /// <summary>How high an item reaches on its storey (of height h), from its bottom to its top, for keeping clear of it.</summary>
+        static (double lo, double hi) Rise(Item it, double h) => it.kind.anchor switch
+        {
+            Anchor.Wall => (it.y + it.kind.bottom, it.y + it.kind.bottom + it.kind.h),
+            Anchor.Opening => it.kind.lod0 == null ? (it.yt - 0.15, it.yt + 0.45) : (it.y + it.kind.bottom, it.y + it.kind.bottom + it.kind.h),
+            _ => (0, h),
+        };
+
+        /// <summary>Geometry of storey k's details; lod 0 = full, 1 = simplified (an artist's kind: its LOD1 mesh, if it has one).</summary>
         public static void Build(MeshBuilder op, Site site, BuildingData b, int k, Palette C, int lod)
         {
             var items = At(site, b, k); if (items.Count == 0) return;
@@ -213,21 +299,30 @@ namespace Triband.Storey.Generate
                 P3 X(double uu, double yy, double ww) => F.At(uu, yy, ww);
                 void Bx(double u0, double u1, double y0, double y1, double w0, double w1, Swatch c, Swatch? cIn = null, Skip sk = Skip.None) => op.OBox(F, u0, u1, y0, y1, w0, w1, c, cIn, sk);
                 double uc = d.u;
-                switch (d.kind)
+                if (d.kind.lod0 is DetailKind.Mesh full)
                 {
-                    case DetailKind.Ac:
+                    // an artist's mesh: on the wall where it was put, at each storey's floor up the wall, or over its opening
+                    double sx = 1, sy = 1, um = uc, y0 = y + d.y;
+                    if (d.kind.anchor == Anchor.Opening && d.Spans) { um = (d.u0 + d.u1) / 2; sx = (d.u1 - d.u0) / Math.Max(0.05, d.kind.w); }
+                    else if (d.kind.anchor == Anchor.Tier) { y0 = y; if (d.kind.stretch && d.kind.h > 0.05) sy = h / d.kind.h; }
+                    DetailKinds.Place(op, F, lod == 0 || d.kind.lod1 == null ? full : d.kind.lod1, um, y0, sx, sy, C);
+                    continue;
+                }
+                switch (d.kind.id)
+                {
+                    case DetailKinds.Ac:
                     {
                         double yb = y + d.y; Bx(uc - 0.375, uc + 0.375, yb, yb + 0.55, T, T + 0.45, metal, null, Skip.In);
                         if (lod == 0) { Bx(uc - 0.3, uc + 0.3, yb + 0.08, yb + 0.47, T + 0.45, T + 0.47, grille, null, Skip.In); foreach (var q in new[] { -1, 1 }) Bx(uc + q * 0.31 - 0.02, uc + q * 0.31 + 0.02, yb - 0.06, yb, T, T + 0.42, dark, null, Skip.In | Skip.Top); }
                         break;
                     }
-                    case DetailKind.Vent:
+                    case DetailKinds.Vent:
                     {
                         double yb = y + d.y; Bx(uc - 0.25, uc + 0.25, yb, yb + 0.5, T, T + 0.12, dark, null, Skip.In);
                         if (lod == 0) for (int j = 0; j < 4; j++) Bx(uc - 0.22, uc + 0.22, yb + 0.08 + j * 0.1, yb + 0.11 + j * 0.1, T + 0.12, T + 0.16, metal, null, Skip.In);
                         break;
                     }
-                    case DetailKind.Dish:
+                    case DetailKinds.Dish:
                     {
                         double yb = y + d.y; var c0 = X(uc, yb + 0.3, T + 0.38); var nn = new P3(w.x * 0.8, 0.6, w.z * 0.8); var e1 = new P3(u.x, 0, u.z);
                         var e2 = P3.Cross(nn, e1);
@@ -236,7 +331,7 @@ namespace Triband.Storey.Generate
                         Bx(uc - 0.03, uc + 0.03, yb - 0.04, yb + 0.03, T, T + 0.33, dark, null, Skip.In); if (lod == 0) Bx(uc - 0.02, uc + 0.02, yb + 0.03, yb + 0.3, T + 0.3, T + 0.36, dark, null, Skip.Bot);
                         break;
                     }
-                    case DetailKind.Awning:
+                    case DetailKinds.Awning:
                     {
                         double yt = y + d.yt, u0 = d.u0, u1 = d.u1; var nn = new P3(w.x * 0.371, 0.928, w.z * 0.371);
                         op.Quad(X(u0, yt + 0.45, T), X(u1, yt + 0.45, T), X(u1, yt + 0.05, T + 1.0), X(u0, yt + 0.05, T + 1.0), nn, canvas);
@@ -245,7 +340,7 @@ namespace Triband.Storey.Generate
                         if (lod == 0) foreach (var (uu, sg) in new[] { (u0, -1.0), (u1, 1.0) }) op.Poly(new[] { X(uu, yt + 0.45, T), X(uu, yt + 0.05, T + 1.0), X(uu, yt - 0.15, T + 1.0) }, new P3(u.x * sg, 0, u.z * sg), canvasIn);
                         break;
                     }
-                    case DetailKind.Escape:
+                    case DetailKinds.Escape:
                     {
                         double u0 = uc - 1.3, u1 = uc + 1.3;
                         if (d.ladder)

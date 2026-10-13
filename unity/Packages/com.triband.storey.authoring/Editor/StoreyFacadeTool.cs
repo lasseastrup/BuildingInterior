@@ -64,9 +64,9 @@ namespace Triband.Storey.Editor
                 BridgeGhost(s, Accent);
                 Label(At(b, h), $"Bridge to {s.B.name}, {s.L:0.0} m");
             }
-            else if (Enum.TryParse<DetailKind>(tool, true, out var kind))
+            else if (DetailKinds.Get(tool) != null)
             {
-                var r = Facades.DetailAt(site, b, h, kind);
+                var r = Facades.DetailAt(site, b, h, tool);
                 if (r.error != null) { Label(At(b, h), r.error); return; }
                 if (r.ghost != null) Box(r.ghost.Value, r.remove >= 0 ? Ok : Accent);
             }
@@ -112,8 +112,11 @@ namespace Triband.Storey.Editor
                 if (found is var (owner, br)) { string oid = owner.id, id = br.id; e.Apply("Bridge removed", d => BridgeEdits.Remove(d.buildings.First(x => x.id == oid), id)); }
                 else e.Apply("Bridge added", d => { var a = d.buildings.First(x => x.id == bid); return (err = BridgeEdits.Add(new Site(d.buildings), a, k, at).why) == null; });
             }
-            else if (Enum.TryParse<DetailKind>(tool, true, out var kind))
-                e.ApplyTo(Details.Catalogue[kind].label, bb => (err = Facades.ToggleDetail(new Site(e.Document.buildings), bb, h, kind)) == null);
+            else if (DetailKinds.Get(tool) is DetailKind kind)
+            {
+                e.ApplyTo(kind.name, bb => (err = Facades.ToggleDetail(new Site(e.Document.buildings), bb, h, tool)) == null);
+                if (err == null) StoreyDetails.Keep(e.Site, tool);   // an artist's: builds include it
+            }
             if (err != null) Notify(sv, err);
             return true;
         }

@@ -216,11 +216,11 @@ namespace Triband.Storey.Generate
                         Quad(F.At(s0, yTop, 0), F.At(e0, yTop, 0), F.At(e1, yTop, T), F.At(s1, yTop, T), new P3(0, 1, 0), 0, 3);
                     }
                 }
-                if (b.details.Exists(d => d.kind == DetailKind.Escape))
+                if (b.details.Exists(d => d.kind == DetailKinds.Escape))
                     for (int k = t.k0; k < t.k1; k++)
                         foreach (var d in Details.At(site, b, k))
                         {
-                            if (d.kind != DetailKind.Escape || d.ladder) continue;
+                            if (d.kind.id != DetailKinds.Escape || d.ladder) continue;
                             var e = Geo.EdgeInfo(g.Wp, d.i, g.ccw); var F = e.F; double yk = Derived.FloorBase(b, k), u0 = d.u - 1.3, u1 = d.u + 1.3, y0 = yk + 0.16, y1 = yk + 0.24, w0 = T, w1 = T + 1.1;
                             Quad(F.At(u0, y1, w0), F.At(u1, y1, w0), F.At(u1, y1, w1), F.At(u0, y1, w1), new P3(0, 1, 0), 0, 3);
                             Quad(F.At(u0, y0, w0), F.At(u1, y0, w0), F.At(u1, y0, w1), F.At(u0, y0, w1), new P3(0, -1, 0), 0, 3);

@@ -229,7 +229,7 @@ namespace Triband.Storey.Editor
         public void Save(bool importLater = false)
         {
             if (!Dirty) return;
-            if (site != null && !importLater) StoreyOpenings.Sync(site, Document);   // the artist's windows and doors the layout uses
+            if (site != null && !importLater) { StoreyOpenings.Sync(site, Document); StoreyDetails.Sync(site, Document); }   // the artist's windows, doors and details the layout uses
             File.WriteAllText(path, text);
             file!.text = text;
             string p = path;

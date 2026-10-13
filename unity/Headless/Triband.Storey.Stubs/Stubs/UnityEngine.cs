@@ -254,6 +254,8 @@ namespace UnityEngine
         public GUIContent(string text) { }
         public GUIContent(string text, string tooltip) { }
         public static GUIContent none => new GUIContent("");
+        public string text { get; set; } = "";
+        public string tooltip { get; set; } = "";
     }
 
     public class GUIStyle

@@ -113,7 +113,7 @@ namespace Triband.Storey
                 var dob = c.Obj(dd, $"{path}.details[{i}]"); var dp = $"{path}.details[{i++}]";
                 b.details.Add(new DetailData
                 {
-                    kind = c.Enum<DetailKind>(dob, "kind", DetailKind.Ac, dp),
+                    kind = Kind(c.Str(dob, "kind", "", dp)),
                     k = c.Int(dob, "k", 0, dp), edge = c.Int(dob, "edge", 0, dp), t = c.Num(dob, "t", 0.5, dp), y = c.Opt(dob, "y", dp),
                 });
                 c.Check(dob, dp, "kind", "k", "edge", "t", "y");
@@ -258,7 +258,15 @@ namespace Triband.Storey
             {
                 var dob = c.Obj(dr, path + ".details");
                 s.details = new DetailRules { ac = c.Opt(dob, "ac", path + ".details"), vents = c.Opt(dob, "vents", path + ".details") };
-                c.Check(dob, path + ".details", "ac", "vents");
+                // the artist's kinds, by their ids (32 hex digits)
+                var known = new List<string> { "ac", "vents" };
+                foreach (var key in dob.Keys)
+                    if (Generate.DetailKinds.IsAssetId(key) && c.Opt(dob, key, path + ".details") is double pct)
+                    {
+                        (s.details.kinds ??= new SortedDictionary<string, double>(StringComparer.Ordinal))[key] = pct;
+                        known.Add(key);
+                    }
+                c.Check(dob, path + ".details", known.ToArray());
             }
             c.Check(o, path, "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "details",
                 "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "doorType", "plinthH", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind",
@@ -318,7 +326,7 @@ namespace Triband.Storey
                 var ds = new List<object?>();
                 foreach (var dd in b.details)
                 {
-                    var dobj = new Dictionary<string, object?> { ["kind"] = Lower(dd.kind), ["k"] = dd.k, ["edge"] = dd.edge, ["t"] = dd.t };
+                    var dobj = new Dictionary<string, object?> { ["kind"] = dd.kind, ["k"] = dd.k, ["edge"] = dd.edge, ["t"] = dd.t };
                     if (dd.y.HasValue) dobj["y"] = dd.y.Value;
                     ds.Add(dobj);
                 }
@@ -412,6 +420,7 @@ namespace Triband.Storey
                 var d = new Dictionary<string, object?>();
                 if (s.details.ac.HasValue) d["ac"] = s.details.ac.Value;
                 if (s.details.vents.HasValue) d["vents"] = s.details.vents.Value;
+                if (s.details.kinds != null) foreach (var kv in s.details.kinds) d[kv.Key] = kv.Value;
                 o["details"] = d;
             }
             return o;
@@ -421,6 +430,9 @@ namespace Triband.Storey
         static List<object?> Pts(List<Vec2> ps) { var l = new List<object?>(ps.Count); foreach (var p in ps) l.Add(Pt(p)); return l; }
         static List<object?> Ints(List<int> xs) { var l = new List<object?>(xs.Count); foreach (var x in xs) l.Add(x); return l; }
         static string Lower<T>(T e) where T : struct => e.ToString()!.ToLowerInvariant();
+
+        // a detail's kind: the generator's own in any case, an artist's id as it is; none is an AC unit, as the prototype has it
+        static string Kind(string s) => s.Length == 0 ? Generate.DetailKinds.Ac : Generate.DetailKinds.Id(s);
 
         // ---- reading helpers --------------------------------------------------------------
 

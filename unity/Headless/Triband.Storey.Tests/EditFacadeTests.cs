@@ -27,12 +27,12 @@ namespace Triband.Storey.Tests
             y = e.GetProperty("y").GetDouble(), k0 = e.GetProperty("k0").GetInt32(), k = e.GetProperty("k").GetInt32(),
         };
 
-        static DetailKind Kind(JsonElement e) => Enum.Parse<DetailKind>(e.GetString()!, true);
+        static string Kind(JsonElement e) => DetailKinds.Id(e.GetString()!);
 
         static object? Detail(DetailData? d)
         {
             if (d == null) return null;
-            var o = new Dictionary<string, object?> { ["kind"] = d.kind.ToString().ToLowerInvariant(), ["k"] = d.k, ["edge"] = d.edge, ["t"] = d.t };
+            var o = new Dictionary<string, object?> { ["kind"] = d.kind, ["k"] = d.k, ["edge"] = d.edge, ["t"] = d.t };
             if (d.y.HasValue) o["y"] = d.y.Value;
             return o;
         }

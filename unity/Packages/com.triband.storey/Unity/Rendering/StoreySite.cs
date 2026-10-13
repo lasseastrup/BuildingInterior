@@ -40,6 +40,8 @@ namespace Triband.Storey.Unity
         public bool collidersInEditMode;
         [Tooltip("The artist-made windows and doors the layout's styles use (the editor keeps this list), so builds include them.")]
         public List<StoreyOpening> openings = new List<StoreyOpening>();
+        [Tooltip("The artist-made facade details the layout uses, placed by hand or by its styles' rules (the editor keeps this list), so builds include them.")]
+        public List<StoreyDetail> facadeDetails = new List<StoreyDetail>();
         [Tooltip("Districts next to this one (their layouts, and how far their sites are from this one): buildings back to back across the edge share one party wall. The inspector's Find neighbouring districts fills it.")]
         public List<NeighbourDistrict> neighbours = new List<NeighbourDistrict>();
 
@@ -68,7 +70,7 @@ namespace Triband.Storey.Unity
         StoreyDocument? preview;
         readonly HashSet<string> pending = new HashSet<string>(StringComparer.Ordinal);
         bool pendingAll;
-        int kindsSeen = -1;
+        int kindsSeen = -1, detailKindsSeen = -1;
 
         /// <summary>Set by the editor's Storey tools each frame they are active: the storey being edited, isolate. Null draws the plain layout.</summary>
         public SiteView? View { get => view; set { view = value; if (value == null) ViewSource = null; } }
@@ -244,9 +246,13 @@ namespace Triband.Storey.Unity
                 site.District = layout.name; site.Neighbours.Clear();
                 foreach (var n in neighbours) if (n != null && n.layout != null && n.layout != layout) site.Neighbours.Add((n.layout.Document.buildings, n.layout.name, n.offset.x, n.offset.y));
             }
-            // an artist's window or door was added or changed: everything is built again with it
+            // an artist's window, door or facade detail was added or changed: everything is built again with it
             foreach (var o in openings) if (o != null && Generate.OpeningKinds.Get(o.Id) == null) o.Register();
-            if (Generate.OpeningKinds.Version != kindsSeen) { kindsSeen = Generate.OpeningKinds.Version; shownJson = null; pendingAll = true; }
+            foreach (var d in facadeDetails) if (d != null && Generate.DetailKinds.Get(d.Id) == null) d.Register();
+            if (Generate.OpeningKinds.Version != kindsSeen || Generate.DetailKinds.Version != detailKindsSeen)
+            {
+                kindsSeen = Generate.OpeningKinds.Version; detailKindsSeen = Generate.DetailKinds.Version; shownJson = null; pendingAll = true;
+            }
             // the camera before a load, so one over frames starts with the cells nearest it
             if (auto && Application.isPlaying && (pendingAll || (preview == null && shownJson != layout.Json))) EyeFor(site);
             if (preview == null)

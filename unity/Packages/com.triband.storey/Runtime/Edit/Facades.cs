@@ -101,10 +101,16 @@ namespace Triband.Storey.Edit
             return null;
         }
 
-        /// <summary>The detail palette at a facade point: the detail to add, or the hand-placed one to remove, and its ghost.</summary>
-        public static DetailSpot DetailAt(Site site, BuildingData b, FacadeHit ed, DetailKind kind)
+        /// <summary>
+        /// The detail palette at a facade point, for the kind with id <paramref name="kind"/> (<see cref="DetailKinds"/>):
+        /// the detail to add, or the hand-placed one to remove, and its ghost.
+        /// </summary>
+        public static DetailSpot DetailAt(Site site, BuildingData b, FacadeHit ed, string kind)
         {
-            var spec = Details.Catalogue[kind]; int k = ed.k, k0 = ed.k0; double h = Derived.FloorH(b, k), L = ed.L;
+            var spec = DetailKinds.Get(kind);
+            if (spec == null) return new DetailSpot { error = "That detail isn’t in the project" };
+            bool artist = spec.lod0 != null;
+            int k = ed.k, k0 = ed.k0; double h = Derived.FloorH(b, k), L = ed.L;
             var fp = Derived.OutlineAt(b, k); var a = fp[ed.i]; var c = fp[(ed.i + 1) % fp.Count]; double sg = Geo.Area2(fp) > 0 ? 1 : -1;
             var u0 = new Vec2((c.x - a.x) / L, (c.z - a.z) / L); var nrm = new Vec2(sg * u0.z, -sg * u0.x);   // outward normal
             GhostBox Box(double uc, double y0, double y1, double w, double dp) => new GhostBox
@@ -116,51 +122,61 @@ namespace Triband.Storey.Edit
 
             // an existing hand-placed item here comes off again
             var items = Details.At(site, b, k).Where(d => d.man != null && d.i == ed.i
-                && Math.Abs(d.u - u) < Math.Max(d.spec.w != 0 ? d.spec.w : 1.0, 0.7) / 2 + 0.15
-                && (d.spec.anchor != Details.Anchor.Wall || Math.Abs(d.y + d.spec.h / 2 - y) < d.spec.h / 2 + 0.4)).ToList();
+                && Math.Abs(d.u - u) < Math.Max(d.kind.w != 0 && !d.Spans ? d.kind.w : 1.0, 0.7) / 2 + 0.15
+                && (d.kind.anchor != Details.Anchor.Wall || Math.Abs(d.y + d.kind.h / 2 - y) < d.kind.h / 2 + 0.4)).ToList();
             if (items.Count > 0)
             {
                 var d = items[0]; int ei = b.details.IndexOf(d.man!);
-                double yb = d.spec.anchor == Details.Anchor.Wall ? fb + d.y : d.spec.anchor == Details.Anchor.Opening ? fb + d.yt - 0.15 : fb;
-                double w = d.spec.w != 0 ? d.spec.w : (d.u1 - d.u0) != 0 ? d.u1 - d.u0 : 1;
-                return new DetailSpot { remove = ei, ghost = Box(d.u, yb, yb + (d.spec.h != 0 ? d.spec.h : h), w, d.spec.d) };
+                if (d.kind.lod0 != null)   // an artist's: its own size, where its pivot is
+                {
+                    bool up = d.kind.anchor == Details.Anchor.Tier;
+                    double ya = up ? fb : fb + d.y + d.kind.bottom, ha = up && d.kind.stretch ? h : d.kind.h;
+                    return new DetailSpot { remove = ei, ghost = Box(d.Spans ? (d.u0 + d.u1) / 2 : d.u, ya, ya + ha, d.Width, d.kind.d) };
+                }
+                double yb = d.kind.anchor == Details.Anchor.Wall ? fb + d.y : d.kind.anchor == Details.Anchor.Opening ? fb + d.yt - 0.15 : fb;
+                double w = d.kind.w != 0 ? d.kind.w : (d.u1 - d.u0) != 0 ? d.u1 - d.u0 : 1;
+                return new DetailSpot { remove = ei, ghost = Box(d.u, yb, yb + (d.kind.h != 0 ? d.kind.h : h), w, d.kind.d) };
             }
             if (Party.Ranges(site, b, k0, ed.i).Any(r => u > r.s - 0.3 && u < r.e + 0.3)) return new DetailSpot { error = "That wall is shared with the building next door" };
             var f = Details.EdgeFrameAt(b, k, ed.i); var ops = Facade.Ops(site, b, k, ed.i, L, f.uS, f.uE);
             if (spec.anchor == Details.Anchor.Opening)
             {
-                if (k > 0) return new DetailSpot { error = "Awnings go over a ground-floor window or door" };
+                if (k > 0) return new DetailSpot { error = artist ? spec.name + " goes over a ground-floor window or door" : "Awnings go over a ground-floor window or door" };
                 Opening? best = null; double bd = 0;
                 foreach (var o in ops)
                 {
                     double cc = (o.u0 + o.u1) / 2, dd = Math.Abs(cc - u);
                     if (dd < Math.Max(0.6, (o.u1 - o.u0) / 2 + 0.3) && (best == null || dd < bd)) { best = o; bd = dd; }
                 }
-                if (best == null) return new DetailSpot { error = "Click a window or door to put an awning over it" };
+                if (best == null) return new DetailSpot { error = artist ? "Click a window or door to put " + spec.name + " over it" : "Click a window or door to put an awning over it" };
+                var add = new DetailData { kind = kind, k = k, edge = ed.i, t = (best.u0 + best.u1) / 2 / L };
+                double ya = fb + best.y1 + Details.OverLift + spec.bottom;
+                if (artist) return new DetailSpot { add = add, ghost = Box((best.u0 + best.u1) / 2, ya, ya + spec.h, spec.stretch ? best.u1 - best.u0 + 0.5 : spec.w, spec.d) };
                 double yt = fb + best.y1 + 0.06;
-                return new DetailSpot { add = new DetailData { kind = kind, k = k, edge = ed.i, t = (best.u0 + best.u1) / 2 / L }, ghost = Box((best.u0 + best.u1) / 2, yt - 0.15, yt + 0.45, best.u1 - best.u0 + 0.5, 1.0) };
+                return new DetailSpot { add = add, ghost = Box((best.u0 + best.u1) / 2, yt - 0.15, yt + 0.45, best.u1 - best.u0 + 0.5, 1.0) };
             }
             double half = spec.w / 2 + 0.15;
             if (L < 2 * half + 0.2) return new DetailSpot { error = "That wall is too short" };
             u = Tiers.Clamp(u, half, L - half);
-            if (kind == DetailKind.Escape)
+            if (spec.anchor == Details.Anchor.Tier)
             {
-                // not across a door (and its canopy) on any storey it climbs past, nor with the drop ladder coming down over one
-                var steps = Details.EscapeRun(b, k, ed.i, u).Select(r => (r.k, r.i, r.u, reach: spec.w / 2 + 0.35)).ToList();
-                if (k > k0) steps.Insert(0, (k - 1, ed.i, u, 0.7));
+                // not across a door (and a fire escape's stair not across its canopy) on any storey it climbs past, nor a fire
+                // escape's drop ladder coming down over one
+                bool escape = kind == DetailKinds.Escape;
+                var run = Details.EscapeRun(b, k, ed.i, u, Details.RunHalf(spec));
+                var steps = run.Select(r => (r.k, r.i, r.u, reach: spec.w / 2 + (escape ? 0.35 : 0.05))).ToList();
+                if (escape && k > k0) steps.Insert(0, (k - 1, ed.i, u, 0.7));
                 foreach (var st in steps)
                 {
                     var fs = Details.EdgeFrameAt(b, st.k, st.i); var o2 = Facade.Ops(site, b, st.k, st.i, fs.e.L, fs.uS, fs.uE);
                     if (o2.Any(o => o.door && Math.Abs((o.u0 + o.u1) / 2 - st.u) < (o.u1 - o.u0) / 2 + st.reach))
-                        return new DetailSpot { error = st.k < k ? "The ladder would come down over a door" : "A fire escape can’t run across a door" };
+                        return new DetailSpot { error = !escape ? spec.name + " can’t run across a door" : st.k < k ? "The ladder would come down over a door" : "A fire escape can’t run across a door" };
                 }
-            }
-            if (spec.anchor == Details.Anchor.Tier)
-            {
-                var run = Details.EscapeRun(b, k, ed.i, u); var last = run[run.Count - 1];
+                var last = run[run.Count - 1];
                 double yt = Derived.FloorBase(b, last.k) + Derived.FloorH(b, last.k);
                 return new DetailSpot { add = new DetailData { kind = kind, k = k, edge = ed.i, t = u / L }, ghost = Box(u, fb, yt, spec.w, spec.d) };
             }
+            if (artist && h - spec.h - 0.1 < 0.15) return new DetailSpot { error = spec.name + " is too tall for this storey" };
             y = Tiers.Clamp(y, 0.15, h - spec.h - 0.1);
             if (ops.Any(o => u + spec.w / 2 > o.u0 - 0.05 && u - spec.w / 2 < o.u1 + 0.05 && y + spec.h > o.y0 - 0.05 && y < o.y1 + 0.05))
                 return new DetailSpot { error = "That would sit across a window or door" };
@@ -168,7 +184,7 @@ namespace Triband.Storey.Edit
         }
 
         /// <summary>The detail palette's click: add the detail or remove the one there. The error says why nothing happened.</summary>
-        public static string? ToggleDetail(Site site, BuildingData b, FacadeHit ed, DetailKind kind)
+        public static string? ToggleDetail(Site site, BuildingData b, FacadeHit ed, string kind)
         {
             var r = DetailAt(site, b, ed, kind);
             if (r.error != null) return r.error;

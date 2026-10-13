@@ -22,7 +22,6 @@ namespace Triband.Storey.Editor
     {
         static readonly string[] TabNames = { "Shape", "Facade", "Interior" };
         static readonly string[] ShapeKeys = { "rect", "L", "U", "T", "oct" }, ShapeLabels = { "Rect", "L", "U", "T", "Octa" };
-        static readonly (string tool, string label)[] FacadeTools = { ("entrance", "Entrance"), ("blank", "Blank wall"), ("ac", "AC unit"), ("vent", "Vent"), ("dish", "Dish"), ("escape", "Fire escape"), ("awning", "Awning"), ("bridge", "Bridge") };
         static readonly (string label, string hint, Action<Rect, Color> icon)[] InteriorTools =
         {
             ("Select", "Pick a wall, stairs or a lift to edit or move it", StoreyInspectorUI.SelectIcon),
@@ -84,10 +83,10 @@ namespace Triband.Storey.Editor
             SiteSettings();
         }
 
-        /// <summary>The site's own settings, which an artist rarely changes: materials, the LOD shown, colliders, the openings kept.</summary>
+        /// <summary>The site's own settings, which an artist rarely changes: materials, the LOD shown, colliders, the openings and details kept.</summary>
         void SiteSettings()
         {
-            if (!StoreyInspectorUI.Fold("site", "Site settings", false, "Materials, the LOD shown, colliders, and the artist-made windows and doors the layout uses")) return;
+            if (!StoreyInspectorUI.Fold("site", "Site settings", false, "Materials, the LOD shown, colliders, and the artist-made windows, doors and facade details the layout uses")) return;
             serializedObject.Update();
             var it = serializedObject.GetIterator(); bool enter = true;
             using (new EditorGUI.IndentLevelScope())
@@ -576,24 +575,56 @@ namespace Triband.Storey.Editor
                     }
                     else StyleToggle(e, k0, "Parapet", st.parapet, (s, x) => s.parapet = x);
                 }
-                if (StoreyInspectorUI.Fold("rules", "Details by rule", false, "AC units and vents scattered on the walls by the style; place your own below"))
-                {
-                    var (ac, vents) = Details.Rules(st);
-                    StyleSlider(e, k0, "AC units %", Math.Round(ac * 100), 0, 100, 5, (s, x) => (s.details ??= new DetailRules()).ac = x);
-                    StyleSlider(e, k0, "Vents %", Math.Round(vents * 100), 0, 100, 5, (s, x) => (s.details ??= new DetailRules()).vents = x);
-                }
+                if (StoreyInspectorUI.Fold("rules", "Details by rule", false, "Details scattered on the walls by the style (AC units, vents, and your own Facade Details with a rule); place any by hand below"))
+                    RuleDetails(e, k0, st);
             }
             StoreyInspectorUI.Section("Place on walls", "Pick one, then click a wall in the Scene view; click a placed one to remove it");
-            // two rows of four: the labels stay whole at inspector widths
-            for (int row = 0; row < FacadeTools.Length; row += 4)
+            // rows of four: the labels stay whole at inspector widths
+            var tools = new List<(string tool, string label)> { ("entrance", "Entrance"), ("blank", "Blank wall") };
+            tools.AddRange(StoreyDetails.Palette());
+            tools.Add(("bridge", "Bridge"));
+            for (int row = 0; row < tools.Count; row += 4)
                 using (new EditorGUILayout.HorizontalScope())
-                    foreach (var (tool, label) in FacadeTools.Skip(row).Take(4))
+                    foreach (var (tool, label) in tools.Skip(row).Take(4))
                     {
                         bool on = GUILayout.Toggle(v.facadeTool == tool, label, EditorStyles.miniButton, GUILayout.Height(20));
                         if (on != (v.facadeTool == tool)) { v.facadeTool = on ? tool : ""; if (on) StoreyToolContext.Show(StoreyTab.Facade); SceneView.RepaintAll(); }
                     }
             if (v.facadeTool == "bridge") EditorGUILayout.HelpBox("Click an upper floor's wall: a bridge goes straight out to the building facing it, to its floor nearest this one. Click a bridge's door to remove it.", MessageType.None);
             BridgeList(e, b);
+        }
+
+        /// <summary>
+        /// The style's details by rule (docs/EDITOR.md §6.12): the AC units' and vents' chances, then each of the project's
+        /// Facade Details with a rule, and any the style names that the project no longer has. Giving one a chance adds it
+        /// to the site's list, so builds include it.
+        /// </summary>
+        void RuleDetails(StoreyEdit e, int k0, FacadeStyle st)
+        {
+            var (ac, vents) = Details.Rules(st);
+            StyleSlider(e, k0, "AC units %", Math.Round(ac * 100), 0, 100, 5, (s, x) => (s.details ??= new DetailRules()).ac = x);
+            StyleSlider(e, k0, "Vents %", Math.Round(vents * 100), 0, 100, 5, (s, x) => (s.details ??= new DetailRules()).vents = x);
+            var shown = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var d in StoreyDetails.All())
+            {
+                if (d.BuiltIn || !Details.RuleFits(d.anchor, d.rule)) continue;
+                shown.Add(d.Id);
+                RuleSlider(e, k0, st, d.name, d.Id);
+            }
+            if (st.details?.kinds != null)
+                foreach (var id in st.details.kinds.Keys.Where(id => !shown.Contains(id)).ToList()) RuleSlider(e, k0, st, StoreyDetails.Name(id), id);
+            if (shown.Count == 0) EditorGUILayout.LabelField("A Facade Detail of your own with a rule gets a slider here.", StoreyInspectorUI.Caption);
+        }
+
+        /// <summary>An artist's detail's chance in the style; giving it one keeps the detail in the site's list.</summary>
+        static void RuleSlider(StoreyEdit e, int k0, FacadeStyle st, string name, string id)
+        {
+            double was = Math.Round(Details.Density(st, id) * 100);
+            EditorGUI.BeginChangeCheck();
+            double x = Math.Round(EditorGUILayout.Slider(name + " %", (float)was, 0, 100) / 5) * 5;
+            if (!EditorGUI.EndChangeCheck() || x == was) return;
+            e.ApplyTo(name + " %", bb => { StoreyDetails.SetDensity(Styles.Edited(bb, k0), id, x); return true; });
+            if (x > 0) StoreyDetails.Keep(e.Site, id);
         }
 
         /// <summary>The bridges from and to this building: enclosed or open, their width, and removing them.</summary>

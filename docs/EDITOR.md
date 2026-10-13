@@ -41,7 +41,7 @@ The stages:
 | 6.4 | Inspector (**written; editor check outstanding**, §5) | UI Toolkit inspector with the Shape, Facade and Interior tabs; building list (new from preset, duplicate, delete, rename); style fields with Color Pipeline's palette picker and `StoreyColorSettings`' suggestions; `FacadeStyle` preset assets | A building restyled entirely from the inspector |
 | 6.5 | Shape tool (**written; editor check outstanding**) | Corner, insert, edge-push and move handles at the selected tier's height, the tier below dotted, snapping (neighbours, axis, Alt for free), edge lengths while dragging, the reason a move is refused | Outlines and setbacks edited as in the prototype |
 | 6.6 | Floors and interior (**written; editor check outstanding**) | Floor overlay (count, list, per-floor height, copy up, duplicate, delete); Interior tool (walls, doors, stairs, lifts) on the active floor, with the floors above clipped as in play | 10 floors with roof access in under 5 minutes |
-| 6.7 | Facade tool (**written; editor check outstanding**) | Entrance and blank-wall picking, the details palette from `FacadeDetailDefinition`s, details by rule | The exit test |
+| 6.7 | Facade tool (**written; editor check outstanding**) | Entrance and blank-wall picking, the details palette from the Facade Detail assets (§6.12), details by rule | The exit test |
 
 Each slice is usable on its own and ends with its tests green. 6.1 and 6.2 are headless; from 6.3 on, each slice needs an editor session to check.
 
@@ -77,13 +77,14 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
 - The **Storey Floors** overlay.
 - The site inspector with the building bar and the three tabs.
 - `FacadeStylePreset` assets: every preset in the Facade tab, the package's five (`Facade Styles/`, the prototype's presets) and the project's.
+- `StoreyDetails`: every Facade Detail asset in the Facade tab's palette, the runtime package's five (`Facade Details/`, the generator's own) and the project's (§6.12).
 - The colour field hook, `StoreyColorField.Picker`. With Color Pipeline installed, `Triband.Storey.Editor.ColorPipeline` replaces it with Color Pipeline's picker and the suggestions from `StoreyColorSettings`. It also installs `StoreyColorField.Conform`, so every edit ends with palette colours only (docs/COLOURS.md §3.8).
 
 **Where this differs from the plan, for now:**
 - The inspector is IMGUI, not UI Toolkit. It is rebuilt from the layout on every draw, which keeps it simple while the fields settle; moving it to UI Toolkit later changes no data.
 - Dragging a wall point or a "+" moves the walls live. Each frame redoes the move from where the drag began, so the result is the prototype's single move on release: a point passing over another doesn't merge with it on the way.
 - While dragging, the edited building rebuilds all its LODs once per frame, not LOD0 only.
-- Facade details are the five built-in kinds. `FacadeDetailDefinition` assets (SPEC §4.4) need the generator to place imported models (docs/COLOURS.md §3.9) and come with that work.
+- Facade details are Facade Detail assets (`StoreyDetail`, §6.12), not prefabs with a `FacadeDetailDefinition` each (SPEC §4.4). An artist's is a mesh in parts coloured from the style, as an artist's window is, and its rule's density is on the style, not in a rules asset. Palette icons, LOD2 meshes and colliders for details aren't done.
 
 **Checks in the editor**, after §4:
 
@@ -100,7 +101,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - The **Preset** list (every Facade Style asset: the package's five, then the project's; *Custom* once a field of the style is edited by hand, its roof aside; presets keep the roof), windows, the three colours (Color Pipeline's picker if installed), the roof fields on the top style only.
    - With Color Pipeline: a preset or a new building shows palette names, never "not a palette colour", and the Console lists each colour that was matched. Opening the demo street for editing matches its colours as one undo step. Under *More options*, a default the project hasn't set shows as its nearest palette colour ("Brass (nearest to #8A8F93)"). **Store the defaults in Storey Color Settings** stores those colours, creating `Assets/Resources/StoreyColorSettings.asset` if there is none.
    - Give a setback its own style.
-   - Entrance and Blank wall, then each detail: ghosts in orange (add) or green (remove), and refusals as a notification.
+   - Entrance and Blank wall, then each detail (the package's five, then the project's Facade Details): ghosts in orange (add) or green (remove), and refusals as a notification.
    - Save as preset…: the new preset shows as the style's, under Project in the list; apply it to another building. Apply one of the package's presets, change a field (the list says *Custom*), and save that as a preset too.
 4. **Interior:**
    - The floors above the active one are hidden.
@@ -396,9 +397,9 @@ The site's inspector reads top to bottom in the order you work: which layout, wh
 4. **Shape / Facade / Interior**: three large buttons, each with an icon and a line saying what it's for. The selected one is tinted, with an accent bar along its bottom. On a narrow inspector the line moves under the bar.
 5. The mode's settings in named groups, each a header with a hairline and space above it, not a box:
    - **Shape:** *Placement* (elevation, Snap to ground), *Outline* (setbacks, presets), *Corners*, *Courtyards and atria* (folded until the building has one), *Storey heights*.
-   - **Facade:** *Style for* (with setbacks), *Style* (preset), *Windows and doors* (type, artist's window, width, bay spacing, heads, glazing bars, frames, street doors), *Walls* (ground floor, bands, plinth, foundation, brick patches), *Colours* (*More colours* folded), *Roof*, *Details by rule* (folded), *Place on walls* (two rows of tools), *Bridges*.
+   - **Facade:** *Style for* (with setbacks), *Style* (preset), *Windows and doors* (type, artist's window, width, bay spacing, heads, glazing bars, frames, street doors), *Walls* (ground floor, bands, plinth, foundation, brick patches), *Colours* (*More colours* folded), *Roof*, *Details by rule* (folded), *Place on walls* (rows of four: Entrance, Blank wall, every Facade Detail, Bridge), *Bridges*.
    - **Interior:** *Inside* (walk-in or shell), *Floor*, *Tools*, the selection, *This storey's height*, *Interior colours* (folded).
-6. **Site settings** (folded): materials, the LOD shown, colliders, and the artist's windows and doors the layout uses.
+6. **Site settings** (folded): materials, the LOD shown, colliders, and the artist's windows, doors and facade details the layout uses.
 
 Foldouts remember whether they're open for the rest of the editor session.
 
@@ -433,3 +434,55 @@ A template comes in at elevation 0 (it lands somewhere else); a duplicate keeps 
 3. Raise one of two buildings back to back by a storey: the lower one's ground floor along the shared wall gets windows; the raised one's top storey above its neighbour does too.
 4. Undo each step.
 
+### 6.12 Artist-made facade details
+
+The details in Facade ▸ *Place on walls* are **Facade Detail** assets. Storey's own five ship in the runtime package's `Facade Details/` folder (AC unit, Vent, Dish, Fire escape, Awning), and the generator draws them as before. An artist can add more: a mesh, placed by hand or by a style's rules, and built into the building's own meshes like the five. So it drops with the cutaway and squashes with Sink.
+
+1. Model it in metres, +Y up, +Z out of the wall:
+   - Z 0 is the wall's outer face. Nothing should go behind it, or it shows through the wall inside, and no face should lie on it facing out.
+   - Each submesh is one part. Name its material after what it is: *Metal*, *Grille* or *Louvre*, *Dark* or *Black*, *Dish*, *Rail*, *Canvas* or *Fabric*, *Glass*, *Wall*, *Frame*, *Door*.
+2. *Assets › Create › Storey › Facade Detail*, then set *Mesh*. The parts take their colours from the material names, and *Size* comes from the mesh's bounds. *Faces back* turns round a mesh made facing −Z.
+3. Pick where it **Goes**:
+   - **On a wall**: where it's clicked, at the height clicked, kept clear of windows and doors. Its pivot is the bottom middle of its back.
+   - **Up the wall**: on every storey from the one clicked up to where the wall steps back, as the fire escape climbs. The pivot is as on a wall, at each storey's floor. A door on any storey it climbs refuses it. *Stretch* fits it to each storey's height. Leave out its top and bottom faces then (a pipe needs no caps): they'd lie on the floor band's top and flicker, and the inspector warns of them.
+   - **Over an opening**: over a ground-floor window or door, as the awning. Its pivot is the middle of its back, and goes 25 cm above the opening's top, clear of a window's head and a door's canopy; an awning can hang below it. *Stretch* fits it across the opening and 25 cm past each side, and two neighbours meet in the middle.
+4. **Placed by rule** (optional):
+   - *Under upper-floor windows*: as AC units, its top 7 cm under the window. Never on the ground floor or a curtain wall.
+   - *Between windows*: as vents, in a stretch of wall with 25 cm to spare each side, its top 45 cm under the ceiling.
+   - *Over ground-floor windows*: one put over a door is placed by hand.
+
+   Then give it a chance per style in Facade ▸ *Details by rule*. Each detail has its own seed, so a rebuild puts every one back where it was. It keeps clear of what is already on the wall: what was put by hand, the AC units and vents, then the other details by rule in id order.
+5. In the Facade tab, pick it under *Place on walls* and click a wall. Click a placed one to remove it. Placing one refuses where it doesn't fit, and says why.
+
+Each part takes one of the style's colours, so the building's palette colours it; the model's materials only name the parts (docs/COLOURS.md §3.9).
+
+LODs:
+- LOD0 places the mesh.
+- LOD1 places *LOD1 mesh* if there is one, otherwise the mesh itself. Give a heavy mesh a LOD1 mesh: many buildings are seen in LOD1 at once, and the inspector warns past 300 triangles.
+- LOD2 has none.
+
+The site lists the details its layout uses (*Facade Details*, under Site settings), so builds include them. The editor keeps the list: when you place one, give one a chance, and when the layout saves.
+
+The mesh is copied into the asset when it's set, and baked again when its model is reimported. If Unity says the mesh isn't readable, tick *Read/Write* on the model.
+
+Each of the project's Facade Details takes its asset's GUID as its id, so a copy, of one of the five too, is a detail of its own. A layout keeps a detail whose asset is gone: it isn't built, and the style's chance for it shows as *Missing detail* until set to 0.
+
+Not done: palette icons, LOD2 meshes, colliders (the five have none either), and triangle budgets beyond the LOD1 warning.
+
+Engine-free:
+- `DetailKind`, `DetailKinds` (`Register`, `Get`, `Place`, `BuiltIn`), `Details.Rule`, `Details.OverLift`.
+- `DetailData.kind`: the detail's id, `ac`, `vent`, `dish`, `escape` and `awning` for the five, as before.
+- `DetailRules.kinds`: layout key, the detail's id beside `ac` and `vents` in a style's `details`.
+- Tests: `DetailKindTests`, `FacadeDetailAssetTests`.
+
+Unity: `StoreyDetail`, `StoreySite.facadeDetails`. Editor: `StoreyDetails`.
+
+**Checks:**
+1. Make a detail from a model with Metal and Grille materials. Its parts say Detail metal and Grille, and its size matches the model.
+2. Place it on a wall by hand. The ghost has its size; it's refused across a window; clicking it removes it.
+3. Give it *Under upper-floor windows*, then 50% in Details by rule. It shows under about half the upper floors' windows. Set AC units to 100%: it gives way to them.
+4. Make one *Over an opening*, with Stretch and *Over ground-floor windows*. It spans each ground-floor window, and two close windows' meet in the middle.
+5. Make one *Up the wall* with Stretch from a capless pipe segment: it runs up every storey of the wall.
+6. Zoom out to LOD1: the LOD1 mesh shows. Change the model and reimport: the buildings update.
+7. Duplicate the asset: the copy is a detail of its own in the palette.
+8. Enter Play mode, and make a build: the details are there.

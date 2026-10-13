@@ -57,7 +57,7 @@ namespace Triband.Storey.Tests
         {
             var b = Box();
             b.entrances.Add(new EntranceData { edge = 1, t = 0.3 });   // on the edge into the corner cut
-            b.details.Add(new DetailData { kind = DetailKind.Ac, k = 1, edge = 2, t = 0.6, y = 1 });
+            b.details.Add(new DetailData { kind = DetailKinds.Ac, k = 1, edge = 2, t = 0.6, y = 1 });
             var e0 = (b.entrances[0].edge, b.entrances[0].t); var d0 = (b.details[0].edge, b.details[0].t);
             CornerCuts.Cut(b, 0, 2, CornerShape.Round, 3, false);
             CornerCuts.Cut(b, 0, 0, CornerShape.Chamfer, 2, false);
@@ -135,7 +135,7 @@ namespace Triband.Storey.Tests
             var b = Box();
             CornerCuts.Cut(b, 0, 2, CornerShape.Chamfer, 3, false);
             int chamfer = CornerCuts.Live(b, 0)[0].start;
-            b.details.Add(new DetailData { kind = DetailKind.Ac, k = 1, edge = chamfer, t = 0.4, y = 1 });
+            b.details.Add(new DetailData { kind = DetailKinds.Ac, k = 1, edge = chamfer, t = 0.4, y = 1 });
             var other = Rect.ToList(); other[0] = new Vec2(-1, -1);
             CornerCuts.Around(b, 0, (x, _) => Outlines.Set(x, 0, other) == OutlineIssue.None);
             Assert.Single(b.details);

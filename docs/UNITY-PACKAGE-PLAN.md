@@ -84,7 +84,7 @@ Rules to hold from day one:
 
 - **Authored data = a `.storey` asset** (ScriptableObject serialised via a `ScriptedImporter` on a `.storey` JSON file). Deterministic, cache-server friendly, diff-able in git, and the same format the prototype writes. The importer (`OnImportAsset`) runs the generator and adds the LOD meshes and colliders as sub-assets (`ctx.AddObjectToAsset`), so a building regenerates when its file changes and never at scene load.
 - **Scene placement = a `Building` MonoBehaviour** referencing the asset plus position and a building index. A district (scene or Addressables group) holds many. Party walls depend on neighbours, so a district-level bake step recomputes shared walls and HLOD cells (`AssetDatabase.RegisterCustomDependency` on the neighbour set).
-- **Style presets** are `FacadeStyle` ScriptableObjects; facade details are `FacadeDetailDefinition` assets (SPEC §4.4) so artists add kinds without code.
+- **Style presets** are `FacadeStyle` ScriptableObjects; facade details are Facade Detail assets (`StoreyDetail`, SPEC §4.4, docs/EDITOR.md §6.12) so artists add kinds without code.
 
 ### 4.2 Editor tooling (usability)
 

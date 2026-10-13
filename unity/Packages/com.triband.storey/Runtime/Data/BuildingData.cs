@@ -206,11 +206,13 @@ namespace Triband.Storey
         public int k;
     }
 
-    public enum DetailKind { Ac, Vent, Dish, Escape, Awning }
-
     public sealed class DetailData
     {
-        public DetailKind kind;
+        /// <summary>
+        /// Its kind's id (<see cref="Generate.DetailKinds"/>): the generator's own "ac", "vent", "dish", "escape" and
+        /// "awning", as the prototype writes them, or an artist's Facade Detail asset's.
+        /// </summary>
+        public string kind = Generate.DetailKinds.Ac;
         public int k;
         public int edge;
         public double t;
@@ -347,6 +349,11 @@ namespace Triband.Storey
         public double? ac;
         /// <summary>Chance of a vent in a window-free stretch of wall; the prototype's default is 12.</summary>
         public double? vents;
-        public DetailRules Clone() => (DetailRules)MemberwiseClone();
+        /// <summary>
+        /// The artist-made kinds' chances (<see cref="Generate.DetailKind.rule"/>), by kind id; a kind not here is placed
+        /// by hand only. Layouts write them beside <c>ac</c> and <c>vents</c>. Storey's own.
+        /// </summary>
+        public SortedDictionary<string, double>? kinds;
+        public DetailRules Clone() { var c = (DetailRules)MemberwiseClone(); if (kinds != null) c.kinds = new SortedDictionary<string, double>(kinds, System.StringComparer.Ordinal); return c; }
     }
 }

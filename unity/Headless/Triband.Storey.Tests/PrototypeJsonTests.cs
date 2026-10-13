@@ -59,7 +59,7 @@ namespace Triband.Storey.Tests
             Assert.True(linden.interior);
             Assert.Equal(6, linden.footprint.Count);
             Assert.Contains(linden.shafts, s => s.type == CoreType.Lift);
-            Assert.Contains(linden.details, x => x.kind == DetailKind.Escape);
+            Assert.Contains(linden.details, x => x.kind == Generate.DetailKinds.Escape);
             Assert.Contains(d.buildings, b => !b.interior);                       // a shell
             Assert.Contains(d.buildings, b => b.floors.Any(f => f.HasShape));       // a setback
             Assert.Contains(d.buildings, b => b.entrances.Any(e => e.k > 0));      // a door above ground
@@ -79,8 +79,8 @@ namespace Triband.Storey.Tests
             Assert.Contains(d.buildings, b => b.floors.Any(f => f.style != null));
             Assert.Contains(d.buildings, b => b.floors.Any(f => f.HasHeight));
             Assert.Contains(d.buildings, b => b.floors.Count(f => f.HasShape) == 2);
-            Assert.Equal(new[] { DetailKind.Ac, DetailKind.Awning, DetailKind.Dish, DetailKind.Escape, DetailKind.Vent }.OrderBy(k => k),
-                d.buildings.SelectMany(b => b.details).Select(x => x.kind).Distinct().OrderBy(k => k));
+            Assert.Equal(Generate.DetailKinds.BuiltIn.OrderBy(k => k, System.StringComparer.Ordinal),
+                d.buildings.SelectMany(b => b.details).Select(x => x.kind).Distinct().OrderBy(k => k, System.StringComparer.Ordinal));
         }
 
         [Fact]

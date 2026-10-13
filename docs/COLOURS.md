@@ -187,7 +187,9 @@ int atlasRow = offset / Shader.GetGlobalInt("_ColorAtlasWidth"); // goes into en
 
 ### 3.9 Facade details (imported models, SPEC §4.4)
 
-Detail models go through the Model Remapper like any prop. The detail validator's rule that "the material is the building material" becomes: one submesh, Color Pipeline's default material, and colour indices in the configured UV channel. At import the `FacadeDetailDefinition` stores the palette **ids** of its vertices rather than the indices, which go stale when the palette loses an entry. When a detail is merged into a building mesh its colours become detail-table slots (24 and up), so a palette change rewrites the table and not the buildings.
+An artist's facade detail (a Facade Detail asset, docs/EDITOR.md §6.12) is coloured as an artist's window or door is. Each submesh is a part that takes one of the style's colour slots: Detail metal, Grille, Detail dark, Dish, Rail, Trim and the rest. Its vertices carry the slot, so they use the building's own colour rows, and a palette change rewrites the table, not the buildings. The model's materials only name the parts.
+
+The plan here was different: import detail models through the Model Remapper, with Color Pipeline's default material, and store the palette ids of their vertices in a `FacadeDetailDefinition`. That isn't built. A detail with colours of its own beyond the style's slots would need it.
 
 ## 4. Alternatives considered
 
