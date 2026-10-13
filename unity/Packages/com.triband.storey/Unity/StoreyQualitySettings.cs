@@ -11,9 +11,11 @@ namespace Triband.Storey.Unity
     /// for memory, CPU time and fill rate.
     /// </summary>
     /// <remarks>
-    /// Defaults are the primary tier (desktop and iPhone 14 or newer). The minimum tier
-    /// (iPhone 7) is a second asset with the values from Plan §6.6's right-hand column,
-    /// and a change to these defaults needs a primary-tier reason.
+    /// Defaults are the primary tier (desktop and iPhone 14 or newer). The package ships both
+    /// tiers as assets (Quality Tiers/): Storey Primary Tier, the defaults, and Storey Minimum
+    /// Tier (iPhone 7), with half the residency, 12 MB of mesh chunks and no occlusion on far
+    /// materials (docs/CITY.md §7). A project picks one, or makes its own, the same kind of
+    /// asset. A change to these defaults needs a primary-tier reason.
     /// </remarks>
     [CreateAssetMenu(menuName = "Storey/Quality Settings", fileName = "StoreyQualitySettings")]
     public sealed class StoreyQualitySettings : ScriptableObject

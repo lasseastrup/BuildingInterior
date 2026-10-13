@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5569bd52d8320ae18c630b7d17b10da, type: 3}
+  m_Name: Storey Minimum Tier
+  m_EditorClassIdentifier: 
+  lod0PixelsPerMetre: 16
+  lod1PixelsPerMetre: 4
+  lod2PixelsPerMetre: 0.3
+  hysteresis: 0.12
+  fadeSeconds: 0.35
+  farDistance: 1500
+  lod0Residency: 8
+  lod1Residency: 130
+  collidersKept: 64
+  buildBudgetMs: 6
+  windowsClearAt: 0.6
+  buildOnWorkerThreads: 1
+  buildThreads: 0
+  meshChunksKeptMB: 12
+  occlusionOnFarMaterials: 0

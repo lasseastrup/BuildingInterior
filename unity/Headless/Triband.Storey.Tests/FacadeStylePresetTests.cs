@@ -1,8 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Text;
 using Triband.Storey.Edit;
 using Xunit;
 
@@ -14,42 +12,22 @@ namespace Triband.Storey.Tests
     /// </summary>
     public class FacadeStylePresetTests
     {
-        static string UnityRoot =>
-            typeof(FacadeStylePresetTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().First(a => a.Key == "UnityRoot").Value!;
-
-        /// <summary>A top-level field of a Unity YAML asset, its single-quoted value unquoted (folded lines joined as YAML joins them).</summary>
-        static string Field(string[] lines, string name)
-        {
-            string head = "  " + name + ": ";
-            int i = System.Array.FindIndex(lines, l => l.StartsWith(head));
-            Assert.True(i >= 0, $"no {name}");
-            string v = lines[i].Substring(head.Length);
-            if (!v.StartsWith("'")) return v.Trim();
-            var sb = new StringBuilder(v.Substring(1));
-            // a single-quoted scalar ends at a quote that isn't doubled
-            bool Closed(string s) { int q = 0; for (int j = s.Length - 1; j >= 0 && s[j] == '\''; j--) q++; return q % 2 == 1; }
-            while (!Closed(sb.ToString())) { var next = lines[++i].Trim(); sb.Append(next.Length == 0 ? "\n" : " " + next); }
-            return sb.ToString(0, sb.Length - 1).Replace("''", "'");
-        }
-
         [Fact]
         public void ThePrototypesFivePresetsShipAsFacadeStyleAssets()
         {
-            var pkg = Path.Combine(UnityRoot, "Packages", "com.triband.storey.authoring");
-            string script = File.ReadAllLines(Path.Combine(pkg, "Editor", "FacadeStylePreset.cs.meta")).First(l => l.StartsWith("guid: ")).Substring(6).Trim();
             var keys = new List<string>();
-            foreach (var path in Directory.GetFiles(Path.Combine(pkg, "Facade Styles"), "*.asset"))
+            foreach (var path in Directory.GetFiles(UnityAsset.Package("com.triband.storey.authoring", "Facade Styles"), "*.asset"))
             {
                 var lines = File.ReadAllLines(path);
                 string name = Path.GetFileNameWithoutExtension(path);
-                Assert.Contains($"guid: {script}, type: 3", Field(lines, "m_Script"));   // a Facade Style, as Save as preset… makes one
-                Assert.Equal(name, Field(lines, "m_Name"));
+                UnityAsset.IsA(lines, UnityAsset.Package("com.triband.storey.authoring", "Editor", "FacadeStylePreset.cs"));   // a Facade Style, as Save as preset… makes one
+                Assert.Equal(name, UnityAsset.Field(lines, "m_Name"));
                 var unknown = new List<string>();
-                var style = PrototypeJson.ReadStyle(Field(lines, "style"), unknown);
+                var style = PrototypeJson.ReadStyle(UnityAsset.Field(lines, "style"), unknown);
                 Assert.Empty(unknown);
                 Assert.Equal(name, style.label);
                 Assert.Null(style.preset);   // a preset's key is its asset's, given to a style applied from it
-                keys.Add(Field(lines, "key"));
+                keys.Add(UnityAsset.Field(lines, "key"));
             }
             Assert.Equal(Styles.Presets.Select(p => p.key).OrderBy(k => k), keys.OrderBy(k => k));
         }
