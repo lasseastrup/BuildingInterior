@@ -84,6 +84,7 @@ All notable changes to this package are documented here. The format follows [Kee
 - The cutaway on a Storey Site moved away from the origin, in the editor and in play. The camera and focus are now given in the site's own x and z.
 
 ### Added
+- `Styles.Apply`'s `key`: the preset key the applied style carries. `Styles.Look`, `Looks` and `ForgetEdited`: a style edited in place by hand loses its preset's key, as in the prototype; the roof's shape is no part of a look.
 - Loading over frames: a site's first load in Play mode (a district streamed in, a scene starting) goes over several frames, nearest cells first, within the build budget, so it never holds a frame. After an edit, and in the editor, a load is done at once. `SiteRenderer.LoadOverFrames` and `Loading`, `StoreySite.LoadOverFrames` and `Loading`, `LodStats.loading`.
 - `MemoryBenchTests`: what a building keeps after its upload, what a finished build holds, what building allocates, a load's massings and the walk model on a five-minute walk, on the 3,000-building test city, with bounds that catch a regression (docs/CITY.md §7).
 - `Lod0.BuildShape`: a building's LOD0 shape without its meshes, exactly the full build's segments and walls (`MeshBuilder.ShapeOnly`). `PlayWorld.Source` and `Keep`. `Lod0ShapeTests`.

@@ -57,7 +57,17 @@ namespace Triband.Storey.Editor
         public bool ApplyTo(string undoName, Func<BuildingData, bool> op, string? id = null)
         {
             string bid = id ?? View.selectedId;
-            return Apply(undoName, d => { var b = d.buildings.FirstOrDefault(x => x.id == bid); return b != null && op(b); });
+            return Apply(undoName, d =>
+            {
+                var b = d.buildings.FirstOrDefault(x => x.id == bid);
+                if (b == null) return false;
+                // a style edited by hand is its preset's no more (Custom), as in the prototype; a preset applied, or its roof
+                // edited, keeps a key (Styles.ForgetEdited). Before the colours are matched to the palette: that keeps them
+                var looks = Styles.Looks(b);
+                if (!op(b)) return false;
+                Styles.ForgetEdited(b, looks);
+                return true;
+            });
         }
 
         int group = -1;

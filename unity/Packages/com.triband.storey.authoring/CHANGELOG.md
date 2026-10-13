@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- The prototype's five facade presets (Brick walk-up, Glass office, Pastel stucco, Concrete slab, Warehouse) ship as Facade Style assets in the package's `Facade Styles/` folder, the same kind of asset **Save as preset…** makes. The Facade tab's **Preset** list is every Facade Style asset, the package's first, then the project's, and applies each the same way; they were five presets written into the code beside the project's assets. A new building starts as the package's Brick walk-up. To make a variant, apply one, change it and **Save as preset…**.
 - The Storey Prop's inspector says which building and storey it's in; *Tools ▸ Storey ▸ Props ▸ Show Prop Buildings* tints every prop by its building (docs/PROPS.md).
 - Shape ▸ *Placement*: a building's **Elevation**, and **Snap to ground**, which casts down onto the scene's colliders under it (a Terrain's too), stands it on the highest ground found and deepens its foundation to the lowest (docs/EDITOR.md §6.11).
 - **Find neighbouring districts** in the site's Site settings, and the **Storey Districts** inspector (**Add open district scenes**, **Read areas**, a warning for scenes missing from the build) (docs/CITY.md §5).
@@ -14,6 +15,7 @@
 - The automatic LOD picks for the Scene view's camera, and the editor updates when that camera moves. The LOD stats are shown in the Scene view for a selected site (`StoreyLodEditor`).
 
 ### Changed
+- A style carries the key of the preset it was applied from (`FacadeStyle.preset`: a package preset's own, `brick` and the rest as the prototype names them, or a project preset's asset GUID), and the **Preset** list shows that preset as the style's, a project's too. A field of the style edited by hand takes the key off (*Custom*), as in the prototype, except the roof, which a preset never sets; before, no edit did, so an edited style still showed its preset, and so did a preset saved from it. **Save as preset…** names the style after the new asset and shows it as the style's.
 - The test city moved from the site's inspector to **Tools ▸ Storey ▸ Test City** (Make 300, 1,000 or 3,000 Buildings, which asks first, and Remove Test City), acting on the selected site.
 - The Interior tab's tools (Select, Wall, Door, Erase, Stairs, Lift) are buttons with drawn icons, the name under each and what it does in the tooltip.
 - **Log Edit Timings** is kept for the editor session only: it is off again after a restart.

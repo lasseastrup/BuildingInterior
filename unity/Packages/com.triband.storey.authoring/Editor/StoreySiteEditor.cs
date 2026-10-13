@@ -162,7 +162,14 @@ namespace Triband.Storey.Editor
                         {
                             string id = "";
                             var near = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.pivot : Vector3.zero;
-                            e.Apply("Added a 3-storey building", d => { id = Buildings.Add(d, key, new Vec2(near.x, near.z)).id; return true; });
+                            // as the package's brick walk-up preset is now, should it have been edited
+                            var start = FacadeStylePreset.Default();
+                            e.Apply("Added a 3-storey building", d =>
+                            {
+                                var nb = Buildings.Add(d, key, new Vec2(near.x, near.z));
+                                if (start is (FacadeStyle sty, string sk)) Styles.Apply(nb, 0, sty, sk);
+                                id = nb.id; return true;
+                            });
                             e.View.Select(id); SetTab(e.View, StoreyTab.Shape);
                         });
                     }
@@ -708,51 +715,41 @@ namespace Triband.Storey.Editor
             StoreyOpenings.Keep(e.Site, k);
         }
 
-        // the project's Facade Style assets: searched once and kept until the project changes (the inspector redraws often,
-        // and a search of a big project's AssetDatabase is slow)
-        static List<FacadeStylePreset>? presetAssets;
-        static bool presetHook;
-        static List<FacadeStylePreset> PresetAssets()
-        {
-            if (!presetHook) { presetHook = true; EditorApplication.projectChanged += () => presetAssets = null; }
-            if (presetAssets != null && presetAssets.All(a => a != null)) return presetAssets;
-            return presetAssets = AssetDatabase.FindAssets("t:" + nameof(FacadeStylePreset)).Select(g => AssetDatabase.LoadAssetAtPath<FacadeStylePreset>(AssetDatabase.GUIDToAssetPath(g))).Where(a => a != null).Select(a => a!).ToList();
-        }
-
         void Presets(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
         {
-            // one list: the built-in presets, then the project's Facade Style assets; "Custom" once the style is edited
-            var assets = PresetAssets();
-            var names = Styles.Presets.Select(p => p.style.label).ToList();
-            if (assets.Count > 0) { names.Add(""); names.AddRange(assets.Select(a => "Project/" + a.name)); }
-            int current = Styles.Presets.ToList().FindIndex(p => p.key == st.preset);
-            bool custom = current < 0;
-            if (custom) { names.Insert(0, "Custom"); names.Insert(1, ""); }
-            int shift = custom ? 2 : 0;
+            // one list, every preset a Facade Style asset: the package's, then the project's; "Custom" when the style carries
+            // no preset's key (a field of it edited by hand since, or it never came from one)
+            var all = FacadeStylePreset.All();
+            var cur = FacadeStylePreset.Of(st);
+            var items = new List<(string name, int i)>();   // i: the preset, -1 for Custom and the separators
+            if (cur == null) { items.Add(("Custom", -1)); items.Add(("", -1)); }
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (i > 0 && all[i].own != all[i - 1].own) items.Add(("", -1));
+                items.Add(((all[i].own ? "" : "Project/") + all[i].asset.name, i));
+            }
+            int shown = cur == null ? 0 : items.FindIndex(x => x.i >= 0 && all[x.i] == cur);
             using (new EditorGUILayout.HorizontalScope())
             {
-                int pick = EditorGUILayout.Popup("Preset", custom ? 0 : current, names.ToArray());
-                int i = pick - shift;
-                if (pick != (custom ? 0 : current) && i >= 0)
+                int pick = EditorGUILayout.Popup("Preset", shown, items.Select(x => x.name).ToArray());
+                if (pick != shown && pick >= 0 && items[pick].i >= 0)
                 {
-                    if (i < Styles.Presets.Count)
-                    {
-                        var (key, ps) = Styles.Presets[i];
-                        e.ApplyTo(ps.label + " applied", bb => { Styles.ApplyPreset(bb, k0, key); return true; });
-                    }
-                    else if (i > Styles.Presets.Count)   // past the separator
-                    {
-                        var a = assets[i - Styles.Presets.Count - 1]; var style = a.Style;
-                        e.ApplyTo(a.name + " applied", bb => { Styles.Apply(bb, k0, style); return true; });
-                    }
+                    var p = all[items[pick].i]; FacadeStyle? style = null;
+                    try { style = p.asset.Style; }
+                    catch (Exception ex) { Debug.LogWarning($"Storey: the Facade Style \"{p.asset.name}\" holds no style it can read ({ex.Message}).", p.asset); }
+                    if (style != null) e.ApplyTo(p.asset.name + " applied", bb => { Styles.Apply(bb, k0, style, p.key); return true; });
                 }
-                if (GUILayout.Button(new GUIContent("Save as preset…", "Keep this style as a Facade Style asset, shared with every building"), EditorStyles.miniButton))
+                if (GUILayout.Button(new GUIContent("Save as preset…", "Keep this style as a Facade Style asset, shared with every building, in the list with the package's"), EditorStyles.miniButton))
                 {
                     string path = EditorUtility.SaveFilePanelInProject("Facade style", st.label.Length > 0 ? st.label : "Facade Style", "asset", "Where the style preset goes");
                     if (!string.IsNullOrEmpty(path))
                     {
-                        var p = CreateInstance<FacadeStylePreset>(); p.Set(st);
+                        string name = System.IO.Path.GetFileNameWithoutExtension(path);
+                        var p = CreateInstance<FacadeStylePreset>(); p.Set(st, name);
                         AssetDatabase.CreateAsset(p, path); AssetDatabase.SaveAssets();
+                        // the style is the new preset's now, named as it is, as one applied from it would be
+                        string key = AssetDatabase.AssetPathToGUID(path);
+                        if (key.Length > 0) e.ApplyTo("Saved as " + name, bb => { var s = Styles.Edited(bb, k0); s.label = name; s.preset = key; return true; });
                     }
                 }
             }

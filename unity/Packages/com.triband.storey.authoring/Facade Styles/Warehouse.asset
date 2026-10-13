@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8478b087ce6804d46210166a2495659c, type: 3}
+  m_Name: Warehouse
+  m_EditorClassIdentifier: 
+  style: '{"label":"Warehouse","wall":"#56645F","trim":"#E0DBCF","interior":"#E6E3DC","floor":"#8F8B82","roof":"#4E5552","core":"#BDB9B0","glass":"#9BB4BE","windows":"tall","winW":1.6,"bay":4.2,"ground":"solid","bands":false,"parapet":false,"preset":null}'
+  key: warehouse

@@ -90,7 +90,18 @@ ShaderImporter:
   assetBundleVariant: 
 """
 
+NATIVE = """fileFormatVersion: 2
+guid: {guid}
+NativeFormatImporter:
+  externalObjects: {{}}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+"""
+
 IMPORTERS = {
+    ".asset": ("NativeFormatImporter", NATIVE),
     ".shader": ("ShaderImporter", SHADER),
     ".cs": ("MonoImporter", SCRIPT),
     ".asmdef": ("AssemblyDefinitionImporter", SIMPLE),

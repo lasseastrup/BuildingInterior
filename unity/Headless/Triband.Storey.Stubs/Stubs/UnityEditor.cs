@@ -29,6 +29,7 @@ namespace UnityEditor
         public static string GetAssetPath(Object assetObject) => "";
         public static string[] FindAssets(string filter) => System.Array.Empty<string>();
         public static string GUIDToAssetPath(string guid) => "";
+        public static string AssetPathToGUID(string path) => "";
         public static T LoadAssetAtPath<T>(string assetPath) where T : Object => null;
         public static void CreateAsset(Object asset, string path) { }
         public static void SaveAssets() { }

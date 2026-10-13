@@ -6,8 +6,9 @@ using Triband.Storey.Generate;
 namespace Triband.Storey.Edit
 {
     /// <summary>
-    /// Facade styles in the Facade tab: the five one-click presets, which style a tier edits, a setback's own style,
-    /// and which style the roof is built with. Ported from the prototype.
+    /// Facade styles in the Facade tab: the prototype's five presets, which style a tier edits, a setback's own style,
+    /// and which style the roof is built with, and a preset's key on a style edited by hand. Ported from the prototype. The
+    /// authoring package ships the five presets as Facade Style assets, its presets as the project's own are (docs/EDITOR.md).
     /// </summary>
     public static class Styles
     {
@@ -18,7 +19,7 @@ namespace Triband.Storey.Edit
             windows = windows, winW = winW, bay = bay, ground = ground, bands = bands, parapet = parapet,
         };
 
-        /// <summary>The prototype's style presets, by key, in its order.</summary>
+        /// <summary>The prototype's style presets, by key, in its order (the authoring package's Facade Style assets start as them).</summary>
         public static readonly IReadOnlyList<(string key, FacadeStyle style)> Presets = new List<(string, FacadeStyle)>
         {
             ("brick", S("Brick walk-up", "#9A4B38", "#ECE5D8", "#EFECE5", "#B88D62", "#6E716B", "#C9C4BB", "#8DB3C8", WindowType.Punched, 1.2, 2.6, GroundType.Storefront, true, true)),
@@ -58,12 +59,51 @@ namespace Triband.Storey.Edit
         /// <summary>Apply a preset to the style tier k0 edits, keeping its roof (presets never change the roof).</summary>
         public static void ApplyPreset(BuildingData b, int k0, string key) => Apply(b, k0, Preset(key));
 
-        /// <summary>Apply a style (a project's preset asset, say) to the style tier k0 edits, keeping its roof.</summary>
-        public static void Apply(BuildingData b, int k0, FacadeStyle style)
+        /// <summary>
+        /// Apply a style (a Facade Style asset's) to the style tier k0 edits, keeping its roof. It carries <paramref name="key"/>
+        /// as its preset (<see cref="FacadeStyle.preset"/>), or the style's own when none is given.
+        /// </summary>
+        public static void Apply(BuildingData b, int k0, FacadeStyle style, string? key = null)
         {
             var cur = Edited(b, k0);
             var ns = style.Clone(); ns.roofType = cur.roofType; ns.pitch = cur.pitch; ns.eave = cur.eave; ns.mansard = cur.mansard; ns.dormers = cur.dormers;
+            if (key != null) ns.preset = key;
             if (k0 > 0 && b.floors[k0].style != null) b.floors[k0].style = ns; else b.style = ns;
+        }
+
+        /// <summary>
+        /// A style's look as a preset sets it: all of it but the roof's shape (a preset keeps the building's) and the preset
+        /// key, as text. Two styles look alike when theirs are the same.
+        /// </summary>
+        public static string Look(FacadeStyle s)
+        {
+            var c = s.Clone(); var none = new FacadeStyle();
+            c.preset = null; c.roofType = none.roofType; c.pitch = none.pitch; c.eave = none.eave; c.mansard = none.mansard; c.dormers = none.dormers;
+            return PrototypeJson.WriteStyle(c);
+        }
+
+        /// <summary>A building's styles, the base and each setback's own, by the storey each starts at: the style, its preset key and its look.</summary>
+        public static List<(int k, FacadeStyle style, string? preset, string look)> Looks(BuildingData b)
+        {
+            var o = new List<(int, FacadeStyle, string?, string)> { (0, b.style, b.style.preset, Look(b.style)) };
+            for (int k = 1; k < b.floors.Count; k++) if (b.floors[k].style is FacadeStyle s) o.Add((k, s, s.preset, Look(s)));
+            return o;
+        }
+
+        /// <summary>
+        /// After an edit by hand (<paramref name="before"/>: the building's <see cref="Looks"/> before it), a style changed in
+        /// place, its look different and its preset key the same, is its preset's no more, and loses the key: the Facade tab
+        /// shows it as Custom, as the prototype does. A preset applied replaces the style, with its key, and the roof is no
+        /// part of a look: neither loses it.
+        /// </summary>
+        public static void ForgetEdited(BuildingData b, List<(int k, FacadeStyle style, string? preset, string look)> before)
+        {
+            foreach (var (k, style, preset, look) in before)
+            {
+                if (preset == null) continue;
+                var s = k == 0 ? b.style : k < b.floors.Count ? b.floors[k].style : null;
+                if (ReferenceEquals(s, style) && s!.preset == preset && Look(s) != look) s.preset = null;
+            }
         }
 
         /// <summary>Give the setback at k0 its own style, starting as what it looks like now.</summary>

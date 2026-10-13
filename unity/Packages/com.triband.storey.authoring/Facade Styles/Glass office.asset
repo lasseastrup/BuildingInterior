@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8478b087ce6804d46210166a2495659c, type: 3}
+  m_Name: Glass office
+  m_EditorClassIdentifier: 
+  style: '{"label":"Glass office","wall":"#C3CCD0","trim":"#33414A","interior":"#F2F3F1","floor":"#A2A7A8","roof":"#7F888D","core":"#BFC4C4","glass":"#79A9C4","windows":"curtain","winW":1.4,"bay":1.8,"ground":"match","bands":true,"parapet":true,"preset":null}'
+  key: glass

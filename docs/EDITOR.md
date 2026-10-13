@@ -66,7 +66,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
 
 **Engine-free, checked against the prototype:**
 - `Edit/Facades`: facade picking, blank walls, entrances and terrace doors, details by hand with their ghosts and refusal reasons, terrace or roof.
-- `Edit/Styles`: the five presets, the style each tier edits, own style and match below, and which style the roof is built with.
+- `Edit/Styles`: the prototype's five presets, the style each tier edits, own style and match below, which style the roof is built with, and the preset key a style loses when a field of it is edited by hand.
 - `Edit/Buildings`: new from a footprint preset in a free spot, duplicate, delete, names.
 - `Edit/Picking`: the building under the pointer, and the Interior tab's storey clip.
 
@@ -76,7 +76,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
 - `StoreyShapeTool`, `StoreyFacadeTool` and `StoreyInteriorTool`, Scene view tools for a selected Storey Site.
 - The **Storey Floors** overlay.
 - The site inspector with the building bar and the three tabs.
-- `FacadeStylePreset` assets.
+- `FacadeStylePreset` assets: every preset in the Facade tab, the package's five (`Facade Styles/`, the prototype's presets) and the project's.
 - The colour field hook, `StoreyColorField.Picker`. With Color Pipeline installed, `Triband.Storey.Editor.ColorPipeline` replaces it with Color Pipeline's picker and the suggestions from `StoreyColorSettings`. It also installs `StoreyColorField.Conform`, so every edit ends with palette colours only (docs/COLOURS.md §3.8).
 
 **Where this differs from the plan, for now:**
@@ -97,11 +97,11 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Something refused says why next to the pointer, for example "Stairs or a lift are in the way".
    - Each drag is one undo step.
 3. **Facade:**
-   - The **Preset** list (the five built-in presets, then the project's Facade Style assets; *Custom* when the style matches none; presets keep the roof), windows, the three colours (Color Pipeline's picker if installed), the roof fields on the top style only.
+   - The **Preset** list (every Facade Style asset: the package's five, then the project's; *Custom* once a field of the style is edited by hand, its roof aside; presets keep the roof), windows, the three colours (Color Pipeline's picker if installed), the roof fields on the top style only.
    - With Color Pipeline: a preset or a new building shows palette names, never "not a palette colour", and the Console lists each colour that was matched. Opening the demo street for editing matches its colours as one undo step. Under *More options*, a default the project hasn't set shows as its nearest palette colour ("Brass (nearest to #8A8F93)"). **Store the defaults in Storey Color Settings** stores those colours, creating `Assets/Resources/StoreyColorSettings.asset` if there is none.
    - Give a setback its own style.
    - Entrance and Blank wall, then each detail: ghosts in orange (add) or green (remove), and refusals as a notification.
-   - Save as preset…, then apply the asset to another building.
+   - Save as preset…: the new preset shows as the style's, under Project in the list; apply it to another building. Apply one of the package's presets, change a field (the list says *Custom*), and save that as a preset too.
 4. **Interior:**
    - The floors above the active one are hidden.
    - **Walls** (Interior tab) sets this storey's walls, after The Sims' wall modes:
