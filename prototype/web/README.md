@@ -20,9 +20,12 @@ as before. The build stamps the site's version into the page (`window.STOREY_BUI
 
 The bar-chart button opens the city stats: **Benchmark** flies a fixed path over the 1,000-building test city (about
 90 seconds, hands off the screen), then orbits one view under several settings, and opens a report with frame-rate,
-interval percentiles, slow frames (over 20 ms), main-thread time and draw load per part. **Copy report** puts it on the
-clipboard. **Performance…** holds the render settings for this browser (resolution, pixel ratio cap, shadows, MSAA, a
-frame HUD). Low Power Mode caps Safari at 30 fps, so turn it off before measuring.
+interval percentiles, slow frames (over 20 ms), main-thread time, draw load and the resolution drawn per part. **Copy
+report** puts it on the clipboard. **Performance…** holds the render settings for this browser: resolution (**Auto**, the
+default, lowers it a step when frames come later than 60 fps while the main thread had time to spare, and raises it
+again after 3 s without; or a fixed share), pixel ratio cap, lighting (full PBR, or diffuse only: the default on a touch
+screen), shadows and their edges (16 taps, or 9 on a touch screen), MSAA, and a frame HUD. Low Power Mode caps Safari
+at 30 fps, so turn it off before measuring.
 
 ## Setting it up, once
 
