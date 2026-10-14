@@ -60,6 +60,37 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void AViewSeesWhatIsInFrontOfIt()
+        {
+            var v = new LodView(); v.Set(0, 1, 0, 1, 0, 0, 0, 1, 0, 60, 1, 0.1, 1500);   // looking along +x
+            Assert.True(v.Sees(50, 1, 0, 5));
+            Assert.False(v.Sees(-50, 1, 0, 5));     // behind
+            Assert.False(v.Sees(50, 1, 60, 5));     // off to the side: 50 m ahead the view is ±29 m wide
+            Assert.True(v.Sees(50, 1, 33, 5));      // just outside, within the margin (5 x 1.2 + 6)
+            Assert.False(v.Sees(2000, 1, 0, 5));    // past the far distance
+        }
+
+        [Fact]
+        public void DetailInViewIsBuiltFirstAndNoLod0OutOfIt()
+        {
+            // docs/PERFORMANCE.md §9.2: two buildings near enough for LOD0, one ahead and one behind the camera
+            var m = new LodManager();
+            var ahead = Box(m, 0, 30, built: false); var behind = m.Set(1, -40, -5, -30, 5, 10);   // 30 m off either way (a building nearer behind is within the view's margin)
+            var v = new LodView(); v.Set(0, 1, 0, 1, 0, 0, 0, 1, 0, 60, 1, 0.1, 1500);
+            var f = m.Update(0, 1, 0, Pxm, 1, null, v);
+            Assert.Equal(new[] { (0, 0), (1, 1) }, f.Build.Select(b => (b.idx, b.lod)).ToArray());   // ahead's LOD0 first, behind gets its shell
+            Assert.Equal(0, ahead.Want); Assert.Equal(0, behind.Want);
+            m.SetBuilt(1, 1, true);
+            m.Update(0, 1, 0, Pxm, 1, null, v);
+            Assert.Equal(1, behind.Shown);   // its shell, until it comes into view
+            v.Set(0, 1, 0, -1, 0, 0, 0, 1, 0, 60, 1, 0.1, 1500);   // turned round
+            f = m.Update(0, 1, 0, Pxm, 1, null, v);
+            Assert.Contains((1, 0), f.Build.Select(b => (b.idx, b.lod)));
+            Assert.DoesNotContain((0, 0), f.Build.Select(b => (b.idx, b.lod)).Take(1));   // the one now behind isn't first
+            Assert.Equal(new[] { (0, 0), (1, 0) }, Step(m).Build.Select(b => (b.idx, b.lod)).OrderBy(b => b).ToArray());   // no view: both, by pixels
+        }
+
+        [Fact]
         public void AForcedBuildingWantsLod0FirstWherever()
         {
             var m = new LodManager();

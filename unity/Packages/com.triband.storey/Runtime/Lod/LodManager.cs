@@ -64,9 +64,51 @@ namespace Triband.Storey.Lod
     }
 
     /// <summary>
+    /// The camera's view volume in site space, so that detail on screen is built first (docs/PERFORMANCE.md §9.2): the six
+    /// planes of a perspective camera, normals inwards. A building's bounding sphere is seen unless it lies wholly outside
+    /// one plane, with a margin (a fifth of its radius and 6 m) for buildings about to come in. Engine-free.
+    /// </summary>
+    public sealed class LodView
+    {
+        readonly double[] planes = new double[24];   // (nx, ny, nz, d) x 6: n.p + d >= 0 inside
+
+        /// <summary>
+        /// A perspective camera at (x, y, z) looking along <paramref name="fx"/>.. with <paramref name="ux"/>.. up (any length;
+        /// up is made square to forward), a vertical field of view in degrees, width over height, and the near and far distances.
+        /// </summary>
+        public void Set(double x, double y, double z, double fx, double fy, double fz, double ux, double uy, double uz, double fovDegrees, double aspect, double near, double far)
+        {
+            double fl = Math.Sqrt(fx * fx + fy * fy + fz * fz); fx /= fl; fy /= fl; fz /= fl;
+            double ud = ux * fx + uy * fy + uz * fz; ux -= ud * fx; uy -= ud * fy; uz -= ud * fz;
+            double ul = Math.Sqrt(ux * ux + uy * uy + uz * uz); ux /= ul; uy /= ul; uz /= ul;
+            double rx = uy * fz - uz * fy, ry = uz * fx - ux * fz, rz = ux * fy - uy * fx;   // right, either hand: the planes pair up
+            double tv = Math.Tan(fovDegrees * Math.PI / 360), th = tv * aspect;
+            int i = 0;
+            void Plane(double nx, double ny, double nz, double d)
+            {
+                double l = Math.Sqrt(nx * nx + ny * ny + nz * nz);
+                planes[i++] = nx / l; planes[i++] = ny / l; planes[i++] = nz / l; planes[i++] = (d - (nx * x + ny * y + nz * z)) / l;
+            }
+            Plane(rx + th * fx, ry + th * fy, rz + th * fz, 0); Plane(-rx + th * fx, -ry + th * fy, -rz + th * fz, 0);
+            Plane(ux + tv * fx, uy + tv * fy, uz + tv * fz, 0); Plane(-ux + tv * fx, -uy + tv * fy, -uz + tv * fz, 0);
+            Plane(fx, fy, fz, -near); Plane(-fx, -fy, -fz, far);
+        }
+
+        /// <summary>Whether a sphere is in view (or within the margin of it).</summary>
+        public bool Sees(double cx, double cy, double cz, double r)
+        {
+            double m = -(r * 1.2 + 6);
+            for (int i = 0; i < 24; i += 4) if (planes[i] * cx + planes[i + 1] * cy + planes[i + 2] * cz + planes[i + 3] < m) return false;
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Picks each building's LOD every frame, as the prototype's LOD system does (docs/CITY.md §2): LOD0 full detail,
     /// LOD1 the shell, LOD2 the massing (always resident, merged into cells), 3 not drawn. A LOD the building doesn't have
-    /// yet is asked for (largest on screen first) and the best one it has is shown meanwhile; a change cross-fades.
+    /// yet is asked for (largest on screen first) and the best one it has is shown meanwhile; a change cross-fades. Given
+    /// the camera's view, the buildings in it are asked for before those out of it, and one out of it gets no LOD0 built (it
+    /// shows its shell until it comes into view; docs/PERFORMANCE.md §9.2).
     /// Past the resident caps, the LOD0 and LOD1 meshes not shown are dropped, least recently shown first (those shown are
     /// not capped). Engine-free: the renderer
     /// builds and drops the meshes and writes the state into the building table.
@@ -113,7 +155,7 @@ namespace Triband.Storey.Lod
         /// <summary>What a frame asks of the renderer. The manager's own, reused: valid until the next <see cref="Update"/>.</summary>
         public sealed class Frame
         {
-            /// <summary>LODs to build, most pixels first: (building, LOD, pixels per metre).</summary>
+            /// <summary>LODs to build, most pixels first: (building, LOD, pixels per metre). Forced buildings first, then (given a view) those in view, then the rest.</summary>
             public readonly List<(int idx, int lod, double px)> Build = new List<(int, int, double)>();
             /// <summary>LOD meshes to drop (the building keeps the others).</summary>
             public readonly List<(int idx, int lod)> Drop = new List<(int, int)>();
@@ -127,7 +169,7 @@ namespace Triband.Storey.Lod
 
         // reused every frame, so a frame makes no garbage (FrameAllocTests)
         readonly Frame frameOut = new Frame();
-        readonly List<(int, int, double)> forcedBuild = new List<(int, int, double)>();
+        readonly List<(int, int, double)> forcedBuild = new List<(int, int, double)>(), unseenBuild = new List<(int, int, double)>();
         readonly List<(int idx, long used)> idle = new List<(int, long)>();
         // ties in building order, so the order never depends on how the buildings are kept
         sealed class MostPixels : IComparer<(int idx, int lod, double px)>
@@ -210,14 +252,15 @@ namespace Triband.Storey.Lod
         /// <summary>
         /// One frame: each building's LOD from the camera (site space), the cross-fades moved on by <paramref name="dt"/>,
         /// the LODs to build and the meshes to drop. <paramref name="forced"/> buildings (being edited, walked in, sliced)
-        /// always want LOD0; a forced one without it is in <see cref="Frame.Build"/> first.
+        /// always want LOD0; a forced one without it is in <see cref="Frame.Build"/> first. With a <paramref name="view"/>, the
+        /// buildings in it come next, and one out of it shows its shell where it would want an LOD0 it hasn't got.
         /// </summary>
-        public Frame Update(double cx, double cy, double cz, double pixelsPerMetre, double dt, ICollection<int>? forced = null)
+        public Frame Update(double cx, double cy, double cz, double pixelsPerMetre, double dt, ICollection<int>? forced = null, LodView? view = null)
         {
             frame++;
             var f = frameOut; f.Clear(); var s = Settings;
             double pxm = pixelsPerMetre * s.Bias, H = s.Hysteresis;
-            forcedBuild.Clear();
+            forcedBuild.Clear(); unseenBuild.Clear();
             // a forced building's square is looked at building by building (a HashSet's own enumerator: no garbage)
             if (forced is HashSet<int> fs) { foreach (int i in fs) Force(i); }
             else if (forced != null) foreach (int i in forced) Force(i);
@@ -247,8 +290,15 @@ namespace Triband.Storey.Lod
                     if (force) want = 0;
                     e.Want = want;
                     int show = want;
-                    if (show == 0 && !e.Has0) { (force ? forcedBuild : f.Build).Add((idx, 0, force ? double.MaxValue : rel)); show = e.Has1 ? 1 : 2; }
-                    if (show == 1 && !e.Has1) { f.Build.Add((idx, 1, rel)); show = 2; }
+                    // in view (or no view given): built first; out of it, last and never LOD0
+                    bool seen = view == null || force || (show < 2 && !(e.Has0 && e.Has1) && view.Sees((e.x0 + e.x1) / 2, e.y1 / 2, (e.z0 + e.z1) / 2,
+                        0.5 * Math.Sqrt((e.x1 - e.x0) * (e.x1 - e.x0) + e.y1 * e.y1 + (e.z1 - e.z0) * (e.z1 - e.z0))));
+                    if (show == 0 && !e.Has0)
+                    {
+                        if (seen) { (force ? forcedBuild : f.Build).Add((idx, 0, force ? double.MaxValue : rel)); show = e.Has1 ? 1 : 2; }
+                        else show = 1;
+                    }
+                    if (show == 1 && !e.Has1) { (seen ? f.Build : unseenBuild).Add((idx, 1, rel)); show = 2; }
                     bool changed = false;
                     if (show != e.Shown) { e.From = e.Shown; e.Shown = show; e.T = 0; changed = true; }
                     if (e.T < 1) { e.T = Math.Min(1, e.T + dt / s.Fade); changed = true; }
@@ -263,6 +313,7 @@ namespace Triband.Storey.Lod
             }
             f.Build.Sort(mostPixels);
             f.Build.InsertRange(0, forcedBuild);
+            if (unseenBuild.Count > 0) { unseenBuild.Sort(mostPixels); f.Build.AddRange(unseenBuild); }
             Evict(f, 0, s.MaxLod0); Evict(f, 1, s.MaxLod1);
             return f;
         }

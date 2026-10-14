@@ -43,7 +43,7 @@ namespace Triband.Storey.Tests
             var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document; TestCity.Generate(d, 3000);
             var world = new PlayWorld(new Site(d.buildings));
             var core = new OcclusionCore(world, new OcclusionSettings { mode = OccluderMode.Sink });
-            var lods = new LodManager();
+            var lods = new LodManager(); var view = new LodView();
             int idx = 0; var forced = new HashSet<int>();
             foreach (var b in world.Site.Buildings)
             {
@@ -68,7 +68,9 @@ namespace Triband.Storey.Tests
                 core.Frame(p, pos, (cam.tx, cam.ty, cam.tz), Dt);
                 long a2 = GC.GetAllocatedBytesForCurrentThread();
                 forced.Clear(); foreach (var r in core.Active) forced.Add(world.Site.IndexOf(r.b));
-                var fr = lods.Update(pos.x, pos.y, pos.z, 1200, Dt, forced);
+                // the view the renderer passes (a phone held upright), so detail in view is asked for first
+                view.Set(pos.x, pos.y, pos.z, cam.tx - pos.x, cam.ty - pos.y, cam.tz - pos.z, 0, 1, 0, 60, 0.46, 0.1, 1500);
+                var fr = lods.Update(pos.x, pos.y, pos.z, 1200, Dt, forced, view);
                 // the renderer builds a few of what is asked each frame
                 int built = 0; foreach (var (bi, l, _) in fr.Build) { if (built++ >= 4) break; lods.SetBuilt(bi, l, true); }
                 long a3 = GC.GetAllocatedBytesForCurrentThread();

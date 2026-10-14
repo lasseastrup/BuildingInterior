@@ -42,6 +42,7 @@ namespace UnityEngine
         public static int Min(int a, int b) => a;
         public static float Clamp(float value, float min, float max) => value;
         public static float Atan2(float y, float x) => 0;
+        public static float Atan(float f) => 0;
     }
 
     public static class PlayerPrefs
@@ -248,6 +249,7 @@ namespace UnityEngine
         public bool orthographic { get => false; set { } }
         public float orthographicSize { get => 5; set { } }
         public int pixelHeight => 0;
+        public float aspect { get => 1; set { } }
     }
 
     public sealed class GUIContent
@@ -533,6 +535,7 @@ namespace UnityEngine
         public Quaternion rotation { get => default; set { } }
         public Vector3 eulerAngles => default;
         public Vector3 forward => default;
+        public Vector3 up => default;
         public Vector3 localPosition { get => default; set { } }
         public Vector3 localScale { get => default; set { } }
         public void LookAt(Vector3 worldPosition) { }

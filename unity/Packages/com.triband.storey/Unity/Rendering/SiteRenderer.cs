@@ -157,6 +157,7 @@ namespace Triband.Storey.Unity
         readonly Dictionary<(int x, int z), Cell> cells = new Dictionary<(int, int), Cell>();
         readonly HashSet<(int x, int z)> dirtyCells = new HashSet<(int, int)>();
         readonly HashSet<int> forcedIdx = new HashSet<int>();
+        readonly LodView lodView = new LodView();
         readonly Dictionary<string, int> carry = new Dictionary<string, int>(StringComparer.Ordinal);
         // detail being generated on worker threads: one at a time per building, uploaded when done
         readonly List<Job> jobs = new List<Job>();
@@ -193,14 +194,21 @@ namespace Triband.Storey.Unity
         {
             public Vector3 position;
             public float pixelsPerMetre;
+            /// <summary>Where it looks, its up, vertical field of view (degrees) and width over height: the view whose buildings
+            /// are built first (docs/PERFORMANCE.md §9.2). A zero forward: no view, every building by its pixels alone.</summary>
+            public Vector3 forward, up;
+            public float fieldOfView, aspect;
 
             /// <summary>A camera's eye. An orthographic one is treated as a perspective one far behind it, so detail goes by its zoom.</summary>
             public static LodEye Of(Camera c)
             {
+                var t = c.transform;
                 if (!c.orthographic)
-                    return new LodEye { position = c.transform.position, pixelsPerMetre = (float)LodManager.PixelsPerMetre(c.pixelHeight, c.fieldOfView) };
+                    return new LodEye { position = t.position, pixelsPerMetre = (float)LodManager.PixelsPerMetre(c.pixelHeight, c.fieldOfView), forward = t.forward, up = t.up, fieldOfView = c.fieldOfView, aspect = c.aspect };
                 const float back = 200;
-                return new LodEye { position = c.transform.position - c.transform.forward * back, pixelsPerMetre = c.pixelHeight / (2 * Mathf.Max(0.01f, c.orthographicSize)) * back };
+                float size = Mathf.Max(0.01f, c.orthographicSize);
+                return new LodEye { position = t.position - t.forward * back, pixelsPerMetre = c.pixelHeight / (2 * size) * back,
+                    forward = t.forward, up = t.up, fieldOfView = 2 * Mathf.Atan(size / back) * Mathf.Rad2Deg, aspect = c.aspect };
             }
         }
 
@@ -835,7 +843,14 @@ namespace Triband.Storey.Unity
             if (Eye is LodEye eye)
             {
                 var o = parent.position;   // the layout is in the site's space: unrotated, unscaled
-                var f = l.Update(eye.position.x - o.x, eye.position.y - o.y, eye.position.z - o.z, eye.pixelsPerMetre, dt, forcedIdx);
+                LodView? seen = null;
+                if (eye.forward.sqrMagnitude > 0)   // the view, in site space (the site is moved, never turned)
+                {
+                    lodView.Set(eye.position.x - o.x, eye.position.y - o.y, eye.position.z - o.z, eye.forward.x, eye.forward.y, eye.forward.z,
+                        eye.up.x, eye.up.y, eye.up.z, eye.fieldOfView, eye.aspect, 0.1, l.Settings.Far);
+                    seen = lodView;
+                }
+                var f = l.Update(eye.position.x - o.x, eye.position.y - o.y, eye.position.z - o.z, eye.pixelsPerMetre, dt, forcedIdx, seen);
                 foreach (var (idx, which) in f.Drop) if (byIdx.TryGetValue(idx, out var bt)) DropDetail(bt, which);
                 for (int bi = 0; bi < f.Build.Count; bi++)
                 {

@@ -60,7 +60,7 @@ Effort: S under a day, M a few days, L a week or more. Impact as estimated in ea
 
 The roadmap (§15) orders everything else.
 
-Done since: #5 (§7.6), and #6's per-variant vertex outputs (§7.2; §7.3's shadow coordinate and SH are still open). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
+Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2; §7.3's shadow coordinate and SH are still open), shadow proxies (§7.8), and #8's priority for detail in view (§9.2). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
 
 ## 1. Scope and method
 
@@ -574,6 +574,8 @@ Everything waits in order:
 Recommendation:
 - Priority classes: forced and visible detail first, then the cells of a load, then parses and prefetch.
 - Builds in steps, a storey per step, as the prototype does (SPEC §6.5). A step's boundary is where a build checks for cancellation (layout changed, no longer wanted) or yields to a higher priority.
+
+Done, the first half for detail: `LodManager.Update` takes the camera's view (`LodView`, from `SiteRenderer.LodEye`) and asks for forced buildings' detail first, then for buildings in view, then for the rest, and builds no LOD0 for a building out of view, which shows its shell meanwhile. The renderer starts jobs in that order, so the threads' queue gets it too. A frame with the view makes no garbage (`FrameAllocTests`). Loads, parses and prefetch still share the one FIFO queue.
 
 ### 9.3 Locks (low)
 
