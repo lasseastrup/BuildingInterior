@@ -14,7 +14,15 @@ the page or this folder changes. The build:
   screen with no network. The page comes from the network when there is one, so a new version shows at once.
 
 `prototype/index.html` itself is unchanged: opened on its own it still loads from jsDelivr, and the artifact publishes it
-as before.
+as before. The build stamps the site's version into the page (`window.STOREY_BUILD`); the benchmark report names it.
+
+## Frame rate on a phone
+
+The bar-chart button opens the city stats: **Benchmark** flies a fixed path over the 1,000-building test city (about
+90 seconds, hands off the screen), then orbits one view under several settings, and opens a report with frame-rate,
+interval percentiles, slow frames (over 20 ms), main-thread time and draw load per part. **Copy report** puts it on the
+clipboard. **Performance…** holds the render settings for this browser (resolution, pixel ratio cap, shadows, MSAA, a
+frame HUD). Low Power Mode caps Safari at 30 fps, so turn it off before measuring.
 
 ## Setting it up, once
 

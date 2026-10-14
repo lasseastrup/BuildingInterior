@@ -42,6 +42,7 @@ const hash = crypto.createHash('sha256');
 for (const [p, c] of [...files].sort((a, b) => a[0] < b[0] ? -1 : 1)) hash.update(p).update(c);
 const version = hash.digest('hex').slice(0, 12);
 files.set('sw.js', Buffer.from(fs.readFileSync(path.join(here, 'sw.js'), 'utf8').replace('__VERSION__', version)));
+files.set('index.html', Buffer.from(files.get('index.html').toString().replace('__STOREY_BUILD__', version)));
 
 fs.rmSync(out, { recursive: true, force: true });
 for (const [p, c] of files) { fs.mkdirSync(path.dirname(path.join(out, p)), { recursive: true }); fs.writeFileSync(path.join(out, p), c); }

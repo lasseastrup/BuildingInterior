@@ -5,7 +5,7 @@ name: Builder on GitHub Pages
 
 on:
   push:
-    branches: ['claude/amazing-thompson-dgsbo8', 'claude/building-creation-prototype-1n1ge1']
+    branches: ['claude/amazing-thompson-dgsbo8', 'claude/building-creation-prototype-1n1ge1', 'claude/unity-performance-analysis-u3f865']
     paths: ['prototype/index.html', 'prototype/web/**', 'prototype/tools/package.json', 'prototype/tools/package-lock.json', '.github/workflows/pages.yml']
   workflow_dispatch:
 

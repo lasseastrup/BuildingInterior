@@ -7,7 +7,7 @@ A prototype of the building creation workflow, made to write the spec before we 
   - Setbacks: any floor can start a new outline that the floors above inherit, stepping in (a walkable terrace with a parapet and a door) or out (an overhang), with its own facade style.
   - Roofs: flat, hip, gable or shed (straight-skeleton roofs on any outline), with pitch and eaves.
   - Per-floor storey heights, stairs and lifts at any angle, and shared (party) walls between buildings built wall to wall.
-  - City scale: three generated LODs per building, merged far-distance cells, on-demand generation. The bar-chart button opens LOD stats and a 1,000/3,000-building stress test.
+  - City scale: three generated LODs per building, merged far-distance cells, on-demand generation. The bar-chart button opens LOD stats, a 1,000/3,000-building stress test, and a frame-rate benchmark with performance settings (`prototype/web/README.md`).
 - `docs/SPEC.md`: findings and the Unity plan. Covers the data model, z-fighting and topology rules, occlusion, LODs and city-scale rendering, the implementation plan, the editor UI mapping, the UPM package layout and the decisions from the prototype review.
 - `docs/COLOURS.md`: how Storey's materials get their colours from Triband's Color Pipeline (2.1.11): palette references on styles, colour rows in the building table, remaps without renderers.
 - `docs/PERFORMANCE.md`: runtime performance analysis of the Unity packages for the iPhone 7, iPhone 14+ and desktop tiers: CPU, GPU, memory and garbage by area, measured headlessly and checked against Unity 6.3 and Apple GPU guidance, with a prioritised roadmap.

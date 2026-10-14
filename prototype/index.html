@@ -232,7 +232,11 @@ details.more[open] summary{margin-bottom:6px}
 .hd-n.passive{pointer-events:none;width:10px;height:10px;margin:-5px 0 0 -5px;border-width:2px;opacity:.85}
 .hd-wm{position:absolute;left:0;top:0;width:15px;height:15px;margin:-7.5px 0 0 -7.5px;border-radius:50%;background:rgba(255,255,255,.9);color:#1C2320;display:grid;place-items:center;font:700 12px/1 var(--sans);cursor:copy;pointer-events:auto;touch-action:none;opacity:.8;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 .hd-wm::after{content:"";position:absolute;inset:-7px}
-#perf{position:absolute;right:12px;bottom:12px;width:280px;padding:12px 14px;z-index:15}
+#perf{position:absolute;right:12px;bottom:12px;width:280px;padding:12px 14px;z-index:15;max-height:calc(100% - 90px);overflow:auto;box-sizing:border-box}
+#fhud{position:absolute;left:12px;top:calc(60px + env(safe-area-inset-top,0px));z-index:16;padding:5px 8px;border-radius:6px;background:rgba(16,20,18,.74);color:#E9EDE9;font:500 11px/1.4 var(--mono);font-variant-numeric:tabular-nums;white-space:pre;pointer-events:none}
+#benchBar{position:absolute;left:50%;transform:translateX(-50%);top:calc(60px + env(safe-area-inset-top,0px));z-index:40;display:flex;align-items:center;gap:10px;padding:6px 6px 6px 12px;font-weight:600;white-space:nowrap}
+.pq{display:grid;gap:8px}
+.pq>label:not(.chk){display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12.5px}
 #perf .h{margin-bottom:6px}
 .pstats{display:grid;grid-template-columns:1fr auto;gap:3px 12px;font-size:12px;margin:2px 0 10px}
 .pstats span{color:var(--muted)}
@@ -306,6 +310,8 @@ details.more[open] summary{margin-bottom:6px}
     <div id="lift" class="card" hidden></div>
   </div>
   <div id="perf" class="card" hidden aria-label="City and LOD stats"></div>
+  <div id="fhud" hidden aria-hidden="true"></div>
+  <div id="benchBar" class="card" hidden role="status"><span id="benchMsg"></span><button class="btn" id="benchStop">Stop</button></div>
   <div id="toast" role="status"></div>
   <div id="modal" hidden></div>
 </div>
@@ -705,10 +711,18 @@ function setActive(b,k){ ui.floors[b.id] = clamp(k,0,b.floors.length); ui.sub=nu
    Renderer & scene
    ========================================================================= */
 const canvas = $('#c');
-const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+// Render quality: the stats card's Performance settings change it for this browser (kept in localStorage) and the
+// benchmark measures it. MSAA is a property of the WebGL context, so it takes a reload.
+const QKEY = 'storey-quality';
+const QUAL = Object.assign({msaa:true, maxDpr:2, scale:1, shadows:true, shadowSize:2048, shadowCache:true, nd:true, hud:false},
+  (()=>{ try{ return JSON.parse(localStorage.getItem(QKEY))||{}; }catch(e){ return {}; } })());
+function saveQual(){ try{ localStorage.setItem(QKEY, JSON.stringify(QUAL)); }catch(e){} }
+const renderer = new THREE.WebGLRenderer({canvas, antialias:QUAL.msaa});
+const applyDpr = () => renderer.setPixelRatio(Math.min(devicePixelRatio, QUAL.maxDpr)*QUAL.scale);
+applyDpr();
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false;   // re-rendered only when what it shows has changed (shadowWanted)
 renderer.toneMapping = THREE.NeutralToneMapping;
 const scene = new THREE.Scene();
 const SKY = new THREE.Color('#CBD8DC');
@@ -717,11 +731,34 @@ scene.fog = new THREE.Fog(SKY, 220, 1300);
 const camera = new THREE.PerspectiveCamera(45, 1, 0.3, 1600);   // near 0.3 keeps depth precision ~2 mm at 100 m
 scene.add(new THREE.HemisphereLight('#E4EDF2', '#6E6656', 1.35));
 const sun = new THREE.DirectionalLight('#FFF1DC', 2.3);
-sun.castShadow = true;
-sun.shadow.mapSize.set(2048,2048);
-Object.assign(sun.shadow.camera, {left:-45,right:45,top:45,bottom:-45,near:1,far:220});
+const SUN_OFF = [30,60,18], SHADOW_HALF = 45, SHADOW_FAR = 220;   // the sun sits at the focus + SUN_OFF; its shadow box follows
+sun.castShadow = QUAL.shadows;
+sun.shadow.mapSize.set(QUAL.shadowSize, QUAL.shadowSize);
+Object.assign(sun.shadow.camera, {left:-SHADOW_HALF,right:SHADOW_HALF,top:SHADOW_HALF,bottom:-SHADOW_HALF,near:1,far:SHADOW_FAR});
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(sun, sun.target);
+function setShadows(on, size){
+  if(size && size!==sun.shadow.mapSize.x){ sun.shadow.mapSize.set(size,size); if(sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map=null; } }
+  sun.castShadow=on; shadowDirty=true;
+}
+/* The shadow map is drawn again only when something in it changed: the sun moved with the focus, a building inside the
+   shadow box changed LOD or fade, a cell or building was rebuilt, or isolate faded others. Orbiting and zooming
+   leave the focus where it is, so they reuse it. Play mode draws it every frame (the player and the sun move). */
+let shadowDirty = true;
+const shadowAt = {x:NaN, y:NaN, z:NaN, iso:-1};
+const SUN_F = new THREE.Vector3(...SUN_OFF).negate().normalize(), SUN_R = new THREE.Vector3().crossVectors(SUN_F, new THREE.Vector3(0,1,0)).normalize(), SUN_U = new THREE.Vector3().crossVectors(SUN_R, SUN_F);
+function inShadowBox(s){   // a bounding sphere against the shadow camera's box, in the sun's frame
+  const f=G.uFocus.value, vx=s.x-f.x-SUN_OFF[0], vy=s.y-f.y-SUN_OFF[1], vz=s.z-f.z-SUN_OFF[2];
+  const x=vx*SUN_R.x+vy*SUN_R.y+vz*SUN_R.z, y=vx*SUN_U.x+vy*SUN_U.y+vz*SUN_U.z, z=vx*SUN_F.x+vy*SUN_F.y+vz*SUN_F.z;
+  return Math.abs(x)<=SHADOW_HALF+s.r && Math.abs(y)<=SHADOW_HALF+s.r && z>=1-s.r && z<=SHADOW_FAR+s.r;
+}
+function shadowWanted(){
+  if(!sun.castShadow) return false;
+  const f=G.uFocus.value;
+  if(!QUAL.shadowCache || ui.mode==='play' || f.x!==shadowAt.x || f.y!==shadowAt.y || f.z!==shadowAt.z || G.uIso.value!==shadowAt.iso) shadowDirty=true;
+  if(!shadowDirty) return false;
+  shadowDirty=false; shadowAt.x=f.x; shadowAt.y=f.y; shadowAt.z=f.z; shadowAt.iso=G.uIso.value; return true;
+}
 
 /* =========================================================================
    Shared building materials + per-building data tables
@@ -804,6 +841,7 @@ float occBayer(vec2 p){ int x = int(mod(p.x,4.0)); int y = int(mod(p.y,4.0));
   float m[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.); return (m[x+y*4]+0.5)/16.0; }
 vec3 lodTint(float l){ return l < 0.5 ? vec3(0.16,0.62,0.30) : l < 1.5 ? vec3(0.95,0.72,0.12) : vec3(0.90,0.30,0.10); }
 void occlude(){
+#ifndef OCC_ND
   // 0. LOD cross-fade: the old and new LOD draw complementary dither patterns
   if (vFade < 2.0) { float d = occBayer(gl_FragCoord.xy); if (vFade >= 0.0) { if (d >= vFade) discard; } else if (d < -vFade - 1.0) discard; }
   // isolate: every other building fades to a light screen-door ghost
@@ -865,6 +903,7 @@ void occlude(){
     }
   }
 #endif
+#endif
 }`;
 // LOD2 massing: windows are drawn procedurally from the same parameters the geometry uses,
 // so the LOD1 -> LOD2 switch keeps every window in place.
@@ -905,16 +944,25 @@ function patch(mat, o={}){
     Object.assign(sh.uniforms, G);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n'+(o.depth?'#define OCC_DEPTH\n':'')+OCC_VERT_DECL+(o.massing?MASS_VERT_DECL:''))
       .replace('#include <project_vertex>', OCC_SINK+'\n#include <project_vertex>\n'+OCC_VERT+(o.massing?MASS_VERT:''));
-    let fs = sh.fragmentShader.replace('#include <common>', '#include <common>\n'+(o.depth?'#define OCC_DEPTH\n':'')+OCC_FRAG_DECL+(o.massing?MASS_FRAG_DECL:'')).replace('void main() {', 'void main() {\n  occlude();');
+    let fs = sh.fragmentShader.replace('#include <common>', '#include <common>\n'+(o.depth?'#define OCC_DEPTH\n':'')+(o.nd?'#define OCC_ND\n':'')+OCC_FRAG_DECL+(o.massing?MASS_FRAG_DECL:'')).replace('void main() {', 'void main() {\n  occlude();');
     fs = fs.replace('#include <color_fragment>', '#include <color_fragment>\n'+(o.massing?'  diffuseColor.rgb = facadeColor();\n':'')+'  if (uLodTint > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, lodTint(vLod), 0.65);\n  if (uIso > 0.001 && abs(vBid - uIsoBid) > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.82, 0.83), uIso * 0.7);');
     // a building in the way goes near-black after lighting (a trace of shading keeps its form)
     fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n'+(o.cap?'  if (!gl_FrontFacing) gl_FragColor.rgb = uCap;\n':'')+'  gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * 0.1 + vec3(0.01, 0.011, 0.013), gOccDark);\n  gl_FragColor.a = mix(gl_FragColor.a, 1.0, gOccDark);');
     sh.fragmentShader = fs;
   };
-  mat.customProgramCacheKey = () => 'occ'+(o.cap?1:0)+(o.massing?'m':'')+(o.depth?'d':'');
+  mat.customProgramCacheKey = () => 'occ'+(o.cap?1:0)+(o.massing?'m':'')+(o.depth?'d':'')+(o.nd?'n':'');
   return mat;
 }
+/* The *N materials leave out every discard (OCC_ND). A shader that can discard turns off the hidden surface removal of
+   Apple's tile-based GPUs (and early depth writes on Mali and Adreno), so every covered pixel of it is shaded. Most
+   buildings most of the time are not fading, cut away, isolated or in the way, and use these; updateLOD picks per
+   mesh. They are made first so they sort first among the opaque draws (three.js orders by material id), and the
+   discarding draws come after them, as Apple's guidance asks. */
 const MAT = {
+  opaqueN: patch(new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.86, metalness:0, side:THREE.DoubleSide}), {cap:true, nd:true}),
+  massN: patch(new THREE.MeshStandardMaterial({roughness:0.9, metalness:0, side:THREE.DoubleSide}), {cap:true, massing:true, nd:true}),
+  depthN: patch(new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide}), {depth:true, nd:true}),
+  massDepthN: patch(new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide}), {massing:true, depth:true, nd:true}),
   opaque: patch(new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.86, metalness:0, side:THREE.DoubleSide}), {cap:true}),
   glass: patch(new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.08, metalness:0.15, transparent:true, opacity:0.5, depthWrite:false}), {}),
   depth: patch(new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide}), {depth:true}),
@@ -1823,7 +1871,7 @@ function freeSlots(r){ for(const x of r.slots||[]) slotFree.push(x); r.slots=[];
    and a dithered cross-fade. LOD0/LOD1 are generated on demand within a per-frame time budget and
    dropped again (least recently used) when not needed; LOD2 is tiny and always resident.
    ========================================================================= */
-const LODCFG = { bias:1, PX:[16, 4, 0.3], hyst:0.12, fade:0.35, cell:128, maxL0:16, maxL1:260, budgetMs:6 };   // PX: pixels per metre needed for LOD0 / LOD1 / LOD2
+const LODCFG = { bias:1, PX:[16, 4, 0.3], hyst:0.12, fade:0.35, cell:128, maxL0:16, maxL1:260, budgetMs:8 };   // PX: pixels per metre needed for LOD0 / LOD1 / LOD2
 const recs = new Map(), recByIdx = [], freeIdx = []; let nextIdx = 0;
 const dirty = new Set(), cells = new Map();
 const lodStats = { n:[0,0,0,0], cells:0, cellsShown:0, queue:0, gen:0 };
@@ -1851,9 +1899,9 @@ function installL0(b,r,{op,gl,segs}){ disposeLod(r,'l0');
   if(r.l0.glass) r.l0.glass.renderOrder=2; }
 function installL1(b,r,{op}){ disposeLod(r,'l1'); r.l1={ver:r.ver, used:frameNo, tris:op.tris, verts:op.verts, mesh:addMesh(op.geo(),MAT.opaque,MAT.depth,b.id)}; }
 // synchronous versions: for the building being edited or walked in, and for collision
-function genL0(b,r){ jobs.delete(r.id+':0'); installL0(b,r,buildLOD0(b,r.idx)); }
-function genL1(b,r){ jobs.delete(r.id+':1'); installL1(b,r,buildLOD1(b,r.idx)); }
-const jobs = new Map();   // "id:lod" -> {r, l, ver, it}: detail LODs being built a storey at a time
+function genL0(b,r){ jobs.delete(r.idx*2); installL0(b,r,buildLOD0(b,r.idx)); }
+function genL1(b,r){ jobs.delete(r.idx*2+1); installL1(b,r,buildLOD1(b,r.idx)); }
+const jobs = new Map();   // building index x 2 + lod -> {ver, it, est}: detail LODs being built a storey at a time
 
 /* a building's data changed (or it is new): refresh its table rows, massing, cell and grid entry */
 function refreshBuilding(b){
@@ -1861,7 +1909,7 @@ function refreshBuilding(b){
   freeSlots(r);
   r.sph=boundsOf(b);
   { const bb=bboxAll(b); r.bbw={x0:bb.x0+b.pos.x, z0:bb.z0+b.pos.z, x1:bb.x1+b.pos.x, z1:bb.z1+b.pos.z}; }
-  r.l2=buildLOD2(b, r.idx, r);
+  r.l2=buildLOD2(b, r.idx, r); shadowDirty=true;
   const key=cellKey(r.sph.x, r.sph.z);
   if(r.cell && r.cell!==key){ const oc=cells.get(r.cell); if(oc){ oc.members.delete(r); oc.dirty=true; } }
   r.cell=key; const c=cellOf(key); c.members.add(r); c.dirty=true;
@@ -1873,7 +1921,7 @@ function refreshBuilding(b){
 function removeRec(r){
   disposeLod(r,'l0'); disposeLod(r,'l1');
   if(r.cell){ const c=cells.get(r.cell); if(c){ c.members.delete(r); c.dirty=true; } }
-  jobs.delete(r.id+':0'); jobs.delete(r.id+':1');
+  jobs.delete(r.idx*2); jobs.delete(r.idx*2+1); shadowDirty=true;
   gridSet(r,null); recs.delete(r.id); recByIdx[r.idx]=null; freeIdx.push(r.idx); freeSlots(r);
   stateArr.set([3,3,1,0], r.idx*4); stateTex.needsUpdate=true;
 }
@@ -1891,7 +1939,7 @@ function touchingIds(b){ const r=recs.get(b.id), bb=bboxAll(b), now={x0:bb.x0+b.
 const cellKey = (x,z) => Math.floor(x/LODCFG.cell)+','+Math.floor(z/LODCFG.cell);
 function cellOf(key){ let c=cells.get(key); if(!c){ c={key, members:new Set(), mesh:null, dirty:true, tris:0}; cells.set(key,c); } return c; }
 function rebuildCell(c){
-  c.dirty=false;
+  c.dirty=false; shadowDirty=true;
   if(c.mesh){ scene.remove(c.mesh); c.mesh.geometry.dispose(); c.mesh=null; }
   if(!c.members.size){ cells.delete(c.key); return; }
   let nv=0, ni=0; for(const r of c.members){ nv+=r.l2.count; ni+=r.l2.idx.length; }
@@ -1906,12 +1954,17 @@ function rebuildCell(c){
   c.mesh=m; c.tris=ni/3;
 }
 
+const _frus = new THREE.Frustum(), _pv = new THREE.Matrix4(), _sph = new THREE.Sphere();
+const genPend = [];   // detail LODs wanted but not built, best first: on-screen buildings, then nearest
 function updateLOD(dt, activeId){
   frameNo++;
   // LOD by feature scale: how many pixels one metre covers at the building's nearest point. Detail that
   // exists at LOD0 (frames, furniture) only matters up close, whatever the size of the building.
   const cp=camera.position, pxm=canvas.clientHeight/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov)/2))*LODCFG.bias, PX=LODCFG.PX, H=LODCFG.hyst, far=camera.far*0.95;
-  const pend=[]; let changed=false; lodStats.n=[0,0,0,0];
+  _frus.setFromProjectionMatrix(_pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  const pend=genPend; pend.length=0; let changed=false; const N=lodStats.n; N[0]=N[1]=N[2]=N[3]=0;
+  // which meshes can draw with the discard-free materials: not fading, not isolated away, not cut, not in the way
+  const isoOff=G.uIso.value<=0.001, act=G.uActive.value, nd=QUAL.nd;
   for(const r of recs.values()){
     const s=r.sph, dx=Math.max(s.x0-cp.x,0,cp.x-s.x1), dy=Math.max(-cp.y,0,cp.y-s.y1), dz=Math.max(s.z0-cp.z,0,cp.z-s.z1);
     const d=Math.max(1, Math.hypot(dx,dy,dz)), rel=pxm/d;
@@ -1922,38 +1975,72 @@ function updateLOD(dt, activeId){
     if(forced) want=0;
     r.want=want;
     let show=want;
-    if(show===0 && !ready(r,'l0')){ if(forced){ const b=bById(r.id); if(b) genL0(b,r); } else { pend.push({r,l:0,p:rel}); show = ready(r,'l1') ? 1 : 2; } }
-    if(show===1 && !ready(r,'l1')){ pend.push({r,l:1,p:rel}); show=2; }
-    if(show!==r.disp){ r.from=r.disp; r.disp=show; r.t=0; changed=true; }
-    if(r.t<1){ r.t=Math.min(1, r.t+dt/LODCFG.fade); changed=true; }
-    const v0 = r.disp===0 || (r.t<1 && r.from===0), v1 = r.disp===1 || (r.t<1 && r.from===1);
-    if(r.l0){ r.l0.mesh.visible=v0; if(r.l0.glass) r.l0.glass.visible=v0; if(v0) r.l0.used=frameNo; }
-    if(r.l1){ r.l1.mesh.visible=v1; if(v1) r.l1.used=frameNo; }
-    const o=r.idx*4; stateArr[o]=r.disp; stateArr[o+1]=r.from; stateArr[o+2]=r.t;
-    { const w=occState(r); if(stateArr[o+3]!==w){ stateArr[o+3]=w; changed=true; } }
-    lodStats.n[r.disp]++;
+    // detail is built for buildings on screen (with a margin) first; LOD0 only for those, the shell will do off screen
+    let vis=true; if(show<2 && !forced){ _sph.center.set(s.x,s.y,s.z); _sph.radius=s.r*1.2+6; vis=_frus.intersectsSphere(_sph); }
+    if(show===0 && !ready(r,'l0')){ if(forced){ const b=bById(r.id); if(b) genL0(b,r); } else if(vis){ pend.push({r,l:0,p:2e6+rel}); show = ready(r,'l1') ? 1 : 2; } else show=1; }
+    if(show===1 && !ready(r,'l1')){ pend.push({r,l:1,p:(vis?1e6:0)+rel}); show=2; }
+    if(show!==r.disp){ r.from=r.disp; r.disp=show; r.t=0; }
+    if(r.t<1) r.t=Math.min(1, r.t+dt/LODCFG.fade);
+    const v0 = r.disp===0 || (r.t<1 && r.from===0), v1 = r.disp===1 || (r.t<1 && r.from===1), w=occState(r);
+    const still = nd && isoOff && r.t>=1, plain = still && w===0 && r.idx!==act;
+    if(r.l0){ const L=r.l0, m=L.mesh; m.visible=v0; if(L.glass) L.glass.visible=v0; if(v0) L.used=frameNo;
+      const p = plain && !(act>=0 && L.party.some(i=>(L.walls[i].K>>3)-1===act));   // a party wall is cut with its neighbour
+      m.material = p ? MAT.opaqueN : MAT.opaque; m.customDepthMaterial = still ? MAT.depthN : MAT.depth; }
+    if(r.l1){ const m=r.l1.mesh; m.visible=v1; if(v1) r.l1.used=frameNo; m.material = plain ? MAT.opaqueN : MAT.opaque; m.customDepthMaterial = still ? MAT.depthN : MAT.depth; }
+    if(r.cell && (!plain || !isoOff) && (r.disp===2 || (r.t<1 && r.from===2))){ const c=cells.get(r.cell); if(c) c.busy=frameNo; }   // its cell needs the full shader
+    const o=r.idx*4;
+    if(stateArr[o]!==r.disp || stateArr[o+1]!==r.from || stateArr[o+2]!==r.t || stateArr[o+3]!==w){
+      stateArr[o]=r.disp; stateArr[o+1]=r.from; stateArr[o+2]=r.t; stateArr[o+3]=w; changed=true;
+      if(!shadowDirty && inShadowBox(s)) shadowDirty=true;   // what it casts changed
+    }
+    N[r.disp]++;
   }
   if(changed) stateTex.needsUpdate=true;
-  // advance generation jobs, nearest first, a storey at a time, within the frame budget
   pend.sort((a,b)=>b.p-a.p);
-  const want=new Set(pend.map(q=>q.r.id+':'+q.l));
-  for(const k of [...jobs.keys()]) if(!want.has(k)) jobs.delete(k);      // no longer needed
-  const t0=performance.now();
-  for(const q of pend){
-    if(performance.now()-t0 > LODCFG.budgetMs) break;
-    const key=q.r.id+':'+q.l, b=bById(q.r.id); if(!b) continue;
-    let job=jobs.get(key);
-    if(!job || job.ver!==q.r.ver){ job={ver:q.r.ver, it: q.l===0 ? lod0Steps(b,q.r.idx) : lod1Steps(b,q.r.idx)}; jobs.set(key,job); }
-    let res; do{ res=job.it.next(); }while(!res.done && performance.now()-t0 <= LODCFG.budgetMs);
-    if(res.done){ jobs.delete(key); (q.l===0 ? installL0 : installL1)(b,q.r,res.value); }
-  }
-  lodStats.gen=performance.now()-t0; lodStats.queue=jobs.size+pend.filter(q=>!jobs.has(q.r.id+':'+q.l) && !ready(q.r,q.l===0?'l0':'l1')).length;
+  for(const q of pend) q.k=q.r.idx*2+q.l;
+  if(jobs.size){ const want=new Set(); for(const q of pend) want.add(q.k); for(const k of jobs.keys()) if(!want.has(k)) jobs.delete(k); }   // no longer needed
+  lodStats.queue=pend.length;
   evict('l0', LODCFG.maxL0); evict('l1', LODCFG.maxL1);
   let shown=0;
   for(const c of cells.values()){ if(c.dirty) rebuildCell(c); if(!c.mesh) continue;
     let any=false; for(const r of c.members) if(r.disp===2 || (r.t<1 && r.from===2)){ any=true; break; }
-    c.mesh.visible=any; if(any) shown++; }
+    c.mesh.visible=any; if(any) shown++;
+    const p = nd && isoOff && c.busy!==frameNo; c.mesh.material = p ? MAT.massN : MAT.mass; c.mesh.customDepthMaterial = p ? MAT.massDepthN : MAT.massDepth; }
   lodStats.cells=cells.size; lodStats.cellsShown=shown;
+}
+/* Generation runs after the frame is handed to the GPU, in the time left before the next one is due, so it
+   overlaps the GPU's work instead of delaying it: the frame loop posts a task (scheduleGen) and the task builds
+   storeys, nearest on-screen building first, until the next frame's start minus a margin. A step that is
+   expected to overrun (by the job's last step, or the average for its LOD) waits for the next frame, unless
+   nothing has run for a few frames. New meshes are uploaded right away (preUpload), not in the next render(). */
+const GEN = {est:[2.5,1.5], safe:2, starve:0, at:0, posted:false};
+const genCh = new MessageChannel();
+genCh.port1.onmessage = () => { GEN.posted=false; if(!genPend.length || tickHold) return;
+  const left = GEN.at + frameIv() - GEN.safe - performance.now();
+  const t=performance.now(); genSlice(Math.min(LODCFG.budgetMs, left)); const ms=performance.now()-t; lodStats.gen=ms; flGen(ms); };
+function scheduleGen(now){ if(!genPend.length || GEN.posted) return; GEN.at=now; GEN.posted=true; genCh.port2.postMessage(0); }
+function genSlice(budget){
+  const t0=performance.now(); let ran=0;
+  for(const q of genPend){
+    const r=q.r, b=bById(r.id); if(!b || recs.get(r.id)!==r || ready(r, q.l===0?'l0':'l1')) continue;
+    let job=jobs.get(q.k);
+    if(!job || job.ver!==r.ver){ job={ver:r.ver, it: q.l===0 ? lod0Steps(b,r.idx) : lod1Steps(b,r.idx), est:GEN.est[q.l]}; jobs.set(q.k,job); }
+    for(;;){
+      if(performance.now()-t0+job.est > budget && (ran || GEN.starve<4)){ GEN.starve = ran ? 0 : GEN.starve+1; return; }
+      const ts=performance.now(), res=job.it.next();
+      if(res.done){ jobs.delete(q.k); if(q.l===0){ installL0(b,r,res.value); preUpload(r.l0.mesh); preUpload(r.l0.glass); } else { installL1(b,r,res.value); preUpload(r.l1.mesh); } }
+      const st=performance.now()-ts; job.est=st; GEN.est[q.l]+=(st-GEN.est[q.l])*0.1; ran++;
+      if(res.done) break;
+    }
+  }
+  GEN.starve=0;
+}
+// upload a new mesh's buffers now: render it with nothing to draw (drawRange 0) into a 1x1 target
+const upRT = new THREE.WebGLRenderTarget(1,1,{depthBuffer:false}), upMat = new THREE.MeshBasicMaterial();
+function preUpload(m){
+  if(!m) return; const g=m.geometry, n=g.drawRange.count, v=m.visible, fc=m.frustumCulled, mat=m.material, rt=renderer.getRenderTarget(), ac=renderer.autoClear;
+  g.drawRange.count=0; m.visible=true; m.frustumCulled=false; m.material=upMat; renderer.autoClear=false; renderer.setRenderTarget(upRT);
+  try{ renderer.render(m, camera); } finally { renderer.setRenderTarget(rt); renderer.autoClear=ac; g.drawRange.count=n; m.visible=v; m.frustumCulled=fc; m.material=mat; }
 }
 function evict(k, max){
   const list=[]; for(const r of recs.values()) if(r[k] && !r[k].mesh.visible) list.push(r);
@@ -2766,6 +2853,7 @@ function rotateSub(){
 const ptrs=new Map(); let gest=null;
 canvas.addEventListener('contextmenu', e=>e.preventDefault());
 canvas.addEventListener('pointerdown', e=>{
+  if(bench) return;   // the benchmark drives the camera
   canvas.focus({preventScroll:true});
   canvas.setPointerCapture(e.pointerId);
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -3351,40 +3439,160 @@ function openData(){ openModal(`<h2>Layout data</h2><p class="note" style="margi
 /* =========================================================================
    City & LOD stats card
    ========================================================================= */
-const perfEl=$('#perf'), LODC=['#299E4D','#F2B71F','#E54D1A','#9AA39D']; let perfOpen=false, perfT=0, cpuAcc=0, cpuN=0; const frameTimes=[];
-const fmtN = v => v>=1e6 ? (v/1e6).toFixed(2)+'M' : v>=1e4 ? (v/1e3).toFixed(1)+'k' : v.toLocaleString();
-function perfTick(now, cpu){ frameTimes.push(now); while(frameTimes.length && now-frameTimes[0]>1000) frameTimes.shift(); cpuAcc+=cpu; cpuN++; if(!perfOpen || now-perfT<250) return; perfT=now; updatePerf(cpuAcc/cpuN); cpuAcc=0; cpuN=0; }
+const perfEl=$('#perf'), LODC=['#299E4D','#F2B71F','#E54D1A','#9AA39D']; let perfOpen=false, perfT=0, perfFrom=0;
+const fmtN = v => v>=1e6 ? (v/1e6).toFixed(2)+'M' : v>=1e4 ? (v/1e3).toFixed(1)+'k' : Math.round(v).toLocaleString();
+function perfTick(now){ if(!perfOpen || now-perfT<500) return; perfT=now; updatePerf(flSum(Math.max(perfFrom, FL.n-60))); perfFrom=FL.n; }
 function openPerf(open){ perfOpen=open; perfEl.hidden=!open; $('#bPerf').classList.toggle('on',open); $('#bPerf').setAttribute('aria-pressed',open); if(open) renderPerf(); }
 function renderPerf(){
   const gen=state.buildings.filter(b=>b.gen).length;
   perfEl.innerHTML=`<div class="h"><span class="grow">City &amp; LOD</span><button class="ib" data-pact="close" aria-label="Close stats" style="min-width:24px;height:24px">${I.del}</button></div>
     <div class="lodbar" id="pBar"></div><div class="lodleg" id="pLeg"></div>
-    <div class="pstats"><span>Buildings</span><b id="pB"></b><span>Draw calls (incl. shadows)</span><b id="pDC"></b><span>Triangles drawn</span><b id="pTri"></b><span>Merged cells shown</span><b id="pCells"></b><span>LODs waiting to build</span><b id="pQ"></b><span>Frame · CPU</span><b id="pFps"></b></div>
+    <div class="pstats"><span>Buildings</span><b id="pB"></b><span>Draw calls (incl. shadows)</span><b id="pDC"></b><span>Triangles drawn</span><b id="pTri"></b><span>Merged cells shown</span><b id="pCells"></b><span>LODs waiting to build</span><b id="pQ"></b><span>Frame rate · p95</span><b id="pFps"></b><span>Main thread · LOD builds</span><b id="pCpu"></b><span>Canvas</span><b id="pRes"></b></div>
     <div id="pSel"></div>
     <label class="sl"><span>LOD bias</span><input type="range" id="pBias" min="0.25" max="3" step="0.05" value="${LODCFG.bias}"><output>${LODCFG.bias.toFixed(2)}×</output></label>
     <label class="chk"><input type="checkbox" id="pTint" ${G.uLodTint.value?'checked':''}> Tint buildings by LOD</label>
-    <div class="sub-h">Stress test</div><div class="row"><button class="btn" data-pact="city" data-n="1000">1,000 buildings</button><button class="btn" data-pact="city" data-n="3000">3,000</button>${gen?`<button class="btn ghost" data-pact="clear">Remove</button>`:''}</div>`;
-  updatePerf(0);
+    <div class="sub-h">Stress test</div><div class="row"><button class="btn" data-pact="city" data-n="1000">1,000 buildings</button><button class="btn" data-pact="city" data-n="3000">3,000</button>${gen?`<button class="btn ghost" data-pact="clear">Remove</button>`:''}</div>
+    <div class="row" style="margin-top:6px"><button class="btn" data-pact="bench">Benchmark</button><button class="btn" data-pact="quality">Performance…</button></div>`;
+  updatePerf(null);
 }
 function selLodTris(){
   const b=selB(); if(!b || ui.mode!=='edit') return null; const r=recs.get(b.id); if(!r || !r.l2) return null;
   if(!ready(r,'l1') && !(r.l1c && r.l1c.ver===r.ver)){ r.l1c={ver:r.ver, tris:buildLOD1(b,r.idx).op.tris}; }
   return [r.l0 ? r.l0.tris : null, ready(r,'l1') ? r.l1.tris : r.l1c.tris, r.l2.tris];
 }
-function updatePerf(cpu){
+function updatePerf(S){
   if(!perfOpen) return;
-  const info=renderer.info.render, n=lodStats.n, total=Math.max(1,recs.size), set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
-  set('pB', recs.size.toLocaleString()); set('pDC', info.calls.toLocaleString()); set('pTri', fmtN(info.triangles)); set('pCells', lodStats.cellsShown+' of '+lodStats.cells); set('pQ', lodStats.queue);
-  set('pFps', frameTimes.length+' fps · '+cpu.toFixed(1)+' ms');
+  const n=lodStats.n, total=Math.max(1,recs.size), set=(id,v)=>{ const e=document.getElementById(id); if(e && e.textContent!==v) e.textContent=v; };
+  set('pB', recs.size.toLocaleString()); set('pCells', lodStats.cellsShown+' of '+lodStats.cells); set('pQ', String(lodStats.queue));
+  if(S){ set('pDC', fmtN(S.calls)); set('pTri', fmtN(S.tris)); set('pFps', S.fps.toFixed(0)+' fps · '+S.p95.toFixed(1)+' ms'); set('pCpu', S.js.toFixed(1)+' · '+S.gen.toFixed(1)+' ms'); }
+  set('pRes', canvas.width+'×'+canvas.height+(QUAL.msaa?' · MSAA':''));
   const bar=$('#pBar'); if(bar) bar.innerHTML=n.map((c,i)=>`<i style="width:${(100*c/total).toFixed(2)}%;background:${LODC[i]}"></i>`).join('');
   const leg=$('#pLeg'); if(leg) leg.innerHTML=['LOD0 full','LOD1 shell','LOD2 massing','culled'].map((l,i)=>`<span><b style="background:${LODC[i]}"></b>${l} <em>${n[i].toLocaleString()}</em></span>`).join('');
   const t=selLodTris(), ps=$('#pSel');
   if(ps) ps.innerHTML = t ? `<div class="sub-h" style="margin-top:0">Triangles in ${esc(selB().name)}</div><div class="pstats"><span>LOD0 full</span><b>${t[0]!=null?t[0].toLocaleString():'—'}</b><span>LOD1 shell</span><b>${t[1].toLocaleString()}</b><span>LOD2 massing</span><b>${t[2].toLocaleString()}</b></div>` : '';
 }
 perfEl.addEventListener('click', e=>{ const a=e.target.closest('[data-pact]'); if(!a) return; const k=a.dataset.pact;
-  if(k==='close') openPerf(false); else if(k==='city'){ generateCity(+a.dataset.n); renderPerf(); } else if(k==='clear'){ clearCity(); renderPerf(); } });
+  if(k==='close') openPerf(false); else if(k==='city'){ generateCity(+a.dataset.n); renderPerf(); } else if(k==='clear'){ clearCity(); renderPerf(); }
+  else if(k==='bench') benchStart(); else if(k==='quality') openQuality(); });
 perfEl.addEventListener('input', e=>{ if(e.target.id==='pBias'){ LODCFG.bias=+e.target.value; e.target.nextElementSibling.textContent=LODCFG.bias.toFixed(2)+'×'; } if(e.target.id==='pTint') G.uLodTint.value=e.target.checked?1:0; });
 $('#bPerf').onclick=()=>openPerf(!perfOpen);
+
+/* =========================================================================
+   Frame log, HUD, performance settings and benchmark
+   Every frame's interval and main-thread time (all of tick, and its LOD selection and render() parts), the
+   LOD building that ran after it, draw calls, triangles and whether the shadow map was drawn. The stats card,
+   the HUD and the benchmark read the last 1,024 frames from here.
+   ========================================================================= */
+const BUILD = window.STOREY_BUILD || 'dev';   // the site's version, stamped by prototype/web/build.mjs
+const FL = {N:1024, n:0};
+for(const k of ['dt','js','lod','rnd','gen','calls','tris','sh']) FL[k]=new Float32Array(FL.N);
+function flPush(dt, js, lod, rnd, sh){ const i=FL.n%FL.N, inf=renderer.info.render; FL.dt[i]=dt; FL.js[i]=js; FL.lod[i]=lod; FL.rnd[i]=rnd; FL.gen[i]=0; FL.calls[i]=inf.calls; FL.tris[i]=inf.triangles; FL.sh[i]=sh?1:0; FL.n++; }
+function flGen(ms){ if(FL.n) FL.gen[(FL.n-1)%FL.N]+=ms; }   // building time lands on the frame it followed
+// the display's frame interval (16.7 ms at 60 Hz): a low percentile of the recent intervals
+let ivMs=16.67, ivAt=0;
+function frameIv(){ if(FL.n-ivAt<30 || FL.n<40) return ivMs; ivAt=FL.n; const a=[]; for(let j=1;j<=120 && j<FL.n;j++) a.push(FL.dt[(FL.n-j)%FL.N]); a.sort((x,y)=>x-y); ivMs=clamp(a[Math.floor(a.length*0.1)], 6, 34); return ivMs; }
+// a summary of the frames from frame number a on: rate, interval percentiles, frames slower than 20 ms (a missed
+// frame at 60 Hz), main thread per frame, draw calls, triangles and how often the shadow map was drawn
+function flSum(a){
+  const n=Math.min(FL.n-a, FL.N); if(n<2) return null;
+  const col=k=>{ const v=new Float32Array(n); for(let j=0;j<n;j++) v[j]=FL[k][(FL.n-n+j)%FL.N]; return v; };
+  const avg=v=>v.reduce((x,y)=>x+y,0)/v.length, pct=(v,p)=>{ const q=Float32Array.from(v).sort(); return q[Math.min(q.length-1, Math.floor(p*q.length))]; };
+  const dt=col('dt'), js=col('js'), gen=col('gen');
+  return {n, fps:n*1000/dt.reduce((x,y)=>x+y,0), p50:pct(dt,.5), p95:pct(dt,.95), p99:pct(dt,.99), max:pct(dt,1), slow:dt.filter(v=>v>20).length/n,
+    js:avg(js), js95:pct(js,.95), lod:avg(col('lod')), gen:avg(gen), genMax:pct(gen,1), rnd:avg(col('rnd')), calls:avg(col('calls')), tris:avg(col('tris')), sh:avg(col('sh'))};
+}
+const hudEl=$('#fhud'); let hudT=0, hudFrom=0;
+function hudTick(now){
+  if(hudEl.hidden===QUAL.hud) hudEl.hidden=!QUAL.hud;
+  if(!QUAL.hud || now-hudT<500) return; const S=flSum(Math.max(hudFrom, FL.n-60)); hudT=now; hudFrom=FL.n; if(!S) return;
+  hudEl.textContent=`${S.fps.toFixed(0)} fps  p95 ${S.p95.toFixed(1)}  slow ${(S.slow*100).toFixed(0)}%\nJS ${S.js.toFixed(1)}  build ${S.gen.toFixed(1)}  render ${S.rnd.toFixed(1)} ms\n${S.calls.toFixed(0)} draws  ${fmtN(S.tris)} tris  ${canvas.width}×${canvas.height}`;
+}
+function gpuName(){ const gl=renderer.getContext(), e=gl.getExtension('WEBGL_debug_renderer_info'); return String(e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); }
+function openQuality(){
+  openModal(`<h2>Performance</h2><p class="note" style="margin:0 0 10px">Render settings for this browser. The benchmark flies a fixed path over the 1,000-building test city, then compares settings on one view (about 90 seconds), and reports frame times to copy.</p>
+  <div class="pq"><label>Resolution <select id="qScale">${[[1,'Full'],[0.75,'75%'],[0.5,'50%']].map(([v,l])=>`<option value="${v}" ${QUAL.scale==v?'selected':''}>${l}</option>`).join('')}</select></label>
+  <label>Pixel ratio up to <select id="qDpr">${[1,1.5,2,3].map(v=>`<option ${QUAL.maxDpr==v?'selected':''}>${v}</option>`).join('')}</select></label>
+  <label>Shadows <select id="qSh">${[[0,'Off'],[1024,'1024²'],[2048,'2048²']].map(([v,l])=>`<option value="${v}" ${(QUAL.shadows?QUAL.shadowSize:0)==v?'selected':''}>${l}</option>`).join('')}</select></label>
+  <label class="chk"><input type="checkbox" id="qShC" ${QUAL.shadowCache?'checked':''}> Draw the shadow map only when it changes</label>
+  <label class="chk"><input type="checkbox" id="qMsaa" ${QUAL.msaa?'checked':''}> Antialiasing (MSAA; reloads the page)</label>
+  <label class="chk"><input type="checkbox" id="qHud" ${QUAL.hud?'checked':''}> Frame HUD</label></div>
+  ${benchReport?`<textarea id="qRep" readonly spellcheck="false" style="height:200px;margin-top:10px">${esc(benchReport)}</textarea>`:''}
+  <div class="row" style="margin-top:12px"><button class="btn pri" id="qBench">Run benchmark</button>${benchReport?'<button class="btn" id="qCopy">Copy report</button>':''}<span style="flex:1"></span><button class="btn" data-close>Close</button></div>`);
+  const ch=()=>{ QUAL.scale=+$('#qScale').value; QUAL.maxDpr=+$('#qDpr').value; const sh=+$('#qSh').value; QUAL.shadows=sh>0; if(sh) QUAL.shadowSize=sh;
+    QUAL.shadowCache=$('#qShC').checked; QUAL.hud=$('#qHud').checked; const reload=QUAL.msaa!==$('#qMsaa').checked; QUAL.msaa=$('#qMsaa').checked;
+    saveQual(); applyDpr(); setShadows(QUAL.shadows, QUAL.shadowSize); if(reload) location.reload(); };
+  for(const id of ['#qScale','#qDpr','#qSh','#qShC','#qMsaa','#qHud']) $(id).onchange=ch;
+  $('#qBench').onclick=()=>{ closeModal(); benchStart(); };
+  if($('#qCopy')) $('#qCopy').onclick=()=>{ const ta=$('#qRep'); navigator.clipboard?.writeText(benchReport).then(()=>toast('Report copied'),()=>{ ta.select(); toast('Select the text to copy it'); }) ?? (ta.select(), toast('Select the text to copy it')); };
+}
+
+/* The benchmark: the 1,000-building test city, a fixed camera path (frame times while LODs are being built and
+   the shadow map follows the focus), then one view orbited under several settings with its LODs ready. Each
+   part reports frame rate, interval percentiles, slow frames (over 20 ms), main-thread time and draw load. */
+let bench=null, benchReport='';
+const BENCH_YAW = 1.12*Math.PI;
+const BENCH_PATH = [   // the test city's streets run along x = 80k + 40 and z = 80k + 48
+  ['Overview, orbit', 6, u=>[0, 20, 470, 0.6, BENCH_YAW+u*1.2]],
+  ['Fly in', 6, u=>{ const e=u*u*(3-2*u); return [120*e, 20+28*e, 470*Math.pow(180/470,e), 0.6-0.15*e, BENCH_YAW+1.2+u*0.6]; }],
+  ['City, orbit', 6, u=>[120, 48, 180, 0.45, BENCH_YAW+1.8+u*2.4]],
+  ['Street, pan', 6, u=>[200-u*160, 48, 60, 0.2, Math.PI/2]],
+  ['Close up, pan', 6, u=>[40, 48+u*120, 30, 0.15, 0]],
+];
+const BENCH_SWEEP = [   // the city orbit with its LODs ready; q: quality changes, bias: LOD bias
+  ['As set', {}], ['Shadow map every frame', {q:{shadowCache:false}}], ['No shadows', {q:{shadows:false}}],
+  ['Resolution 50%', {q:{scale:0.5}}], ['LOD detail 50%', {bias:0.5}], ['Shadow 1024, every frame', {q:{shadowSize:1024, shadowCache:false}}],
+  ['Discard in every shader', {q:{nd:false}}],
+];
+const SWEEP_CAM = BENCH_PATH[2][2];
+function benchCam([x,z,dist,pitch,yaw]){ camEdit.target.set(x,0,z); camEdit.dist=dist; camEdit.pitch=pitch; camEdit.yaw=yaw; }
+function* benchFrames(ms, until){ let t0=null; for(;;){ const now=yield; if(t0===null) t0=now; if(now-t0>=ms || (until && until())) return now-t0; } }
+function* benchPart(label, sec, cam){ let t0=null; const a=FL.n; for(;;){ const now=yield; if(t0===null) t0=now; const u=(now-t0)/(sec*1000);
+  if(u>=1) return flSum(a+1); benchCam(cam(u)); $('#benchMsg').textContent=`${label} · ${Math.ceil(sec*(1-u))} s`; } }
+function* benchRun(){
+  const keep={q:{...QUAL}, bias:LODCFG.bias, t:camEdit.target.clone(), yaw:camEdit.yaw, pitch:camEdit.pitch, dist:camEdit.dist}, res=[], sweep=[];
+  try{
+    const msg=t=>{ $('#benchMsg').textContent=t; };
+    if(state.buildings.filter(b=>b.gen).length!==1000) generateCity(1000);
+    ui.sel=null; ui.isolate=false; refreshChrome(); benchCam(BENCH_PATH[0][2](0));
+    const tPrep = yield* benchFrames(30000, ()=>{ msg(`Preparing the city · ${lodStats.queue} LODs to build`); return !dirty.size && !lodStats.queue; });
+    yield* benchFrames(1000);
+    const head=benchHead(tPrep);
+    for(const [name, sec, cam] of BENCH_PATH) res.push([name, yield* benchPart(name, sec, cam)]);
+    msg('Warming up'); yield* benchPart('Warming up', 6, SWEEP_CAM);
+    for(const [name, c] of BENCH_SWEEP){
+      Object.assign(QUAL, keep.q, c.q||{}); LODCFG.bias=c.bias ?? keep.bias; applyDpr(); setShadows(QUAL.shadows, QUAL.shadowSize);
+      benchCam(SWEEP_CAM(0)); msg(name+' · warming up'); yield* benchFrames(1200);
+      sweep.push([name, yield* benchPart(name, 5, SWEEP_CAM)]);
+    }
+    return benchText(head, res, sweep);
+  } finally {
+    Object.assign(QUAL, keep.q); LODCFG.bias=keep.bias; applyDpr(); setShadows(QUAL.shadows, QUAL.shadowSize);
+    camEdit.target.copy(keep.t); camEdit.yaw=keep.yaw; camEdit.pitch=keep.pitch; camEdit.dist=keep.dist;
+  }
+}
+function benchHead(tPrep){   // the device and the settings as set, before the sweep changes them
+  const gl=renderer.getContext(), app = matchMedia('(display-mode: standalone)').matches || navigator.standalone ? 'home screen app' : 'browser tab';
+  return [`Storey benchmark · build ${BUILD} · ${new Date().toISOString().slice(0,16).replace('T',' ')} UTC`, navigator.userAgent,
+    `Screen ${screen.width}×${screen.height} @${devicePixelRatio} · ${innerWidth>innerHeight?'landscape':'portrait'} · canvas ${canvas.width}×${canvas.height} (${renderer.getPixelRatio().toFixed(2)}×) · MSAA ${gl.getParameter(gl.SAMPLES)} · ${gpuName()} · ${app} · ${navigator.hardwareConcurrency||'?'} cores`,
+    `${recs.size.toLocaleString()} buildings · ${cells.size} cells · LOD bias ${LODCFG.bias.toFixed(2)} · shadows ${QUAL.shadows?QUAL.shadowSize+(QUAL.shadowCache?', drawn when changed':', every frame'):'off'} · city ready in ${(tPrep/1000).toFixed(1)} s · frame interval ${frameIv().toFixed(1)} ms`];
+}
+function benchText(head, res, sweep){
+  const pad=(v,w)=>String(v).padStart(w), num=(v,d=1)=>v==null||isNaN(v)?'-':v.toFixed(d);
+  const row=(name,S)=>S ? name.padEnd(26)+pad(num(S.fps),5)+pad(num(S.p50),6)+pad(num(S.p95),6)+pad(num(S.p99),6)+pad(num(S.max,0),5)+pad((S.slow*100).toFixed(0)+'%',5)+pad(num(S.js),6)+pad(num(S.js95),6)+pad(num(S.gen),6)+pad(num(S.rnd),6)+pad(S.calls.toFixed(0),6)+pad(fmtN(S.tris),7)+pad((S.sh*100).toFixed(0)+'%',5) : name.padEnd(26)+' (no frames)';
+  const cols='part'.padEnd(26)+'  fps   p50   p95   p99  max slow    JS JSp95 build  rndr draws   tris  shdw';
+  return [...head, '', 'ms per frame; slow: frames over 20 ms; JS: main thread in the frame; build: LOD building after it; shdw: frames that drew the shadow map', '',
+    cols, ...res.map(([n,S])=>row(n,S)), '', 'City orbit with LODs ready, by setting:', cols, ...sweep.map(([n,S])=>row(n,S))].join('\n');
+}
+function benchStart(){
+  if(bench) return; if(ui.mode!=='edit') exitPlay(); openPerf(false); closeModal();
+  $('#benchBar').hidden=false; $('#benchMsg').textContent='Starting';
+  bench=benchRun(); bench.next();
+}
+function benchStep(now){
+  const r=bench.next(now); if(!r.done) return;
+  bench=null; $('#benchBar').hidden=true; if(r.value){ benchReport=r.value; console.log(benchReport); openQuality(); }
+}
+$('#benchStop').onclick=()=>{ if(!bench) return; bench.return(); bench=null; $('#benchBar').hidden=true; toast('Benchmark stopped'); };
 
 /* =========================================================================
    Main loop
@@ -3392,7 +3600,8 @@ $('#bPerf').onclick=()=>openPerf(!perfOpen);
 function resize(){ const w=canvas.clientWidth, h=canvas.clientHeight; if(canvas.width!==Math.floor(w*renderer.getPixelRatio())||canvas.height!==Math.floor(h*renderer.getPixelRatio())){ renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); } }
 let last=performance.now(), tickHold=false;   // tickHold: test hook, the harness steps play itself (__sb.play.step)
 function tick(now){
-  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  const dt=Math.min(0.05,(now-last)/1000), fdt=now-last; last=now;
+  if(bench && !tickHold) benchStep(now);
   resize();
   const tf=performance.now();
   if(dirty.size){ for(const id of dirty){ const b=bById(id); if(b){ const r=recOf(b), bb=bboxAll(b); r.bbw={x0:bb.x0+b.pos.x, z0:bb.z0+b.pos.z, x1:bb.x1+b.pos.x, z1:bb.z1+b.pos.z}; gridSet(r,b); partyMemo.delete(id); } }
@@ -3410,11 +3619,15 @@ function tick(now){
     if(ui.sub && b && ui.tab==='interior' && !dragItem && ui.tool==='select'){ const k=activeFloor(b); const s=ui.sub; if(s.kind==='shaft'){ const sh=b.shafts.find(x=>x.id===s.id); if(sh && shaftLevels(b,sh).includes(k)) showTarget(b,k,{kind:'shaft',s:sh},'#2F7D4F'); } else if(s.floor===k){ if(s.kind==='wall') showTarget(b,k,{kind:'wall',wi:s.i},'#2F7D4F'); } }
     overlayUpdate();
   }
-  const f=G.uFocus.value; sun.position.set(f.x+30, f.y+60, f.z+18); sun.target.position.set(f.x, f.y, f.z);
+  const f=G.uFocus.value; sun.position.set(f.x+SUN_OFF[0], f.y+SUN_OFF[1], f.z+SUN_OFF[2]); sun.target.position.set(f.x, f.y, f.z);
   const activeId=applyView(); updateCutaway(dt);
+  const tl=performance.now();
   updateLOD(dt, activeId);
+  const tr=performance.now(), sh=shadowWanted(); renderer.shadowMap.needsUpdate=sh;
   renderer.render(scene,camera);
-  perfTick(now, performance.now()-tf);
+  const te=performance.now();
+  flPush(fdt, te-tf, tr-tl, te-tr, sh); perfTick(now); hudTick(now);
+  scheduleGen(now);   // LOD building runs after this frame is handed over
   requestAnimationFrame(tick);
 }
 
@@ -3434,7 +3647,7 @@ window.__sb = { roofParts:(i,k)=>{ const b=state.buildings[i]; const R = k==null
       out=[{p:L.posD, n:[...L.nrm].map(v=>v/127), c, i:[...L.idx], fac:[...L.fac], fac2:[...L.fac2], slot:[...L.slot], params, solids:[]}]; }
     DEBUG_SOLIDS=false; return out; },
   nb:()=>state.buildings.length, bench:(i=0,lod=0)=>{ const b=state.buildings[i], r=recOf(b), f=[buildLOD0,buildLOD1,buildLOD2][lod]; const t=performance.now(); for(let k=0;k<10;k++) f(b,r.idx); return (performance.now()-t)/10; },
-  lodStats, LODCFG, city:generateCity, clearCity, recs, cells, openPerf, renderer,
+  lodStats, LODCFG, city:generateCity, clearCity, recs, cells, openPerf, renderer, QUAL, lodDbg:()=>({fading:[...recs.values()].filter(r=>r.t<1).map(r=>r.id+':'+r.from+'>'+r.disp).slice(0,8), n:lodStats.n.join('/'), q:lodStats.queue, jobs:jobs.size, frames:FL.n}),   // for harnesses: wait until LODs are settled benchStart, get benchReport(){ return benchReport; }, get benching(){ return !!bench; }, flSum, get frames(){ return FL.n; },
   timeLOD:(n=20)=>{ const b=LODCFG.budgetMs; LODCFG.budgetMs=-1; const t=performance.now(); for(let i=0;i<n;i++) updateLOD(0, null); LODCFG.budgetMs=b; return (performance.now()-t)/n; },
   memBytes:()=>{ let by=0, m=0; scene.traverse(o=>{ if(o.isMesh && o.geometry){ m++; for(const a of Object.values(o.geometry.attributes)) by+=a.array.byteLength; if(o.geometry.index) by+=o.geometry.index.array.byteLength; } }); return {meshes:m, MB:+(by/1048576).toFixed(1)}; },
   timeCells:()=>{ const t=performance.now(); let n=0; for(const c of cells.values()){ c.dirty=true; rebuildCell(c); n++; } return {cells:n, msPerCell:+((performance.now()-t)/Math.max(1,n)).toFixed(3)}; },
