@@ -414,7 +414,7 @@ Recommendation: split LOD0's interior into its own renderer. Draw it (and the gl
 ### 7.8 Shadow casters (medium to high, depends on cascades)
 
 Every LOD0, LOD1 and cell renderer casts shadows (`ShadowCastingMode.On`: `SiteRenderer.Add`, `BuildCell`), and the shadow pass runs Storey's full vertex stage (§7.2). Shadow cost scales with triangles × cascades touched, and at street level LOD1 shells and cells fill the far cascades. Recommendations:
-- **Shadow proxies for distance:** let a building at LOD1 cast through its massing in the cell (a shadow-only pass of the massing that ignores the LOD hide for buildings at LOD1) and turn LOD1's own casting off. LOD1 is about 980 triangles, its massing 43, with the same outline and heights.
+- **Shadow proxies for distance:** let a building at LOD1 cast through its massing in the cell (a shadow-only pass of the massing that ignores the LOD hide for buildings at LOD1) and turn LOD1's own casting off. LOD1 is about 980 triangles, its massing 43, with the same outline and heights. *Done* (docs/CITY.md §3): the massing's shadow caster pass treats LOD1 and LOD2 alike, LOD1 renderers cast none, and a cell with LOD1 members but no LOD2 one draws into the shadow maps only. The prototype does the same (its cell stays drawn, every triangle clipped in its colour pass, three.js having no shadows-only mode); its street views show the same shadows but for roof bulkheads and canopies.
 - Interiors as above (§7.7).
 - Per tier: cascades and shadow distance (§7.10).
 

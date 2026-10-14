@@ -182,6 +182,9 @@ namespace Triband.Storey.Unity
             public readonly List<Mesh> meshes = new List<Mesh>();
             public readonly List<MeshRenderer> renderers = new List<MeshRenderer>();
             public bool shown = true;
+            // a member shows LOD1 and none its massing: the cell draws into the shadow maps only, casting for the LOD1s
+            // (docs/PERFORMANCE.md §7.8)
+            public bool shadowsOnly;
             public bool steady;   // its renderers have the massing's steady copy
         }
 
@@ -680,7 +683,8 @@ namespace Triband.Storey.Unity
             var d = (Detail)made;
             if (which == 1)
             {
-                for (int i = 0; i < d.opaque.Count; i++) Add(bt, 1, Part("LOD1", i, d.opaque.Count), MeshUpload.Upload(d.opaque[i], Part(name + " LOD1", i, d.opaque.Count), RowOf), opaque, true);
+                // no shadow of its own: the building casts through its massing while at LOD1 (docs/PERFORMANCE.md §7.8)
+                for (int i = 0; i < d.opaque.Count; i++) Add(bt, 1, Part("LOD1", i, d.opaque.Count), MeshUpload.Upload(d.opaque[i], Part(name + " LOD1", i, d.opaque.Count), RowOf), opaque, false);
                 return;
             }
             var shape = d.shape!; bt.shape = shape;
@@ -861,10 +865,17 @@ namespace Triband.Storey.Unity
             int shown = 0, pieces = 0;
             foreach (var c in cells.Values)
             {
-                bool on = false;
-                foreach (int idx in c.order) { var e = l.Get(idx); if (e == null || e.Visible(2)) { on = true; break; } }
-                if (on != c.shown) { c.shown = on; foreach (var r in c.renderers) r.enabled = on; }
+                // drawn while a member shows its massing; in the shadow maps alone while a member shows LOD1 instead, whose
+                // own renderers cast no shadow: the massing has its outline and heights in a twentieth of the triangles
+                bool on = false, cast = false;
+                foreach (int idx in c.order) { var e = l.Get(idx); if (e == null || e.Visible(2)) { on = true; break; } if (e.Visible(1)) cast = true; }
+                bool shadowsOnly = !on && cast;
                 if (on) shown++;
+                if ((on || shadowsOnly) != c.shown || shadowsOnly != c.shadowsOnly)
+                {
+                    c.shown = on || shadowsOnly; c.shadowsOnly = shadowsOnly;
+                    foreach (var r in c.renderers) { r.enabled = c.shown; r.shadowCastingMode = CellCasting(c); }
+                }
                 pieces += c.renderers.Count;
             }
             var (r0, r1) = l.Resident();
@@ -916,12 +927,15 @@ namespace Triband.Storey.Unity
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
                 var mr = go.AddComponent<MeshRenderer>();
                 mr.sharedMaterial = c.steady && massingSteady != null ? massingSteady : massing;
-                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                mr.shadowCastingMode = CellCasting(c);
                 mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
                 mr.enabled = c.shown;
                 c.renderers.Add(mr);
             }
         }
+
+        static UnityEngine.Rendering.ShadowCastingMode CellCasting(Cell c) =>
+            c.shadowsOnly ? UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly : UnityEngine.Rendering.ShadowCastingMode.On;
 
         /// <summary>
         /// A cell member's massing: the one it was built with, or made again from the layout. The layout's buildings are the

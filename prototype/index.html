@@ -837,11 +837,18 @@ const OCC_VERT = `vBid = mod(aTag, 65536.0); vLod = floor(aTag / 65536.0);
   {
     int ib = int(vBid + 0.5);
     vec4 st = texelFetch(uState, ivec2(ib % 256, ib / 256), 0);   // x: displayed LOD, y: previous LOD, z: cross-fade 0..1
+#if defined(OCC_DEPTH) && defined(OCC_MASS)
+    // shadow proxy (docs/PERFORMANCE.md §7.8): a building shown at LOD1 casts through its massing, which has its outline
+    // and heights in a twentieth of the triangles; LOD1 meshes cast none. Between LOD1 and LOD2 the massing stays whole
+    bool isDisp = st.x > 0.5 && st.x < 2.5;
+    bool isFrom = st.z < 1.0 && st.y > 0.5 && st.y < 2.5;
+#else
     bool isDisp = abs(vLod - st.x) < 0.5;
     bool isFrom = st.z < 1.0 && abs(vLod - st.y) < 0.5;
+#endif
     if (!isDisp && !isFrom) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);   // LOD not shown: clip the whole triangle
 #ifndef OCC_ND
-    vFade = st.z >= 1.0 ? 3.0 : (isDisp ? st.z : -1.0 - st.z);
+    vFade = st.z >= 1.0 || (isDisp && isFrom) ? 3.0 : (isDisp ? st.z : -1.0 - st.z);
 #ifndef OCC_DEPTH
     vOcc = st.w - 1.0;   // building in the way: its occluder slot, or -1
 #endif
@@ -968,7 +975,7 @@ vec3 facadeColor(){
 function patch(mat, o={}){
   mat.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, G);
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n'+(o.depth?'#define OCC_DEPTH\n':'')+(o.nd?'#define OCC_ND\n':'')+OCC_VERT_DECL+(o.massing?MASS_VERT_DECL:''))
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n'+(o.depth?'#define OCC_DEPTH\n':'')+(o.nd?'#define OCC_ND\n':'')+(o.massing?'#define OCC_MASS\n':'')+OCC_VERT_DECL+(o.massing?MASS_VERT_DECL:''))
       .replace('#include <project_vertex>', OCC_SINK+'\n#include <project_vertex>\n'+OCC_VERT+(o.massing?MASS_VERT:''));
     let fs = sh.fragmentShader.replace('#include <common>', '#include <common>\n'+(o.depth?'#define OCC_DEPTH\n':'')+(o.nd?'#define OCC_ND\n':'')+OCC_FRAG_DECL+(o.massing && !o.depth?MASS_FRAG_DECL:'')).replace('void main() {', 'void main() {\n  occlude();');
     fs = fs.replace('#include <color_fragment>', '#include <color_fragment>\n'+(o.massing?'  diffuseColor.rgb = facadeColor();\n':'')+'  if (uLodTint > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, lodTint(vLod), 0.65);\n  if (uIso > 0.001 && abs(vBid - uIsoBid) > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.82, 0.83), uIso * 0.7);');
@@ -1923,7 +1930,7 @@ function installL0(b,r,{op,gl,segs}){ disposeLod(r,'l0');
   const wbase=wallAlloc(op.walls.length), party=[]; op.walls.forEach((w,i)=>{ if(w.K>=8) party.push(i); });
   r.l0={ver:r.ver, segs, used:frameNo, tris:op.tris+gl.tris, verts:op.verts+gl.verts, walls:op.walls, wbase, party, mesh:addMesh(op.geo(wbase),MAT.opaque,MAT.depth,b.id), glass:gl.i.length?addMesh(gl.geo(wbase),MAT.glass,null,b.id):null};
   if(r.l0.glass) r.l0.glass.renderOrder=2; }
-function installL1(b,r,{op}){ disposeLod(r,'l1'); r.l1={ver:r.ver, used:frameNo, tris:op.tris, verts:op.verts, mesh:addMesh(op.geo(),MAT.opaque,MAT.depth,b.id)}; }
+function installL1(b,r,{op}){ disposeLod(r,'l1'); r.l1={ver:r.ver, used:frameNo, tris:op.tris, verts:op.verts, mesh:addMesh(op.geo(),MAT.opaque,null,b.id)}; }   // casts through its massing (OCC_MASS)
 // synchronous versions: for the building being edited or walked in, and for collision
 function genL0(b,r){ jobs.delete(r.idx*2); installL0(b,r,buildLOD0(b,r.idx)); }
 function genL1(b,r){ jobs.delete(r.idx*2+1); installL1(b,r,buildLOD1(b,r.idx)); }
@@ -2012,8 +2019,11 @@ function updateLOD(dt, activeId){
     if(r.l0){ const L=r.l0, m=L.mesh; m.visible=v0; if(L.glass) L.glass.visible=v0; if(v0) L.used=frameNo;
       const p = plain && !(act>=0 && L.party.some(i=>(L.walls[i].K>>3)-1===act));   // a party wall is cut with its neighbour
       m.material = p ? MAT.opaqueN : MAT.opaque; m.customDepthMaterial = still ? MAT.depthN : MAT.depth; }
-    if(r.l1){ const m=r.l1.mesh; m.visible=v1; if(v1) r.l1.used=frameNo; m.material = plain ? MAT.opaqueN : MAT.opaque; m.customDepthMaterial = still ? MAT.depthN : MAT.depth; }
-    if(r.cell && (!plain || !isoOff) && (r.disp===2 || (r.t<1 && r.from===2))){ const c=cells.get(r.cell); if(c) c.busy=frameNo; }   // its cell needs the full shader
+    if(r.l1){ const m=r.l1.mesh; m.visible=v1; if(v1) r.l1.used=frameNo; m.material = plain ? MAT.opaqueN : MAT.opaque; }
+    if(r.cell){   // its cell needs the full shader: in colour while its massing shows and can discard, in the shadow pass while
+      // it fades between LOD1 or LOD2 (the massing casts for both) and LOD0 or none
+      const c=(!plain || !isoOff) && (r.disp===2 || (r.t<1 && r.from===2)), d=r.t<1 && (r.disp===1 || r.disp===2) !== (r.from===1 || r.from===2);
+      if(c || d){ const cl=cells.get(r.cell); if(cl){ if(c) cl.busy=frameNo; if(d) cl.busyD=frameNo; } } }
     const o=r.idx*4;
     if(stateArr[o]!==r.disp || stateArr[o+1]!==r.from || stateArr[o+2]!==r.t || stateArr[o+3]!==w){
       stateArr[o]=r.disp; stateArr[o+1]=r.from; stateArr[o+2]=r.t; stateArr[o+3]=w; changed=true;
@@ -2029,9 +2039,11 @@ function updateLOD(dt, activeId){
   evict('l0', LODCFG.maxL0); evict('l1', LODCFG.maxL1);
   let shown=0;
   for(const c of cells.values()){ if(c.dirty) rebuildCell(c); if(!c.mesh) continue;
-    let any=false; for(const r of c.members) if(r.disp===2 || (r.t<1 && r.from===2)){ any=true; break; }
-    c.mesh.visible=any; if(any) shown++;
-    const p = nd && isoOff && c.busy!==frameNo; c.mesh.material = p ? MAT.massN : MAT.mass; c.mesh.customDepthMaterial = p ? MAT.massDepthN : MAT.massDepth; }
+    // drawn while a member shows its massing, or casts through it (at LOD1: its colour pass then clips every triangle)
+    let any=false, cast=false;
+    for(const r of c.members){ if(r.disp===2 || (r.t<1 && r.from===2)){ any=true; break; } if(r.disp===1 || (r.t<1 && r.from===1)) cast=true; }
+    c.mesh.visible=any || (cast && sun.castShadow); if(any) shown++;
+    c.mesh.material = nd && isoOff && c.busy!==frameNo ? MAT.massN : MAT.mass; c.mesh.customDepthMaterial = nd && isoOff && c.busyD!==frameNo ? MAT.massDepthN : MAT.massDepth; }
   lodStats.cells=cells.size; lodStats.cellsShown=shown;
 }
 /* Generation runs after the frame is handed to the GPU, in the time left before the next one is due, so it

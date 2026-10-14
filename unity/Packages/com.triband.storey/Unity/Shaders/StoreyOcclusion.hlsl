@@ -101,9 +101,17 @@ bool StoreyVertex(float tag, float4 wall, float kind, float wid, float3 worldPos
     v.bid = fmod(tag, 65536.0); v.lod = floor(tag / 65536.0);
     int ib = (int)(v.bid + 0.5);
     float4 st = _StoreyState[ib];   // x: displayed LOD, y: previous LOD, z: cross-fade 0..1, w: occluder slot + 1
+#if defined(STOREY_SHADOW) && defined(STOREY_MASSING)
+    // shadow proxy (docs/PERFORMANCE.md §7.8): a building shown at LOD1 casts through its massing, which has its outline
+    // and heights in a twentieth of the triangles; LOD1's renderers cast none. Between LOD1 and LOD2 the massing stays
+    // whole. The shadow caster pass only: the depth prepass must match the colour pass
+    bool isDisp = st.x > 0.5 && st.x < 2.5;
+    bool isFrom = st.z < 1.0 && st.y > 0.5 && st.y < 2.5;
+#else
     bool isDisp = abs(v.lod - st.x) < 0.5;
     bool isFrom = st.z < 1.0 && abs(v.lod - st.y) < 0.5;
-    v.fade = st.z >= 1.0 ? 3.0 : (isDisp ? st.z : -1.0 - st.z);
+#endif
+    v.fade = st.z >= 1.0 || (isDisp && isFrom) ? 3.0 : (isDisp ? st.z : -1.0 - st.z);
     v.occ = st.w - 1.0;
     return isDisp || isFrom;
 }

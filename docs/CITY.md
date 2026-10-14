@@ -68,6 +68,7 @@ Every building's LOD2 massing goes into a 128 m square of the ground (`Cells`, b
 - **Tags.** Each vertex keeps its building's tag, so the shader hides one building inside a cell while it shows a finer LOD.
 - **When a cell is rebuilt.** Only when one of its buildings changes, never for an LOD change.
 - **Drawing.** A cell's renderer is enabled while any of its buildings shows LOD2.
+- **Shadow proxies.** A building at LOD1 casts its shadow through its massing in the cell (43 triangles against LOD1's 980, with the same outline and heights); LOD1's own renderers cast none. The massing's shadow caster pass treats LOD1 and LOD2 alike (whole between them, dithered against LOD0 and culled), and a cell whose buildings show LOD1 but none LOD2 draws into the shadow maps only (`ShadowCastingMode.ShadowsOnly`). LOD0 keeps its own shadow: the interiors' light depends on it (docs/PERFORMANCE.md §7.8).
 - **Size.** A cell's mesh is split to stay under 65,535 vertices (16-bit indices), never through a building.
 - **The test city** of 3,000 falls into 307 cells (the prototype has 316). Each fits in one mesh, 263,000 vertices in all.
 

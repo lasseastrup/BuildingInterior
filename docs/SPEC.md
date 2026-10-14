@@ -221,7 +221,7 @@ Each layer runs every frame from a handful of global shader properties (`Shader.
 | **Section cap** | Back faces render as a flat dark colour. | Cut walls read as solid sections, not hollow shells. |
 | **Buildings in the way** | Other buildings between camera and player, found by a ray test (below). One of four designer-selectable modes; see the table below. | Handles walking behind a house, and a neighbour blocking the view into the building you're in. |
 | **Silhouette** | Player drawn a second time with `ZTest Greater`. | The player is never lost. |
-| **Shadow pass** | None of the occlusion discards (floors above, cutaway, buildings in the way) and none of Sink's displacement run in the ShadowCaster pass: it always casts from the whole building. Only the LOD cross-fade dither and isolate run there. | Occlusion is a view aid, not a change to the world: going inside or dropping a wall must not change the lighting. |
+| **Shadow pass** | None of the occlusion discards (floors above, cutaway, buildings in the way) and none of Sink's displacement run in the ShadowCaster pass: it always casts from the whole building. Only the LOD cross-fade dither and isolate run there. A building at LOD1 casts through its massing (docs/CITY.md §3). | Occlusion is a view aid, not a change to the world: going inside or dropping a wall must not change the lighting. |
 
 The player's floor comes from height, with a threshold 0.9 m below each floor line. This gives natural switching halfway up the second flight of stairs.
 
