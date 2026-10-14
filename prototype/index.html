@@ -2004,13 +2004,17 @@ function updateLOD(dt, activeId){
     let want=3;
     for(let l=0;l<3;l++) if(rel >= PX[l]*(l<r.want ? 1+H : 1-H)){ want=l; break; }
     if(d > far) want=3;
-    const forced = r.id===activeId || (ui.mode==='edit' && r.id===ui.sel) || (r.slot!=null && ui.mode==='play' && (ui.occ.outside==='slice' || ui.occ.outside==='sink'));   // a sliced building shows its rooms
+    // LOD0 at once for the building walked in or cut (its rooms show; play mode's collision is built from it) and one
+    // sliced or sunk; the one selected in Shape or Facade wants it too, first in the queue, its shell shown meanwhile, so
+    // that tapping a building in a city doesn't build its full detail inside one frame
+    const now = r.id===activeId || (r.slot!=null && ui.mode==='play' && (ui.occ.outside==='slice' || ui.occ.outside==='sink'));
+    const forced = now || (ui.mode==='edit' && r.id===ui.sel);
     if(forced) want=0;
     r.want=want;
     let show=want;
     // detail is built for buildings on screen (with a margin) first; LOD0 only for those, the shell will do off screen
     let vis=true; if(show<2 && !forced){ _sph.center.set(s.x,s.y,s.z); _sph.radius=s.r*1.2+6; vis=_frus.intersectsSphere(_sph); }
-    if(show===0 && !ready(r,'l0')){ if(forced){ const b=bById(r.id); if(b) genL0(b,r); } else if(vis){ pend.push({r,l:0,p:2e6+rel}); show = ready(r,'l1') ? 1 : 2; } else show=1; }
+    if(show===0 && !ready(r,'l0')){ if(now){ const b=bById(r.id); if(b) genL0(b,r); } else if(forced || vis){ pend.push({r,l:0,p:(forced?3e6:2e6)+rel}); show = ready(r,'l1') ? 1 : 2; } else show=1; }
     if(show===1 && !ready(r,'l1')){ pend.push({r,l:1,p:(vis?1e6:0)+rel}); show=2; }
     if(show!==r.disp){ r.from=r.disp; r.disp=show; r.t=0; }
     if(r.t<1) r.t=Math.min(1, r.t+dt/LODCFG.fade);
@@ -2056,7 +2060,8 @@ const genCh = new MessageChannel();
 genCh.port1.onmessage = () => { GEN.posted=false; if(!genPend.length || tickHold) return;
   const left = GEN.at + frameIv() - GEN.safe - performance.now();
   const t=performance.now(); genSlice(Math.min(LODCFG.budgetMs, left)); const ms=performance.now()-t; lodStats.gen=ms; flGen(ms); };
-function scheduleGen(now){ if(!genPend.length || GEN.posted) return; GEN.at=now; GEN.posted=true; genCh.port2.postMessage(0); }
+// the frame's start: its rAF time, or when its work began if later (a slow compositor's rAF time can lag far behind)
+function scheduleGen(now, began){ if(!genPend.length || GEN.posted) return; GEN.at=Math.max(now, began); GEN.posted=true; genCh.port2.postMessage(0); }
 function genSlice(budget){
   const t0=performance.now(); let ran=0;
   for(const q of genPend){
@@ -3576,12 +3581,12 @@ const BENCH_PATH = [   // the test city's streets run along x = 80k + 40 and z =
   ['Street, pan', 6, u=>[200-u*160, 48, 60, 0.2, Math.PI/2]],
   ['Close up, pan', 6, u=>[40, 48+u*120, 30, 0.15, 0]],
 ];
-const BENCH_SWEEP = [   // the city orbit with its LODs ready; q: quality changes, bias: LOD bias
+const BENCH_SWEEP = [   // the city view swaying, its LODs built; q: quality changes, bias: LOD bias
   ['As set', {}], ['Shadow map every frame', {q:{shadowCache:false}}], ['No shadows', {q:{shadows:false}}],
   ['Resolution 50%', {q:{scale:0.5}}], ['LOD detail 50%', {bias:0.5}], ['Shadow 1024, every frame', {q:{shadowSize:1024, shadowCache:false}}],
   ['Discard in every shader', {q:{nd:false}}],
 ];
-const SWEEP_CAM = BENCH_PATH[2][2];
+const SWEEP_CAM = u=>[120, 48, 180, 0.45, BENCH_YAW+3.0+0.25*Math.sin(u*2*Math.PI)];   // a slow sway the warm-up covers whole, so its LODs are built
 function benchCam([x,z,dist,pitch,yaw]){ camEdit.target.set(x,0,z); camEdit.dist=dist; camEdit.pitch=pitch; camEdit.yaw=yaw; }
 function* benchFrames(ms, until){ let t0=null; for(;;){ const now=yield; if(t0===null) t0=now; if(now-t0>=ms || (until && until())) return now-t0; } }
 function* benchPart(label, sec, cam){ let t0=null; const a=FL.n; for(;;){ const now=yield; if(t0===null) t0=now; const u=(now-t0)/(sec*1000);
@@ -3596,7 +3601,9 @@ function* benchRun(){
     yield* benchFrames(1000);
     const head=benchHead(tPrep);
     for(const [name, sec, cam] of BENCH_PATH) res.push([name, yield* benchPart(name, sec, cam)]);
-    msg('Warming up'); yield* benchPart('Warming up', 6, SWEEP_CAM);
+    // warm up on the sway until nothing has been waiting to build for a second (20 s at most, for slow devices)
+    { let calm=0, t0=null; for(;;){ const now=yield; if(t0===null) t0=now; const u=((now-t0)/5000)%1; benchCam(SWEEP_CAM(u));
+        calm = lodStats.queue ? 0 : calm+1; msg(`Warming up · ${lodStats.queue} LODs to build`); if((calm>=60 && now-t0>5000) || now-t0>20000) break; } }
     for(const [name, c] of BENCH_SWEEP){
       Object.assign(QUAL, keep.q, c.q||{}); LODCFG.bias=c.bias ?? keep.bias; applyDpr(); setShadows(QUAL.shadows, QUAL.shadowSize);
       benchCam(SWEEP_CAM(0)); msg(name+' · warming up'); yield* benchFrames(1200);
@@ -3619,7 +3626,7 @@ function benchText(head, res, sweep){
   const row=(name,S)=>S ? name.padEnd(26)+pad(num(S.fps),5)+pad(num(S.p50),6)+pad(num(S.p95),6)+pad(num(S.p99),6)+pad(num(S.max,0),5)+pad((S.slow*100).toFixed(0)+'%',5)+pad(num(S.js),6)+pad(num(S.js95),6)+pad(num(S.gen),6)+pad(num(S.rnd),6)+pad(S.calls.toFixed(0),6)+pad(fmtN(S.tris),7)+pad((S.sh*100).toFixed(0)+'%',5) : name.padEnd(26)+' (no frames)';
   const cols='part'.padEnd(26)+'  fps   p50   p95   p99  max slow    JS JSp95 build  rndr draws   tris  shdw';
   return [...head, '', 'ms per frame; slow: frames over 20 ms; JS: main thread in the frame; build: LOD building after it; shdw: frames that drew the shadow map', '',
-    cols, ...res.map(([n,S])=>row(n,S)), '', 'City orbit with LODs ready, by setting:', cols, ...sweep.map(([n,S])=>row(n,S))].join('\n');
+    cols, ...res.map(([n,S])=>row(n,S)), '', 'City view swaying, LODs built, by setting:', cols, ...sweep.map(([n,S])=>row(n,S))].join('\n');
 }
 function benchStart(){
   if(bench) return; if(ui.mode!=='edit') exitPlay(); openPerf(false); closeModal();
@@ -3665,7 +3672,7 @@ function tick(now){
   renderer.render(scene,camera);
   const te=performance.now();
   flPush(fdt, te-tf, tr-tl, te-tr, sh); perfTick(now); hudTick(now);
-  scheduleGen(now);   // LOD building runs after this frame is handed over
+  scheduleGen(now, tf);   // LOD building runs after this frame is handed over
   requestAnimationFrame(tick);
 }
 
@@ -3686,7 +3693,7 @@ window.__sb = { roofParts:(i,k)=>{ const b=state.buildings[i]; const R = k==null
     DEBUG_SOLIDS=false; return out; },
   nb:()=>state.buildings.length, bench:(i=0,lod=0)=>{ const b=state.buildings[i], r=recOf(b), f=[buildLOD0,buildLOD1,buildLOD2][lod]; const t=performance.now(); for(let k=0;k<10;k++) f(b,r.idx); return (performance.now()-t)/10; },
   lodStats, LODCFG, city:generateCity, clearCity, recs, cells, openPerf, renderer, QUAL, benchStart, get benchReport(){ return benchReport; }, get benching(){ return !!bench; }, flSum,
-  lodDbg:()=>({fading:[...recs.values()].filter(r=>r.t<1).map(r=>r.id+':'+r.from+'>'+r.disp).slice(0,8), n:lodStats.n.join('/'), q:lodStats.queue, jobs:jobs.size, frames:FL.n}),   // harnesses wait on this until the LODs settle
+  gen:GEN, lodDbg:()=>({fading:[...recs.values()].filter(r=>r.t<1).map(r=>r.id+':'+r.from+'>'+r.disp).slice(0,8), n:lodStats.n.join('/'), q:lodStats.queue, jobs:jobs.size, frames:FL.n}),   // harnesses wait on this until the LODs settle
   timeLOD:(n=20)=>{ const b=LODCFG.budgetMs; LODCFG.budgetMs=-1; const t=performance.now(); for(let i=0;i<n;i++) updateLOD(0, null); LODCFG.budgetMs=b; return (performance.now()-t)/n; },
   memBytes:()=>{ let by=0, m=0; scene.traverse(o=>{ if(o.isMesh && o.geometry){ m++; for(const a of Object.values(o.geometry.attributes)) by+=a.array.byteLength; if(o.geometry.index) by+=o.geometry.index.array.byteLength; } }); return {meshes:m, MB:+(by/1048576).toFixed(1)}; },
   timeCells:()=>{ const t=performance.now(); let n=0; for(const c of cells.values()){ c.dirty=true; rebuildCell(c); n++; } return {cells:n, msPerCell:+((performance.now()-t)/Math.max(1,n)).toFixed(3)}; },
