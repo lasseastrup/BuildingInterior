@@ -1,0 +1,1 @@
+void MainLight_float(float3 p, out float3 direction, out float3 color, out float distanceAtten, out float shadowAtten) { Light l = GetMainLight(); direction = l.direction; color = l.color; distanceAtten = 1; shadowAtten = 1; }

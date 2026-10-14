@@ -8,7 +8,10 @@ Shader "Storey/Massing"
     }
     SubShader
     {
-        Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "Queue" = "Geometry" }
+        // AlphaTest: this variant can discard (cross-fades, cutaway, occluders). The steady copies (STOREY_STEADY, no discard) draw
+        // at Geometry (SiteRenderer.SteadyCopy), so every opaque draw comes before every discarding one, as Apple's GPUs want
+        // (docs/PERFORMANCE.md §7.6)
+        Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "Queue" = "AlphaTest" }
         Cull Off
 
         HLSLINCLUDE

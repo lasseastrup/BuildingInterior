@@ -30,6 +30,10 @@ dotnet test unity/Headless/Triband.Storey.Tests
 # Run without --check to write the missing ones (GUIDs derive from the path).
 python3 unity/tools/meta.py --check
 
+# The shaders, every pass and steady variant, compiled with Slang against stubs of the
+# URP functions they call (unity/tools/shaders/stubs): Storey's HLSL, not URP's.
+pip install slangpy==0.43.1 && python3 unity/tools/shaders/check.py
+
 # Reference answers, from the implementation that works (needs npm; ~2 min headless).
 cd prototype/tools && npm install && npm run fixtures
 ```
@@ -59,6 +63,7 @@ unity/
     Triband.Storey.Tests/           xunit: fixtures, layout rules, smoke tests
   Fixtures/                         reference answers emitted by the prototype (workstream 1)
   tools/meta.py                     .meta generator
+  tools/shaders/                    shader compile check (Slang, URP stubs)
   Assets/, ProjectSettings/         the Unity project, for when a scene is wanted
 ```
 

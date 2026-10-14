@@ -8,7 +8,8 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
 {
     UNITY_SETUP_INSTANCE_ID(IN);
     bool isFront = IS_FRONT_VFACE(cullFace, true, false);
-    float dark = StoreyOcclude(StoreyUnpack(IN), IN.positionCS.xy, IN.positionCS.z);
+    StoreyVarying v = StoreyUnpack(IN);
+    float dark = StoreyOcclude(v, IN.positionCS.xy, IN.positionCS.z);
 
     StoreySurface s;
 #ifdef STOREY_MASSING
@@ -18,8 +19,8 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     s.albedo = IN.color.rgb;
     s.alpha = _StoreyAlpha;
 #endif
-    if (_StoreyLodTint > 0.5) s.albedo = lerp(s.albedo, StoreyLodTint(IN.misc.w), 0.65);
-    if (_StoreyIso.x > 0.001 && abs(IN.misc.z - _StoreyIso.y) > 0.5) s.albedo = lerp(s.albedo, float3(0.78, 0.82, 0.83), _StoreyIso.x * 0.7);
+    if (_StoreyLodTint > 0.5) s.albedo = lerp(s.albedo, StoreyLodTint(v.lod), 0.65);
+    if (_StoreyIso.x > 0.001 && abs(v.bid - _StoreyIso.y) > 0.5) s.albedo = lerp(s.albedo, float3(0.78, 0.82, 0.83), _StoreyIso.x * 0.7);
     s.positionWS = IN.worldPos;
     s.normalWS = normalize(isFront ? IN.normalWS : -IN.normalWS);
     s.shadowCoord = IN.shadowCoord;
@@ -31,7 +32,7 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     if (_StoreyWindowsOn > 0.5)
     {
     #ifdef STOREY_MASSING
-        float2 wuv; float id; float onPane = StoreyFacadeWindow(IN.fac, IN.fac2.xy, IN.fac2.z, s.positionWS, IN.occ.z, s.normalWS, wuv, id);
+        float2 wuv; float id; float onPane = StoreyFacadeWindow(IN.fac, IN.fac2.xy, IN.fac2.z, s.positionWS, v.origY, s.normalWS, wuv, id);
     #else
         float2 wuv = IN.win.xy; float id = IN.win.w; float onPane = IN.win.z;
     #endif
@@ -40,7 +41,7 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     }
   #ifndef STOREY_MASSING
     // LOD1's flat walls: the window's reveal, shaded at the pane's edges (LOD0 models it)
-    if (IN.misc.w > 0.5 && IN.win.z > 0.5 && isFront) color.rgb *= StoreyRevealShade(IN.win.xy);
+    if (v.lod > 0.5 && IN.win.z > 0.5 && isFront) color.rgb *= StoreyRevealShade(IN.win.xy);
   #endif
 #elif !defined(STOREY_DEPTH)
     // LOD0's see-through glass: where LOD0 has just taken over it is LOD1's pane (the painted room, opaque), and it clears

@@ -100,7 +100,9 @@ namespace Triband.Storey.Unity
             if (m.shader == null) return null;
             kw = m.shader.keywordSpace.FindKeyword("STOREY_STEADY");
             if (!kw.isValid) return null;
-            var c = new Material(m) { name = m.name + " (steady)", hideFlags = HideFlags.HideAndDontSave };
+            // the shaders sit in the AlphaTest queue for their discarding variant; the steady copy draws with the opaque
+            // geometry before it (docs/PERFORMANCE.md §7.6)
+            var c = new Material(m) { name = m.name + " (steady)", hideFlags = HideFlags.HideAndDontSave, renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry };
             c.SetKeyword(kw, true);
             return c;
         }
@@ -119,8 +121,9 @@ namespace Triband.Storey.Unity
             if (!Application.isPlaying || Time.frameCount - steadySynced >= 30)
             {
                 steadySynced = Time.frameCount;
-                if (opaqueSteady != null) { opaqueSteady.CopyMatchingPropertiesFromMaterial(opaque); opaqueSteady.SetKeyword(opaqueKw, true); }
-                if (massingSteady != null) { massingSteady.CopyMatchingPropertiesFromMaterial(massing); massingSteady.SetKeyword(massingKw, true); }
+                const int geometry = (int)UnityEngine.Rendering.RenderQueue.Geometry;
+                if (opaqueSteady != null) { opaqueSteady.CopyMatchingPropertiesFromMaterial(opaque); opaqueSteady.SetKeyword(opaqueKw, true); opaqueSteady.renderQueue = geometry; }
+                if (massingSteady != null) { massingSteady.CopyMatchingPropertiesFromMaterial(massing); massingSteady.SetKeyword(massingKw, true); massingSteady.renderQueue = geometry; }
             }
             int active = StoreyGlobals.ActiveIndex, isolated = StoreyGlobals.IsolatedIndex; float iso = StoreyGlobals.IsolateAmount;
             bool farOcc = lods?.Settings.FarOcclusion ?? true;

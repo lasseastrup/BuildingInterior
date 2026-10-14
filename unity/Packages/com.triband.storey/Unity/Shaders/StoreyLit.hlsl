@@ -53,21 +53,38 @@ struct Attributes
     UNITY_VERTEX_INPUT_INSTANCE_ID   // the GPU Resident Drawer draws through instancing: the object's matrix comes from its instance
 };
 
+// What each pass and variant hands its fragment stage, and nothing more (docs/PERFORMANCE.md §7.2): a tile-based GPU
+// writes every vertex output to memory between the two stages. The depth and shadow passes carry the position and,
+// unless steady, the five values the cross-fade, isolate and Dissolve tests read; the colour pass leaves out the
+// cutaway's and the occluders' values when steady, and the massing has no vertex colour or pane.
 struct Varyings
 {
     float4 positionCS : SV_POSITION;
+#ifdef STOREY_DEPTH
+#ifndef STOREY_STEADY
+    float4 occ        : TEXCOORD4;   // fade, occ slot, origY, kind
+    float  bid        : TEXCOORD3;   // building index
+#endif
+#else
     float3 normalWS   : TEXCOORD0;
+#ifndef STOREY_MASSING
     float4 color      : TEXCOORD1;
+    float4 win        : TEXCOORD9;   // a window pane: u, v across and up it, 1 on a pane, its number (LOD0/LOD1)
+#endif
+#ifdef STOREY_STEADY
+    float2 misc       : TEXCOORD3;   // bid, lod
+#else
+    float4 misc       : TEXCOORD3;   // bid, lod, kind, wid
     float4 wall       : TEXCOORD2;
-    float4 misc       : TEXCOORD3;   // kind, wid, bid, lod
     float4 occ        : TEXCOORD4;   // fade, occ slot, origY, unused
+#endif
     float3 worldPos   : TEXCOORD5;
 #ifdef STOREY_MASSING
     float4 fac        : TEXCOORD6;
     float4 fac2       : TEXCOORD7;   // fac2.xy, slot
 #endif
     float4 shadowCoord : TEXCOORD8;
-    float4 win        : TEXCOORD9;   // a window pane: u, v across and up it, 1 on a pane (LOD0/LOD1)
+#endif
     UNITY_VERTEX_INPUT_INSTANCE_ID
     UNITY_VERTEX_OUTPUT_STEREO
 };
@@ -79,26 +96,36 @@ Varyings StoreyVert(Attributes IN)
     UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(OUT);
     float3 worldPos = TransformObjectToWorld(IN.positionOS);
-    float3 worldPos0 = worldPos;
 #ifdef STOREY_MASSING
     float kind = 0.0; float4 wall = 0; float wid = 0;
 #else
-    // the wall's data by its id: one entry per wall, not 16 bytes on every vertex
     float kind = IN.kind.x, wid = IN.kind.y;
+#if defined(STOREY_DEPTH) || defined(STOREY_STEADY)
+    float4 wall = 0;   // only the colour pass's cutaway reads a wall's data
+#else
+    // the wall's data by its id: one entry per wall, not 16 bytes on every vertex
     float4 wall = wid > 0.5 ? _StoreyWallData[(int)(wid + 0.5)] : float4(0, 0, 0, 0);
+#endif
 #endif
     float origY;
     worldPos = StoreySink(worldPos, IN.tag, kind, origY);
     StoreyVarying v;
     bool shown = StoreyVertex(IN.tag, wall, kind, wid, worldPos, origY, v);
-    OUT.normalWS = TransformObjectToWorldNormal(IN.normalOS.xyz);
+    float3 normalWS = TransformObjectToWorldNormal(IN.normalOS.xyz);
 #ifdef STOREY_SHADOW
-    OUT.positionCS = TransformWorldToHClip(ApplyShadowBias(worldPos, OUT.normalWS, _LightDirection));
+    OUT.positionCS = TransformWorldToHClip(ApplyShadowBias(worldPos, normalWS, _LightDirection));
 #else
     OUT.positionCS = TransformWorldToHClip(worldPos);
 #endif
     if (!shown) OUT.positionCS = float4(2.0, 2.0, 2.0, 1.0);   // LOD not shown: clip the whole triangle
-#if !defined(STOREY_MASSING) && !defined(STOREY_DEPTH)
+#ifdef STOREY_DEPTH
+#ifndef STOREY_STEADY
+    OUT.occ = float4(v.fade, v.occ, origY, kind);
+    OUT.bid = v.bid;
+#endif
+#else
+    OUT.normalWS = normalWS;
+#ifndef STOREY_MASSING
     // a window pane carries its place on the pane (the shade byte and the normal's fourth byte) and the window's number
     // (the slot byte) instead (MeshUpload); its slot is the glass's, its shade the opaque glass's (or, for LOD0's
     // see-through panes, the glass's own)
@@ -112,23 +139,40 @@ Varyings StoreyVert(Attributes IN)
     OUT.color = float4(pane ? StoreyPaletteColor(ce.x | (ce.y << 8), 6u, paneTone) : StoreyVertexColor(IN.color), 1.0);   // a face's vertices share one swatch: exact per vertex
     OUT.win = pane ? float4(IN.color.a, (IN.normalOS.w * 127.0 - 1.0) / 126.0, 1.0, (float)ce.z) : float4(0, 0, 0, 0);
 #endif
+#ifdef STOREY_STEADY
+    OUT.misc = float2(v.bid, v.lod);
+#else
+    OUT.misc = float4(v.bid, v.lod, kind, wid);
     OUT.wall = wall;
-    OUT.misc = float4(kind, wid, v.bid, v.lod);
     OUT.occ = float4(v.fade, v.occ, origY, 0);
+#endif
     OUT.worldPos = worldPos;
 #ifdef STOREY_MASSING
     OUT.fac = IN.wall;
     OUT.fac2 = float4(IN.kind, IN.wid, 0);
 #endif
     OUT.shadowCoord = TransformWorldToShadowCoord(worldPos);
+#endif
     return OUT;
 }
 
+// The varyings as StoreyOcclude and the fragment stage read them. A value a variant doesn't carry reads as a steady
+// building's: solid (fade 3), not in the way (occ -1), no Sink (origY is the height).
 StoreyVarying StoreyUnpack(Varyings IN)
 {
-    StoreyVarying v;
-    v.worldPos = IN.worldPos; v.wall = IN.wall; v.kind = IN.misc.x; v.wid = IN.misc.y; v.bid = IN.misc.z; v.lod = IN.misc.w;
+    StoreyVarying v = (StoreyVarying)0;
+    v.fade = 3.0; v.occ = -1.0;
+#ifdef STOREY_DEPTH
+#ifndef STOREY_STEADY
+    v.fade = IN.occ.x; v.occ = IN.occ.y; v.origY = IN.occ.z; v.kind = IN.occ.w; v.bid = IN.bid;
+#endif
+#else
+    v.worldPos = IN.worldPos; v.origY = IN.worldPos.y; v.bid = IN.misc.x; v.lod = IN.misc.y;
+#ifndef STOREY_STEADY
+    v.kind = IN.misc.z; v.wid = IN.misc.w; v.wall = IN.wall;
     v.fade = IN.occ.x; v.occ = IN.occ.y; v.origY = IN.occ.z;
+#endif
+#endif
     return v;
 }
 

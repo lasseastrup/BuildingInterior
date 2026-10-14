@@ -60,6 +60,8 @@ Effort: S under a day, M a few days, L a week or more. Impact as estimated in ea
 
 The roadmap (§15) orders everything else.
 
+Done since: #5 (§7.6), and #6's per-variant vertex outputs (§7.2; §7.3's shadow coordinate and SH are still open). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
+
 ## 1. Scope and method
 
 - **In scope**: everything that runs in a player. That is the runtime package (`Runtime/` engine-free, `Unity/`, shaders), the Color Pipeline bridge, and the play kit (sample-grade, but it is what PLAY.md §5.5's iPhone test measures). The authoring package is editor-only and is not covered, except where it decides what ships (artist meshes, §11.2).
@@ -364,6 +366,8 @@ On Apple's GPUs the transformed vertices and their outputs are stored in the til
 
 Recommendation: per-pass `Varyings` (a lean depth/shadow vertex function that outputs only the position, plus the five scalars the non-steady dither and Dissolve need), `#if !defined(STOREY_STEADY)` around the cutaway outputs, and `half` for colour, normal and window uv. Skip the `_StoreyWallData` read when the variant can't use it. Effort: M.
 
+Done (all but `half`): `Varyings` (`StoreyLit.hlsl`) now carries, per pass and variant, only what its fragment stage reads. Steady depth and shadow passes output the position alone (4 floats, from 34 on Opaque and 42 on Massing); non-steady ones the position and five scalars (9). The steady colour pass drops the cutaway's and occluders' values (24 floats on both shaders, from 34 and 42), the massing never carries the vertex colour or pane, and the `_StoreyWallData` read happens only in the non-steady colour pass. The prototype's materials follow the same split.
+
 ### 7.3 Shadow coordinates and spherical harmonics
 
 - `OUT.shadowCoord = TransformWorldToShadowCoord(worldPos)` runs in the vertex stage of every pass (`StoreyLit.hlsl:123`), the depth and shadow passes included, and is interpolated. URP interpolates it only for a single cascade or screen-space shadows (`REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR`). With cascades it computes it per pixel, because a per-vertex cascade index is wrong across a large triangle such as a massing wall, a slab or a roof [R7]. Follow URP's pattern, and never compute it in the depth passes. Correctness first, a little vertex work second.
@@ -396,6 +400,8 @@ These run only for the few buildings being cut, faded or in the way, but those a
 Apple's rule for its GPUs: draw opaque first, then anything with `discard` or depth output, then translucent, and don't interleave opaque and discarding meshes. Any discard turns that draw's fragments into feedback fragments that hidden-surface removal has to wait for [R6]. URP doesn't sort opaques front to back on GPUs with hidden-surface removal; it keeps the render queue and otherwise orders for state changes [R6]. Storey's Opaque and Massing shaders are both `"Queue" = "Geometry"`, and the steady copies inherit it, so the few discarding buildings (cross-fading, cut, in the way) are mixed in among the steady ones.
 
 Fix: put the discard-capable materials in the AlphaTest queue (2450) and set the steady copies' `renderQueue` back to Geometry (2000) in `SiteRenderer.SteadyCopy`. All steady draws then go first. One line each. On desktop GPUs it costs nothing, and opaque before alpha-tested is the conventional order there too.
+
+Done: both shaders (and the Color Palette Lit sample's) queue at AlphaTest, the steady copies at Geometry, checked by `SteadyTests.SteadyDrawsComeBeforeDiscardingOnes`.
 
 ### 7.7 Glass and the rooms behind it (medium)
 

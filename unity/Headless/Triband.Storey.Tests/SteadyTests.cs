@@ -75,5 +75,18 @@ namespace Triband.Storey.Tests
                 Assert.True(passes == 3 && variants == passes, $"{name}: {variants} steady variants for {passes} passes");
             }
         }
+
+        [Fact]
+        public void SteadyDrawsComeBeforeDiscardingOnes()
+        {
+            // docs/PERFORMANCE.md §7.6: the shaders (the package's and the Color Palette Lit sample's) queue at AlphaTest for
+            // their discarding variant, and the steady copies draw at Geometry, so no opaque draw follows a discarding one
+            var package = Path.GetDirectoryName(Shaders)!;
+            foreach (var dir in new[] { Shaders, Path.Combine(Path.GetDirectoryName(package)!, "Samples~", "ColorPaletteLit") })
+                foreach (var name in new[] { "StoreyOpaque.shader", "StoreyMassing.shader" })
+                    Assert.Matches(new Regex("Tags\\s*\\{[^}]*\"Queue\"\\s*=\\s*\"AlphaTest\""), File.ReadAllText(Path.Combine(dir, name)));
+            var renderer = File.ReadAllText(Path.Combine(package, "Rendering", "SiteRenderer.cs"));
+            Assert.Equal(3, Regex.Matches(renderer, @"renderQueue = (\(int\)UnityEngine\.Rendering\.RenderQueue\.Geometry|geometry)").Count);
+        }
     }
 }

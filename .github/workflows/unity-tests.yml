@@ -20,3 +20,10 @@ jobs:
         run: python3 unity/tools/meta.py --check
       - name: Headless tests (behaviour, stub compile, package layout)
         run: dotnet test unity/Headless/Triband.Storey.Tests --logger "console;verbosity=normal"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: The shaders compile (Storey's HLSL against URP stubs, with Slang)
+        run: |
+          pip install slangpy==0.43.1
+          python3 unity/tools/shaders/check.py
