@@ -60,7 +60,22 @@ namespace UnityEngine
     public sealed class ExecuteAlways : System.Attribute { }
 
 
-    public static class Time { public static float deltaTime => 0; public static float realtimeSinceStartup => 0; public static int frameCount => 0; }
+    public static class Time { public static float deltaTime => 0; public static float unscaledDeltaTime => 0; public static float realtimeSinceStartup => 0; public static double realtimeSinceStartupAsDouble => 0; public static int frameCount => 0; }
+
+    public struct FrameTiming { public double cpuFrameTime, cpuMainThreadFrameTime, cpuRenderThreadFrameTime, cpuMainThreadPresentWaitTime, gpuFrameTime; }
+
+    public static class FrameTimingManager
+    {
+        public static bool IsFeatureEnabled() => false;
+        public static void CaptureFrameTimings() { }
+        public static uint GetLatestTimings(uint numFrames, FrameTiming[] timings) => 0;
+    }
+
+    public static class ScalableBufferManager
+    {
+        public static float widthScaleFactor => 1; public static float heightScaleFactor => 1;
+        public static void ResizeBuffers(float widthScale, float heightScale) { }
+    }
 
     public enum RuntimePlatform { OSXEditor = 0, WindowsEditor = 7, IPhonePlayer = 8, Android = 11, LinuxEditor = 16, WebGLPlayer = 17 }
 
@@ -69,6 +84,7 @@ namespace UnityEngine
         public static RuntimePlatform platform => RuntimePlatform.LinuxEditor;
         public static bool isPlaying => false;
         public static bool isMobilePlatform => false;
+        public static int targetFrameRate { get => -1; set { } }
         public static event System.Action quitting { add { } remove { } }
     }
 
@@ -250,6 +266,7 @@ namespace UnityEngine
         public float orthographicSize { get => 5; set { } }
         public int pixelHeight => 0;
         public float aspect { get => 1; set { } }
+        public bool allowDynamicResolution { get => false; set { } }
     }
 
     public sealed class GUIContent

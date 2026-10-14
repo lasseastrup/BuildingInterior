@@ -446,6 +446,8 @@ Every LOD0, LOD1 and cell renderer casts shadows (`ShadowCastingMode.On`: `SiteR
   - HDR format;
   - additional-light limits.
 
+Done since: auto resolution. **Storey Auto Resolution** (`StoreyAutoResolution`) is the prototype's, which held its city views on an iPhone at 60 fps by drawing them at 60–80 % of the screen's resolution, where full resolution drew 53: Unity's dynamic resolution (`ScalableBufferManager` and the camera's Allow Dynamic Resolution, from which URP 17.3 draws into an intermediate texture by itself), stepped between full and half resolution by `Lod.AutoResolution` with the prototype's rules. With Frame Timing Stats on, a frame is late when the GPU took longer than the frame rate's interval, and a step up waits until the GPU's time says it fits; without, it goes by frames over a fifth of an interval late, whatever made them late. It needs a platform with dynamic resolution (Metal, Vulkan, DirectX 12, consoles); elsewhere render scale or STP stay the lever.
+
 ### 7.11 Small triangles
 
 At the far end of LOD0's range (58 m at 1080p, 16 px/m), a 5 cm window-frame bar is under a pixel wide. Thin triangles shade whole 2×2 quads for one or two covered pixels, so the fragment cost per visible pixel rises. LOD0 px/m is already a tier setting. Measure quad efficiency (Xcode's GPU counters, RenderDoc's quad overdraw) before changing it.

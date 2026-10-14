@@ -165,7 +165,7 @@ What the research settled (Unity 6.3 LTS is the current LTS; 6.4–6.6 add WebGP
 
 The primary column is the prototype's measured numbers (SPEC §6.6) taken as ceilings and applies unchanged to iPhone 14 and newer (an A15 at 2532×1170 has more fill rate per pixel than the prototype's desktop test needs). The iPhone 7 column is a starting estimate to be replaced by measurements in workstream 5 (the first device run establishes the real numbers, then the performance tests enforce them per tier). Because the iPhone 7 has little fill rate, the alpha-clip discard in the near materials and the Fade/Cutout modes at LOD2 are the two things most likely to blow its GPU budget; both are quality settings the minimum tier turns off, and the primary tier keeps.
 
-**Rule for the minimum tier:** if the iPhone 7 cannot reach 30 fps with the quality settings alone, the answer is a further setting (smaller radii, fewer resident LOD0 buildings, dynamic resolution), never a change to the content or to the primary tier's defaults.
+**Rule for the minimum tier:** if the iPhone 7 cannot reach 30 fps with the quality settings alone, the answer is a further setting (smaller radii, fewer resident LOD0 buildings, dynamic resolution: **Storey Auto Resolution**), never a change to the content or to the primary tier's defaults.
 
 ## 7. Testing and CI
 
