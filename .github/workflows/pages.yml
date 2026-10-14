@@ -27,8 +27,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # package.json pins them; prototype/tools keeps no lockfile (its .gitignore), and build.mjs checks the versions
       - name: The page's libraries, in the versions it names
-        run: npm ci
+        run: npm install --no-audit --no-fund
         working-directory: prototype/tools
       - name: Build the site
         run: node prototype/web/build.mjs _site

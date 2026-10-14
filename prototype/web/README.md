@@ -38,7 +38,7 @@ manifest (the 512 also as its maskable icon: the mark is inside the middle 80%),
 ## Checking it locally
 
 ```bash
-(cd prototype/tools && npm ci)
+(cd prototype/tools && npm install)
 node prototype/web/build.mjs /tmp/site/BuildingInterior
 python3 -m http.server -d /tmp/site 8000      # then http://localhost:8000/BuildingInterior/
 ```

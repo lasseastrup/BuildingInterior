@@ -3,7 +3,7 @@
 // three.js and polygon-clipping served by the site itself, in the versions the page names, instead of from jsDelivr.
 // prototype/index.html itself is left as it is.
 //
-//   node prototype/web/build.mjs [out]     (out: _site; needs prototype/tools' node_modules: npm ci there)
+//   node prototype/web/build.mjs [out]     (out: _site; needs prototype/tools' node_modules: npm install there)
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
