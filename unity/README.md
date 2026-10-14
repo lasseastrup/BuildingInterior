@@ -30,8 +30,9 @@ dotnet test unity/Headless/Triband.Storey.Tests
 # Run without --check to write the missing ones (GUIDs derive from the path).
 python3 unity/tools/meta.py --check
 
-# The shaders, every pass and steady variant, compiled with Slang against stubs of the
-# URP functions they call (unity/tools/shaders/stubs): Storey's HLSL, not URP's.
+# The shaders, every pass with each of Storey's keywords and each main-light shadow mode,
+# compiled with Slang against stubs of the URP functions they call
+# (unity/tools/shaders/stubs): Storey's HLSL, not URP's.
 pip install slangpy==0.43.1 && python3 unity/tools/shaders/check.py
 
 # Reference answers, from the implementation that works (needs npm; ~2 min headless).

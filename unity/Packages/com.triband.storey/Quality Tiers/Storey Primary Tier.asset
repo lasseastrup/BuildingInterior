@@ -27,3 +27,4 @@ MonoBehaviour:
   buildThreads: 0
   meshChunksKeptMB: 16
   occlusionOnFarMaterials: 1
+  specularAndReflections: 1

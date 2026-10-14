@@ -60,7 +60,7 @@ Effort: S under a day, M a few days, L a week or more. Impact as estimated in ea
 
 The roadmap (§15) orders everything else.
 
-Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2; §7.3's shadow coordinate and SH are still open), shadow proxies (§7.8), and #8's priority for detail in view (§9.2). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
+Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), and #8's priority for detail in view (§9.2). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
 
 ## 1. Scope and method
 
@@ -373,6 +373,8 @@ Done (all but `half`): `Varyings` (`StoreyLit.hlsl`) now carries, per pass and v
 - `OUT.shadowCoord = TransformWorldToShadowCoord(worldPos)` runs in the vertex stage of every pass (`StoreyLit.hlsl:123`), the depth and shadow passes included, and is interpolated. URP interpolates it only for a single cascade or screen-space shadows (`REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR`). With cascades it computes it per pixel, because a per-vertex cascade index is wrong across a large triangle such as a massing wall, a slab or a roof [R7]. Follow URP's pattern, and never compute it in the depth passes. Correctness first, a little vertex work second.
 - `SampleSH(s.normalWS)` per pixel (`StoreyLit.hlsl:168`). URP's own shaders evaluate SH per vertex on mobile by default (the asset's SH Evaluation Mode, Auto; `EVALUATE_SH_VERTEX`/`EVALUATE_SH_MIXED`) [R7], and Storey's shader bypasses that setting. Every Storey face is flat, so the per-vertex value is exact anyway: evaluate it in the vertex stage and pass a `half3`. That saves tens of ALU instructions on every lit pixel.
 - Smoothness 0.14 and metallic 0 on Opaque, 0.1 on Massing, still run URP's full PBR: GGX specular per light and a reflection-probe sample per pixel. Defining `_ENVIRONMENTREFLECTIONS_OFF` (probe sampling replaced by a constant colour) and `_SPECULARHIGHLIGHTS_OFF` [R7] for Opaque and Massing on the minimum tier (glass keeps both) removes a cube-map fetch and the specular term. That is a quality-tier keyword, not a content change.
+
+Done: the shadow coordinate and the minimum tier's lighting. The colour passes take the shadow coordinate as URP's Lit does: interpolated (`GetShadowCoord`) only where URP defines `REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR` (one cascade, or screen-space shadows, where it is the screen position before the divide), the pixel's own with cascades, and the glass defines `_SURFACE_TYPE_TRANSPARENT` so that it reads the shadow map rather than the screen-space shadows of what lies behind it. **Specular And Reflections** (`StoreyQualitySettings.specularAndReflections`, off on the minimum tier) sets the global keyword `STOREY_SIMPLE_LIGHTING`, which the opaque and massing colour passes declare and `StoreyLit.hlsl` turns into URP's two keywords before including its lighting. The prototype's touch screens draw with Lambert lighting likewise. SH per vertex is still open: the back faces show the section cap, so the per-vertex value would be exact, but it costs another interpolant against the tens of instructions a pixel it saves, which only a GPU capture on a device can weigh.
 
 ### 7.4 The massing fragment shader re-derives per-quad constants per pixel (high for the overview, medium at street level)
 

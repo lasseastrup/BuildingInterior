@@ -263,6 +263,7 @@ namespace Triband.Storey.Unity
             else if (pending.Count > 0) site.Rebuild(preview, pending);
             pendingAll = false; pending.Clear();
             site.Lod = displayedLod;
+            StoreyGlobals.SetSimpleLighting(quality != null && !quality.specularAndReflections);   // the tier's lighting, with either LOD mode
             if (occApplyFor != Occlusion) { occApplyFor = Occlusion; occApply = Occlusion != null ? Occlusion.Apply : null; }
             site.Occlusion = Application.isPlaying && Occlusion != null && Occlusion.isActiveAndEnabled ? occApply : null;
             var v = ViewSource != null ? (view = ViewSource()) : view;

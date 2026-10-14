@@ -16,6 +16,8 @@ Shader "Storey/Glass"
 
         HLSLINCLUDE
         #define STOREY_GLASS
+        // as URP's transparent Lit: screen-space shadows hold what lies behind the glass, so it reads the shadow map itself
+        #define _SURFACE_TYPE_TRANSPARENT
         ENDHLSL
 
         Pass

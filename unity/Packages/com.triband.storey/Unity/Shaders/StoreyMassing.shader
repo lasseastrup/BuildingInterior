@@ -33,6 +33,7 @@ Shader "Storey/Massing"
             #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
             #pragma multi_compile _ DOTS_INSTANCING_ON
             #pragma multi_compile_local _ STOREY_STEADY
+            #pragma multi_compile_fragment _ STOREY_SIMPLE_LIGHTING
             #include "StoreyLit.hlsl"
             ENDHLSL
         }

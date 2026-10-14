@@ -70,5 +70,20 @@ namespace Triband.Storey.Unity
 
         /// <summary>Debug tint by LOD (0 off, 1 on).</summary>
         public static void SetLodTint(bool on) => Shader.SetGlobalFloat(StoreyShaderIds.LodTint, on ? 1 : 0);
+
+        /// <summary>The global keyword of <see cref="SetSimpleLighting"/>, as the opaque and massing shaders declare it.</summary>
+        public const string SimpleLightingKeyword = "STOREY_SIMPLE_LIGHTING";
+
+        /// <summary>
+        /// Light Storey/Opaque and Storey/Massing without URP's specular term and reflection probe (the minimum tier's
+        /// <see cref="StoreyQualitySettings.specularAndReflections"/> off; docs/PERFORMANCE.md §7.3). A global keyword:
+        /// every site's materials follow the last call. The engine keeps it across a domain reload, so it is compared
+        /// with the engine's state, not a copy here.
+        /// </summary>
+        public static void SetSimpleLighting(bool on)
+        {
+            if (Shader.IsKeywordEnabled(SimpleLightingKeyword) == on) return;
+            if (on) Shader.EnableKeyword(SimpleLightingKeyword); else Shader.DisableKeyword(SimpleLightingKeyword);
+        }
     }
 }

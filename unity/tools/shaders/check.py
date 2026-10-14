@@ -4,12 +4,14 @@
 The shaders under Packages/com.triband.storey/Unity/Shaders (and the Color Palette Lit
 sample's) include URP's ShaderLibrary, which only exists inside a Unity project, so the
 headless suite can't compile them and a mistake in Storey's own HLSL used to surface as
-pink buildings in the editor. This compiles every pass of every .shader file, with and
-without each variant keyword the pass declares with multi_compile_local (STOREY_STEADY),
-with the Slang compiler against stubs/: small stand-ins for the URP functions and macros
-the shaders call, with URP's signatures. It catches what Storey's code gets wrong (a field
-a variant's Varyings doesn't have, a misspelt name, a type mismatch); URP itself, the
-#pragma keywords' other combinations and the platform back ends are still Unity's to check.
+pink buildings in the editor. This compiles every pass of every .shader file without
+keywords, with each of Storey's own keywords the pass declares (STOREY_STEADY,
+STOREY_SIMPLE_LIGHTING) and all of them together, and with each main-light shadow keyword
+it declares (Storey picks its shadow coordinate by them), with the Slang compiler against
+stubs/: small stand-ins for the URP functions and macros the shaders call, with URP's
+signatures. It catches what Storey's code gets wrong (a field a variant's Varyings doesn't
+have, a misspelt name, a type mismatch); URP itself, the #pragma keywords' other
+combinations and the platform back ends are still Unity's to check.
 
     pip install slangpy==0.43.1     # the Slang compiler, no GPU needed
     python3 unity/tools/shaders/check.py [shader directory ...]
@@ -60,9 +62,13 @@ def main(dirs):
                 for p, prog in enumerate(blocks(text, "HLSLPROGRAM", "ENDHLSL")):
                     vert = re.search(r"#pragma\s+vertex\s+(\w+)", prog).group(1)
                     frag = re.search(r"#pragma\s+fragment\s+(\w+)", prog).group(1)
-                    local = re.findall(r"#pragma\s+multi_compile_local\s+_\s+(\w+)", prog)
+                    # Storey's own keywords, each alone and all together, and each main-light shadow keyword the pass
+                    # declares: Storey's code branches on what URP makes of those (the shadow coordinate)
+                    own = re.findall(r"#pragma\s+multi_compile\w*\s+_\s+(STOREY_\w+)", prog)
+                    shadows = [k for k in ("_MAIN_LIGHT_SHADOWS", "_MAIN_LIGHT_SHADOWS_CASCADE", "_MAIN_LIGHT_SHADOWS_SCREEN")
+                               if re.search(r"#pragma\s+multi_compile\w*\s+_\s[^\n]*\b" + k + r"\b", prog)]
                     body = re.sub(r"#pragma[^\n]*", "", prog)
-                    for keys in [[]] + [[k] for k in local]:
+                    for keys in [[]] + [[k] for k in own] + ([own] if len(own) > 1 else []) + [[k] for k in shadows]:
                         entry = (f'[shader("fragment")] float4 __frag(Varyings IN, FRONT_FACE_TYPE f : FRONT_FACE_SEMANTIC) : SV_Target {{ return {frag}(IN, f); }}'
                                  if frag == "StoreyFrag" else f'[shader("fragment")] float4 __frag(Varyings IN) : SV_Target {{ return {frag}(IN); }}')
                         src = "".join(f"#define {k}\n" for k in keys) + shared + body + \

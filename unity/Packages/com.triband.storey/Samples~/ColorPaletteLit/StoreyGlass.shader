@@ -16,6 +16,7 @@ Shader "Flamingo/Storey/Glass"
 
         HLSLINCLUDE
         #define STOREY_GLASS
+        #define _SURFACE_TYPE_TRANSPARENT   // as the graph's transparent target: the shadow map itself, not the screen-space shadows
         #define STOREY_CUSTOM_LIGHTING
         #define STOREY_MATERIAL_PROPERTIES float _StoreyShadowStrength;
         ENDHLSL

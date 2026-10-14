@@ -23,7 +23,15 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     if (_StoreyIso.x > 0.001 && abs(v.bid - _StoreyIso.y) > 0.5) s.albedo = lerp(s.albedo, float3(0.78, 0.82, 0.83), _StoreyIso.x * 0.7);
     s.positionWS = IN.worldPos;
     s.normalWS = normalize(isFront ? IN.normalWS : -IN.normalWS);
+    // the main light's shadow coordinate as URP's Lit takes it: from the vertex with one cascade or screen-space shadows,
+    // the pixel's own with cascades, where a vertex's cascade is wrong across a large face (docs/PERFORMANCE.md §7.3)
+#if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
     s.shadowCoord = IN.shadowCoord;
+#elif defined(MAIN_LIGHT_CALCULATE_SHADOWS)
+    s.shadowCoord = TransformWorldToShadowCoord(s.positionWS);
+#else
+    s.shadowCoord = float4(0, 0, 0, 0);
+#endif
     s.positionCS = IN.positionCS;
     s.isFront = isFront;
 

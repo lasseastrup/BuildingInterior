@@ -11,6 +11,14 @@
 #ifndef STOREY_LIT_INCLUDED
 #define STOREY_LIT_INCLUDED
 
+// The minimum tier's lighting (StoreyQualitySettings.specularAndReflections off, a global keyword the opaque and massing
+// colour passes declare): URP's PBR without the specular term, and a constant colour in place of the reflection probe's
+// cube-map fetch (docs/PERFORMANCE.md §7.3). URP reads both where Lighting.hlsl defines its functions, so before it.
+#ifdef STOREY_SIMPLE_LIGHTING
+#define _SPECULARHIGHLIGHTS_OFF
+#define _ENVIRONMENTREFLECTIONS_OFF
+#endif
+
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "StoreyOcclusion.hlsl"
@@ -83,7 +91,9 @@ struct Varyings
     float4 fac        : TEXCOORD6;
     float4 fac2       : TEXCOORD7;   // fac2.xy, slot
 #endif
-    float4 shadowCoord : TEXCOORD8;
+#if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
+    float4 shadowCoord : TEXCOORD8;   // one cascade or screen-space shadows; with cascades StoreyFrag finds the pixel's
+#endif
 #endif
     UNITY_VERTEX_INPUT_INSTANCE_ID
     UNITY_VERTEX_OUTPUT_STEREO
@@ -151,7 +161,11 @@ Varyings StoreyVert(Attributes IN)
     OUT.fac = IN.wall;
     OUT.fac2 = float4(IN.kind, IN.wid, 0);
 #endif
-    OUT.shadowCoord = TransformWorldToShadowCoord(worldPos);
+#if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
+    VertexPositionInputs inputs = (VertexPositionInputs)0;
+    inputs.positionWS = worldPos; inputs.positionCS = OUT.positionCS;
+    OUT.shadowCoord = GetShadowCoord(inputs);   // URP's: the light's space, or the screen's (before the divide) for screen-space shadows
+#endif
 #endif
     return OUT;
 }
@@ -194,7 +208,7 @@ struct StoreySurface
     float  alpha;
     float3 positionWS;    // after Sink
     float3 normalWS;      // normalised, towards the viewer on back faces
-    float4 shadowCoord;   // main light, from the vertex
+    float4 shadowCoord;   // the main light's, as URP's Lit takes it: from the vertex, or the pixel's with cascades
     float4 positionCS;    // SV_Position: pixel coordinates in xy
     bool   isFront;
 };

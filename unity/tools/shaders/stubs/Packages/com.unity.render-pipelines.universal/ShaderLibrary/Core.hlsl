@@ -16,6 +16,7 @@
 #define FRONT_FACE_TYPE bool
 #define FRONT_FACE_SEMANTIC SV_IsFrontFace
 #define IS_FRONT_VFACE(f, a, b) ((f) ? (a) : (b))
+struct VertexPositionInputs { float3 positionWS; float3 positionVS; float4 positionCS; float4 positionNDC; };
 cbuffer UnityPerDraw { float4x4 unity_ObjectToWorld; float4x4 unity_WorldToObject; };
 cbuffer UnityPerFrame { float4x4 UNITY_MATRIX_VP; float4x4 UNITY_MATRIX_P; float4x4 UNITY_MATRIX_V; float4 _ScreenParams; float3 _WorldSpaceCameraPos; float4 _ProjectionParams; float4 unity_FogColor; };
 float3 TransformObjectToWorld(float3 p) { return mul(unity_ObjectToWorld, float4(p, 1)).xyz; }

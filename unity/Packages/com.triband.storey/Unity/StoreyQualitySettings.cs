@@ -7,15 +7,16 @@ namespace Triband.Storey.Unity
     /// Per-tier quality settings for the package (Plan §6.1, §6.6). One asset per device
     /// tier; a project selects one at startup from the device model. Nothing here changes
     /// content: the same buildings, LODs and occlusion modes exist on every tier, and
-    /// these knobs only trade detail distance, far buildings' occlusion and build speed
-    /// for memory, CPU time and fill rate.
+    /// these knobs only trade detail distance, far buildings' occlusion, specular highlights
+    /// and build speed for memory, CPU time and fill rate.
     /// </summary>
     /// <remarks>
     /// Defaults are the primary tier (desktop and iPhone 14 or newer). The package ships both
     /// tiers as assets (Quality Tiers/): Storey Primary Tier, the defaults, and Storey Minimum
-    /// Tier (iPhone 7), with half the residency, 12 MB of mesh chunks and no occlusion on far
-    /// materials (docs/CITY.md §7). A project picks one, or makes its own, the same kind of
-    /// asset. A change to these defaults needs a primary-tier reason.
+    /// Tier (iPhone 7), with half the residency, 12 MB of mesh chunks, no occlusion on far
+    /// materials (docs/CITY.md §7) and no specular or reflections (docs/PERFORMANCE.md §7.3).
+    /// A project picks one, or makes its own, the same kind of asset. A change to these
+    /// defaults needs a primary-tier reason.
     /// </remarks>
     [CreateAssetMenu(menuName = "Storey/Quality Settings", fileName = "StoreyQualitySettings")]
     public sealed class StoreyQualitySettings : ScriptableObject
@@ -67,6 +68,10 @@ namespace Triband.Storey.Unity
         [Header("Occlusion")]
         [Tooltip("Cut and fade massings (LOD2 and the cells) in the way like near buildings. Off, far geometry always draws without discard (the steady variant), which tile-based GPUs treat as opaque; off on the minimum tier.")]
         public bool occlusionOnFarMaterials = true;
+
+        [Header("Lighting")]
+        [Tooltip("URP's specular highlights and reflection probe on Storey/Opaque and Storey/Massing. Off, they are lit by the diffuse term and the ambient alone, with a constant colour for reflections: no specular term and no cube-map fetch per pixel. The glass keeps both. Off on the minimum tier. One switch for the whole app: the last site to apply its quality sets it for every site.")]
+        public bool specularAndReflections = true;
 
         // No GPU occlusion culling or frame rate here. Unity has no per-renderer switch for GPU occlusion: it is each quality
         // level's Universal Renderer setting. The frame rate is the project's (Application.targetFrameRate), and Storey's own

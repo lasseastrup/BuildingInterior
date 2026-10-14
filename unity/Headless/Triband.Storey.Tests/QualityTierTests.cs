@@ -44,9 +44,37 @@ namespace Triband.Storey.Tests
             Assert.Equal(d.Threads, p["buildOnWorkerThreads"] == "1" && p["buildThreads"] == "0" ? -1 : 0);   // automatic
             Assert.Equal(d.KeepChunkBytes, long.Parse(p["meshChunksKeptMB"]) << 20);
             Assert.Equal(d.FarOcclusion, p["occlusionOnFarMaterials"] == "1");
-            // the minimum tier: half the residency, 12 MB of chunks, no occlusion on far materials, and nothing else
-            Assert.Equal(new[] { "lod0Residency", "lod1Residency", "meshChunksKeptMB", "occlusionOnFarMaterials" }, p.Keys.Where(k => p[k] != m[k]));
-            Assert.Equal(("8", "130", "12", "0"), (m["lod0Residency"], m["lod1Residency"], m["meshChunksKeptMB"], m["occlusionOnFarMaterials"]));
+            Assert.Equal("1", p["specularAndReflections"]);   // URP's full PBR, as a site without a quality asset lights
+            // the minimum tier: half the residency, 12 MB of chunks, no occlusion on far materials, no specular or
+            // reflections, and nothing else
+            Assert.Equal(new[] { "lod0Residency", "lod1Residency", "meshChunksKeptMB", "occlusionOnFarMaterials", "specularAndReflections" }, p.Keys.Where(k => p[k] != m[k]));
+            Assert.Equal(("8", "130", "12", "0", "0"), (m["lod0Residency"], m["lod1Residency"], m["meshChunksKeptMB"], m["occlusionOnFarMaterials"], m["specularAndReflections"]));
+        }
+
+        [Fact]
+        public void SpecularAndReflectionsOffIsAGlobalKeywordThatTurnsURPsOwnOff()
+        {
+            // docs/PERFORMANCE.md §7.3: the site sets the keyword from its quality asset, the opaque and massing colour
+            // passes declare it (the glass keeps its specular), and StoreyLit.hlsl turns it into URP's two keywords before
+            // URP's lighting is included, where URP reads them
+            string Text(params string[] path) => File.ReadAllText(UnityAsset.Package("com.triband.storey", path));
+            var keyword = Regex.Match(Text("Unity", "Rendering", "StoreyGlobals.cs"), @"SimpleLightingKeyword = ""(\w+)""").Groups[1].Value;
+            Assert.Equal("STOREY_SIMPLE_LIGHTING", keyword);
+            Assert.Contains("StoreyGlobals.SetSimpleLighting(quality != null && !quality.specularAndReflections)", Text("Unity", "Rendering", "StoreySite.cs"));
+            foreach (var name in new[] { "StoreyOpaque.shader", "StoreyMassing.shader", "StoreyGlass.shader" })
+            {
+                var passes = Regex.Split(Regex.Replace(Text("Unity", "Shaders", name), @"//[^\n]*", ""), @"\bPass\s*\{").Skip(1).ToList();
+                var with = passes.Where(p => p.Contains($"#pragma multi_compile_fragment _ {keyword}")).ToList();
+                if (name == "StoreyGlass.shader") { Assert.Empty(with); continue; }
+                Assert.Single(with);
+                Assert.Contains("\"LightMode\" = \"UniversalForward\"", with[0]);
+            }
+            var lit = Text("Unity", "Shaders", "StoreyLit.hlsl");
+            int on = lit.IndexOf($"#ifdef {keyword}", System.StringComparison.Ordinal), urp = lit.IndexOf("ShaderLibrary/Lighting.hlsl\"", System.StringComparison.Ordinal);
+            Assert.True(on > 0 && urp > on, "the keyword is read before URP's Lighting.hlsl is included");
+            var block = lit.Substring(on, lit.IndexOf("#endif", on, System.StringComparison.Ordinal) - on);
+            Assert.Contains("#define _SPECULARHIGHLIGHTS_OFF", block);
+            Assert.Contains("#define _ENVIRONMENTREFLECTIONS_OFF", block);
         }
     }
 }

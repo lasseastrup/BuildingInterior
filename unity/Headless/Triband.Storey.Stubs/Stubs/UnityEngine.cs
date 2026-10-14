@@ -382,6 +382,9 @@ namespace UnityEngine
         public static int GetGlobalInt(int nameID) => 0;
         public static float GetGlobalFloat(int nameID) => 0;
         public static void SetGlobalTexture(int nameID, Texture value) { }
+        public static void EnableKeyword(string keyword) { }
+        public static void DisableKeyword(string keyword) { }
+        public static bool IsKeywordEnabled(string keyword) => false;
         public UnityEngine.Rendering.LocalKeywordSpace keywordSpace => default;
     }
 
