@@ -1,0 +1,17 @@
+{
+  "name": "Storey Builder",
+  "short_name": "Storey",
+  "description": "Prototype of a building creation workflow: footprint, facade, floors, interiors, stairs and lifts, and dynamic floor occlusion in play mode.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EEF0EB",
+  "theme_color": "#EEF0EB",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

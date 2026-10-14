@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- the builder's mark (the top bar's), on ink; within the middle 80% circle, so it is also a maskable icon -->
+  <rect width="512" height="512" fill="#1C2320"/>
+  <g transform="translate(256 256) scale(15) translate(-11 -11)" fill="none" stroke="#EEF0EB" stroke-width="2">
+    <rect x="3" y="12" width="16" height="7"/>
+    <rect x="5" y="6" width="12" height="6"/>
+    <rect x="8" y="2" width="6" height="4" fill="#FF7C33" stroke="none"/>
+  </g>
+</svg>

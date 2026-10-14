@@ -1,0 +1,48 @@
+# The builder (prototype/index.html) on GitHub Pages, installable to a phone's home screen: prototype/web/README.md.
+# Once: Settings > Pages > Source: GitHub Actions; and the branch deploying allowed in Settings > Environments >
+# github-pages, if it isn't the default branch.
+name: Builder on GitHub Pages
+
+on:
+  push:
+    branches: ['claude/amazing-thompson-dgsbo8', 'claude/building-creation-prototype-1n1ge1']
+    paths: ['prototype/index.html', 'prototype/web/**', 'prototype/tools/package.json', 'prototype/tools/package-lock.json', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# one deployment at a time, and one in progress finishes
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: The page's libraries, in the versions it names
+        run: npm ci
+        working-directory: prototype/tools
+      - name: Build the site
+        run: node prototype/web/build.mjs _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
