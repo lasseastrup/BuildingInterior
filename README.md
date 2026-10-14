@@ -10,6 +10,7 @@ A prototype of the building creation workflow, made to write the spec before we 
   - City scale: three generated LODs per building, merged far-distance cells, on-demand generation. The bar-chart button opens LOD stats and a 1,000/3,000-building stress test.
 - `docs/SPEC.md`: findings and the Unity plan. Covers the data model, z-fighting and topology rules, occlusion, LODs and city-scale rendering, the implementation plan, the editor UI mapping, the UPM package layout and the decisions from the prototype review.
 - `docs/COLOURS.md`: how Storey's materials get their colours from Triband's Color Pipeline (2.1.11): palette references on styles, colour rows in the building table, remaps without renderers.
+- `docs/PERFORMANCE.md`: runtime performance analysis of the Unity packages for the iPhone 7, iPhone 14+ and desktop tiers: CPU, GPU, memory and garbage by area, measured headlessly and checked against Unity 6.3 and Apple GPU guidance, with a prioritised roadmap.
 
 ## Unity package
 
