@@ -736,36 +736,53 @@ scene.fog = new THREE.Fog(SKY, 220, 1300);
 const camera = new THREE.PerspectiveCamera(45, 1, 0.3, 1600);   // near 0.3 keeps depth precision ~2 mm at 100 m
 scene.add(new THREE.HemisphereLight('#E4EDF2', '#6E6656', 1.35));
 const sun = new THREE.DirectionalLight('#FFF1DC', 2.3);
-const SUN_OFF = [30,60,18], SHADOW_HALF = 45, SHADOW_FAR = 220;   // the sun sits at the focus + SUN_OFF; its shadow box follows
+// The sun shines from SUN_OFF; it and its shadow box sit at the box's anchor. The box covers SHADOW_HALF around the focus
+// and SHADOW_SLACK more, and moves only once the focus has gone SHADOW_SLACK from the anchor (shadowAnchor), so a pan
+// redraws the cached shadow map every few metres rather than every frame
+const SUN_OFF = [30,60,18], SHADOW_HALF = 45, SHADOW_SLACK = 12, SHADOW_FAR = 220, SHB = SHADOW_HALF+SHADOW_SLACK;
+const SUN_D = Math.hypot(...SUN_OFF)+SHADOW_SLACK;   // SHADOW_SLACK further back: the box reaches as far sunwards of the focus as before
 sun.castShadow = QUAL.shadows;
 sun.shadow.mapSize.set(QUAL.shadowSize, QUAL.shadowSize);
-Object.assign(sun.shadow.camera, {left:-SHADOW_HALF,right:SHADOW_HALF,top:SHADOW_HALF,bottom:-SHADOW_HALF,near:1,far:SHADOW_FAR});
+Object.assign(sun.shadow.camera, {left:-SHB,right:SHB,top:SHB,bottom:-SHB,near:1,far:SHADOW_FAR+2*SHADOW_SLACK});
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(sun, sun.target);
 function setShadows(on, size, soft=QUAL.shadowSoft){
   if(size && size!==sun.shadow.mapSize.x){ sun.shadow.mapSize.set(size,size); if(sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map=null; } }
   const type = soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   if(type!==renderer.shadowMap.type){ renderer.shadowMap.type=type; for(const m of [...Object.values(MAT), ...Object.values(MATL)]) m.needsUpdate=true; }   // the filter is compiled in
-  sun.castShadow=on; shadowDirty=true;
+  sun.castShadow=on; shadowDirty=true; shadowA.x=NaN;   // a new map size: a new texel to snap to
 }
-/* The shadow map is drawn again only when something in it changed: the sun moved with the focus, a building inside the
-   shadow box changed LOD or fade, a cell or building was rebuilt, or isolate faded others. Orbiting and zooming
-   leave the focus where it is, so they reuse it. Play mode draws it every frame (the player and the sun move). */
+/* The shadow map is drawn again only when something in it changed: its box moved (shadowAnchor), a building inside it
+   changed what it casts (updateLOD), a cell or building was rebuilt, or isolate faded others. Orbiting and zooming
+   leave the focus where it is, and a pan moves the box every SHADOW_SLACK metres, so they mostly reuse it. Play mode
+   draws it every frame (the player moves). */
 let shadowDirty = true;
-const shadowAt = {x:NaN, y:NaN, z:NaN, iso:-1};
+const shadowAt = {iso:-1};
 const SUN_F = new THREE.Vector3(...SUN_OFF).negate().normalize(), SUN_R = new THREE.Vector3().crossVectors(SUN_F, new THREE.Vector3(0,1,0)).normalize(), SUN_U = new THREE.Vector3().crossVectors(SUN_R, SUN_F);
+// the shadow box's anchor, in the sun's frame: x along SUN_R and y along SUN_U (the shadow map's axes), z along SUN_F
+const shadowA = {x:NaN, y:NaN, z:NaN};
+function shadowAnchor(){   // moves the box to the focus once the focus is SHADOW_SLACK from its anchor; true when it moved
+  const f=G.uFocus.value, x=f.dot(SUN_R), y=f.dot(SUN_U), z=f.dot(SUN_F);
+  if(Math.abs(x-shadowA.x)<=SHADOW_SLACK && Math.abs(y-shadowA.y)<=SHADOW_SLACK && Math.abs(z-shadowA.z)<=SHADOW_SLACK) return false;
+  // by whole texels across the map, so what stood still is drawn on the same texels and its shadow doesn't shift
+  const tx=2*SHB/sun.shadow.mapSize.x; shadowA.x=Math.round(x/tx)*tx; shadowA.y=Math.round(y/tx)*tx; shadowA.z=z;
+  sun.target.position.copy(SUN_R).multiplyScalar(shadowA.x).addScaledVector(SUN_U, shadowA.y).addScaledVector(SUN_F, shadowA.z);
+  sun.position.copy(sun.target.position).addScaledVector(SUN_F, -SUN_D);
+  return true;
+}
 function inShadowBox(s){   // a bounding sphere against the shadow camera's box, in the sun's frame
-  const f=G.uFocus.value, vx=s.x-f.x-SUN_OFF[0], vy=s.y-f.y-SUN_OFF[1], vz=s.z-f.z-SUN_OFF[2];
-  const x=vx*SUN_R.x+vy*SUN_R.y+vz*SUN_R.z, y=vx*SUN_U.x+vy*SUN_U.y+vz*SUN_U.z, z=vx*SUN_F.x+vy*SUN_F.y+vz*SUN_F.z;
-  return Math.abs(x)<=SHADOW_HALF+s.r && Math.abs(y)<=SHADOW_HALF+s.r && z>=1-s.r && z<=SHADOW_FAR+s.r;
+  const x=s.x*SUN_R.x+s.y*SUN_R.y+s.z*SUN_R.z-shadowA.x, y=s.x*SUN_U.x+s.y*SUN_U.y+s.z*SUN_U.z-shadowA.y, z=s.x*SUN_F.x+s.y*SUN_F.y+s.z*SUN_F.z-shadowA.z+SUN_D;
+  return !(Math.abs(x)>SHB+s.r || Math.abs(y)>SHB+s.r || z<1-s.r || z>SHADOW_FAR+2*SHADOW_SLACK+s.r);   // true while the box is unset (NaN)
 }
 function shadowWanted(){
+  const moved=shadowAnchor();   // the sun's place too: with shadows off it still lights from SUN_OFF
   if(!sun.castShadow) return false;
-  const f=G.uFocus.value;
-  if(!QUAL.shadowCache || ui.mode==='play' || f.x!==shadowAt.x || f.y!==shadowAt.y || f.z!==shadowAt.z || G.uIso.value!==shadowAt.iso) shadowDirty=true;
+  if(moved || !QUAL.shadowCache || ui.mode==='play' || G.uIso.value!==shadowAt.iso) shadowDirty=true;
   if(!shadowDirty) return false;
-  shadowDirty=false; shadowAt.x=f.x; shadowAt.y=f.y; shadowAt.z=f.z; shadowAt.iso=G.uIso.value; return true;
+  shadowDirty=false; shadowAt.iso=G.uIso.value; return true;
 }
+// what a building casts at a displayed LOD: LOD0 its own mesh, LOD1 and LOD2 its massing (the shadow proxy), beyond far nothing
+const castOf = l => l===0 ? 0 : l===1 || l===2 ? 1 : 2;
 
 /* =========================================================================
    Shared building materials + per-building data tables
@@ -799,14 +816,12 @@ const G = { uCam:{value:new THREE.Vector3()}, uFocus:{value:new THREE.Vector3()}
   uState:{value:stateTex}, uParams:{value:paramTex}, uLodTint:{value:0}, uIso:{value:0}, uIsoBid:{value:-1},
   uWallT:{value:wallTex}, uOccT:{value:occTex}, uOccMode:{value:0}, uPZ:{value:1}, uPScr:{value:new THREE.Vector2()}, uHoleR:{value:100} };
 // The varyings a variant's fragment stage reads, and no more (docs/PERFORMANCE.md §7.2): a tile-based GPU writes every
-// vertex output to memory between the stages. The discard-free (OCC_ND) materials read the building and its LOD (tints);
-// the depth materials add the fade (their dither); only the full colour materials carry the cutaway's and occluders' values.
+// vertex output to memory between the stages. The discard-free (OCC_ND) and depth materials read the building and its LOD
+// (tints, isolate); only the full colour materials carry the fade and the cutaway's and occluders' values.
 const OCC_VARYINGS = `varying float vBid; varying float vLod;
-#ifndef OCC_ND
+#if !defined(OCC_ND) && !defined(OCC_DEPTH)
 varying float vFade;
-#ifndef OCC_DEPTH
 varying vec3 vOccW; varying vec4 vWall; varying float vKind; varying float vWid; varying float vOcc; varying float vOrigY;
-#endif
 #endif
 `;
 const OCC_VERT_DECL = `attribute vec4 aWall; attribute float aKind; attribute float aTag; attribute float aWid;
@@ -853,10 +868,15 @@ const OCC_VERT = `vBid = mod(aTag, 65536.0); vLod = floor(aTag / 65536.0);
     bool isDisp = abs(vLod - st.x) < 0.5;
     bool isFrom = st.z < 1.0 && abs(vLod - st.y) < 0.5;
 #endif
+#ifdef OCC_DEPTH
+    // no cross-fade in the shadow pass: the old LOD casts until halfway, the new one from there. The cached shadow map then
+    // changes once a switch, not every frame of the fade (updateLOD redraws it when a building's caster changes), and a
+    // fading building casts with the discard-free materials
+    if (!(isDisp && isFrom) && !(isDisp ? st.z >= 0.5 : isFrom && st.z < 0.5)) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+#else
     if (!isDisp && !isFrom) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);   // LOD not shown: clip the whole triangle
 #ifndef OCC_ND
     vFade = st.z >= 1.0 || (isDisp && isFrom) ? 3.0 : (isDisp ? st.z : -1.0 - st.z);
-#ifndef OCC_DEPTH
     vOcc = st.w - 1.0;   // building in the way: its occluder slot, or -1
 #endif
 #endif
@@ -882,8 +902,10 @@ float occBayer(vec2 p){ int x = int(mod(p.x,4.0)); int y = int(mod(p.y,4.0));
 vec3 lodTint(float l){ return l < 0.5 ? vec3(0.16,0.62,0.30) : l < 1.5 ? vec3(0.95,0.72,0.12) : vec3(0.90,0.30,0.10); }
 void occlude(){
 #ifndef OCC_ND
-  // 0. LOD cross-fade: the old and new LOD draw complementary dither patterns
+#ifndef OCC_DEPTH
+  // 0. LOD cross-fade: the old and new LOD draw complementary dither patterns (the shadow pass switches halfway instead)
   if (vFade < 2.0) { float d = occBayer(gl_FragCoord.xy); if (vFade >= 0.0) { if (d >= vFade) discard; } else if (d < -vFade - 1.0) discard; }
+#endif
   // isolate: every other building fades to a light screen-door ghost
   if (uIso > 0.001 && abs(vBid - uIsoBid) > 0.5) {
 #ifdef OCC_DEPTH
@@ -2037,17 +2059,16 @@ function updateLOD(dt, activeId){
     const still = nd && isoOff && r.t>=1, plain = still && w===0 && r.idx!==act;
     if(r.l0){ const L=r.l0, m=L.mesh; m.visible=v0; if(L.glass) L.glass.visible=v0; if(v0) L.used=frameNo;
       const p = plain && !(act>=0 && L.party.some(i=>(L.walls[i].K>>3)-1===act));   // a party wall is cut with its neighbour
-      m.material = p ? M.opaqueN : M.opaque; m.customDepthMaterial = still ? MAT.depthN : MAT.depth; }
+      m.material = p ? M.opaqueN : M.opaque; m.customDepthMaterial = nd && isoOff ? MAT.depthN : MAT.depth; }
     if(r.l1){ const m=r.l1.mesh; m.visible=v1; if(v1) r.l1.used=frameNo; m.material = plain ? M.opaqueN : M.opaque; }
-    if(r.cell){   // its cell needs the full shader: in colour while its massing shows and can discard, in the shadow pass while
-      // it fades between LOD1 or LOD2 (the massing casts for both) and LOD0 or none
-      const c=(!plain || !isoOff) && (r.disp===2 || (r.t<1 && r.from===2)), d=r.t<1 && (r.disp===1 || r.disp===2) !== (r.from===1 || r.from===2);
-      if(c || d){ const cl=cells.get(r.cell); if(cl){ if(c) cl.busy=frameNo; if(d) cl.busyD=frameNo; } } }
+    if(r.cell && (!plain || !isoOff) && (r.disp===2 || (r.t<1 && r.from===2))){   // its cell needs the full shader while its massing shows and can discard
+      const cl=cells.get(r.cell); if(cl) cl.busy=frameNo; }
     const o=r.idx*4;
     if(stateArr[o]!==r.disp || stateArr[o+1]!==r.from || stateArr[o+2]!==r.t || stateArr[o+3]!==w){
       stateArr[o]=r.disp; stateArr[o+1]=r.from; stateArr[o+2]=r.t; stateArr[o+3]=w; changed=true;
-      if(!shadowDirty && inShadowBox(s)) shadowDirty=true;   // what it casts changed
     }
+    const cast=castOf(r.t<0.5 ? r.from : r.disp);   // the shadow pass switches LODs halfway through a fade
+    if(cast!==r.cast){ r.cast=cast; if(!shadowDirty && inShadowBox(s)) shadowDirty=true; }
     N[r.disp]++;
   }
   if(changed) stateTex.needsUpdate=true;
@@ -2062,7 +2083,7 @@ function updateLOD(dt, activeId){
     let any=false, cast=false;
     for(const r of c.members){ if(r.disp===2 || (r.t<1 && r.from===2)){ any=true; break; } if(r.disp===1 || (r.t<1 && r.from===1)) cast=true; }
     c.mesh.visible=any || (cast && sun.castShadow); if(any) shown++;
-    c.mesh.material = nd && isoOff && c.busy!==frameNo ? M.massN : M.mass; c.mesh.customDepthMaterial = nd && isoOff && c.busyD!==frameNo ? MAT.massDepthN : MAT.massDepth; }
+    c.mesh.material = nd && isoOff && c.busy!==frameNo ? M.massN : M.mass; c.mesh.customDepthMaterial = nd && isoOff ? MAT.massDepthN : MAT.massDepth; }
   lodStats.cells=cells.size; lodStats.cellsShown=shown;
 }
 /* Generation runs after the frame is handed to the GPU, in the time left before the next one is due, so it
@@ -3561,18 +3582,18 @@ function flSum(a){
 }
 /* Auto resolution. A GPU that can't draw a frame at this resolution in time shows as frames later than 60 fps's 16.7 ms
    while the main thread had time to spare (a frame late from the main thread isn't helped by fewer pixels). Three of
-   the last 20 frames late: a level down (two if most were). Three seconds without a late one: a level up. A step up
-   that brings late frames back within 3 s makes the level it fell back to the ceiling for 30 s, so a scene at the edge
+   the last 20 frames late: a level down (two if most were). Two seconds without a late one: a level up. A step up
+   that brings late frames back within 3 s makes the level it fell back to the ceiling for 20 s, so a scene at the edge
    isn't probed every few seconds. The levels are shares of the pixel ratio, down to half. */
-const DRS_LATE = 21;   // ms between frames: a vsync missed at 60 Hz
+const DRS_LATE = 20;   // ms between frames: a vsync missed at 60 Hz (the report's slow frames)
 function drsTick(now){
   if(!QUAL.dyn || FL.n < 30 || now-DRS.at < 500) return;
-  let late=0, recent=0; const n=Math.min(FL.n-1, 180);
+  let late=0, recent=0; const n=Math.min(FL.n-1, 120);
   for(let j=1;j<=n;j++){ const i=(FL.n-j)%FL.N, pi=(FL.n-j-1)%FL.N;
     if(FL.dt[i]>DRS_LATE && FL.js[i]+FL.gen[pi]<12){ late++; if(j<=20) recent++; } }
   let to=DRS.i;
-  if(recent>=3){ to=Math.min(DRS.levels.length-1, DRS.i+(recent>=10?2:1)); if(now-DRS.upAt<3000){ DRS.ceil=to; DRS.ceilUntil=now+30000; } }
-  else if(!late && n>=180 && now-DRS.at>3000 && DRS.i>0 && (now>DRS.ceilUntil || DRS.i-1>=DRS.ceil)){ to=DRS.i-1; DRS.upAt=now; }
+  if(recent>=3){ to=Math.min(DRS.levels.length-1, DRS.i+(recent>=10?2:1)); if(now-DRS.upAt<3000){ DRS.ceil=to; DRS.ceilUntil=now+20000; } }
+  else if(!late && n>=120 && now-DRS.at>2000 && DRS.i>0 && (now>DRS.ceilUntil || DRS.i-1>=DRS.ceil)){ to=DRS.i-1; DRS.upAt=now; }
   if(to!==DRS.i){ DRS.i=to; DRS.at=now; applyDpr(); }
 }
 const hudEl=$('#fhud'); let hudT=0, hudFrom=0;
@@ -3583,7 +3604,7 @@ function hudTick(now){
 }
 function gpuName(){ const gl=renderer.getContext(), e=gl.getExtension('WEBGL_debug_renderer_info'); return String(e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); }
 function openQuality(){
-  openModal(`<h2>Performance</h2><p class="note" style="margin:0 0 10px">Render settings for this browser. The benchmark flies a fixed path over the 1,000-building test city, then compares settings on one view (about 90 seconds), and reports frame times to copy.</p>
+  openModal(`<h2>Performance</h2><p class="note" style="margin:0 0 10px">Render settings for this browser. The benchmark flies a fixed path over the 1,000-building test city, then compares settings on a street-level view (about 90 seconds), and reports frame times to copy.</p>
   <div class="pq"><label>Resolution <select id="qScale">${[['auto','Auto (holds 60 fps)'],[1,'Full'],[0.75,'75%'],[0.5,'50%']].map(([v,l])=>`<option value="${v}" ${(QUAL.dyn?'auto':QUAL.scale)==v?'selected':''}>${l}</option>`).join('')}</select></label>
   <label>Pixel ratio up to <select id="qDpr">${[1,1.5,2,3].map(v=>`<option ${QUAL.maxDpr==v?'selected':''}>${v}</option>`).join('')}</select></label>
   <label>Lighting <select id="qLit"><option value="full" ${QUAL.simple?'':'selected'}>Full (PBR)</option><option value="simple" ${QUAL.simple?'selected':''}>Simple (diffuse)</option></select></label>
@@ -3604,8 +3625,8 @@ function openQuality(){
 }
 
 /* The benchmark: the 1,000-building test city, a fixed camera path (frame times while LODs are being built and
-   the shadow map follows the focus, at the settings as set: auto resolution starts from full), then one view swaying
-   under several settings at fixed resolutions, its LODs ready. Each
+   the shadow box follows the focus, at the settings as set: auto resolution starts from full), then the close-up view
+   swaying under several settings at fixed resolutions, its LODs ready. Each
    part reports frame rate, interval percentiles, slow frames (over 20 ms), main-thread time and draw load. */
 let bench=null, benchReport='';
 const BENCH_YAW = 1.12*Math.PI;
@@ -3616,13 +3637,15 @@ const BENCH_PATH = [   // the test city's streets run along x = 80k + 40 and z =
   ['Street, pan', 6, u=>[200-u*160, 48, 60, 0.2, Math.PI/2]],
   ['Close up, pan', 6, u=>[40, 48+u*120, 30, 0.15, 0]],
 ];
-const BENCH_SWEEP = [   // the city view swaying, its LODs built, at a fixed resolution; q: quality changes, bias: LOD bias
+// the close-up view (the path's hardest) swaying, its LODs built, at a fixed resolution; q: quality changes, bias: LOD bias,
+// px0: LOD0's pixels per metre (1e9: no building near enough for it)
+const BENCH_SWEEP = [
   ['Full resolution', {q:{dyn:false, scale:1}}], ['Resolution 80%', {q:{dyn:false, scale:0.8}}], ['Resolution 65%', {q:{dyn:false, scale:0.65}}],
-  ['Simple lighting, 9 taps', {q:{dyn:false, scale:1, simple:true, shadowSoft:false}}], ['PBR, soft shadow edges', {q:{dyn:false, scale:1, simple:false, shadowSoft:true}}],
+  ['Resolution 50%', {q:{dyn:false, scale:0.5}}], ['Shadow map every frame', {q:{dyn:false, scale:1, shadowCache:false}}],
   ['No shadows', {q:{dyn:false, scale:1, shadows:false}}], ['LOD detail 50%', {q:{dyn:false, scale:1}, bias:0.5}],
-  ['Discard in every shader', {q:{dyn:false, scale:1, nd:false}}],
+  ['No full detail (shells)', {q:{dyn:false, scale:1}, px0:1e9}],
 ];
-const SWEEP_CAM = u=>[120, 48, 180, 0.45, BENCH_YAW+3.0+0.25*Math.sin(u*2*Math.PI)];   // a slow sway the warm-up covers whole, so its LODs are built
+const SWEEP_CAM = u=>[40, 108, 30, 0.15, 0.25*Math.sin(u*2*Math.PI)];   // a slow sway the warm-up covers whole, so its LODs are built
 // every building material's program for the lights and settings now, compiled at once (a phone takes about 300 ms a
 // program, a hitch where a variant is first drawn): a tiny mesh per material, compiled with the scene, then removed
 function prewarm(){
@@ -3635,7 +3658,7 @@ function* benchFrames(ms, until){ let t0=null; for(;;){ const now=yield; if(t0==
 function* benchPart(label, sec, cam){ let t0=null; const a=FL.n; for(;;){ const now=yield; if(t0===null) t0=now; const u=(now-t0)/(sec*1000);
   if(u>=1) return flSum(a+1); benchCam(cam(u)); $('#benchMsg').textContent=`${label} · ${Math.ceil(sec*(1-u))} s`; } }
 function* benchRun(){
-  const keep={q:{...QUAL}, bias:LODCFG.bias, t:camEdit.target.clone(), yaw:camEdit.yaw, pitch:camEdit.pitch, dist:camEdit.dist}, res=[], sweep=[];
+  const keep={q:{...QUAL}, bias:LODCFG.bias, px0:LODCFG.PX[0], t:camEdit.target.clone(), yaw:camEdit.yaw, pitch:camEdit.pitch, dist:camEdit.dist}, res=[], sweep=[];
   try{
     const msg=t=>{ $('#benchMsg').textContent=t; };
     if(state.buildings.filter(b=>b.gen).length!==1000) generateCity(1000);
@@ -3649,13 +3672,13 @@ function* benchRun(){
     { let calm=0, t0=null; for(;;){ const now=yield; if(t0===null) t0=now; const u=((now-t0)/5000)%1; benchCam(SWEEP_CAM(u));
         calm = lodStats.queue ? 0 : calm+1; msg(`Warming up · ${lodStats.queue} LODs to build`); if((calm>=60 && now-t0>5000) || now-t0>20000) break; } }
     for(const [name, c] of BENCH_SWEEP){
-      Object.assign(QUAL, keep.q, c.q||{}); LODCFG.bias=c.bias ?? keep.bias; applyDpr(); setShadows(QUAL.shadows, QUAL.shadowSize, QUAL.shadowSoft);
+      Object.assign(QUAL, keep.q, c.q||{}); LODCFG.bias=c.bias ?? keep.bias; LODCFG.PX[0]=c.px0 ?? keep.px0; applyDpr(); setShadows(QUAL.shadows, QUAL.shadowSize, QUAL.shadowSoft);
       benchCam(SWEEP_CAM(0)); msg(name+' · warming up'); yield; prewarm(); yield* benchFrames(1200);
       sweep.push([name, yield* benchPart(name, 5, SWEEP_CAM)]);
     }
     return benchText(head, res, sweep);
   } finally {
-    Object.assign(QUAL, keep.q); LODCFG.bias=keep.bias; applyDpr(); setShadows(QUAL.shadows, QUAL.shadowSize, QUAL.shadowSoft);
+    Object.assign(QUAL, keep.q); LODCFG.bias=keep.bias; LODCFG.PX[0]=keep.px0; applyDpr(); setShadows(QUAL.shadows, QUAL.shadowSize, QUAL.shadowSoft);
     camEdit.target.copy(keep.t); camEdit.yaw=keep.yaw; camEdit.pitch=keep.pitch; camEdit.dist=keep.dist;
   }
 }
@@ -3670,7 +3693,7 @@ function benchText(head, res, sweep){
   const row=(name,S)=>S ? name.padEnd(26)+pad(num(S.fps),5)+pad(num(S.p50),6)+pad(num(S.p95),6)+pad(num(S.p99),6)+pad(num(S.max,0),5)+pad((S.slow*100).toFixed(0)+'%',5)+pad(num(S.js),6)+pad(num(S.js95),6)+pad(num(S.gen),6)+pad(num(S.rnd),6)+pad(S.calls.toFixed(0),6)+pad(fmtN(S.tris),7)+pad((S.sh*100).toFixed(0)+'%',5)+pad(Math.round(S.res*100)+'%',5)+pad(Math.round(S.resMin*100)+'%',5) : name.padEnd(26)+' (no frames)';
   const cols='part'.padEnd(26)+'  fps   p50   p95   p99  max slow    JS JSp95 build  rndr draws   tris  shdw  res  min';
   return [...head, '', 'ms per frame; slow: frames over 20 ms; JS: main thread in the frame; build: LOD building after it; shdw: frames that drew the shadow map; res: resolution drawn (average, lowest)', '',
-    cols, ...res.map(([n,S])=>row(n,S)), '', 'City view swaying, LODs built, by setting:', cols, ...sweep.map(([n,S])=>row(n,S))].join('\n');
+    cols, ...res.map(([n,S])=>row(n,S)), '', 'Close-up view swaying, LODs built, by setting:', cols, ...sweep.map(([n,S])=>row(n,S))].join('\n');
 }
 function benchStart(){
   if(bench) return; if(ui.mode!=='edit') exitPlay(); openPerf(false); closeModal();
@@ -3708,7 +3731,6 @@ function tick(now){
     if(ui.sub && b && ui.tab==='interior' && !dragItem && ui.tool==='select'){ const k=activeFloor(b); const s=ui.sub; if(s.kind==='shaft'){ const sh=b.shafts.find(x=>x.id===s.id); if(sh && shaftLevels(b,sh).includes(k)) showTarget(b,k,{kind:'shaft',s:sh},'#2F7D4F'); } else if(s.floor===k){ if(s.kind==='wall') showTarget(b,k,{kind:'wall',wi:s.i},'#2F7D4F'); } }
     overlayUpdate();
   }
-  const f=G.uFocus.value; sun.position.set(f.x+SUN_OFF[0], f.y+SUN_OFF[1], f.z+SUN_OFF[2]); sun.target.position.set(f.x, f.y, f.z);
   const activeId=applyView(); updateCutaway(dt);
   const tl=performance.now();
   updateLOD(dt, activeId);

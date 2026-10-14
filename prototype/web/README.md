@@ -19,13 +19,14 @@ as before. The build stamps the site's version into the page (`window.STOREY_BUI
 ## Frame rate on a phone
 
 The bar-chart button opens the city stats: **Benchmark** flies a fixed path over the 1,000-building test city (about
-90 seconds, hands off the screen), then orbits one view under several settings, and opens a report with frame-rate,
-interval percentiles, slow frames (over 20 ms), main-thread time, draw load and the resolution drawn per part. **Copy
-report** puts it on the clipboard. **Performance…** holds the render settings for this browser: resolution (**Auto**, the
-default, lowers it a step when frames come later than 60 fps while the main thread had time to spare, and raises it
-again after 3 s without; or a fixed share), pixel ratio cap, lighting (full PBR, or diffuse only: the default on a touch
-screen), shadows and their edges (16 taps, or 9 on a touch screen), MSAA, and a frame HUD. Low Power Mode caps Safari
-at 30 fps, so turn it off before measuring.
+90 seconds, hands off the screen), then sways a street-level close-up under several settings, and opens a report with
+frame-rate, interval percentiles, slow frames (over 20 ms), main-thread time, draw load, how often the shadow map was
+drawn and the resolution drawn per part. **Copy report** puts it on the clipboard. **Performance…** holds the render
+settings for this browser: resolution (**Auto**, the default, lowers it a step when frames come later than 60 fps while
+the main thread had time to spare, and raises it again after 2 s without; or a fixed share), pixel ratio cap, lighting
+(full PBR, or diffuse only: the default on a touch screen), shadows and their edges (16 taps, or 9 on a touch screen),
+MSAA, and a frame HUD. The shadow map is drawn again only when what it shows changes; its box follows the camera in
+steps of 12 m. Low Power Mode caps Safari at 30 fps, so turn it off before measuring.
 
 ## Setting it up, once
 
