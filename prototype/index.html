@@ -723,8 +723,18 @@ const renderer = new THREE.WebGLRenderer({canvas, antialias:QUAL.msaa});
 // Auto resolution (QUAL.dyn): the share of the pixel ratio drawn, stepped by drsTick to hold 60 fps
 const DRS = {levels:[1, 0.9, 0.8, 0.72, 0.65, 0.58, 0.5], i:0, at:0, upAt:-1e9, ceil:0, ceilUntil:0, resized:false};
 const resScale = () => QUAL.dyn ? DRS.levels[DRS.i] : QUAL.scale;
-const applyDpr = () => renderer.setPixelRatio(Math.min(devicePixelRatio, QUAL.maxDpr)*resScale());
-applyDpr();
+// A canvas resized after its frame is drawn shows black until the next one: setting its size clears it, and the browser
+// shows what it holds once the frame's work is done. So a new pixel ratio (auto resolution's steps, the settings) waits
+// for the start of the next frame (resize), before that frame is drawn, and is set only when it changed.
+let dprStale = false;
+const applyDpr = () => { dprStale = true; };
+function setDpr(){ dprStale=false; const r=Math.min(devicePixelRatio, QUAL.maxDpr)*resScale(); if(r!==renderer.getPixelRatio()) renderer.setPixelRatio(r); }
+setDpr();
+// The GPU can take the page's WebGL context away (iOS does under memory pressure): the canvas stays black until three.js
+// has it back. Said when it happens and counted in the benchmark's report, so a black spell isn't taken for a black frame
+const CTX = {lost:0};
+canvas.addEventListener('webglcontextlost', () => { CTX.lost++; toast('The GPU dropped the 3D view · restoring it'); });
+canvas.addEventListener('webglcontextrestored', () => toast('3D view restored'));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = QUAL.shadowSoft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;   // 16 taps or 9
 renderer.shadowMap.autoUpdate = false;   // re-rendered only when what it shows has changed (shadowWanted)
@@ -3735,6 +3745,7 @@ function benchText(head, res, sweep){
   const cols='part'.padEnd(26)+'  fps   p50   p95   p99  max slow    JS JSp95 build draws disc   tris  shdw  res  min';
   return [...head, '', 'ms per frame; slow: frames over 20 ms; JS: main thread in the frame; build: LOD building after it; disc: buildings drawn with a shader that can discard pixels (a frame\'s average); shdw: frames that drew the shadow map; res: resolution drawn (average, lowest)', '',
     cols, ...res.map(([n,S])=>row(n,S)), '', 'From the city view to the street and back, LODs built, by setting:', cols, ...sweep.map(([n,S])=>row(n,S)),
+    '', `WebGL context lost ${CTX.lost} times since the page opened.`,
     '', 'Slow frames by what the two frames before them did: the share of frames slow after one that drew the shadow map, came after a resolution change, came after meshes were uploaded, or had buildings fading between LODs, and the share slow without it (-: no such frame)', '',
     'part'.padEnd(26)+'  slow      shdw    resize    upload    fading', ...[...res, ...sweep].map(([n,S])=>S ? n.padEnd(26)+pad((S.slow*100).toFixed(0)+'%',6)+['sh','rs','up','fd'].map(k=>{ const w=S.why[k], f=(a,b)=>b ? Math.round(a*100/b)+'%' : '-'; return pad(f(w[1],w[0])+'/'+f(w[3],w[2]),10); }).join('') : n.padEnd(26)+' (no frames)')].join('\n');
 }
@@ -3752,7 +3763,7 @@ $('#benchStop').onclick=()=>{ if(!bench) return; bench.return(); bench=null; $('
 /* =========================================================================
    Main loop
    ========================================================================= */
-function resize(){ const w=canvas.clientWidth, h=canvas.clientHeight; if(canvas.width!==Math.floor(w*renderer.getPixelRatio())||canvas.height!==Math.floor(h*renderer.getPixelRatio())){ renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); } }
+function resize(){ if(dprStale) setDpr(); const w=canvas.clientWidth, h=canvas.clientHeight; if(canvas.width!==Math.floor(w*renderer.getPixelRatio())||canvas.height!==Math.floor(h*renderer.getPixelRatio())){ renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); } }
 let last=performance.now(), tickHold=false;   // tickHold: test hook, the harness steps play itself (__sb.play.step)
 function tick(now){
   const dt=Math.min(0.05,(now-last)/1000), fdt=now-last; last=now;
@@ -3801,7 +3812,7 @@ window.__sb = { roofParts:(i,k)=>{ const b=state.buildings[i]; const R = k==null
       out=[{p:L.posD, n:[...L.nrm].map(v=>v/127), c, i:[...L.idx], fac:[...L.fac], fac2:[...L.fac2], slot:[...L.slot], params, solids:[]}]; }
     DEBUG_SOLIDS=false; return out; },
   nb:()=>state.buildings.length, bench:(i=0,lod=0)=>{ const b=state.buildings[i], r=recOf(b), f=[buildLOD0,buildLOD1,buildLOD2][lod]; const t=performance.now(); for(let k=0;k<10;k++) f(b,r.idx); return (performance.now()-t)/10; },
-  lodStats, LODCFG, city:generateCity, clearCity, recs, cells, openPerf, renderer, QUAL, setShadows, benchStart, get benchReport(){ return benchReport; }, get benching(){ return !!bench; }, flSum,
+  lodStats, LODCFG, city:generateCity, clearCity, recs, cells, openPerf, renderer, QUAL, setShadows, benchStart, get benchReport(){ return benchReport; }, get benching(){ return !!bench; }, flSum, drs:DRS,
   gen:GEN, fadeAt:t=>{ for(const r of recs.values()) if(r.t<1) r.t=t; },   // test hook: every fade so far (with LODCFG.fade made long, held there)
   lodDbg:()=>({fading:[...recs.values()].filter(r=>r.t<1).map(r=>r.id+':'+r.from+'>'+r.disp).slice(0,8), n:lodStats.n.join('/'), q:lodStats.queue, jobs:jobs.size, frames:FL.n}),   // harnesses wait on this until the LODs settle
   timeLOD:(n=20)=>{ const b=LODCFG.budgetMs; LODCFG.budgetMs=-1; const t=performance.now(); for(let i=0;i<n;i++) updateLOD(0, null); LODCFG.budgetMs=b; return (performance.now()-t)/n; },
