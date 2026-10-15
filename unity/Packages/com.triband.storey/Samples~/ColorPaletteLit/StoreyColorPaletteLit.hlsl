@@ -62,6 +62,7 @@ float3 StoreyGraphFog(float3 color, float3 positionWS)
 #endif
     return lerp(color, unity_FogColor.rgb, density);
 }
+#define STOREY_FOG StoreyGraphFog   // StoreyFragment fogs the section cap with it
 
 // Base Shading then Handle Fog, as the graph's Base Color. The Unlit target outputs it unchanged.
 float4 StoreyLighting(StoreySurface s)

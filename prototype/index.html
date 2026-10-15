@@ -1024,7 +1024,9 @@ function patch(mat, o={}){
     let fs = sh.fragmentShader.replace('#include <common>', '#include <common>\n'+(o.depth?'#define OCC_DEPTH\n':'')+(o.nd?'#define OCC_ND\n':'')+OCC_FRAG_DECL+(o.massing && !o.depth?MASS_FRAG_DECL:'')).replace('void main() {', 'void main() {\n  occlude();');
     fs = fs.replace('#include <color_fragment>', '#include <color_fragment>\n'+(o.massing?'  diffuseColor.rgb = facadeColor();\n':'')+'  if (uLodTint > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, lodTint(vLod), 0.65);\n  if (uIso > 0.001 && abs(vBid - uIsoBid) > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.82, 0.83), uIso * 0.7);');
     // a building in the way goes near-black after lighting (a trace of shading keeps its form)
-    fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n'+(o.cap?'  if (!gl_FrontFacing) gl_FragColor.rgb = uCap;\n':'')+'  gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * 0.1 + vec3(0.01, 0.011, 0.013), gOccDark);\n  gl_FragColor.a = mix(gl_FragColor.a, 1.0, gOccDark);');
+    // the section cap where a cut shows a wall's inside, fogged like the rest: in the distance a thin parapet's back face
+    // can win the depth test against its front, and an unfogged cap there showed as dark specks along far roofs
+    fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n'+(o.cap?'  if (!gl_FrontFacing) {\n    gl_FragColor.rgb = uCap;\n#ifdef USE_FOG\n    gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);\n#endif\n  }\n':'')+'  gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * 0.1 + vec3(0.01, 0.011, 0.013), gOccDark);\n  gl_FragColor.a = mix(gl_FragColor.a, 1.0, gOccDark);');
     sh.fragmentShader = fs;
   };
   mat.customProgramCacheKey = () => 'occ'+(o.cap?1:0)+(o.massing?'m':'')+(o.depth?'d':'')+(o.nd?'n':'')+(o.fade?'f':'');

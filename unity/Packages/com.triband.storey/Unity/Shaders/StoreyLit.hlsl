@@ -7,7 +7,8 @@
 // Lighting is one function, StoreyLighting(StoreySurface), so a project can light the buildings like the rest
 // of its world (the Color Palette Lit sample is one). By default it is URP's PBR. A project shader
 // instead defines STOREY_CUSTOM_LIGHTING (and, for its own material properties, STOREY_MATERIAL_PROPERTIES) in
-// every pass, includes this file, defines StoreyLighting and then includes StoreyFragment.hlsl.
+// every pass, includes this file, defines StoreyLighting and then includes StoreyFragment.hlsl. Lighting that fogs also
+// defines STOREY_FOG(color, positionWS), so the section cap is fogged with the rest.
 #ifndef STOREY_LIT_INCLUDED
 #define STOREY_LIT_INCLUDED
 

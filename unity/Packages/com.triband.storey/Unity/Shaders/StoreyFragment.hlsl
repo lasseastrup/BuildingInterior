@@ -70,7 +70,17 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     }
 #endif
 #ifdef STOREY_CAP
-    if (!isFront) color.rgb = _StoreyCap.rgb;   // a cut exposes a wall's inside: the section cap
+    // a cut exposes a wall's inside: the section cap, fogged as the lighting fogs (STOREY_FOG, when it does). In the
+    // distance a thin parapet's back face can win the depth test against its front, and an unfogged cap there shows as
+    // dark specks along far roofs
+    if (!isFront)
+    {
+    #ifdef STOREY_FOG
+        color.rgb = STOREY_FOG(_StoreyCap.rgb, s.positionWS);
+    #else
+        color.rgb = _StoreyCap.rgb;
+    #endif
+    }
 #endif
     return StoreyDarken(color, dark);
 }
