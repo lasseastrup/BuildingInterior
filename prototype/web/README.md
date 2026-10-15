@@ -27,9 +27,10 @@ fades, against how often without. **Copy report** puts it on the clipboard. **Pe
 settings for this browser: resolution (**Auto**, the default, lowers it a step when frames come later than 60 fps while
 the main thread had time to spare, and raises it again after 2 s without; or a fixed share), pixel ratio cap, lighting
 (full PBR, or diffuse only: the default on a touch screen), shadows and their edges (16 taps, or 9 on a touch screen),
-MSAA, and a frame HUD. The shadow map is drawn again only when what it shows changes; its box follows the camera in
-steps of 12 m. A building fading to or from its massing draws that massing on its own, so its merged cell keeps the
-discard-free shader. Low Power Mode caps Safari at 30 fps, so turn it off before measuring.
+MSAA, and a frame HUD. The shadow map is drawn again only when what it shows changes, spread over 3 frames (the last map
+shows meanwhile); its box follows the camera in steps of 12 m. Full detail and the shell switch at once on a touch
+screen (cross-fade elsewhere; **Full detail and shell**). A building fading to or from its massing draws that massing
+on its own, so its merged cell keeps the discard-free shader. Low Power Mode caps Safari at 30 fps, so turn it off before measuring.
 
 ## Setting it up, once
 

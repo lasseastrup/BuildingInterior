@@ -16,6 +16,13 @@ namespace Triband.Storey.Lod
         public double Hysteresis = 0.12;
         /// <summary>The dithered cross-fade between two LODs, in seconds.</summary>
         public double Fade = 0.35;
+        /// <summary>
+        /// Full detail (LOD0) and the shell (LOD1) cross-fade. Off, they switch at once: they look alike where they meet
+        /// (LOD0's windows start as LOD1's painted ones, <see cref="GlassClear"/>), and the fade draws the whole LOD0 mesh,
+        /// interiors and all, with a discarding material, which Apple's GPUs pay for in every pixel it covers. Fades to and
+        /// from the massing stay. Off on phones, as the prototype on a touch screen.
+        /// </summary>
+        public bool FadeDetail = true;
         /// <summary>Multiplies the pixels per metre: above 1 brings detail closer in.</summary>
         public double Bias = 1;
         /// <summary>Beyond this many metres a building is not drawn.</summary>
@@ -300,7 +307,7 @@ namespace Triband.Storey.Lod
                     }
                     if (show == 1 && !e.Has1) { (seen ? f.Build : unseenBuild).Add((idx, 1, rel)); show = 2; }
                     bool changed = false;
-                    if (show != e.Shown) { e.From = e.Shown; e.Shown = show; e.T = 0; changed = true; }
+                    if (show != e.Shown) { e.From = e.Shown; e.Shown = show; e.T = !s.FadeDetail && show < 2 && e.From < 2 ? 1 : 0; changed = true; }
                     if (e.T < 1) { e.T = Math.Min(1, e.T + dt / s.Fade); changed = true; }
                     if (changed) f.Changed.Add(idx);
                     if (e.Visible(0)) e.Used0 = frame;

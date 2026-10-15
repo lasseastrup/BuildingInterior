@@ -38,6 +38,7 @@ namespace Triband.Storey.Tests
             var d = new LodSettings();
             Assert.Equal(d.PX, new[] { D(p["lod0PixelsPerMetre"]), D(p["lod1PixelsPerMetre"]), D(p["lod2PixelsPerMetre"]) });
             Assert.Equal(d.Hysteresis, D(p["hysteresis"])); Assert.Equal(d.Fade, D(p["fadeSeconds"])); Assert.Equal(d.Far, D(p["farDistance"]));
+            Assert.Equal(d.FadeDetail, p["crossFadeFullDetail"] == "1");
             Assert.Equal(d.MaxLod0, int.Parse(p["lod0Residency"])); Assert.Equal(d.MaxLod1, int.Parse(p["lod1Residency"]));
             Assert.Equal(d.MaxColliders, int.Parse(p["collidersKept"])); Assert.Equal(d.BudgetMs, D(p["buildBudgetMs"]));
             Assert.Equal(d.GlassClear, D(p["windowsClearAt"]));
@@ -45,10 +46,10 @@ namespace Triband.Storey.Tests
             Assert.Equal(d.KeepChunkBytes, long.Parse(p["meshChunksKeptMB"]) << 20);
             Assert.Equal(d.FarOcclusion, p["occlusionOnFarMaterials"] == "1");
             Assert.Equal("1", p["specularAndReflections"]);   // URP's full PBR, as a site without a quality asset lights
-            // the minimum tier: half the residency, 12 MB of chunks, no occlusion on far materials, no specular or
-            // reflections, and nothing else
-            Assert.Equal(new[] { "lod0Residency", "lod1Residency", "meshChunksKeptMB", "occlusionOnFarMaterials", "specularAndReflections" }, p.Keys.Where(k => p[k] != m[k]));
-            Assert.Equal(("8", "130", "12", "0", "0"), (m["lod0Residency"], m["lod1Residency"], m["meshChunksKeptMB"], m["occlusionOnFarMaterials"], m["specularAndReflections"]));
+            // the minimum tier: full detail and shell switched at once, half the residency, 12 MB of chunks, no occlusion on
+            // far materials, no specular or reflections, and nothing else
+            Assert.Equal(new[] { "crossFadeFullDetail", "lod0Residency", "lod1Residency", "meshChunksKeptMB", "occlusionOnFarMaterials", "specularAndReflections" }, p.Keys.Where(k => p[k] != m[k]));
+            Assert.Equal(("0", "8", "130", "12", "0", "0"), (m["crossFadeFullDetail"], m["lod0Residency"], m["lod1Residency"], m["meshChunksKeptMB"], m["occlusionOnFarMaterials"], m["specularAndReflections"]));
         }
 
         [Fact]

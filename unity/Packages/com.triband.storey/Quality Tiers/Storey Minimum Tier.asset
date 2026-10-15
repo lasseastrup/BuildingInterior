@@ -17,6 +17,7 @@ MonoBehaviour:
   lod2PixelsPerMetre: 0.3
   hysteresis: 0.12
   fadeSeconds: 0.35
+  crossFadeFullDetail: 0
   farDistance: 1500
   lod0Residency: 8
   lod1Residency: 130

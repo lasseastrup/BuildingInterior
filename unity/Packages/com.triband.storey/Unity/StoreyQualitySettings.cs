@@ -37,6 +37,9 @@ namespace Triband.Storey.Unity
         [Tooltip("The dithered cross-fade between two LODs, in seconds.")]
         [Range(0, 2)] public float fadeSeconds = 0.35f;
 
+        [Tooltip("Full detail (LOD0) and the shell (LOD1) cross-fade. Off, they switch at once: they look alike where they meet, and the fade draws the whole LOD0 mesh with a discarding material, which Apple's GPUs pay for in every pixel. Fades to and from the massing stay. Off on the minimum tier.")]
+        public bool crossFadeFullDetail = true;
+
         [Tooltip("Beyond this many metres a building is not drawn.")]
         [Min(10)] public float farDistance = 1500f;
 
@@ -85,7 +88,7 @@ namespace Triband.Storey.Unity
         {
             if (s.PX.Length != 3) s.PX = new double[3];   // into the array it has: the site applies this every frame
             s.PX[0] = lod0PixelsPerMetre; s.PX[1] = lod1PixelsPerMetre; s.PX[2] = lod2PixelsPerMetre;
-            s.Hysteresis = hysteresis; s.Fade = Mathf.Max(0.01f, fadeSeconds); s.Far = farDistance;
+            s.Hysteresis = hysteresis; s.Fade = Mathf.Max(0.01f, fadeSeconds); s.FadeDetail = crossFadeFullDetail; s.Far = farDistance;
             s.GlassClear = windowsClearAt; s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.MaxColliders = collidersKept; s.BudgetMs = buildBudgetMs;
             s.Threads = !buildOnWorkerThreads ? 0 : buildThreads > 0 ? buildThreads : -1;
             s.KeepChunkBytes = (long)meshChunksKeptMB << 20;

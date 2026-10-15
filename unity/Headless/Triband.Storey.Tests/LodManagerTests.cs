@@ -116,6 +116,24 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void WithoutFadeDetailFullDetailAndShellSwitchAtOnce()
+        {
+            // the prototype's touch screens: LOD0 and LOD1 switch in one frame, no dithered (discarding) fade of the LOD0
+            // mesh; a change to or from the massing still cross-fades
+            var m = new LodManager(new LodSettings { FadeDetail = false }); var e = Box(m, 0, 100);   // 10 px/m: LOD1
+            Step(m, 10);
+            Assert.Equal((1, 1.0), (e.Shown, e.T));
+            m.Set(0, 20, -5, 30, 5, 10); m.SetBuilt(0, 0, true); m.SetBuilt(0, 1, true);   // 50 px/m: LOD0
+            var f = Step(m, 0.01);
+            Assert.Equal((0, 1, 1.0), (e.Shown, e.From, e.T));
+            Assert.True(e.Visible(0) && !e.Visible(1));
+            Assert.Contains(0, f.Changed);   // its row is written
+            m.Set(0, 1000, -5, 1010, 5, 10); m.SetBuilt(0, 0, true); m.SetBuilt(0, 1, true);   // 1 px/m: the massing
+            Step(m, 0.01);
+            Assert.Equal(2, e.Shown); Assert.True(e.T < 1);   // fading
+        }
+
+        [Fact]
         public void PastTheCapTheLeastRecentlyShownGo()
         {
             var m = new LodManager(new LodSettings { MaxLod1 = 2 });

@@ -716,7 +716,7 @@ const canvas = $('#c');
 // tablet) starts with diffuse lighting and 9-tap shadow edges: the same picture to within a few hundred pixels of a
 // city view, for less GPU time.
 const QKEY = 'storey-quality', TOUCH = matchMedia('(pointer: coarse)').matches;
-const QUAL = Object.assign({msaa:true, maxDpr:2, scale:1, dyn:true, shadows:true, shadowSize:2048, shadowSoft:!TOUCH, shadowCache:true, nd:true, simple:TOUCH, fadeApart:true, hud:false},
+const QUAL = Object.assign({msaa:true, maxDpr:2, scale:1, dyn:true, shadows:true, shadowSize:2048, shadowSoft:!TOUCH, shadowCache:true, shadowSpread:true, nd:true, simple:TOUCH, fadeApart:true, fadeDetail:!TOUCH, hud:false},
   (()=>{ try{ return JSON.parse(localStorage.getItem(QKEY))||{}; }catch(e){ return {}; } })());
 function saveQual(){ try{ localStorage.setItem(QKEY, JSON.stringify(QUAL)); }catch(e){} }
 const renderer = new THREE.WebGLRenderer({canvas, antialias:QUAL.msaa});
@@ -757,7 +757,8 @@ Object.assign(sun.shadow.camera, {left:-SHB,right:SHB,top:SHB,bottom:-SHB,near:1
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(sun, sun.target);
 function setShadows(on, size, soft=QUAL.shadowSoft){
-  if(size && size!==sun.shadow.mapSize.x){ sun.shadow.mapSize.set(size,size); if(sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map=null; } }
+  if(size && size!==sun.shadow.mapSize.x){ sun.shadow.mapSize.set(size,size); if(sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map=null; }
+    if(SHJ.back){ SHJ.back.dispose(); SHJ.back=null; } SHJ.k=-1; }
   const type = soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   if(type!==renderer.shadowMap.type){ renderer.shadowMap.type=type; for(const m of [...Object.values(MAT), ...Object.values(MATL)]) m.needsUpdate=true; }   // the filter is compiled in
   sun.castShadow=on; shadowDirty=true; shadowA.x=NaN;   // a new map size: a new texel to snap to
@@ -793,6 +794,49 @@ function shadowWanted(){
 }
 // what a building casts at a displayed LOD: LOD0 its own mesh, LOD1 and LOD2 its massing (the shadow proxy), beyond far nothing
 const castOf = l => l===0 ? 0 : l===1 || l===2 ? 1 : 2;
+/* A redraw of the shadow map spread over frames (QUAL.shadowSpread). Drawn whole it costs about 5 ms on a phone, most of
+   it the triangles of the full-detail buildings in the box, and the frame that pays it comes late (round 4's report:
+   a third of the frames after a redraw were slow in the pans, almost none of the others). So the casters are shared out over
+   SH_SLICES frames, balanced by triangles, and each frame draws its share into a second map with their own shadow
+   materials (on a layer of its own, the main camera's layer 0 kept); the map and its matrix are swapped in once it is
+   whole. The last map stays meanwhile: the box moves when the focus is SHADOW_SLACK from its middle, so the old map
+   still covers SHADOW_HALF around it, and a building's new LOD casts a few frames late. The first map, play mode (the
+   player moves every frame) and the cache turned off draw it whole, as three.js does. */
+const SH_SLICES = 3;
+const SHJ = {k:-1, pending:false, back:null, cam:new THREE.OrthographicCamera(), matrix:new THREE.Matrix4(), pv:new THREE.Matrix4(), slices:[[],[],[]], clear:new THREE.Color()};
+function shadowStep(want){   // 1: three.js draws the map whole this frame; 1/SH_SLICES: a share of a spread redraw was drawn; 0: none
+  if(!sun.castShadow || !QUAL.shadowSpread || !QUAL.shadowCache || ui.mode==='play' || !sun.shadow.map){ SHJ.k=-1; SHJ.pending=false; return sun.castShadow && want ? 1 : 0; }
+  if(want) SHJ.pending=true;
+  if(SHJ.k<0){ if(!SHJ.pending) return 0; SHJ.pending=false; shadowJob(); SHJ.k=0; }
+  shadowSlice(SHJ.k);
+  if(++SHJ.k===SH_SLICES){ const front=sun.shadow.map; sun.shadow.map=SHJ.back; SHJ.back=front; sun.shadow.matrix.copy(SHJ.matrix); SHJ.k=-1; }
+  return 1/SH_SLICES;
+}
+function shadowJob(){   // the light's camera at the box as it is now, its casters shared out, the second map cleared
+  const c=SHJ.cam, s=sun.shadow.camera;
+  c.left=s.left; c.right=s.right; c.top=s.top; c.bottom=s.bottom; c.near=s.near; c.far=s.far; c.updateProjectionMatrix();
+  c.position.copy(sun.position); c.lookAt(sun.target.position); c.updateMatrixWorld();   // as three.js's LightShadow.updateMatrices
+  SHJ.matrix.set(0.5,0,0,0.5, 0,0.5,0,0.5, 0,0,0.5,0.5, 0,0,0,1).multiply(SHJ.pv.multiplyMatrices(c.projectionMatrix, c.matrixWorldInverse));
+  const all=[];
+  for(const r of recs.values()) if(r.l0 && r.l0.mesh.visible) all.push(r.l0.mesh);
+  for(const cl of cells.values()) if(cl.mesh && cl.mesh.visible) all.push(cl.mesh);
+  const tris=m=>m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count;
+  all.sort((a,b)=>tris(b)-tris(a));
+  const load=new Array(SH_SLICES).fill(0); for(const a of SHJ.slices) a.length=0;
+  for(const m of all){ let j=0; for(let q=1;q<SH_SLICES;q++) if(load[q]<load[j]) j=q; load[j]+=tris(m); SHJ.slices[j].push(m); m.layers.mask=1|(2<<j); }
+  const n=sun.shadow.mapSize.x;
+  if(!SHJ.back || SHJ.back.width!==n){ if(SHJ.back) SHJ.back.dispose(); SHJ.back=new THREE.WebGLRenderTarget(n, n, {minFilter:THREE.NearestFilter, magFilter:THREE.NearestFilter}); SHJ.back.texture.name='.shadowMap'; }
+  const rt=renderer.getRenderTarget(), ca=renderer.getClearAlpha(); renderer.getClearColor(SHJ.clear);
+  renderer.setRenderTarget(SHJ.back); renderer.setClearColor(0xffffff, 1); renderer.clear(); renderer.setClearColor(SHJ.clear, ca); renderer.setRenderTarget(rt);
+}
+function shadowSlice(j){   // one share of the casters into the second map, each with its shadow material
+  const list=SHJ.slices[j], mats=list.map(m=>m.material), bg=scene.background, ac=renderer.autoClear, rt=renderer.getRenderTarget();
+  for(const m of list) m.material=m.customDepthMaterial;
+  scene.background=null; renderer.autoClear=false; renderer.shadowMap.needsUpdate=false; SHJ.cam.layers.mask=2<<j;
+  renderer.setRenderTarget(SHJ.back);
+  try{ renderer.render(scene, SHJ.cam); }
+  finally{ renderer.setRenderTarget(rt); renderer.autoClear=ac; scene.background=bg; list.forEach((m,i)=>{ m.material=mats[i]; }); }
+}
 
 /* =========================================================================
    Shared building materials + per-building data tables
@@ -2087,7 +2131,9 @@ function updateLOD(dt, activeId){
     let vis=true; if(show<2 && !forced){ _sph.center.set(s.x,s.y,s.z); _sph.radius=s.r*1.2+6; vis=_frus.intersectsSphere(_sph); }
     if(show===0 && !ready(r,'l0')){ if(now){ const b=bById(r.id); if(b) genL0(b,r); } else if(forced || vis){ pend.push({r,l:0,p:(forced?3e6:2e6)+rel}); show = ready(r,'l1') ? 1 : 2; } else show=1; }
     if(show===1 && !ready(r,'l1')){ pend.push({r,l:1,p:(vis?1e6:0)+rel}); show=2; }
-    if(show!==r.disp){ r.from=r.disp; r.disp=show; r.t=0; }
+    // full detail and shell switch at once with fadeDetail off (touch screens): they look alike where they meet (LOD0's
+    // windows start as LOD1's painted ones), and the fade drew the whole full-detail mesh with a discarding material
+    if(show!==r.disp){ r.from=r.disp; r.disp=show; r.t = !QUAL.fadeDetail && show<2 && r.from<2 ? 1 : 0; }
     if(r.t<1) r.t=Math.min(1, r.t+dt/LODCFG.fade);
     const v0 = r.disp===0 || (r.t<1 && r.from===0), v1 = r.disp===1 || (r.t<1 && r.from===1), w=occState(r);
     const still = nd && isoOff && r.t>=1, plain = still && w===0 && r.idx!==act;
@@ -3607,7 +3653,7 @@ const FL = {N:1024, n:0};
 // per frame: its interval, main-thread times, draw load, whether it drew the shadow map, the resolution, and for the
 // slow frames' account (flSum): meshes uploaded before it, a resolution change before it, buildings mid-fade, discarding draws
 for(const k of ['dt','js','lod','rnd','gen','calls','tris','sh','res','up','rs','fd','dd']) FL[k]=new Float32Array(FL.N);
-function flPush(dt, js, lod, rnd, sh){ const i=FL.n%FL.N, inf=renderer.info.render; FL.dt[i]=dt; FL.js[i]=js; FL.lod[i]=lod; FL.rnd[i]=rnd; FL.gen[i]=0; FL.calls[i]=inf.calls; FL.tris[i]=inf.triangles; FL.sh[i]=sh?1:0; FL.res[i]=resScale();
+function flPush(dt, js, lod, rnd, sh){ const i=FL.n%FL.N, inf=renderer.info.render; FL.dt[i]=dt; FL.js[i]=js; FL.lod[i]=lod; FL.rnd[i]=rnd; FL.gen[i]=0; FL.calls[i]=inf.calls; FL.tris[i]=inf.triangles; FL.sh[i]=sh; FL.res[i]=resScale();
   FL.up[i]=GEN.up; GEN.up=0; FL.rs[i]=DRS.resized?1:0; DRS.resized=false; FL.fd[i]=lodStats.fading; FL.dd[i]=lodStats.disc; FL.n++; }
 function flGen(ms){ if(FL.n) FL.gen[(FL.n-1)%FL.N]+=ms; }   // building time lands on the frame it followed
 // the display's frame interval (16.7 ms at 60 Hz): a low percentile of the recent intervals
@@ -3662,15 +3708,17 @@ function openQuality(){
   <label>Shadows <select id="qSh">${[[0,'Off'],[1024,'1024²'],[2048,'2048²']].map(([v,l])=>`<option value="${v}" ${(QUAL.shadows?QUAL.shadowSize:0)==v?'selected':''}>${l}</option>`).join('')}</select></label>
   <label>Shadow edges <select id="qShS"><option value="soft" ${QUAL.shadowSoft?'selected':''}>Soft (16 taps)</option><option value="pcf" ${QUAL.shadowSoft?'':'selected'}>Filtered (9 taps)</option></select></label>
   <label class="chk"><input type="checkbox" id="qShC" ${QUAL.shadowCache?'checked':''}> Draw the shadow map only when it changes</label>
+  <label class="chk"><input type="checkbox" id="qShP" ${QUAL.shadowSpread?'checked':''}> Spread each shadow map redraw over ${SH_SLICES} frames</label>
+  <label>Full detail and shell <select id="qFade"><option value="fade" ${QUAL.fadeDetail?'selected':''}>Cross-fade</option><option value="cut" ${QUAL.fadeDetail?'':'selected'}>Switch at once</option></select></label>
   <label class="chk"><input type="checkbox" id="qMsaa" ${QUAL.msaa?'checked':''}> Antialiasing (MSAA; reloads the page)</label>
   <label class="chk"><input type="checkbox" id="qHud" ${QUAL.hud?'checked':''}> Frame HUD</label></div>
   ${benchReport?`<textarea id="qRep" readonly spellcheck="false" style="height:200px;margin-top:10px">${esc(benchReport)}</textarea>`:''}
   <div class="row" style="margin-top:12px"><button class="btn pri" id="qBench">Run benchmark</button>${benchReport?'<button class="btn" id="qCopy">Copy report</button>':''}<span style="flex:1"></span><button class="btn" data-close>Close</button></div>`);
   const ch=()=>{ const sc=$('#qScale').value; QUAL.dyn=sc==='auto'; if(!QUAL.dyn) QUAL.scale=+sc; QUAL.maxDpr=+$('#qDpr').value; QUAL.simple=$('#qLit').value==='simple';
     const sh=+$('#qSh').value; QUAL.shadows=sh>0; if(sh) QUAL.shadowSize=sh; QUAL.shadowSoft=$('#qShS').value==='soft';
-    QUAL.shadowCache=$('#qShC').checked; QUAL.hud=$('#qHud').checked; const reload=QUAL.msaa!==$('#qMsaa').checked; QUAL.msaa=$('#qMsaa').checked;
+    QUAL.shadowCache=$('#qShC').checked; QUAL.shadowSpread=$('#qShP').checked; QUAL.fadeDetail=$('#qFade').value==='fade'; QUAL.hud=$('#qHud').checked; const reload=QUAL.msaa!==$('#qMsaa').checked; QUAL.msaa=$('#qMsaa').checked;
     saveQual(); applyDpr(); setShadows(QUAL.shadows, QUAL.shadowSize, QUAL.shadowSoft); if(reload) location.reload(); };
-  for(const id of ['#qScale','#qDpr','#qLit','#qSh','#qShS','#qShC','#qMsaa','#qHud']) $(id).onchange=ch;
+  for(const id of ['#qScale','#qDpr','#qLit','#qSh','#qShS','#qShC','#qShP','#qFade','#qMsaa','#qHud']) $(id).onchange=ch;
   $('#qBench').onclick=()=>{ closeModal(); benchStart(); };
   if($('#qCopy')) $('#qCopy').onclick=()=>{ const ta=$('#qRep'); navigator.clipboard?.writeText(benchReport).then(()=>toast('Report copied'),()=>{ ta.select(); toast('Select the text to copy it'); }) ?? (ta.select(), toast('Select the text to copy it')); };
 }
@@ -3692,8 +3740,8 @@ const BENCH_PATH = [   // the test city's streets run along x = 80k + 40 and z =
 // box, as the path does, without building any), at a fixed resolution; q: quality changes, bias: LOD bias, px0: LOD0's
 // pixels per metre (1e9: no building near enough for it)
 const BENCH_SWEEP = [
-  ['As set, full resolution', {q:{dyn:false, scale:1}}], ['Fades inside cells', {q:{dyn:false, scale:1, fadeApart:false}}],
-  ['No shadows', {q:{dyn:false, scale:1, shadows:false}}], ['Shadow map 1024', {q:{dyn:false, scale:1, shadowSize:1024}}],
+  ['As set, full resolution', {q:{dyn:false, scale:1}}], ['Shadow map drawn whole', {q:{dyn:false, scale:1, shadowSpread:false}}],
+  ['Full detail cross-faded', {q:{dyn:false, scale:1, fadeDetail:true}}], ['No shadows', {q:{dyn:false, scale:1, shadows:false}}],
   ['Resolution 80%', {q:{dyn:false, scale:0.8}}], ['Resolution 65%', {q:{dyn:false, scale:0.65}}],
 ];
 const SWEEP_CAM = u=>{ const s=0.5-0.5*Math.cos(u*2*Math.PI); return [120-50*s, 48, 180-125*s, 0.45-0.25*s, BENCH_YAW+3.0+1.3*s]; };   // the warm-up covers it whole, so its LODs are built
@@ -3739,13 +3787,13 @@ function benchHead(tPrep){   // the device and the settings as set, before the s
   const gl=renderer.getContext(), app = matchMedia('(display-mode: standalone)').matches || navigator.standalone ? 'home screen app' : 'browser tab';
   return [`Storey benchmark · build ${BUILD} · ${new Date().toISOString().slice(0,16).replace('T',' ')} UTC`, navigator.userAgent,
     `Screen ${screen.width}×${screen.height} @${devicePixelRatio} · ${innerWidth>innerHeight?'landscape':'portrait'} · canvas ${canvas.width}×${canvas.height} (${renderer.getPixelRatio().toFixed(2)}×) · MSAA ${gl.getParameter(gl.SAMPLES)} · ${gpuName()} · ${app} · ${navigator.hardwareConcurrency||'?'} cores`,
-    `${recs.size.toLocaleString()} buildings · ${cells.size} cells · LOD bias ${LODCFG.bias.toFixed(2)} · resolution ${QUAL.dyn?'auto':Math.round(QUAL.scale*100)+'%'} · lighting ${QUAL.simple?'simple':'full'} · shadows ${QUAL.shadows?QUAL.shadowSize+(QUAL.shadowSoft?' soft':' 9 taps')+(QUAL.shadowCache?', drawn when changed':', every frame'):'off'} · city ready in ${(tPrep/1000).toFixed(1)} s · frame interval ${frameIv().toFixed(1)} ms`];
+    `${recs.size.toLocaleString()} buildings · ${cells.size} cells · LOD bias ${LODCFG.bias.toFixed(2)} · resolution ${QUAL.dyn?'auto':Math.round(QUAL.scale*100)+'%'} · lighting ${QUAL.simple?'simple':'full'} · shadows ${QUAL.shadows?QUAL.shadowSize+(QUAL.shadowSoft?' soft':' 9 taps')+(QUAL.shadowCache?', drawn when changed'+(QUAL.shadowSpread?' over '+SH_SLICES+' frames':''):', every frame'):'off'} · full detail ${QUAL.fadeDetail?'cross-faded':'switched at once'} · city ready in ${(tPrep/1000).toFixed(1)} s · frame interval ${frameIv().toFixed(1)} ms`];
 }
 function benchText(head, res, sweep){
   const pad=(v,w)=>String(v).padStart(w), num=(v,d=1)=>v==null||isNaN(v)?'-':v.toFixed(d);
   const row=(name,S)=>S ? name.padEnd(26)+pad(num(S.fps),5)+pad(num(S.p50),6)+pad(num(S.p95),6)+pad(num(S.p99),6)+pad(num(S.max,0),5)+pad((S.slow*100).toFixed(0)+'%',5)+pad(num(S.js),6)+pad(num(S.js95),6)+pad(num(S.gen),6)+pad(S.calls.toFixed(0),6)+pad(num(S.disc),5)+pad(fmtN(S.tris),7)+pad((S.sh*100).toFixed(0)+'%',5)+pad(Math.round(S.res*100)+'%',5)+pad(Math.round(S.resMin*100)+'%',5) : name.padEnd(26)+' (no frames)';
   const cols='part'.padEnd(26)+'  fps   p50   p95   p99  max slow    JS JSp95 build draws disc   tris  shdw  res  min';
-  return [...head, '', 'ms per frame; slow: frames over 20 ms; JS: main thread in the frame; build: LOD building after it; disc: buildings drawn with a shader that can discard pixels (a frame\'s average); shdw: frames that drew the shadow map; res: resolution drawn (average, lowest)', '',
+  return [...head, '', 'ms per frame; slow: frames over 20 ms; JS: main thread in the frame; build: LOD building after it; disc: buildings drawn with a shader that can discard pixels (a frame\'s average); shdw: shadow map redraws a frame (a spread one counts a share in each of its frames); res: resolution drawn (average, lowest)', '',
     cols, ...res.map(([n,S])=>row(n,S)), '', 'From the city view to the street and back, LODs built, by setting:', cols, ...sweep.map(([n,S])=>row(n,S)),
     '', `WebGL context lost ${CTX.lost} times since the page opened.`,
     '', 'Slow frames by what the two frames before them did: the share of frames slow after one that drew the shadow map, came after a resolution change, came after meshes were uploaded, or had buildings fading between LODs, and the share slow without it (-: no such frame)', '',
@@ -3790,7 +3838,7 @@ function tick(now){
   const activeId=applyView(); updateCutaway(dt);
   const tl=performance.now();
   updateLOD(dt, activeId);
-  const tr=performance.now(), sh=shadowWanted(); renderer.shadowMap.needsUpdate=sh;
+  const tr=performance.now(), sh=shadowStep(shadowWanted()); renderer.shadowMap.needsUpdate=sh===1;
   renderer.render(scene,camera);
   const te=performance.now();
   flPush(fdt, te-tf, tr-tl, te-tr, sh); drsTick(now); perfTick(now); hudTick(now);
