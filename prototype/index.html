@@ -716,12 +716,12 @@ const canvas = $('#c');
 // tablet) starts with diffuse lighting and 9-tap shadow edges: the same picture to within a few hundred pixels of a
 // city view, for less GPU time.
 const QKEY = 'storey-quality', TOUCH = matchMedia('(pointer: coarse)').matches;
-const QUAL = Object.assign({msaa:true, maxDpr:2, scale:1, dyn:true, shadows:true, shadowSize:2048, shadowSoft:!TOUCH, shadowCache:true, nd:true, simple:TOUCH, hud:false},
+const QUAL = Object.assign({msaa:true, maxDpr:2, scale:1, dyn:true, shadows:true, shadowSize:2048, shadowSoft:!TOUCH, shadowCache:true, nd:true, simple:TOUCH, fadeApart:true, hud:false},
   (()=>{ try{ return JSON.parse(localStorage.getItem(QKEY))||{}; }catch(e){ return {}; } })());
 function saveQual(){ try{ localStorage.setItem(QKEY, JSON.stringify(QUAL)); }catch(e){} }
 const renderer = new THREE.WebGLRenderer({canvas, antialias:QUAL.msaa});
 // Auto resolution (QUAL.dyn): the share of the pixel ratio drawn, stepped by drsTick to hold 60 fps
-const DRS = {levels:[1, 0.9, 0.8, 0.72, 0.65, 0.58, 0.5], i:0, at:0, upAt:-1e9, ceil:0, ceilUntil:0};
+const DRS = {levels:[1, 0.9, 0.8, 0.72, 0.65, 0.58, 0.5], i:0, at:0, upAt:-1e9, ceil:0, ceilUntil:0, resized:false};
 const resScale = () => QUAL.dyn ? DRS.levels[DRS.i] : QUAL.scale;
 const applyDpr = () => renderer.setPixelRatio(Math.min(devicePixelRatio, QUAL.maxDpr)*resScale());
 applyDpr();
@@ -814,7 +814,7 @@ const paramTex = new THREE.DataTexture(paramArr, TEX_W, PARAM_ROWS, THREE.RGBAFo
 const G = { uCam:{value:new THREE.Vector3()}, uFocus:{value:new THREE.Vector3()}, uCutH:{value:1.0}, uCamDir:{value:new THREE.Vector2(0,1)},
   uActive:{value:-1}, uClipY:{value:1e9}, uCutOn:{value:0}, uCutBase:{value:0}, uCutTop:{value:0}, uCap:{value:new THREE.Vector3(0.23,0.25,0.24)},
   uState:{value:stateTex}, uParams:{value:paramTex}, uLodTint:{value:0}, uIso:{value:0}, uIsoBid:{value:-1},
-  uWallT:{value:wallTex}, uOccT:{value:occTex}, uOccMode:{value:0}, uPZ:{value:1}, uPScr:{value:new THREE.Vector2()}, uHoleR:{value:100} };
+  uWallT:{value:wallTex}, uOccT:{value:occTex}, uOccMode:{value:0}, uPZ:{value:1}, uPScr:{value:new THREE.Vector2()}, uHoleR:{value:100}, uFadeApart:{value:1} };
 // The varyings a variant's fragment stage reads, and no more (docs/PERFORMANCE.md §7.2): a tile-based GPU writes every
 // vertex output to memory between the stages. The discard-free (OCC_ND) and depth materials read the building and its LOD
 // (tints, isolate); only the full colour materials carry the fade and the cutaway's and occluders' values.
@@ -825,7 +825,7 @@ varying vec3 vOccW; varying vec4 vWall; varying float vKind; varying float vWid;
 #endif
 `;
 const OCC_VERT_DECL = `attribute vec4 aWall; attribute float aKind; attribute float aTag; attribute float aWid;
-uniform highp sampler2D uState; uniform highp sampler2D uOccT; uniform float uActive;
+uniform highp sampler2D uState; uniform highp sampler2D uOccT; uniform float uActive; uniform float uFadeApart;
 ${OCC_VARYINGS}`;
 // Sink: squash each storey of a building in the way between its floor lines (runs before projection, so shadows follow)
 const OCC_SINK = `
@@ -875,6 +875,11 @@ const OCC_VERT = `vBid = mod(aTag, 65536.0); vLod = floor(aTag / 65536.0);
     if (!(isDisp && isFrom) && !(isDisp ? st.z >= 0.5 : isFrom && st.z < 0.5)) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
 #else
     if (!isDisp && !isFrom) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);   // LOD not shown: clip the whole triangle
+#if defined(OCC_MASS) && !defined(OCC_FADE)
+    // a member cross-fading to or from its massing draws it on its own (massMesh, with the discarding material), so its
+    // cell draws without discard
+    if (uFadeApart > 0.5 && st.z < 1.0 && isDisp != isFrom) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+#endif
 #ifndef OCC_ND
     vFade = st.z >= 1.0 || (isDisp && isFrom) ? 3.0 : (isDisp ? st.z : -1.0 - st.z);
     vOcc = st.w - 1.0;   // building in the way: its occluder slot, or -1
@@ -1004,7 +1009,7 @@ vec3 facadeColor(){
 function patch(mat, o={}){
   mat.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, G);
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n'+(o.depth?'#define OCC_DEPTH\n':'')+(o.nd?'#define OCC_ND\n':'')+(o.massing?'#define OCC_MASS\n':'')+OCC_VERT_DECL+(o.massing?MASS_VERT_DECL:''))
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n'+(o.depth?'#define OCC_DEPTH\n':'')+(o.nd?'#define OCC_ND\n':'')+(o.massing?'#define OCC_MASS\n':'')+(o.fade?'#define OCC_FADE\n':'')+OCC_VERT_DECL+(o.massing?MASS_VERT_DECL:''))
       .replace('#include <project_vertex>', OCC_SINK+'\n#include <project_vertex>\n'+OCC_VERT+(o.massing?MASS_VERT:''));
     let fs = sh.fragmentShader.replace('#include <common>', '#include <common>\n'+(o.depth?'#define OCC_DEPTH\n':'')+(o.nd?'#define OCC_ND\n':'')+OCC_FRAG_DECL+(o.massing && !o.depth?MASS_FRAG_DECL:'')).replace('void main() {', 'void main() {\n  occlude();');
     fs = fs.replace('#include <color_fragment>', '#include <color_fragment>\n'+(o.massing?'  diffuseColor.rgb = facadeColor();\n':'')+'  if (uLodTint > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, lodTint(vLod), 0.65);\n  if (uIso > 0.001 && abs(vBid - uIsoBid) > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.82, 0.83), uIso * 0.7);');
@@ -1012,7 +1017,7 @@ function patch(mat, o={}){
     fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n'+(o.cap?'  if (!gl_FrontFacing) gl_FragColor.rgb = uCap;\n':'')+'  gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * 0.1 + vec3(0.01, 0.011, 0.013), gOccDark);\n  gl_FragColor.a = mix(gl_FragColor.a, 1.0, gOccDark);');
     sh.fragmentShader = fs;
   };
-  mat.customProgramCacheKey = () => 'occ'+(o.cap?1:0)+(o.massing?'m':'')+(o.depth?'d':'')+(o.nd?'n':'');
+  mat.customProgramCacheKey = () => 'occ'+(o.cap?1:0)+(o.massing?'m':'')+(o.depth?'d':'')+(o.nd?'n':'')+(o.fade?'f':'');
   return mat;
 }
 /* The *N materials leave out every discard (OCC_ND). A shader that can discard turns off the hidden surface removal of
@@ -1030,6 +1035,7 @@ const MAT = {
   depth: patch(new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide}), {depth:true}),
   mass: patch(new THREE.MeshStandardMaterial({roughness:0.9, metalness:0, side:THREE.DoubleSide}), {cap:true, massing:true}),
   massDepth: patch(new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide}), {massing:true, depth:true}),
+  massFade: patch(new THREE.MeshStandardMaterial({roughness:0.9, metalness:0, side:THREE.DoubleSide}), {cap:true, massing:true, fade:true}),   // massMesh's
 };
 // Simple lighting (QUAL.simple): the opaque and massing materials lit diffuse only (Lambert), no specular term. The
 // Unity package's minimum tier turns URP's specular highlights and reflections off the same way (docs/PERFORMANCE.md §7.3)
@@ -1038,6 +1044,7 @@ const MATL = {
   massN: patch(new THREE.MeshLambertMaterial({side:THREE.DoubleSide}), {cap:true, massing:true, nd:true}),
   opaque: patch(new THREE.MeshLambertMaterial({vertexColors:true, side:THREE.DoubleSide}), {cap:true}),
   mass: patch(new THREE.MeshLambertMaterial({side:THREE.DoubleSide}), {cap:true, massing:true}),
+  massFade: patch(new THREE.MeshLambertMaterial({side:THREE.DoubleSide}), {cap:true, massing:true, fade:true}),
 };
 
 /* ---- geometry builder: boxes & polygons with per-vertex colour, building tag and occlusion data ---- */
@@ -1944,7 +1951,7 @@ function freeSlots(r){ for(const x of r.slots||[]) slotFree.push(x); r.slots=[];
 const LODCFG = { bias:1, PX:[16, 4, 0.3], hyst:0.12, fade:0.35, cell:128, maxL0:16, maxL1:260, budgetMs:8 };   // PX: pixels per metre needed for LOD0 / LOD1 / LOD2
 const recs = new Map(), recByIdx = [], freeIdx = []; let nextIdx = 0;
 const dirty = new Set(), cells = new Map();
-const lodStats = { n:[0,0,0,0], cells:0, cellsShown:0, queue:0, gen:0 };
+const lodStats = { n:[0,0,0,0], cells:0, cellsShown:0, queue:0, gen:0, fading:0, disc:0 };
 let frameNo = 0;
 const ghostMat = new THREE.LineBasicMaterial({color:'#DD5A12', transparent:true, opacity:0.45, depthWrite:false});
 
@@ -1962,6 +1969,19 @@ function boundsOf(b){ const bb=bboxAll(b), H=roofY(b)+Math.max(1.1,(roofParts(b)
     x0:bb.x0+b.pos.x-T_EXT, x1:bb.x1+b.pos.x+T_EXT, z0:bb.z0+b.pos.z-T_EXT, z1:bb.z1+b.pos.z+T_EXT, y1:H}; }
 const ready = (r,k) => !!r[k] && r[k].ver===r.ver;
 function addMesh(geo, mat, depth, id){ const m=new THREE.Mesh(geo,mat); m.castShadow=!!depth; m.receiveShadow=true; if(depth) m.customDepthMaterial=depth; m.userData.bid=id; m.matrixAutoUpdate=false; m.visible=false; scene.add(m); return m; }
+// A building's own massing, drawn while it cross-fades to or from LOD2: its cell skips it meanwhile (OCC_VERT), so a cell
+// draws without discard while its members' LODs change, and only the fading building pays for the dither
+function massMesh(r){
+  if(r.l2m) return r.l2m;
+  const L=r.l2, g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(L.pos,3)); g.setAttribute('normal', new THREE.BufferAttribute(L.nrm,3,true));
+  g.setAttribute('aFac', new THREE.BufferAttribute(L.fac,4)); g.setAttribute('aFac2', new THREE.BufferAttribute(L.fac2,2)); g.setAttribute('aSlot', new THREE.BufferAttribute(L.slot,1));
+  g.setAttribute('aTag', new THREE.BufferAttribute(new Float32Array(L.count).fill(L.tag),1));
+  g.setIndex(new THREE.BufferAttribute(L.idx,1)); g.computeBoundingSphere();
+  const m=new THREE.Mesh(g, MAT.massFade); m.receiveShadow=true; m.matrixAutoUpdate=false; m.visible=false; m.userData.bid=r.id; scene.add(m);   // its cell casts its shadow
+  return r.l2m=m;
+}
+function disposeMass(r){ if(r.l2m){ scene.remove(r.l2m); r.l2m.geometry.dispose(); r.l2m=null; } }
 function disposeLod(r,k){ const L=r[k]; if(!L) return; for(const m of [L.mesh,L.glass]) if(m){ scene.remove(m); m.geometry.dispose(); } if(L.wbase>0) wallRelease(L.wbase, L.walls.length); r[k]=null; }
 function installL0(b,r,{op,gl,segs}){ disposeLod(r,'l0');
   const wbase=wallAlloc(op.walls.length), party=[]; op.walls.forEach((w,i)=>{ if(w.K>=8) party.push(i); });
@@ -1979,7 +1999,7 @@ function refreshBuilding(b){
   freeSlots(r);
   r.sph=boundsOf(b);
   { const bb=bboxAll(b); r.bbw={x0:bb.x0+b.pos.x, z0:bb.z0+b.pos.z, x1:bb.x1+b.pos.x, z1:bb.z1+b.pos.z}; }
-  r.l2=buildLOD2(b, r.idx, r); shadowDirty=true;
+  r.l2=buildLOD2(b, r.idx, r); disposeMass(r); shadowDirty=true;
   const key=cellKey(r.sph.x, r.sph.z);
   if(r.cell && r.cell!==key){ const oc=cells.get(r.cell); if(oc){ oc.members.delete(r); oc.dirty=true; } }
   r.cell=key; const c=cellOf(key); c.members.add(r); c.dirty=true;
@@ -1989,7 +2009,7 @@ function refreshBuilding(b){
   if(r.l1){ if(r.disp===1 || (r.t<1 && r.from===1)) genL1(b,r); else disposeLod(r,'l1'); }
 }
 function removeRec(r){
-  disposeLod(r,'l0'); disposeLod(r,'l1');
+  disposeLod(r,'l0'); disposeLod(r,'l1'); disposeMass(r);
   if(r.cell){ const c=cells.get(r.cell); if(c){ c.members.delete(r); c.dirty=true; } }
   jobs.delete(r.idx*2); jobs.delete(r.idx*2+1); shadowDirty=true;
   gridSet(r,null); recs.delete(r.id); recByIdx[r.idx]=null; freeIdx.push(r.idx); freeSlots(r);
@@ -2034,7 +2054,9 @@ function updateLOD(dt, activeId){
   _frus.setFromProjectionMatrix(_pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   const pend=genPend; pend.length=0; let changed=false; const N=lodStats.n; N[0]=N[1]=N[2]=N[3]=0;
   // which meshes can draw with the discard-free materials: not fading, not isolated away, not cut, not in the way
-  const isoOff=G.uIso.value<=0.001, act=G.uActive.value, nd=QUAL.nd, M=QUAL.simple ? MATL : MAT;
+  const isoOff=G.uIso.value<=0.001, act=G.uActive.value, nd=QUAL.nd, M=QUAL.simple ? MATL : MAT, apart=QUAL.fadeApart;
+  G.uFadeApart.value=apart?1:0;
+  let fading=0, disc=0;   // for the frame log: buildings mid-fade, buildings drawn with a discarding colour material
   for(const r of recs.values()){
     const s=r.sph, dx=Math.max(s.x0-cp.x,0,cp.x-s.x1), dy=Math.max(-cp.y,0,cp.y-s.y1), dz=Math.max(s.z0-cp.z,0,cp.z-s.z1);
     const d=Math.max(1, Math.hypot(dx,dy,dz)), rel=pxm/d;
@@ -2059,10 +2081,15 @@ function updateLOD(dt, activeId){
     const still = nd && isoOff && r.t>=1, plain = still && w===0 && r.idx!==act;
     if(r.l0){ const L=r.l0, m=L.mesh; m.visible=v0; if(L.glass) L.glass.visible=v0; if(v0) L.used=frameNo;
       const p = plain && !(act>=0 && L.party.some(i=>(L.walls[i].K>>3)-1===act));   // a party wall is cut with its neighbour
-      m.material = p ? M.opaqueN : M.opaque; m.customDepthMaterial = nd && isoOff ? MAT.depthN : MAT.depth; }
-    if(r.l1){ const m=r.l1.mesh; m.visible=v1; if(v1) r.l1.used=frameNo; m.material = plain ? M.opaqueN : M.opaque; }
-    if(r.cell && (!plain || !isoOff) && (r.disp===2 || (r.t<1 && r.from===2))){   // its cell needs the full shader while its massing shows and can discard
+      m.material = p ? M.opaqueN : M.opaque; m.customDepthMaterial = nd && isoOff ? MAT.depthN : MAT.depth; if(v0 && !p) disc++; }
+    if(r.l1){ const m=r.l1.mesh; m.visible=v1; if(v1) r.l1.used=frameNo; m.material = plain ? M.opaqueN : M.opaque; if(v1 && !plain) disc++; }
+    // fading to or from its massing: drawn on its own (massMesh), its cell skipping it; otherwise its cell needs the
+    // full shader while its massing shows and can discard
+    const apartNow = apart && r.t<1 && (r.disp===2)!==(r.from===2);
+    if(apartNow || r.l2m){ const m=apartNow ? massMesh(r) : r.l2m; m.visible=apartNow; if(apartNow){ m.material=M.massFade; disc++; } }
+    if(r.cell && (!plain || !isoOff) && (apart ? r.disp===2 && r.t>=1 : r.disp===2 || (r.t<1 && r.from===2))){
       const cl=cells.get(r.cell); if(cl) cl.busy=frameNo; }
+    if(r.t<1) fading++;
     const o=r.idx*4;
     if(stateArr[o]!==r.disp || stateArr[o+1]!==r.from || stateArr[o+2]!==r.t || stateArr[o+3]!==w){
       stateArr[o]=r.disp; stateArr[o+1]=r.from; stateArr[o+2]=r.t; stateArr[o+3]=w; changed=true;
@@ -2083,15 +2110,16 @@ function updateLOD(dt, activeId){
     let any=false, cast=false;
     for(const r of c.members){ if(r.disp===2 || (r.t<1 && r.from===2)){ any=true; break; } if(r.disp===1 || (r.t<1 && r.from===1)) cast=true; }
     c.mesh.visible=any || (cast && sun.castShadow); if(any) shown++;
-    c.mesh.material = nd && isoOff && c.busy!==frameNo ? M.massN : M.mass; c.mesh.customDepthMaterial = nd && isoOff ? MAT.massDepthN : MAT.massDepth; }
-  lodStats.cells=cells.size; lodStats.cellsShown=shown;
+    c.mesh.material = nd && isoOff && c.busy!==frameNo ? M.massN : M.mass; c.mesh.customDepthMaterial = nd && isoOff ? MAT.massDepthN : MAT.massDepth;
+    if(any && c.mesh.material===M.mass) for(const r of c.members) if(r.disp===2 ? r.t>=1 || !apart : r.t<1 && r.from===2 && !apart) disc++; }
+  lodStats.cells=cells.size; lodStats.cellsShown=shown; lodStats.fading=fading; lodStats.disc=disc;
 }
 /* Generation runs after the frame is handed to the GPU, in the time left before the next one is due, so it
    overlaps the GPU's work instead of delaying it: the frame loop posts a task (scheduleGen) and the task builds
    storeys, nearest on-screen building first, until the next frame's start minus a margin. A step that is
    expected to overrun (by the job's last step, or the average for its LOD) waits for the next frame, unless
    nothing has run for a few frames. New meshes are uploaded right away (preUpload), not in the next render(). */
-const GEN = {est:[2.5,1.5], safe:2, starve:0, at:0, posted:false};
+const GEN = {est:[2.5,1.5], safe:2, starve:0, at:0, posted:false, up:0};   // up: meshes uploaded since the last frame
 const genCh = new MessageChannel();
 genCh.port1.onmessage = () => { GEN.posted=false; if(!genPend.length || tickHold) return;
   const left = GEN.at + frameIv() - GEN.safe - performance.now();
@@ -2117,7 +2145,7 @@ function genSlice(budget){
 // upload a new mesh's buffers now: render it with nothing to draw (drawRange 0) into a 1x1 target
 const upRT = new THREE.WebGLRenderTarget(1,1,{depthBuffer:false}), upMat = new THREE.MeshBasicMaterial();
 function preUpload(m){
-  if(!m) return; const g=m.geometry, n=g.drawRange.count, v=m.visible, fc=m.frustumCulled, mat=m.material, rt=renderer.getRenderTarget(), ac=renderer.autoClear;
+  if(!m) return; GEN.up++; const g=m.geometry, n=g.drawRange.count, v=m.visible, fc=m.frustumCulled, mat=m.material, rt=renderer.getRenderTarget(), ac=renderer.autoClear;
   g.drawRange.count=0; m.visible=true; m.frustumCulled=false; m.material=upMat; renderer.autoClear=false; renderer.setRenderTarget(upRT);
   try{ renderer.render(m, camera); } finally { renderer.setRenderTarget(rt); renderer.autoClear=ac; g.drawRange.count=n; m.visible=v; m.frustumCulled=fc; m.material=mat; }
 }
@@ -3564,21 +3592,32 @@ $('#bPerf').onclick=()=>openPerf(!perfOpen);
    ========================================================================= */
 const BUILD = window.STOREY_BUILD || 'dev';   // the site's version, stamped by prototype/web/build.mjs
 const FL = {N:1024, n:0};
-for(const k of ['dt','js','lod','rnd','gen','calls','tris','sh','res']) FL[k]=new Float32Array(FL.N);
-function flPush(dt, js, lod, rnd, sh){ const i=FL.n%FL.N, inf=renderer.info.render; FL.dt[i]=dt; FL.js[i]=js; FL.lod[i]=lod; FL.rnd[i]=rnd; FL.gen[i]=0; FL.calls[i]=inf.calls; FL.tris[i]=inf.triangles; FL.sh[i]=sh?1:0; FL.res[i]=resScale(); FL.n++; }
+// per frame: its interval, main-thread times, draw load, whether it drew the shadow map, the resolution, and for the
+// slow frames' account (flSum): meshes uploaded before it, a resolution change before it, buildings mid-fade, discarding draws
+for(const k of ['dt','js','lod','rnd','gen','calls','tris','sh','res','up','rs','fd','dd']) FL[k]=new Float32Array(FL.N);
+function flPush(dt, js, lod, rnd, sh){ const i=FL.n%FL.N, inf=renderer.info.render; FL.dt[i]=dt; FL.js[i]=js; FL.lod[i]=lod; FL.rnd[i]=rnd; FL.gen[i]=0; FL.calls[i]=inf.calls; FL.tris[i]=inf.triangles; FL.sh[i]=sh?1:0; FL.res[i]=resScale();
+  FL.up[i]=GEN.up; GEN.up=0; FL.rs[i]=DRS.resized?1:0; DRS.resized=false; FL.fd[i]=lodStats.fading; FL.dd[i]=lodStats.disc; FL.n++; }
 function flGen(ms){ if(FL.n) FL.gen[(FL.n-1)%FL.N]+=ms; }   // building time lands on the frame it followed
 // the display's frame interval (16.7 ms at 60 Hz): a low percentile of the recent intervals
 let ivMs=16.67, ivAt=0;
 function frameIv(){ if(FL.n-ivAt<30 || FL.n<40) return ivMs; ivAt=FL.n; const a=[]; for(let j=1;j<=120 && j<FL.n;j++) a.push(FL.dt[(FL.n-j)%FL.N]); a.sort((x,y)=>x-y); ivMs=clamp(a[Math.floor(a.length*0.1)], 6, 34); return ivMs; }
 // a summary of the frames from frame number a on: rate, interval percentiles, frames slower than 20 ms (a missed
-// frame at 60 Hz), main thread per frame, draw calls, triangles and how often the shadow map was drawn
+// frame at 60 Hz), main thread per frame, draw calls, triangles, discarding draws and how often the shadow map was drawn.
+// A frame's interval ends when the work of the frames before it is done, so each slow one is put down to what the two
+// frames before it did: drew the shadow map, followed a resolution change, followed mesh uploads, had buildings fading
 function flSum(a){
   const n=Math.min(FL.n-a, FL.N); if(n<2) return null;
   const col=k=>{ const v=new Float32Array(n); for(let j=0;j<n;j++) v[j]=FL[k][(FL.n-n+j)%FL.N]; return v; };
   const avg=v=>v.reduce((x,y)=>x+y,0)/v.length, pct=(v,p)=>{ const q=Float32Array.from(v).sort(); return q[Math.min(q.length-1, Math.floor(p*q.length))]; };
   const dt=col('dt'), js=col('js'), gen=col('gen');
+  // per cause: [frames with it, slow ones of them, frames without it, slow ones of them]
+  const why={sh:[0,0,0,0], rs:[0,0,0,0], up:[0,0,0,0], fd:[0,0,0,0]}, at=(k,j)=>FL[k][((FL.n-n+j)%FL.N+FL.N)%FL.N];
+  for(let j=0;j<n;j++){ const slow=dt[j]>20?1:0;
+    const has={sh:at('sh',j-1) || at('sh',j-2), rs:at('rs',j-1) || at('rs',j-2), up:at('up',j-1) || at('up',j-2), fd:at('fd',j-1)>0};
+    for(const k in why){ const w=why[k]; if(has[k]){ w[0]++; w[1]+=slow; } else { w[2]++; w[3]+=slow; } } }
   return {n, fps:n*1000/dt.reduce((x,y)=>x+y,0), p50:pct(dt,.5), p95:pct(dt,.95), p99:pct(dt,.99), max:pct(dt,1), slow:dt.filter(v=>v>20).length/n,
-    js:avg(js), js95:pct(js,.95), lod:avg(col('lod')), gen:avg(gen), genMax:pct(gen,1), rnd:avg(col('rnd')), calls:avg(col('calls')), tris:avg(col('tris')), sh:avg(col('sh')), res:avg(col('res')), resMin:pct(col('res'),0)};
+    js:avg(js), js95:pct(js,.95), lod:avg(col('lod')), gen:avg(gen), genMax:pct(gen,1), rnd:avg(col('rnd')), calls:avg(col('calls')), tris:avg(col('tris')), sh:avg(col('sh')), res:avg(col('res')), resMin:pct(col('res'),0),
+    disc:avg(col('dd')), fading:avg(col('fd')), why};
 }
 /* Auto resolution. A GPU that can't draw a frame at this resolution in time shows as frames later than 60 fps's 16.7 ms
    while the main thread had time to spare (a frame late from the main thread isn't helped by fewer pixels). Three of
@@ -3594,7 +3633,7 @@ function drsTick(now){
   let to=DRS.i;
   if(recent>=3){ to=Math.min(DRS.levels.length-1, DRS.i+(recent>=10?2:1)); if(now-DRS.upAt<3000){ DRS.ceil=to; DRS.ceilUntil=now+20000; } }
   else if(!late && n>=120 && now-DRS.at>2000 && DRS.i>0 && (now>DRS.ceilUntil || DRS.i-1>=DRS.ceil)){ to=DRS.i-1; DRS.upAt=now; }
-  if(to!==DRS.i){ DRS.i=to; DRS.at=now; applyDpr(); }
+  if(to!==DRS.i){ DRS.i=to; DRS.at=now; applyDpr(); DRS.resized=true; }
 }
 const hudEl=$('#fhud'); let hudT=0, hudFrom=0;
 function hudTick(now){
@@ -3604,7 +3643,7 @@ function hudTick(now){
 }
 function gpuName(){ const gl=renderer.getContext(), e=gl.getExtension('WEBGL_debug_renderer_info'); return String(e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); }
 function openQuality(){
-  openModal(`<h2>Performance</h2><p class="note" style="margin:0 0 10px">Render settings for this browser. The benchmark flies a fixed path over the 1,000-building test city, then compares settings on a street-level view (about 90 seconds), and reports frame times to copy.</p>
+  openModal(`<h2>Performance</h2><p class="note" style="margin:0 0 10px">Render settings for this browser. The benchmark flies a fixed path over the 1,000-building test city, then compares settings moving from the city view to the street (about 90 seconds), and reports frame times to copy.</p>
   <div class="pq"><label>Resolution <select id="qScale">${[['auto','Auto (holds 60 fps)'],[1,'Full'],[0.75,'75%'],[0.5,'50%']].map(([v,l])=>`<option value="${v}" ${(QUAL.dyn?'auto':QUAL.scale)==v?'selected':''}>${l}</option>`).join('')}</select></label>
   <label>Pixel ratio up to <select id="qDpr">${[1,1.5,2,3].map(v=>`<option ${QUAL.maxDpr==v?'selected':''}>${v}</option>`).join('')}</select></label>
   <label>Lighting <select id="qLit"><option value="full" ${QUAL.simple?'':'selected'}>Full (PBR)</option><option value="simple" ${QUAL.simple?'selected':''}>Simple (diffuse)</option></select></label>
@@ -3625,8 +3664,8 @@ function openQuality(){
 }
 
 /* The benchmark: the 1,000-building test city, a fixed camera path (frame times while LODs are being built and
-   the shadow box follows the focus, at the settings as set: auto resolution starts from full), then the close-up view
-   swaying under several settings at fixed resolutions, its LODs ready. Each
+   the shadow box follows the focus, at the settings as set: auto resolution starts from full), then a move from the city
+   view to the street and back under several settings at fixed resolutions, its LODs ready. Each
    part reports frame rate, interval percentiles, slow frames (over 20 ms), main-thread time and draw load. */
 let bench=null, benchReport='';
 const BENCH_YAW = 1.12*Math.PI;
@@ -3637,15 +3676,15 @@ const BENCH_PATH = [   // the test city's streets run along x = 80k + 40 and z =
   ['Street, pan', 6, u=>[200-u*160, 48, 60, 0.2, Math.PI/2]],
   ['Close up, pan', 6, u=>[40, 48+u*120, 30, 0.15, 0]],
 ];
-// the close-up view (the path's hardest) swaying, its LODs built, at a fixed resolution; q: quality changes, bias: LOD bias,
-// px0: LOD0's pixels per metre (1e9: no building near enough for it)
+// from the city view down to the street and back, its LODs built (the move changes buildings' LODs and moves the shadow
+// box, as the path does, without building any), at a fixed resolution; q: quality changes, bias: LOD bias, px0: LOD0's
+// pixels per metre (1e9: no building near enough for it)
 const BENCH_SWEEP = [
-  ['Full resolution', {q:{dyn:false, scale:1}}], ['Resolution 80%', {q:{dyn:false, scale:0.8}}], ['Resolution 65%', {q:{dyn:false, scale:0.65}}],
-  ['Resolution 50%', {q:{dyn:false, scale:0.5}}], ['Shadow map every frame', {q:{dyn:false, scale:1, shadowCache:false}}],
-  ['No shadows', {q:{dyn:false, scale:1, shadows:false}}], ['LOD detail 50%', {q:{dyn:false, scale:1}, bias:0.5}],
-  ['No full detail (shells)', {q:{dyn:false, scale:1}, px0:1e9}],
+  ['As set, full resolution', {q:{dyn:false, scale:1}}], ['Fades inside cells', {q:{dyn:false, scale:1, fadeApart:false}}],
+  ['No shadows', {q:{dyn:false, scale:1, shadows:false}}], ['Shadow map 1024', {q:{dyn:false, scale:1, shadowSize:1024}}],
+  ['Resolution 80%', {q:{dyn:false, scale:0.8}}], ['Resolution 65%', {q:{dyn:false, scale:0.65}}],
 ];
-const SWEEP_CAM = u=>[40, 108, 30, 0.15, 0.25*Math.sin(u*2*Math.PI)];   // a slow sway the warm-up covers whole, so its LODs are built
+const SWEEP_CAM = u=>{ const s=0.5-0.5*Math.cos(u*2*Math.PI); return [120-50*s, 48, 180-125*s, 0.45-0.25*s, BENCH_YAW+3.0+1.3*s]; };   // the warm-up covers it whole, so its LODs are built
 // every building material's program for the lights and settings now, compiled at once (a phone takes about 300 ms a
 // program, a hitch where a variant is first drawn): a tiny mesh per material, compiled with the scene, then removed
 function prewarm(){
@@ -3658,7 +3697,7 @@ function* benchFrames(ms, until){ let t0=null; for(;;){ const now=yield; if(t0==
 function* benchPart(label, sec, cam){ let t0=null; const a=FL.n; for(;;){ const now=yield; if(t0===null) t0=now; const u=(now-t0)/(sec*1000);
   if(u>=1) return flSum(a+1); benchCam(cam(u)); $('#benchMsg').textContent=`${label} · ${Math.ceil(sec*(1-u))} s`; } }
 function* benchRun(){
-  const keep={q:{...QUAL}, bias:LODCFG.bias, px0:LODCFG.PX[0], t:camEdit.target.clone(), yaw:camEdit.yaw, pitch:camEdit.pitch, dist:camEdit.dist}, res=[], sweep=[];
+  const keep={q:{...QUAL}, bias:LODCFG.bias, px0:LODCFG.PX[0], maxL0:LODCFG.maxL0, t:camEdit.target.clone(), yaw:camEdit.yaw, pitch:camEdit.pitch, dist:camEdit.dist}, res=[], sweep=[];
   try{
     const msg=t=>{ $('#benchMsg').textContent=t; };
     if(state.buildings.filter(b=>b.gen).length!==1000) generateCity(1000);
@@ -3668,7 +3707,9 @@ function* benchRun(){
     const head=benchHead(tPrep);
     DRS.i=0; DRS.at=DRS.ceilUntil=0; DRS.upAt=-1e9; applyDpr();   // auto resolution starts the path from full
     for(const [name, sec, cam] of BENCH_PATH) res.push([name, yield* benchPart(name, sec, cam)]);
-    // warm up on the sway until nothing has been waiting to build for a second (20 s at most, for slow devices)
+    // warm up on the move until nothing has been waiting to build for a second (20 s at most, for slow devices), keeping
+    // every full-detail LOD it builds, so the settings below are measured on the same LODs and no building
+    LODCFG.maxL0=Math.max(keep.maxL0, 40);
     { let calm=0, t0=null; for(;;){ const now=yield; if(t0===null) t0=now; const u=((now-t0)/5000)%1; benchCam(SWEEP_CAM(u));
         calm = lodStats.queue ? 0 : calm+1; msg(`Warming up · ${lodStats.queue} LODs to build`); if((calm>=60 && now-t0>5000) || now-t0>20000) break; } }
     for(const [name, c] of BENCH_SWEEP){
@@ -3678,7 +3719,7 @@ function* benchRun(){
     }
     return benchText(head, res, sweep);
   } finally {
-    Object.assign(QUAL, keep.q); LODCFG.bias=keep.bias; LODCFG.PX[0]=keep.px0; applyDpr(); setShadows(QUAL.shadows, QUAL.shadowSize, QUAL.shadowSoft);
+    Object.assign(QUAL, keep.q); LODCFG.bias=keep.bias; LODCFG.PX[0]=keep.px0; LODCFG.maxL0=keep.maxL0; applyDpr(); setShadows(QUAL.shadows, QUAL.shadowSize, QUAL.shadowSoft);
     camEdit.target.copy(keep.t); camEdit.yaw=keep.yaw; camEdit.pitch=keep.pitch; camEdit.dist=keep.dist;
   }
 }
@@ -3690,10 +3731,12 @@ function benchHead(tPrep){   // the device and the settings as set, before the s
 }
 function benchText(head, res, sweep){
   const pad=(v,w)=>String(v).padStart(w), num=(v,d=1)=>v==null||isNaN(v)?'-':v.toFixed(d);
-  const row=(name,S)=>S ? name.padEnd(26)+pad(num(S.fps),5)+pad(num(S.p50),6)+pad(num(S.p95),6)+pad(num(S.p99),6)+pad(num(S.max,0),5)+pad((S.slow*100).toFixed(0)+'%',5)+pad(num(S.js),6)+pad(num(S.js95),6)+pad(num(S.gen),6)+pad(num(S.rnd),6)+pad(S.calls.toFixed(0),6)+pad(fmtN(S.tris),7)+pad((S.sh*100).toFixed(0)+'%',5)+pad(Math.round(S.res*100)+'%',5)+pad(Math.round(S.resMin*100)+'%',5) : name.padEnd(26)+' (no frames)';
-  const cols='part'.padEnd(26)+'  fps   p50   p95   p99  max slow    JS JSp95 build  rndr draws   tris  shdw  res  min';
-  return [...head, '', 'ms per frame; slow: frames over 20 ms; JS: main thread in the frame; build: LOD building after it; shdw: frames that drew the shadow map; res: resolution drawn (average, lowest)', '',
-    cols, ...res.map(([n,S])=>row(n,S)), '', 'Close-up view swaying, LODs built, by setting:', cols, ...sweep.map(([n,S])=>row(n,S))].join('\n');
+  const row=(name,S)=>S ? name.padEnd(26)+pad(num(S.fps),5)+pad(num(S.p50),6)+pad(num(S.p95),6)+pad(num(S.p99),6)+pad(num(S.max,0),5)+pad((S.slow*100).toFixed(0)+'%',5)+pad(num(S.js),6)+pad(num(S.js95),6)+pad(num(S.gen),6)+pad(S.calls.toFixed(0),6)+pad(num(S.disc),5)+pad(fmtN(S.tris),7)+pad((S.sh*100).toFixed(0)+'%',5)+pad(Math.round(S.res*100)+'%',5)+pad(Math.round(S.resMin*100)+'%',5) : name.padEnd(26)+' (no frames)';
+  const cols='part'.padEnd(26)+'  fps   p50   p95   p99  max slow    JS JSp95 build draws disc   tris  shdw  res  min';
+  return [...head, '', 'ms per frame; slow: frames over 20 ms; JS: main thread in the frame; build: LOD building after it; disc: buildings drawn with a shader that can discard pixels (a frame\'s average); shdw: frames that drew the shadow map; res: resolution drawn (average, lowest)', '',
+    cols, ...res.map(([n,S])=>row(n,S)), '', 'From the city view to the street and back, LODs built, by setting:', cols, ...sweep.map(([n,S])=>row(n,S)),
+    '', 'Slow frames by what the two frames before them did: the share of frames slow after one that drew the shadow map, came after a resolution change, came after meshes were uploaded, or had buildings fading between LODs, and the share slow without it (-: no such frame)', '',
+    'part'.padEnd(26)+'  slow      shdw    resize    upload    fading', ...[...res, ...sweep].map(([n,S])=>S ? n.padEnd(26)+pad((S.slow*100).toFixed(0)+'%',6)+['sh','rs','up','fd'].map(k=>{ const w=S.why[k], f=(a,b)=>b ? Math.round(a*100/b)+'%' : '-'; return pad(f(w[1],w[0])+'/'+f(w[3],w[2]),10); }).join('') : n.padEnd(26)+' (no frames)')].join('\n');
 }
 function benchStart(){
   if(bench) return; if(ui.mode!=='edit') exitPlay(); openPerf(false); closeModal();
@@ -3759,7 +3802,8 @@ window.__sb = { roofParts:(i,k)=>{ const b=state.buildings[i]; const R = k==null
     DEBUG_SOLIDS=false; return out; },
   nb:()=>state.buildings.length, bench:(i=0,lod=0)=>{ const b=state.buildings[i], r=recOf(b), f=[buildLOD0,buildLOD1,buildLOD2][lod]; const t=performance.now(); for(let k=0;k<10;k++) f(b,r.idx); return (performance.now()-t)/10; },
   lodStats, LODCFG, city:generateCity, clearCity, recs, cells, openPerf, renderer, QUAL, setShadows, benchStart, get benchReport(){ return benchReport; }, get benching(){ return !!bench; }, flSum,
-  gen:GEN, lodDbg:()=>({fading:[...recs.values()].filter(r=>r.t<1).map(r=>r.id+':'+r.from+'>'+r.disp).slice(0,8), n:lodStats.n.join('/'), q:lodStats.queue, jobs:jobs.size, frames:FL.n}),   // harnesses wait on this until the LODs settle
+  gen:GEN, fadeAt:t=>{ for(const r of recs.values()) if(r.t<1) r.t=t; },   // test hook: every fade so far (with LODCFG.fade made long, held there)
+  lodDbg:()=>({fading:[...recs.values()].filter(r=>r.t<1).map(r=>r.id+':'+r.from+'>'+r.disp).slice(0,8), n:lodStats.n.join('/'), q:lodStats.queue, jobs:jobs.size, frames:FL.n}),   // harnesses wait on this until the LODs settle
   timeLOD:(n=20)=>{ const b=LODCFG.budgetMs; LODCFG.budgetMs=-1; const t=performance.now(); for(let i=0;i<n;i++) updateLOD(0, null); LODCFG.budgetMs=b; return (performance.now()-t)/n; },
   memBytes:()=>{ let by=0, m=0; scene.traverse(o=>{ if(o.isMesh && o.geometry){ m++; for(const a of Object.values(o.geometry.attributes)) by+=a.array.byteLength; if(o.geometry.index) by+=o.geometry.index.array.byteLength; } }); return {meshes:m, MB:+(by/1048576).toFixed(1)}; },
   timeCells:()=>{ const t=performance.now(); let n=0; for(const c of cells.values()){ c.dirty=true; rebuildCell(c); n++; } return {cells:n, msPerCell:+((performance.now()-t)/Math.max(1,n)).toFixed(3)}; },

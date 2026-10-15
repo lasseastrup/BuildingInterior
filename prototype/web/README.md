@@ -19,14 +19,17 @@ as before. The build stamps the site's version into the page (`window.STOREY_BUI
 ## Frame rate on a phone
 
 The bar-chart button opens the city stats: **Benchmark** flies a fixed path over the 1,000-building test city (about
-90 seconds, hands off the screen), then sways a street-level close-up under several settings, and opens a report with
-frame-rate, interval percentiles, slow frames (over 20 ms), main-thread time, draw load, how often the shadow map was
-drawn and the resolution drawn per part. **Copy report** puts it on the clipboard. **Performance…** holds the render
+90 seconds, hands off the screen), then moves from the city view down to the street and back under several settings,
+and opens a report with frame-rate, interval percentiles, slow frames (over 20 ms), main-thread time, draw load, the
+buildings drawn with a shader that can discard pixels, how often the shadow map was drawn and the resolution drawn per
+part, and for each part how often a frame was slow after a shadow map redraw, a resolution change, mesh uploads or LOD
+fades, against how often without. **Copy report** puts it on the clipboard. **Performance…** holds the render
 settings for this browser: resolution (**Auto**, the default, lowers it a step when frames come later than 60 fps while
 the main thread had time to spare, and raises it again after 2 s without; or a fixed share), pixel ratio cap, lighting
 (full PBR, or diffuse only: the default on a touch screen), shadows and their edges (16 taps, or 9 on a touch screen),
 MSAA, and a frame HUD. The shadow map is drawn again only when what it shows changes; its box follows the camera in
-steps of 12 m. Low Power Mode caps Safari at 30 fps, so turn it off before measuring.
+steps of 12 m. A building fading to or from its massing draws that massing on its own, so its merged cell keeps the
+discard-free shader. Low Power Mode caps Safari at 30 fps, so turn it off before measuring.
 
 ## Setting it up, once
 
