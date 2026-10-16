@@ -71,6 +71,9 @@ namespace Triband.Storey.Unity
 
         readonly FrameTiming[] timing = new FrameTiming[1];
         float lastScale = -1;
+        // memory, as the Memory Profiler counts it (release players too): the process's, Unity's, the graphics driver's
+        global::Unity.Profiling.ProfilerRecorder systemMemory, totalMemory, gfxMemory;
+        long memoryNoted;
         readonly StringBuilder line = new StringBuilder(512);
         readonly Dictionary<StoreySite, StoreyOcclusion?> described = new Dictionary<StoreySite, StoreyOcclusion?>();
         static bool movedLastRun;
@@ -104,6 +107,11 @@ namespace Triband.Storey.Unity
             }
             header = Header();
             Application.logMessageReceivedThreaded += OnLog;
+            Application.lowMemory += OnLowMemory;
+            systemMemory = global::Unity.Profiling.ProfilerRecorder.StartNew(global::Unity.Profiling.ProfilerCategory.Memory, "System Used Memory");
+            totalMemory = global::Unity.Profiling.ProfilerRecorder.StartNew(global::Unity.Profiling.ProfilerCategory.Memory, "Total Used Memory");
+            gfxMemory = global::Unity.Profiling.ProfilerRecorder.StartNew(global::Unity.Profiling.ProfilerCategory.Memory, "Gfx Used Memory");
+            memoryNoted = 0;
             UnityEngine.Rendering.RenderPipelineManager.beginContextRendering += OnBeginRendering;
             UnityEngine.Rendering.RenderPipelineManager.endContextRendering += OnEndRendering;
             if (SystemInfo.supportsAsyncGPUReadback)
@@ -126,6 +134,8 @@ namespace Triband.Storey.Unity
             running = false;
             watchdog?.Join(1000); watchdog = null;
             Application.logMessageReceivedThreaded -= OnLog;
+            Application.lowMemory -= OnLowMemory;
+            systemMemory.Dispose(); totalMemory.Dispose(); gfxMemory.Dispose();
             UnityEngine.Rendering.RenderPipelineManager.beginContextRendering -= OnBeginRendering;
             UnityEngine.Rendering.RenderPipelineManager.endContextRendering -= OnEndRendering;
             Add("recording stopped");
@@ -159,6 +169,10 @@ namespace Triband.Storey.Unity
             }
             StoreyTimings.Enter("rendering: after LateUpdate, before the cameras (culling)");
         }
+
+        void OnLowMemory() => Add($"LOW MEMORY: the OS asked the app to free memory ({Mb(systemMemory)} MB in use)");
+
+        static string Mb(global::Unity.Profiling.ProfilerRecorder r) => r.Valid ? (r.LastValue >> 20).ToString(Inv) : "?";
 
         void OnRead(UnityEngine.Rendering.AsyncGPUReadbackRequest r)
         {
@@ -218,6 +232,10 @@ namespace Triband.Storey.Unity
                 if (cam != null) { var c = cam.transform.position; b.Append(" cam ").Append(F1(c.x)).Append(',').Append(F1(c.y)).Append(',').Append(F1(c.z)); }
             }
             b.Append(" | heap ").Append(GC.GetTotalMemory(false) >> 20).Append("MB");
+            if (systemMemory.Valid || totalMemory.Valid || gfxMemory.Valid)
+                b.Append(" mem ").Append(Mb(systemMemory)).Append('/').Append(Mb(totalMemory)).Append('/').Append(Mb(gfxMemory)).Append("MB");
+            // the process's memory noted each time it passes another 256 MB: a climb towards the OS's limit shows in what happened
+            if (systemMemory.Valid && systemMemory.LastValue >> 28 > memoryNoted) { memoryNoted = systemMemory.LastValue >> 28; Add($"memory in use passed {memoryNoted * 256:N0} MB (Unity's {Mb(totalMemory)} MB, graphics {Mb(gfxMemory)} MB)"); }
             return b.ToString();
         }
 
@@ -357,7 +375,7 @@ namespace Triband.Storey.Unity
             b.Append("\nThe last ").Append(ringCount).Append(" frames: frame, time, its length; with Frame Timing Stats the main thread's, the GPU's and the present wait, ms; gpu-N: frames since the last the GPU finished")
                 .Append(" | per site: LOD0/1/2 shown, LOD0 resident, generating, waiting, built this frame, LOD ms, wall ids used/table")
                 .Append(" | in: the player's building, floor, clip height, cut, its state row (LOD, from, fade, slot+1) | in the way: building, kN its storey at the player, sN its slot")
-                .Append(" | feet, camera | managed heap\n");
+                .Append(" | feet, camera | managed heap; memory: the process's, Unity's, the graphics driver's\n");
             for (int i = 0; i < ringCount; i++) b.Append(ring[(ringNext - ringCount + i + ring.Length) % ring.Length]).Append('\n');
             return b.ToString();
         }

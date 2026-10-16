@@ -91,6 +91,8 @@ namespace UnityEngine
         public static string version => "";
         public delegate void LogCallback(string condition, string stackTrace, LogType type);
         public static event LogCallback logMessageReceivedThreaded { add { } remove { } }
+        public delegate void LowMemoryCallback();
+        public static event LowMemoryCallback lowMemory { add { } remove { } }
     }
 
     public enum LogType { Error = 0, Assert = 1, Warning = 2, Log = 3, Exception = 4 }
@@ -731,6 +733,16 @@ namespace Unity.Profiling
         public void End() { }
         public AutoScope Auto() => default;
         public readonly struct AutoScope : System.IDisposable { public void Dispose() { } }
+    }
+
+    public readonly struct ProfilerCategory { public static ProfilerCategory Memory => default; }
+    public enum ProfilerRecorderOptions { None = 0, StartImmediately = 1, KeepAliveDuringDomainReload = 2, CollectOnlyOnCurrentThread = 4, WrapAroundWhenCapacityReached = 8, SumAllSamplesInFrame = 16, GpuRecorder = 64, Default = 24 }
+    public struct ProfilerRecorder : System.IDisposable
+    {
+        public static ProfilerRecorder StartNew(ProfilerCategory category, string statName, int capacity = 1, ProfilerRecorderOptions options = ProfilerRecorderOptions.Default) => default;
+        public bool Valid => false;
+        public long LastValue => 0;
+        public void Dispose() { }
     }
 }
 
