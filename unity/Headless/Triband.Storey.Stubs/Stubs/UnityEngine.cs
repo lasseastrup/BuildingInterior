@@ -282,6 +282,7 @@ namespace UnityEngine
         public int pixelHeight => 0;
         public float aspect { get => 1; set { } }
         public bool allowDynamicResolution { get => false; set { } }
+        public RenderTexture targetTexture { get => null; set { } }
     }
 
     public sealed class GUIContent
@@ -436,6 +437,17 @@ namespace UnityEngine
 
     public class Texture : Object
     {
+        public virtual int width { get => 0; set { } }
+        public virtual int height { get => 0; set { } }
+    }
+
+    [System.Flags] public enum RenderTextureMemoryless { None = 0, Color = 1, Depth = 2, MSAA = 4 }
+
+    public class RenderTexture : Texture
+    {
+        public int depth { get => 0; set { } }
+        public int antiAliasing { get => 1; set { } }
+        public RenderTextureMemoryless memorylessMode { get => default; set { } }
     }
 
     public sealed class Texture2D : Texture
@@ -488,6 +500,7 @@ namespace UnityEngine
         public static string graphicsDeviceVersion => "";
         public static int systemMemorySize => 0;
         public static bool supportsAsyncGPUReadback => false;
+        public static bool supportsMemorylessTextures => false;
     }
 
     public enum DeviceType { Unknown, Handheld, Console, Desktop }

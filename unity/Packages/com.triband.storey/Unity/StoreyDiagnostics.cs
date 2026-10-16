@@ -83,7 +83,7 @@ namespace Triband.Storey.Unity
         global::Unity.Profiling.ProfilerRecorder systemMemory, totalMemory, gfxMemory;
         long memoryNoted;
         readonly StringBuilder line = new StringBuilder(512);
-        readonly Dictionary<StoreySite, StoreyOcclusion?> described = new Dictionary<StoreySite, StoreyOcclusion?>();
+        readonly Dictionary<StoreySite, (StoreyOcclusion? o, Camera? cam, RenderTexture? rt)> described = new Dictionary<StoreySite, (StoreyOcclusion?, Camera?, RenderTexture?)>();
         static bool movedLastRun;
         string? lastRun, lastRunSummary; bool showing; string copied = "";
         GUIStyle? textStyle, buttonStyle;
@@ -244,6 +244,7 @@ namespace Triband.Storey.Unity
                     b.Append(" L0 ").Append(st.lod0).Append(" L1 ").Append(st.lod1).Append(" L2 ").Append(st.lod2).Append(" res0 ").Append(st.resident0)
                         .Append(" gen ").Append(st.generating).Append(" wait ").Append(st.queued).Append(" built ").Append(st.builtThisFrame).Append(" lod ").Append(F1(st.ms)).Append("ms");
                     if (st.loading > 0) b.Append(" loading ").Append(st.loading);
+                    b.Append(" v0 ").Append(st.lod0VerticesInView / 1000).Append("k/").Append(st.lod0Vertices / 1000).Append('k');
                 }
                 var r = s.Renderer;
                 if (r != null) b.Append(" walls ").Append(r.Table.WallsInUse).Append('/').Append(r.Table.Wall.Length);
@@ -288,12 +289,18 @@ namespace Triband.Storey.Unity
             foreach (var s in StoreySite.AllSet)
             {
                 var o = s.Occlusion;
-                if (described.TryGetValue(s, out var seen) && seen == o) continue;
-                described[s] = o;
+                var cam = o != null && o.viewCamera != null ? o.viewCamera : Camera.main;
+                var rt = cam != null ? cam.targetTexture : null;
+                if (described.TryGetValue(s, out var seen) && seen.o == o && seen.cam == cam && seen.rt == rt) continue;
+                described[s] = (o, cam, rt);
                 var os = o != null ? o.settings : null;
                 Add($"site {s.name}: layout {(s.layout != null ? s.layout.name : "none")}, {s.lodMode} LOD, quality {(s.quality != null ? s.quality.name : "defaults")}, " +
                     $"colliders {(s.generateColliders ? "on" : "off")}, occlusion {(o == null ? "none" : os == null ? "default settings" : $"{os.name} (in the way: {os.buildingsInTheWay}, cutaway {(os.cutaway ? "on" : "off")})")}" +
-                    (o != null ? $", player {(o.player != null ? o.player.name : "not set")}, camera {(o.viewCamera != null ? o.viewCamera.name : "the main one")}" : ""));
+                    (o != null ? $", player {(o.player != null ? o.player.name : "not set")}, camera {(o.viewCamera != null ? o.viewCamera.name : "the main one")}" : "") +
+                    // a memoryless attachment can't be stored for a partial render: with too much geometry in a pass the GPU
+                    // throws the frame away instead (Metal's "too much geometry to support memoryless render pass attachments")
+                    (cam == null ? "" : rt == null ? $"; {cam.name} draws to the screen" :
+                        $"; {cam.name} draws into {rt.name} ({rt.width}×{rt.height}, depth {rt.depth} bits, MSAA {rt.antiAliasing}, memoryless {rt.memorylessMode})"));
             }
         }
 
@@ -308,7 +315,8 @@ namespace Triband.Storey.Unity
             int q = QualitySettings.GetQualityLevel(); var names = QualitySettings.names;
             var rp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
             b.Append("Unity ").Append(Application.unityVersion).Append(", app ").Append(Application.version).Append("; quality ").Append(q >= 0 && q < names.Length ? names[q] : q.ToString(Inv))
-                .Append(", render pipeline ").Append(rp != null ? rp.name : "none").Append("; Frame Timing Stats ").Append(FrameTimingManager.IsFeatureEnabled() ? "on" : "off (no CPU and GPU times)").Append('\n');
+                .Append(", render pipeline ").Append(rp != null ? rp.name : "none").Append("; Frame Timing Stats ").Append(FrameTimingManager.IsFeatureEnabled() ? "on" : "off (no CPU and GPU times)")
+                .Append("; memoryless textures ").Append(SystemInfo.supportsMemorylessTextures ? "supported" : "not supported").Append('\n');
             // the pipeline asset's settings that weigh on the GPU, read by name: this assembly needs no URP types ("?": not
             // there, or stripped from the build)
             if (rp != null)
@@ -435,7 +443,7 @@ namespace Triband.Storey.Unity
                 foreach (var l in incident) b.Append(l).Append('\n');
             }
             b.Append("\nThe last ").Append(ringCount).Append(" frames: frame, time, its length; with Frame Timing Stats the main thread's, the GPU's and the present wait, ms; gpu-N: frames since the last the GPU finished")
-                .Append(" | per site: LOD0/1/2 shown, LOD0 resident, generating, waiting, built this frame, LOD ms, wall ids used/table")
+                .Append(" | per site: LOD0/1/2 shown, LOD0 resident, generating, waiting, built this frame, LOD ms, v0: LOD0 vertices in view/shown, wall ids used/table")
                 .Append(" | in: the player's building, floor, clip height, cut, its state row (LOD, from, fade, slot+1) | in the way: building, kN its storey at the player, sN its slot")
                 .Append(" | feet, camera | swaps N new M: renderers given another material, and renderers made | managed heap; memory: the process's, Unity's, the graphics driver's\n");
             for (int i = 0; i < ringCount; i++) b.Append(ring[(ringNext - ringCount + i + ring.Length) % ring.Length]).Append('\n');

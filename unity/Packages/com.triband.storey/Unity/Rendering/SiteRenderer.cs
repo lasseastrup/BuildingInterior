@@ -42,6 +42,8 @@ namespace Triband.Storey.Unity
         {
             public string id = "";
             public int idx, wallBase = -1, wallCount;
+            // its LOD0's vertices, opaque and glass (0 without one): how much geometry it puts in a pass
+            public long lod0Verts;
             // while LOD0 is built: what is read of it after upload (collision segments, the wall list), not the generator's result
             public Lod0Shape? shape;
             public readonly List<int> rows = new List<int>();
@@ -231,12 +233,18 @@ namespace Triband.Storey.Unity
             public double ms;
             /// <summary>Cells of a layout loading over frames still to load (<see cref="LoadOverFrames"/>).</summary>
             public int loading;
+            /// <summary>
+            /// The vertices of the LOD0 meshes shown, and of those in the camera's view: the geometry a tile-based GPU holds
+            /// for a pass. Past what it can hold with memoryless attachments, an iPhone throws the frame away.
+            /// </summary>
+            public long lod0Vertices, lod0VerticesInView;
 
             public override string ToString() =>
                 $"{buildings:N0} buildings: LOD0 {lod0}, LOD1 {lod1}, LOD2 {lod2}, not drawn {culled}\n" +
                 $"Resident: LOD0 {resident0}, LOD1 {resident1}\n" +
                 $"Cells: {cellsShown} of {cells} drawn ({cellMeshes} meshes)\n" +
-                $"Built this frame {builtThisFrame}, generating {generating}, waiting {queued}; LOD {ms:0.00} ms" +
+                $"Built this frame {builtThisFrame}, generating {generating}, waiting {queued}; LOD {ms:0.00} ms\n" +
+                $"LOD0 vertices: {lod0Vertices:N0} shown, {lod0VerticesInView:N0} in view" +
                 (loading > 0 ? $"\nLoading: {loading} cells to go" : "");
         }
 
@@ -708,11 +716,9 @@ namespace Triband.Storey.Unity
             }
             for (int i = 0; i < d.opaque.Count; i++) Add(bt, 0, Part("LOD0", i, d.opaque.Count), MeshUpload.Upload(d.opaque[i], Part(name + " LOD0", i, d.opaque.Count), RowOf, bt.wallBase), opaque, true);
             for (int i = 0; i < d.glass!.Count; i++) Add(bt, 0, Part("LOD0 glass", i, d.glass.Count), MeshUpload.Upload(d.glass[i], Part(name + " glass", i, d.glass.Count), RowOf, bt.wallBase), glass, false);
-            if (StoreyDiagnostics.Recording)
-            {
-                long nv = 0; foreach (var p in d.opaque) nv += p.Verts; foreach (var p in d.glass) nv += p.Verts;
-                StoreyDiagnostics.Note($"LOD0 up: {name} ({bt.wallCount} walls at {bt.wallBase}, {d.opaque.Count} + {d.glass.Count} meshes, {nv:N0} vertices)");
-            }
+            long nv = 0; foreach (var p in d.opaque) nv += p.Verts; foreach (var p in d.glass) nv += p.Verts;
+            bt.lod0Verts = nv;
+            if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 up: {name} ({bt.wallCount} walls at {bt.wallBase}, {d.opaque.Count} + {d.glass.Count} meshes, {nv:N0} vertices)");
             // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
             if (d.collision != null && bt.collision == null) bt.collisionMade = d.collision;
             if (lods != null && colliders && bt.collision == null) colliderPending.Add(bt.id);
@@ -799,7 +805,7 @@ namespace Triband.Storey.Unity
             if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 dropped: {site?.ById(bt.id)?.name ?? bt.id}");
             bt.mates = Array.Empty<int>();
             if (bt.wallBase >= 0) table.ReleaseWalls(bt.wallBase, bt.wallCount);
-            bt.wallBase = -1; bt.wallCount = 0; bt.shape = null;
+            bt.wallBase = -1; bt.wallCount = 0; bt.shape = null; bt.lod0Verts = 0;
         }
 
         /// <summary>
@@ -890,6 +896,16 @@ namespace Triband.Storey.Unity
                     if (byIdx.TryGetValue(idx, out var cb)) ShowDetail(cb);
                 }
                 stats.lod0 = f.Count[0]; stats.lod1 = f.Count[1]; stats.lod2 = f.Count[2]; stats.culled = f.Count[3];
+                // the LOD0 geometry shown, and in the view (by each building's box, as the LOD manager sees it)
+                long shownV = 0, viewV = 0;
+                foreach (var bt in built.Values)
+                {
+                    if (bt.lod0Verts == 0 || !(l.Get(bt.idx) is LodManager.Entry e) || !e.Visible(0)) continue;
+                    shownV += bt.lod0Verts;
+                    if (seen == null || seen.Sees((e.x0 + e.x1) / 2, e.y1 / 2, (e.z0 + e.z1) / 2, 0.5 * Math.Sqrt((e.x1 - e.x0) * (e.x1 - e.x0) + e.y1 * e.y1 + (e.z1 - e.z0) * (e.z1 - e.z0))))
+                        viewV += bt.lod0Verts;
+                }
+                stats.lod0Vertices = shownV; stats.lod0VerticesInView = viewV;
             }
             MergeCells();
             int shown = 0, pieces = 0;
