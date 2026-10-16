@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using UnityEngine;
@@ -15,7 +16,10 @@ namespace Triband.Storey.Unity
     /// scene. While the player runs it keeps a line for each of the last frames: its time and, with Frame Timing Stats on
     /// (Player Settings), the CPU's and the GPU's; how far behind the GPU is; each site's LOD numbers and wall table; the
     /// building the player is in, its floor and the buildings in the way; the player's feet and the camera. Beside them it
-    /// notes what happened: Unity's warnings, errors and exceptions, LOD0 built at once for the occlusion, a table grown.
+    /// notes what happened: Unity's warnings, errors and exceptions, LOD0 built at once for the occlusion, a table grown,
+    /// every camera that renders and where to. On iOS it notes Metal's own word on each GPU command buffer that fails
+    /// (Plugins/iOS/StoreyMetalErrors.mm): why, a GPU fault or too much geometry for a pass's memoryless attachments, and
+    /// which of its passes it was.
     ///
     /// A thread of its own watches the frames. When none has come for a second it notes the stage the main thread is in
     /// (<see cref="StoreyTimings.Stage"/>: Storey's own, or physics, scripts or rendering) and when the GPU last finished
@@ -32,6 +36,8 @@ namespace Triband.Storey.Unity
         public bool showLastRun = true;
         [Tooltip("How many frames the record keeps a line for.")]
         [Min(30)] public int frames = 240;
+        [Tooltip("iOS: note Metal's own word on each GPU command buffer that fails: why (a GPU fault, too much geometry for a pass's memoryless attachments, …) and which of its passes. Metal records every pass's state for it, which costs the GPU a little.")]
+        public bool metalErrors = true;
 
         /// <summary>A recorder is running: notes are kept, so a caller makes one only then.</summary>
         public static bool Recording => current != null;
@@ -84,6 +90,14 @@ namespace Triband.Storey.Unity
         long memoryNoted;
         readonly StringBuilder line = new StringBuilder(512);
         readonly Dictionary<StoreySite, (StoreyOcclusion? o, Camera? cam, RenderTexture? rt)> described = new Dictionary<StoreySite, (StoreyOcclusion?, Camera?, RenderTexture?)>();
+        // the cameras that render, noted when they or their targets change
+        Camera[] cameras = new Camera[8];
+        int? camerasSeen;
+        // Metal's own word on the command buffers that fail (iOS: Plugins/iOS/StoreyMetalErrors.mm), taken each frame
+        bool metalWatched; long metalFailed;
+#if UNITY_IOS
+        byte[]? metalText; int metalTaken, metalCheckAt;
+#endif
         static bool movedLastRun;
         string? lastRun, lastRunSummary; bool showing; string copied = "";
         GUIStyle? textStyle, buttonStyle;
@@ -101,7 +115,7 @@ namespace Triband.Storey.Unity
             path = FilePath;   // Application's paths are the main thread's only: the watchdog saves to this
             ring = new string[Math.Max(30, frames)]; ringNext = ringCount = 0;
             lock (gate) { notes.Clear(); lastRaw = lastNote = null; repeats = 0; incident = null; incidentWhat = ""; }
-            described.Clear(); where.Clear();
+            described.Clear(); where.Clear(); camerasSeen = null;
             readbackStale = 0; gpuZero = 0; gpuLastTimed = -1;
             // the record the last run left: set aside once a run, shown until closed; this run writes a new one
             if (!movedLastRun)
@@ -114,7 +128,7 @@ namespace Triband.Storey.Unity
                 }
                 catch (Exception e) { UnityEngine.Debug.LogWarning("Storey Diagnostics: the last run's record couldn't be read: " + e.Message); }
             }
-            header = Header();
+            header = Header() + WatchMetal() + "\n";
             Application.logMessageReceivedThreaded += OnLog;
             Application.lowMemory += OnLowMemory;
             systemMemory = global::Unity.Profiling.ProfilerRecorder.StartNew(global::Unity.Profiling.ProfilerCategory.Memory, "System Used Memory");
@@ -147,6 +161,7 @@ namespace Triband.Storey.Unity
             systemMemory.Dispose(); totalMemory.Dispose(); gfxMemory.Dispose();
             UnityEngine.Rendering.RenderPipelineManager.beginContextRendering -= OnBeginRendering;
             UnityEngine.Rendering.RenderPipelineManager.endContextRendering -= OnEndRendering;
+            TakeMetal(Time.frameCount);
             Add("recording stopped");
             Save();
             probe?.Dispose(); probe = null; asked.Clear();
@@ -156,6 +171,7 @@ namespace Triband.Storey.Unity
         // in the background no frames come, and that's no stall
         void OnApplicationPause(bool pause)
         {
+            if (pause) TakeMetal(Time.frameCount);
             paused = pause; Add(pause ? "paused (in the background)" : "resumed");
             if (!pause) { long now = Stopwatch.GetTimestamp(); Volatile.Write(ref frameAt, now); Volatile.Write(ref gpuDoneAt, now); }
         }
@@ -176,7 +192,9 @@ namespace Triband.Storey.Unity
                 probeValue[0] = f; probe.SetData(probeValue);
                 asked.Enqueue(f); UnityEngine.Rendering.AsyncGPUReadback.Request(probe, 4, 0, onRead);
             }
+            TakeMetal(f);
             Describe();
+            DescribeCameras();
             var text = Line(f);
             lock (gate)
             {
@@ -231,6 +249,7 @@ namespace Triband.Storey.Unity
             if (probe != null) b.Append(" gpu-").Append(done >= 0 ? (f - done).ToString(Inv) : "?");
             int errors = Volatile.Read(ref gpuErrors);
             if (errors > 0) b.Append(" readback errors ").Append(errors);
+            if (metalFailed > 0) b.Append(" mtl-fail ").Append(metalFailed);
             // dynamic resolution (Storey Auto Resolution, or the project's own): the share of each axis drawn
             float scale = ScalableBufferManager.widthScaleFactor;
             if (scale != 1) b.Append(" res ").Append(F2(scale));
@@ -304,6 +323,98 @@ namespace Triband.Storey.Unity
             }
         }
 
+        /// <summary>Every camera that renders, where to and with what: noted at first and when they or their targets change.</summary>
+        void DescribeCameras()
+        {
+            if (cameras.Length < Camera.allCamerasCount) cameras = new Camera[Camera.allCamerasCount * 2];
+            int n = Camera.GetAllCameras(cameras), h = n;
+            for (int i = 0; i < n; i++)
+            {
+                var c = cameras[i]; var rt = c.targetTexture;
+                h = (h * 31 + c.GetInstanceID()) * 31 + (rt != null ? rt.GetInstanceID() : 0);
+                h = h * 31 + c.cullingMask;
+            }
+            if (camerasSeen == h) return;
+            camerasSeen = h;
+            var b = new StringBuilder(n == 1 ? "1 camera renders:" : $"{n} cameras render:");
+            for (int i = 0; i < n; i++) b.Append("\n      ").Append(CameraLine(cameras[i]));
+            Add(b.ToString());
+        }
+
+        static string CameraLine(Camera c)
+        {
+            var rt = c.targetTexture;
+            var b = new StringBuilder();
+            b.Append(c.name).Append(" (depth ").Append(F1(c.depth)).Append("): ")
+                .Append(rt == null ? "draws to the screen" : $"draws into {rt.name} ({rt.width}×{rt.height}, depth {rt.depth} bits, MSAA {rt.antiAliasing}, memoryless {rt.memorylessMode})")
+                .Append(", culling mask ").Append(c.cullingMask == -1 ? "everything" : "0x" + c.cullingMask.ToString("X8", Inv));
+            // URP's per-camera settings, read by name as the pipeline asset's are: which decide whether its passes store
+            // their depth or keep it memoryless (a depth texture copies it; without one and with post-processing it is a
+            // transient attachment, memoryless where supported)
+            var d = c.GetComponent("UniversalAdditionalCameraData");
+            if (d != null)
+                b.Append("; URP ").Append(Prop(d, "renderType")).Append(", renderer ").Append(Field(d, "m_RendererIndex") is int ri && ri >= 0 ? ri.ToString(Inv) : "default")
+                    .Append(", post-processing ").Append(Prop(d, "renderPostProcessing")).Append(", depth texture ").Append(Prop(d, "requiresDepthTexture"))
+                    .Append(", opaque texture ").Append(Prop(d, "requiresColorTexture")).Append(", anti-aliasing ").Append(Prop(d, "antialiasing"))
+                    .Append(", shadows ").Append(Prop(d, "renderShadows"));
+            return b.ToString();
+        }
+
+        // ---- Metal's errors (iOS) --------------------------------------------------------------------------------------
+
+#if UNITY_IOS
+        [System.Runtime.InteropServices.DllImport("__Internal")] static extern int StoreyMetalErrors_Install();
+        [System.Runtime.InteropServices.DllImport("__Internal")] static extern void StoreyMetalErrors_Frame(int frame);
+        [System.Runtime.InteropServices.DllImport("__Internal")] static extern int StoreyMetalErrors_Take(byte[] buffer, int size);
+        [System.Runtime.InteropServices.DllImport("__Internal")] static extern long StoreyMetalErrors_Completed();
+        [System.Runtime.InteropServices.DllImport("__Internal")] static extern long StoreyMetalErrors_Failed();
+#endif
+
+        /// <summary>The Metal error hook started (iOS players); the header's line on it.</summary>
+        string WatchMetal()
+        {
+            metalWatched = false; metalFailed = 0;
+#if UNITY_IOS
+            metalTaken = 0; metalCheckAt = 0;
+            // the editor with iOS as its build target compiles this too: the plug-in is in the iOS player only
+            if (Application.platform != RuntimePlatform.IPhonePlayer) return "Metal errors: not watched (iOS players only)";
+            if (!metalErrors) return "Metal errors: not watched (Metal Errors is off)";
+            try { metalWatched = StoreyMetalErrors_Install() != 0; }
+            catch (Exception e) { return "Metal errors: not watched (" + e.Message + ")"; }
+            if (!metalWatched) return "Metal errors: not watched (no Metal device)";
+            metalCheckAt = Time.frameCount + 300;
+            return "Metal errors: watched (each failed command buffer, with its passes' states)";
+#else
+            return "Metal errors: not watched (iOS players only)";
+#endif
+        }
+
+        /// <summary>The failed command buffers Metal has reported since the last frame, noted; main thread.</summary>
+        void TakeMetal(int f)
+        {
+#if UNITY_IOS
+            if (!metalWatched) return;
+            StoreyMetalErrors_Frame(f);
+            metalFailed = StoreyMetalErrors_Failed();
+            metalText ??= new byte[16384];
+            for (int i = 0; i < 4; i++)
+            {
+                int n = StoreyMetalErrors_Take(metalText, metalText.Length);
+                if (n <= 0) break;
+                Add(Encoding.UTF8.GetString(metalText, 0, n));
+                if (metalTaken++ == 0) Incident("the first failed Metal command buffer");
+            }
+            // once, a few seconds in: that the hook sees the command buffers Unity makes (none: it watches nothing)
+            if (metalCheckAt > 0 && f >= metalCheckAt)
+            {
+                metalCheckAt = 0;
+                long done = StoreyMetalErrors_Completed();
+                Add(done > 0 ? $"Metal: watching; {done:N0} command buffers completed so far, {metalFailed:N0} failed"
+                    : "Metal: the hook has seen no command buffer complete: Unity's are made elsewhere, and a failure won't show here");
+            }
+#endif
+        }
+
         static string Header()
         {
             var b = new StringBuilder();
@@ -325,13 +436,51 @@ namespace Triband.Storey.Unity
                     .Append(", GPU Resident Drawer ").Append(Prop(rp, "gpuResidentDrawerMode")).Append(", its occlusion culling ").Append(Prop(rp, "gpuResidentDrawerEnableOcclusionCullingInCameras")).Append('\n')
                     .Append("shadows: main light ").Append(Prop(rp, "supportsMainLightShadows")).Append(", ").Append(Prop(rp, "mainLightShadowmapResolution")).Append(" px, ").Append(Prop(rp, "shadowCascadeCount"))
                     .Append(" cascades to ").Append(Prop(rp, "shadowDistance")).Append(" m, soft ").Append(Prop(rp, "supportsSoftShadows")).Append('\n');
+            if (rp != null) Renderers(b, rp);
             return b.ToString();
         }
 
-        static string Prop(object o, string name)
+        /// <summary>
+        /// The pipeline asset's renderers: the settings that decide which attachments a camera's passes have, and so
+        /// whether one is memoryless (Render Graph makes an attachment no later pass reads memoryless where supported).
+        /// </summary>
+        static void Renderers(StringBuilder b, object rp)
         {
-            try { return Convert.ToString(o.GetType().GetProperty(name)?.GetValue(o), Inv) is string v && v.Length > 0 ? v : "?"; }
-            catch (Exception) { return "?"; }
+            if (!(Field(rp, "m_RendererDataList") is Array list)) return;
+            int def = Field(rp, "m_DefaultRendererIndex") is int d ? d : 0;
+            for (int i = 0; i < list.Length; i++)
+            {
+                var r = list.GetValue(i); if (r == null) continue;
+                b.Append("renderer ").Append(i).Append(i == def ? " (default) " : " ").Append(r is UnityEngine.Object ro ? ro.name : "?")
+                    .Append(": ").Append(Prop(r, "renderingMode")).Append(", depth priming ").Append(Prop(r, "depthPrimingMode"))
+                    .Append(", depth texture copied ").Append(Prop(r, "copyDepthMode")).Append(", intermediate texture ").Append(Prop(r, "intermediateTextureMode"))
+                    .Append(", features:");
+                int features = 0;
+                if (Value(r, "rendererFeatures") is System.Collections.IList fs)
+                    foreach (var f in fs)
+                        if (f is UnityEngine.Object fo) { b.Append(features++ == 0 ? " " : ", ").Append(fo.name).Append(Prop(f, "isActive") == "True" ? "" : " (off)"); }
+                b.Append(features == 0 ? " none\n" : "\n");
+            }
+        }
+
+        static string Prop(object o, string name) => Convert.ToString(Value(o, name), Inv) is string v && v.Length > 0 ? v : "?";
+
+        static object? Value(object o, string name)
+        {
+            try { return o.GetType().GetProperty(name)?.GetValue(o); }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>A field by name, the private ones of the type and its bases too; null when there is none.</summary>
+        static object? Field(object o, string name)
+        {
+            try
+            {
+                for (var t = o.GetType(); t != null; t = t.BaseType)
+                    if (t.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly) is FieldInfo f) return f.GetValue(o);
+            }
+            catch (Exception) { }
+            return null;
         }
 
         /// <summary>A note, stamped with the time and the main thread's frame; the same one again counts up instead.</summary>
@@ -442,7 +591,7 @@ namespace Triband.Storey.Unity
                 b.Append("\nThe ").Append(incident.Length).Append(" frames before ").Append(incidentWhat).Append(" (columns as below):\n");
                 foreach (var l in incident) b.Append(l).Append('\n');
             }
-            b.Append("\nThe last ").Append(ringCount).Append(" frames: frame, time, its length; with Frame Timing Stats the main thread's, the GPU's and the present wait, ms; gpu-N: frames since the last the GPU finished")
+            b.Append("\nThe last ").Append(ringCount).Append(" frames: frame, time, its length; with Frame Timing Stats the main thread's, the GPU's and the present wait, ms; gpu-N: frames since the last the GPU finished; mtl-fail N: Metal command buffers failed so far (iOS)")
                 .Append(" | per site: LOD0/1/2 shown, LOD0 resident, generating, waiting, built this frame, LOD ms, v0: LOD0 vertices in view/shown, wall ids used/table")
                 .Append(" | in: the player's building, floor, clip height, cut, its state row (LOD, from, fade, slot+1) | in the way: building, kN its storey at the player, sN its slot")
                 .Append(" | feet, camera | swaps N new M: renderers given another material, and renderers made | managed heap; memory: the process's, Unity's, the graphics driver's\n");

@@ -15,7 +15,9 @@
 // evaluates both sides of ?: and of && and || (FXC, which compiles Unity's Metal shaders, never short-circuits), so
 // `im >= 0 && _StoreyState[im]` reads row -1 for every wall without a neighbour. D3D and Vulkan read an element outside
 // a buffer as 0. Metal gives it no defined result: it reads whatever lies there, or the GPU faults, and after a fault iOS
-// stops running the app's GPU work (artifacts, then a frozen picture), while the editor may never show it.
+// stops running the app's GPU work (artifacts, then a frozen picture), while the editor may never show it. So every
+// index goes through StoreyRow, StoreySlotRow or StoreyWallId below (TableReadTests holds it): the reads inside an if
+// too, which the compiler may flatten (run the read, then pick), and the ids that come from a mesh's vertices.
 #ifndef STOREY_OCCLUSION_INCLUDED
 #define STOREY_OCCLUSION_INCLUDED
 
@@ -30,6 +32,21 @@ StructuredBuffer<float4> _StoreyWallData;
 
 #define STOREY_OCC_W 64
 #define STOREY_SLAB 0.25
+#define STOREY_ROWS 8192       // _StoreyState's rows (BuildingTable.MaxBuildings)
+#define STOREY_OCC_SLOTS 16    // _StoreyOcc's slots of STOREY_OCC_W texels (BuildingTable.OccSlots)
+
+// The tables that grow, their sizes now (BuildingTable.Upload): x wall ids, y parameter rows, z colour rows
+#ifndef STOREY_TABLE_SIZE_DECLARED
+#define STOREY_TABLE_SIZE_DECLARED
+float4 _StoreyTableSize;
+#endif
+
+// A building's state row, kept in the table
+int StoreyRow(int ib) { return clamp(ib, 0, STOREY_ROWS - 1); }
+// The first texel of an occluder slot's row: slot -1 (none) reads slot 0's, where an if around the read is flattened
+int StoreySlotRow(int slot) { return clamp(slot, 0, STOREY_OCC_SLOTS - 1) * STOREY_OCC_W; }
+// A wall id from a vertex, kept in the wall tables (id 0, none, reads the first entry)
+int StoreyWallId(float wid) { return clamp((int)(wid + 0.5), 0, max((int)_StoreyTableSize.x - 1, 0)); }
 
 float3 _StoreyCam;      // camera position for the cutaway (focus + camera offset from the play camera's target)
 float3 _StoreyFocus;    // the player
@@ -72,24 +89,24 @@ float3 StoreySink(float3 worldPos, float tag, float kind, out float origY)
     origY = worldPos.y;
 #if !defined(STOREY_DEPTH) && !defined(STOREY_STEADY)
     int ib = (int)(fmod(tag, 65536.0) + 0.5);
-    int slot = (int)(_StoreyState[ib].w + 0.5) - 1;
+    int slot = (int)(_StoreyState[StoreyRow(ib)].w + 0.5) - 1, row = StoreySlotRow(slot);
     int im = (int)floor(kind / 8.0) - 1;   // a party wall also belongs to the neighbour: it stays unless the neighbour is sinking too
-    bool mateUp = im >= 0 && _StoreyState[max(im, 0)].w < 0.5;
+    bool mateUp = im >= 0 && _StoreyState[StoreyRow(im)].w < 0.5;
     if (slot >= 0 && abs((float)ib - _StoreyActive.x) > 0.5 && !mateUp)
     {
-        int n = (int)(_StoreyOcc[slot * STOREY_OCC_W].x + 0.5);
+        int n = (int)(_StoreyOcc[row].x + 0.5);
         if (n > 0)
         {
-            float y = origY, f0 = _StoreyOcc[slot * STOREY_OCC_W + 1].x;
+            float y = origY, f0 = _StoreyOcc[row + 1].x;
             if (y > f0)
             {
                 float f = f0;
                 for (int i = 0; i < STOREY_OCC_W - 1; i++)
                 {
                     if (i >= n) break;
-                    float4 a = _StoreyOcc[slot * STOREY_OCC_W + 1 + i];
+                    float4 a = _StoreyOcc[row + 1 + i];
                     // the next storey's line, read on the last too: kept in the slot's row (past the last slot's, the buffer's end)
-                    float top = i + 1 < n ? _StoreyOcc[slot * STOREY_OCC_W + 1 + min(i + 1, STOREY_OCC_W - 2)].x : 1e6;
+                    float top = i + 1 < n ? _StoreyOcc[row + 1 + min(i + 1, STOREY_OCC_W - 2)].x : 1e6;
                     f += clamp(y - a.x, 0.0, top - a.x) * a.y;
                 }
                 worldPos.y += f - y;
@@ -106,8 +123,7 @@ bool StoreyVertex(float tag, float4 wall, float kind, float wid, float3 worldPos
 {
     v.worldPos = worldPos; v.wall = wall; v.kind = kind; v.wid = wid; v.origY = origY;
     v.bid = fmod(tag, 65536.0); v.lod = floor(tag / 65536.0);
-    int ib = (int)(v.bid + 0.5);
-    float4 st = _StoreyState[ib];   // x: displayed LOD, y: previous LOD, z: cross-fade 0..1, w: occluder slot + 1
+    float4 st = _StoreyState[StoreyRow((int)(v.bid + 0.5))];   // x: displayed LOD, y: previous LOD, z: cross-fade 0..1, w: occluder slot + 1
 #if defined(STOREY_SHADOW) && defined(STOREY_MASSING)
     // shadow proxy (docs/PERFORMANCE.md §7.8): a building shown at LOD1 casts through its massing, which has its outline
     // and heights in a twentieth of the triangles; LOD1's renderers cast none. Between LOD1 and LOD2 the massing stays
@@ -158,7 +174,7 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
         if (kind < 1.5 && v.wid > 0.5)
         {
             // walls slide down to the stub and back up (eased per wall on the CPU)
-            float a = _StoreyWall[(int)(v.wid + 0.5)];
+            float a = _StoreyWall[StoreyWallId(v.wid)];
             if (a > 0.0 && v.worldPos.y > lerp(_StoreyCut.w, _StoreyCut.z + _StoreyCut.y, a * a * (3.0 - 2.0 * a))) clip(-1);
         }
         else if (kind < 1.5)
@@ -178,11 +194,11 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
         else if (dot(v.wall.xy - _StoreyFocus.xz, _StoreyCamDir) > 0.4) clip(-1);
     }
     // 3. buildings between the camera and the player (never the player's own building, which is sliced above)
-    bool mateUp = mate >= 0.0 && _StoreyState[max((int)mate, 0)].w < 0.5;
+    bool mateUp = mate >= 0.0 && _StoreyState[StoreyRow((int)mate)].w < 0.5;
     if (_StoreyOccMode > 0.5 && !act && v.occ > -0.5 && !mateUp)
     {
-        int slot = (int)(v.occ + 0.5);
-        float4 hd = _StoreyOcc[slot * STOREY_OCC_W];   // segments, dark, clip height, solid base height
+        int row = StoreySlotRow((int)(v.occ + 0.5));
+        float4 hd = _StoreyOcc[row];   // segments, dark, clip height, solid base height
         if (v.origY > hd.z) clip(-1);                     // Slice: the cut plane lowered to the player's storey
         int n = (int)(hd.x + 0.5);
         if (n > 0)
@@ -192,8 +208,8 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
             for (int i = 0; i < STOREY_OCC_W - 1; i++)
             {
                 if (i >= n) break;
-                float4 a = _StoreyOcc[slot * STOREY_OCC_W + 1 + i];
-                float top = i + 1 < n ? _StoreyOcc[slot * STOREY_OCC_W + 1 + min(i + 1, STOREY_OCC_W - 2)].x : 1e6;
+                float4 a = _StoreyOcc[row + 1 + i];
+                float top = i + 1 < n ? _StoreyOcc[row + 1 + min(i + 1, STOREY_OCC_W - 2)].x : 1e6;
                 if (v.origY < a.x || v.origY > top) continue;
                 if (a.z > 0.5) clip(-1);                                   // collapsed storey
                 float ceil_ = top - (STOREY_SLAB + 0.01);
@@ -231,9 +247,9 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
     }
 #else
     // Dissolve takes its shadow and depth away with it, dithered alike (Sink's squash is colour-pass only: its shadow stays)
-    if (_StoreyOccMode > 3.5 && !act && v.occ > -0.5 && !(mate >= 0.0 && _StoreyState[max((int)mate, 0)].w < 0.5))
+    if (_StoreyOccMode > 3.5 && !act && v.occ > -0.5 && !(mate >= 0.0 && _StoreyState[StoreyRow((int)mate)].w < 0.5))
     {
-        float4 hd = _StoreyOcc[(int)(v.occ + 0.5) * STOREY_OCC_W];
+        float4 hd = _StoreyOcc[StoreySlotRow((int)(v.occ + 0.5))];
         if (hd.x < 0.5 && v.origY >= hd.w && StoreyBayer(screenPos) < hd.y) clip(-1);
     }
 #endif

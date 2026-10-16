@@ -283,6 +283,10 @@ namespace UnityEngine
         public float aspect { get => 1; set { } }
         public bool allowDynamicResolution { get => false; set { } }
         public RenderTexture targetTexture { get => null; set { } }
+        public static int allCamerasCount => 0;
+        public static int GetAllCameras(Camera[] cameras) => 0;
+        public int cullingMask { get => -1; set { } }
+        public float depth { get => 0; set { } }
     }
 
     public sealed class GUIContent
@@ -542,6 +546,7 @@ namespace UnityEngine
         public Transform transform { get; } = new Transform();
         public GameObject gameObject { get; } = new GameObject("");
         public T GetComponent<T>() => default!;
+        public Component GetComponent(string type) => null;
         public T GetComponentInChildren<T>() => default!;
         public T GetComponentInParent<T>() => default!;
         public T[] GetComponents<T>() => System.Array.Empty<T>();

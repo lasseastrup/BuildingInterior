@@ -252,6 +252,9 @@ namespace Triband.Storey.Unity
             Shader.SetGlobalBuffer(StoreyShaderIds.Params, prms);
             Shader.SetGlobalBuffer(StoreyShaderIds.Colors, colors);
             Shader.SetGlobalBuffer(StoreyShaderIds.DetailColors, details);
+            // with the buffers, their sizes: the shaders keep every index inside them, a vertex's own ids too (on Metal a read
+            // past a buffer's end can fault the GPU, StoreyOcclusion.hlsl)
+            Shader.SetGlobalVector(StoreyShaderIds.TableSize, new Vector4(Wall.Length, Params.Length / ParamTexels, Colors.Length / Generate.ColorRows.Words, 0));
         }
 
         /// <summary>The changed chunks of one buffer, uploaded.</summary>

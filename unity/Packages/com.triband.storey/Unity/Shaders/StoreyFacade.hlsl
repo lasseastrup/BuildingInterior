@@ -13,7 +13,14 @@
 StructuredBuffer<float4> _StoreyParams;
 #define STOREY_PARAM_TEXELS 6
 
-float4 StoreyParam(float slot, int i) { return _StoreyParams[(int)(slot + 0.5) * STOREY_PARAM_TEXELS + i]; }
+// The tables that grow, their sizes now (BuildingTable.Upload): x wall ids, y parameter rows, z colour rows
+#ifndef STOREY_TABLE_SIZE_DECLARED
+#define STOREY_TABLE_SIZE_DECLARED
+float4 _StoreyTableSize;
+#endif
+
+// Texel i of a parameter row, the row (from a massing's vertices) kept in the table, as every table read is (StoreyOcclusion.hlsl)
+float4 StoreyParam(float slot, int i) { return _StoreyParams[clamp((int)(slot + 0.5), 0, max((int)_StoreyTableSize.y - 1, 0)) * STOREY_PARAM_TEXELS + i]; }
 
 float3 StoreyFacadeColor(float4 fac, float2 fac2, float slot)
 {

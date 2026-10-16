@@ -100,8 +100,49 @@ NativeFormatImporter:
   assetBundleVariant: 
 """
 
+# A native source plug-in for iOS only (Storey Diagnostics' Metal error hook): compiled into the Xcode project's
+# UnityFramework with ARC, linked against Metal, and left out of every other platform and of the editor.
+PLUGIN_IOS = """fileFormatVersion: 2
+guid: {guid}
+PluginImporter:
+  externalObjects: {{}}
+  serializedVersion: 2
+  iconMap: {{}}
+  executionOrder: {{}}
+  defineConstraints: []
+  isPreloaded: 0
+  isOverridable: 0
+  isExplicitlyReferenced: 0
+  validateReferences: 1
+  platformData:
+  - first:
+      Any:
+    second:
+      enabled: 0
+      settings: {{}}
+  - first:
+      Editor: Editor
+    second:
+      enabled: 0
+      settings:
+        DefaultValueInitialized: true
+  - first:
+      iPhone: iOS
+    second:
+      enabled: 1
+      settings:
+        AddToEmbeddedBinaries: false
+        CPU: AnyCPU
+        CompileFlags: -fobjc-arc
+        FrameworkDependencies: Metal;
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+"""
+
 IMPORTERS = {
     ".asset": ("NativeFormatImporter", NATIVE),
+    ".mm": ("PluginImporter", PLUGIN_IOS),
     ".shader": ("ShaderImporter", SHADER),
     ".cs": ("MonoImporter", SCRIPT),
     ".asmdef": ("AssemblyDefinitionImporter", SIMPLE),

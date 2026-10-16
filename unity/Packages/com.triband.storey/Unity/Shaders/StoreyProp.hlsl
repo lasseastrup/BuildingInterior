@@ -57,14 +57,14 @@ bool StoreyPropGone(int ib, float pivotY)
 #ifdef STOREY_DEPTH
     return false;
 #else
-    int slot = (int)(_StoreyState[ib].w + 0.5) - 1;
+    int slot = (int)(_StoreyState[StoreyRow(ib)].w + 0.5) - 1, row = StoreySlotRow(slot);
     if (slot < 0 || abs((float)ib - _StoreyActive.x) < 0.5) return false;
-    int n = (int)(_StoreyOcc[slot * STOREY_OCC_W].x + 0.5);
+    int n = (int)(_StoreyOcc[row].x + 0.5);
     for (int i = 0; i < STOREY_OCC_W - 1; i++)
     {
         if (i >= n) break;
-        float4 a = _StoreyOcc[slot * STOREY_OCC_W + 1 + i];
-        float top = i + 1 < n ? _StoreyOcc[slot * STOREY_OCC_W + 1 + min(i + 1, STOREY_OCC_W - 2)].x : 1e6;   // in the row: StoreySink's
+        float4 a = _StoreyOcc[row + 1 + i];
+        float top = i + 1 < n ? _StoreyOcc[row + 1 + min(i + 1, STOREY_OCC_W - 2)].x : 1e6;   // in the row: StoreySink's
         if (pivotY >= a.x && pivotY < top) return a.z > 0.5;
     }
     return false;
@@ -74,7 +74,7 @@ bool StoreyPropGone(int ib, float pivotY)
 // The prop shows at its building's current LOD: as an LOD0 mesh (shown at LOD0, fading in and out with it).
 bool StoreyPropShown(int ib)
 {
-    float4 st = _StoreyState[ib];
+    float4 st = _StoreyState[StoreyRow(ib)];
     return st.x < 0.5 || (st.z < 1.0 && st.y < 0.5);
 }
 #endif
@@ -116,7 +116,7 @@ void StoreyPropFragment_float(float3 PositionWS, float3 BaseColor, out float3 Co
     int ib = StoreyPropBuilding();
     if (_StoreyPropDebug > 0.5) Color = StoreyPropDebugColor(ib);
     if (ib < 0) return;
-    float4 st = _StoreyState[ib];
+    float4 st = _StoreyState[StoreyRow(ib)];
     bool isDisp = st.x < 0.5, isFrom = st.z < 1.0 && st.y < 0.5;
     StoreyVarying v;
     v.worldPos = PositionWS; v.wall = 0; v.kind = 0; v.wid = 0; v.bid = (float)ib; v.lod = 0;

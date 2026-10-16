@@ -21,6 +21,13 @@ StructuredBuffer<uint>  _StoreyDetailColors; // per facade-detail colour (slot -
 
 #define STOREY_REMAP_ENTRY 23
 #define STOREY_ROW_SLOTS 24
+#define STOREY_DETAIL_COLORS 232   // _StoreyDetailColors' entries: one for each slot from 24 to 255 (BuildingTable.DetailColors)
+
+// The tables that grow, their sizes now (BuildingTable.Upload): x wall ids, y parameter rows, z colour rows
+#ifndef STOREY_TABLE_SIZE_DECLARED
+#define STOREY_TABLE_SIZE_DECLARED
+float4 _StoreyTableSize;
+#endif
 
 // Color Pipeline 2.1.11's SampleColorPalette: flat index = remap row * width + palette index. The width kept off zero and
 // the texel inside the texture: until Color Pipeline binds its atlas, both are whatever Unity has bound in its place
@@ -32,10 +39,11 @@ float4 StoreyAtlas(uint i)
 }
 
 // Entry e of a colour row: the low (even e) or high half of word e / 2 (ColorRows.Pack on the CPU). An e past the row
-// reads its last entry, not the next row's (or past the buffer's end)
+// reads its last entry, not the next row's (or past the buffer's end); a row past the table (from a vertex), its last row
 uint StoreyRowEntry(uint row, uint e)
 {
     e = min(e, STOREY_ROW_SLOTS - 1u);
+    row = min(row, (uint)max((int)_StoreyTableSize.z - 1, 0));
     uint4 r = _StoreyColors[row * 3 + (e >> 3)];
     uint q = (e >> 1) & 3;
     uint w = q == 0 ? r.x : (q == 1 ? r.y : (q == 2 ? r.z : r.w));
@@ -45,7 +53,7 @@ uint StoreyRowEntry(uint row, uint e)
 float3 StoreyPaletteColor(uint row, uint slot, float tone)
 {
     // both sides are read, whichever is used: a style's slot reads detail colour 0, not slot - 24 wrapped round
-    uint detail = _StoreyDetailColors[slot >= STOREY_ROW_SLOTS ? slot - STOREY_ROW_SLOTS : 0u];
+    uint detail = _StoreyDetailColors[min(slot >= STOREY_ROW_SLOTS ? slot - STOREY_ROW_SLOTS : 0u, STOREY_DETAIL_COLORS - 1u)];
     uint index = slot < STOREY_ROW_SLOTS ? StoreyRowEntry(row, slot) : detail;
     return StoreyAtlas(StoreyRowEntry(row, STOREY_REMAP_ENTRY) * _ColorAtlasWidth + index).rgb * tone;
 }

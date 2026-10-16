@@ -115,8 +115,9 @@ Varyings StoreyVert(Attributes IN)
     float4 wall = 0;   // only the colour pass's cutaway reads a wall's data
 #else
     // the wall's data by its id: one entry per wall, not 16 bytes on every vertex. Read for every vertex, as HLSL would
-    // read it inside a ?: anyway (StoreyOcclusion.hlsl): id 0, no wall, reads the first row
-    float4 wallRow = _StoreyWallData[(int)(wid + 0.5)];
+    // read it inside a ?: anyway (StoreyOcclusion.hlsl): id 0, no wall, reads the first row; a mesh without the stream
+    // (LOD1's) reads whatever Unity gives in its place, kept in the table
+    float4 wallRow = _StoreyWallData[StoreyWallId(wid)];
     float4 wall = wid > 0.5 ? wallRow : float4(0, 0, 0, 0);
 #endif
 #endif
