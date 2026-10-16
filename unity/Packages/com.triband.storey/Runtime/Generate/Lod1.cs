@@ -40,7 +40,7 @@ namespace Triband.Storey.Generate
                 if (Derived.IsSetback(b, k))
                 {
                     var Cb = L0.At(k - 1).C; L0.Slab(op, k, Cb, true, true);
-                    if (!Roofs.Draw(op, Roofs.TerraceRoof(site, b, k), Cb)) L0.Terrace(op, null, k, Cb);
+                    if (Roofs.Draw(op, Roofs.TerraceRoof(site, b, k), Cb)) L0.TerraceTops(op, k, Cb); else L0.Terrace(op, null, k, Cb);
                     L0.Overhang(op, k, C);
                 }
                 for (int i = 0; i < g.Wp.Count; i++)

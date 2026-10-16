@@ -20,6 +20,12 @@ namespace Triband.Storey.Generate
         /// and the landing at each end (a 4.6 m run between them).
         /// </summary>
         public const double FLIGHT_W = 2.6, FLIGHT_D = 6.4, FLIGHT_LANE = 1.3, FLIGHT_LANDING = 0.9;
+        /// <summary>
+        /// How far behind a roof part its back lies (<see cref="MeshBuilder.Backing"/>, Unity's own): clear of the generator's
+        /// centimetre details (a window's head stands 9 mm proud of an eave's soffit), which a back a centimetre behind would
+        /// lie on.
+        /// </summary>
+        public const double BACK = 0.013;
     }
 
     /// <summary>Faces a box can leave out because something covers them.</summary>

@@ -61,6 +61,12 @@ namespace Triband.Storey.Generate
         /// </summary>
         public readonly List<(int start, int end)> InsideTris = new List<(int, int)>();
         /// <summary>
+        /// The faces only Unity draws, as ranges of triangles (the first, and one past the last): the backs of the prototype's
+        /// one-sided surfaces, which it draws two-sided, so a renderer culling back faces sees no hole (docs/PERFORMANCE.md
+        /// §7.1). <see cref="Backing"/> records them; the prototype's census leaves them out.
+        /// </summary>
+        public readonly List<(int start, int end)> BackingTris = new List<(int, int)>();
+        /// <summary>
         /// Openings made that show what is behind them at any distance: a doorway with nothing in it (a walk-in storey's
         /// doors but a glazed one) and an artist's glass, which LOD0's far windows don't paint over. Their storey's rooms
         /// are not kept apart (<see cref="Inside"/>).
@@ -93,6 +99,25 @@ namespace Triband.Storey.Generate
             InsideTris.RemoveRange(mark.ranges, InsideTris.Count - mark.ranges);
             if (mark.ranges > 0) InsideTris[mark.ranges - 1] = (InsideTris[mark.ranges - 1].start, mark.end);
         }
+
+        /// <summary>The triangles made from now on only close the shell (<see cref="BackingTris"/>), until it is set false again.</summary>
+        public bool Backing
+        {
+            get => backing;
+            set
+            {
+                if (value == backing) return;
+                backing = value;
+                int t = I.Count / 3;
+                if (value) { backingFrom = t; return; }
+                if (t == backingFrom) return;
+                int n = BackingTris.Count;
+                if (n > 0 && BackingTris[n - 1].end == backingFrom) BackingTris[n - 1] = (BackingTris[n - 1].start, t);
+                else BackingTris.Add((backingFrom, t));
+            }
+        }
+        bool backing;
+        int backingFrom;
 
         /// <summary>The triangles made from now on are the rooms' (<see cref="InsideTris"/>), until it is set false again.</summary>
         public bool Inside
@@ -142,9 +167,9 @@ namespace Triband.Storey.Generate
         {
             if (ShapeOnly) return;
             lock (spares) if (spares.Contains(this)) return;
-            P.Clear(); N.Clear(); C.Clear(); K.Clear(); WI.Clear(); I.Clear(); PaneUV.Clear(); InsideTris.Clear();
+            P.Clear(); N.Clear(); C.Clear(); K.Clear(); WI.Clear(); I.Clear(); PaneUV.Clear(); InsideTris.Clear(); BackingTris.Clear();
             Walls = new List<(double[], int)>(); WallBase = new List<double>(); Solids = null;
-            StoreyBase = 0; curW = Zero4; curK = curI = 0; Welded = false; inside = false; insideFrom = 0; SeeThrough = 0;
+            StoreyBase = 0; curW = Zero4; curK = curI = 0; Welded = false; inside = false; insideFrom = 0; SeeThrough = 0; backing = false; backingFrom = 0;
             lock (spares) if (spares.Count < Spares) spares.Add(this);
         }
 

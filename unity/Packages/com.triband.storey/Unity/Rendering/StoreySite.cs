@@ -264,7 +264,7 @@ namespace Triband.Storey.Unity
             pendingAll = false; pending.Clear();
             site.Lod = displayedLod;
             StoreyGlobals.SetSimpleLighting(quality != null && !quality.specularAndReflections);   // the tier's lighting, with either LOD mode
-            site.CullSteadyBackFaces = quality != null && quality.cullBackFacesWhenSteady;
+            site.CullSteadyBackFaces = quality == null || quality.cullBackFacesWhenSteady;   // on without a quality asset, as its default
             if (occApplyFor != Occlusion) { occApplyFor = Occlusion; occApply = Occlusion != null ? Occlusion.Apply : null; }
             site.Occlusion = Application.isPlaying && Occlusion != null && Occlusion.isActiveAndEnabled ? occApply : null;
             var v = ViewSource != null ? (view = ViewSource()) : view;

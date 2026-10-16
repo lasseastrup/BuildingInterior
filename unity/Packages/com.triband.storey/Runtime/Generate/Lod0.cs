@@ -131,7 +131,7 @@ namespace Triband.Storey.Generate
                 // a filled storey is built as a shell-only building's storeys are; a slab between two of them is not needed
                 bool sh = Derived.ShellAt(b, k), shBelow = Derived.ShellAt(b, k - 1);
                 if ((!(sh && shBelow) || k == N || sb) && !op.ShapeOnly) Slab(op, k, Cb, sh, false);   // no walls or segments: none for a shape
-                if (sb) { if (!Roofs.Draw(op, Roofs.TerraceRoof(site, b, k), Cb)) Terrace(op, sg, k, Cb); Overhang(op, k, g.C); }
+                if (sb) { if (Roofs.Draw(op, Roofs.TerraceRoof(site, b, k), Cb)) TerraceTops(op, k, Cb); else Terrace(op, sg, k, Cb); Overhang(op, k, g.C); }
                 foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && k == v.bottom && Courtyards.Live(b, v)) Courtyards.Pave(op, b, v, g.C);
                 // the storey's rooms are kept apart unless one of its openings shows them at any distance (a doorway, an
                 // artist's glass), which is known once its walls are made: until then they are only marked
@@ -348,10 +348,29 @@ namespace Triband.Storey.Generate
             }
         }
 
+        /// <summary>
+        /// Under a terrace's pitched roof, the tops of the walls it sits on, by Unity only (<see cref="MeshBuilder.Backing"/>):
+        /// where a flat terrace has its parapet. As <see cref="WallTops"/>.
+        /// </summary>
+        public void TerraceTops(MeshBuilder op, int k, Palette C)
+        {
+            if (op.ShapeOnly) return;
+            double y = Derived.FloorBase(b, k), T = Dim.T_EXT;
+            op.Ctx(null, 0); op.Backing = true;
+            foreach (var r in TerraceRuns(k))
+            {
+                var F = new Frame(r.a, r.u, r.w); double s1 = r.S.At(T), e1 = r.E.At(T);
+                if (r.E.s - r.S.s < 1e-4 || e1 - s1 < 1e-4) continue;
+                op.Quad(F.At(r.S.s, y, 0), F.At(r.E.s, y, 0), F.At(e1, y, T), F.At(s1, y, T), new P3(0, 1, 0), C.roof);
+            }
+            op.Backing = false;
+        }
+
         // ---- facade -------------------------------------------------------------------------
 
         /// <summary>LOD0 facade of one storey: panels with window and door holes, recessed panes, frames and trims.</summary>
-        /// <param name="rooms">The walls' inner faces are the rooms' (<see cref="MeshBuilder.Inside"/>).</param>
+        /// <param name="rooms">The walls' inner faces are the rooms' (<see cref="MeshBuilder.Inside"/>), and what only clear glass
+        /// shows from outside (the slab's edges, the strips' backs).</param>
         public void FacadeStorey(MeshBuilder op, MeshBuilder gl, List<Seg> sg, int k, TierCtx g, bool rooms = false)
         {
             var Wp = g.Wp; var C = g.C; int n = Wp.Count; bool shell = Derived.ShellAt(b, k); double h = Derived.FloorH(b, k), y = Derived.FloorBase(b, k), T = Dim.T_EXT;   // shell: this storey (a filled one is closed as a shell building is)
@@ -371,13 +390,14 @@ namespace Triband.Storey.Generate
                     Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : C.wall, C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? T * 0.45 : 0, rooms: rooms));
                     var stk = Derived.StyleAt(b, k);
                     Facade.Dress(op, gl, F, ops, y, C, shell, stk);
+                    if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
                     if (!party && stk.bricks is double density && density > 0)
                     {
                         var (bs0, be0) = pm.Span(T, T);
                         Facade.Bricks(op, F, Math.Max(bs0, pc.lo), Math.Min(be0, pc.hi), y, h, k == 0 ? Math.Max(stk.plinthH ?? 0.45, stk.foundation.HasValue ? FoundationH(stk) : 0) : 0,
                             stk.bands && k < N - 1 ? Band(stk, C).h : 0, ops, density, Facade.Seed(b.id, k, i, pc.lo), C.brick);
                     }
-                    if (!party) { op.Ctx(wc, 1); PieceStrips(op, k, F, m, pc, ops, y, h, C); }
+                    if (!party) { op.Ctx(wc, 1); PieceStrips(op, k, F, m, pc, ops, y, h, C, rooms && !shell); }
                     var (cs, ce) = pm.Span(T / 2, T / 2);
                     var ranges = shell || party ? new List<(double, double)> { (cs, ce) } : Facade.SolidRanges(cs, ce, ops);
                     foreach (var (s1, e1) in ranges) Facade.PushSeg(sg, F, s1, e1, T / 2, T / 2);
@@ -386,7 +406,8 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>Floor bands and the ground-floor plinth along one facade piece (ends against a party wall are left open).</summary>
-        public void PieceStrips(MeshBuilder op, int k, Frame F, Miter m, Party.Piece pc, List<Opening> ops, double y, double h, Palette C)
+        /// <param name="rooms">The strips' backs over openings are the rooms' (<see cref="Facade.StripBacks"/>).</param>
+        public void PieceStrips(MeshBuilder op, int k, Frame F, Miter m, Party.Piece pc, List<Opening> ops, double y, double h, Palette C, bool rooms = false)
         {
             double T = Dim.T_EXT, L = m.E.s; int k0 = Derived.TierStart(b, k), i = pc.i;
             var c0 = pc.s < 0.02 ? Party.CornerCut(site, b, k0, i, false, y, true) : null;
@@ -408,12 +429,12 @@ namespace Triband.Storey.Generate
                 var decks = Decks(k + 1, F, T, T + bd);
                 var rs = decks == null ? band : Geo.MinusRanges(band, decks);
                 rs.RemoveAll(r => r.Item2 - r.Item1 <= 0.02);
-                if (rs.Count > 0) Facade.StripPieces(op, F, m, rs, y + h - bh, y + h, T, T + bd, bc, bc, Skip.In);
+                if (rs.Count > 0) { Facade.StripPieces(op, F, m, rs, y + h - bh, y + h, T, T + bd, bc, bc, Skip.In); Facade.StripBacks(op, F, rs, ops, y, y + h - bh, y + h, T, bc, rooms); }
                 if (decks != null && bh > Bridges.Deck + 0.01)
                 {
                     var below = new List<(double, double)>();
                     foreach (var (a0, a1) in band) foreach (var (d0, d1) in decks) if (Math.Min(a1, d1) - Math.Max(a0, d0) > 0.02) below.Add((Math.Max(a0, d0), Math.Min(a1, d1)));
-                    if (below.Count > 0) Facade.StripPieces(op, F, m, below, y + h - bh, y + h - Bridges.Deck, T, T + bd, bc, bc, Skip.In);
+                    if (below.Count > 0) { Facade.StripPieces(op, F, m, below, y + h - bh, y + h - Bridges.Deck, T, T + bd, bc, bc, Skip.In); Facade.StripBacks(op, F, below, ops, y, y + h - bh, y + h - Bridges.Deck, T, bc, rooms); }
                 }
             }
             if (k == 0)
@@ -423,15 +444,18 @@ namespace Triband.Storey.Generate
                 if (st.foundation is double depth)
                 {
                     double fo = FoundationOut(st);
-                    var rf = Clip(m.Span(T, T + fo));
-                    Facade.StripPieces(op, F, m, new List<(double, double)> { rf }, y - Math.Max(0, depth), y + fTop, T, T + fo, C.foundation, C.foundation, Skip.In | Skip.Bot);   // y: the ground floor's slab, the building's ground
+                    var rf = new List<(double, double)> { Clip(m.Span(T, T + fo)) };
+                    Facade.StripPieces(op, F, m, rf, y - Math.Max(0, depth), y + fTop, T, T + fo, C.foundation, C.foundation, Skip.In | Skip.Bot);   // y: the ground floor's slab, the building's ground
+                    Facade.StripBacks(op, F, rf, ops, y, y - Math.Max(0, depth), y + fTop, T, C.foundation, rooms);
                 }
                 if (pTop > fTop + 0.01)
                 {
                     var r = Clip(m.Span(T, T + 0.04));
                     var widened = ops.ConvertAll(o => { if (!o.door) return o; var d = o.Clone(); d.u0 -= 0.08; d.u1 += 0.08; return d; });
                     var pc0 = st.plinth != null ? new Swatch(C.style, ColorSlot.Plinth) : C.plinth;
-                    Facade.StripPieces(op, F, m, Facade.SolidRanges(r.Item1, r.Item2, widened), y + fTop, y + pTop, T, T + 0.04, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart);
+                    var rp = Facade.SolidRanges(r.Item1, r.Item2, widened);
+                    Facade.StripPieces(op, F, m, rp, y + fTop, y + pTop, T, T + 0.04, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart);
+                    Facade.StripBacks(op, F, rp, ops, y, y + fTop, y + pTop, T, pc0, rooms);
                 }
             }
         }
@@ -536,26 +560,72 @@ namespace Triband.Storey.Generate
 
         public void Roof(MeshBuilder op, List<Seg>? sg, TierCtx g, Palette C)
         {
-            if (Roofs.Draw(op, Roofs.Parts(site, b), C, Derived.StyleAt(b, N))) return;   // hip, gable or shed (no roof access, no parapet)
+            if (Roofs.Draw(op, Roofs.Parts(site, b), C, Derived.StyleAt(b, N))) { WallTops(op, g, C); return; }   // hip, gable or shed (no roof access, no parapet)
             double y = Derived.RoofY(b), T = Dim.T_EXT; int n = g.Wp.Count, k0 = Derived.TierStart(b, N);
             bool parapet = Derived.StyleAt(b, N).parapet;
             for (int i = 0; i < n; i++)
             {
                 var e = Geo.EdgeInfo(g.Wp, i, g.ccw); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L);
-                var cut = new List<(double, double)>(Party.Skips(site, b, k0, i, y)); cut.AddRange(CoreRoofSkips(i));
+                var party = Party.Skips(site, b, k0, i, y); var cores = CoreRoofSkips(i);
+                var cut = new List<(double, double)>(party); cut.AddRange(cores);
                 var c0 = Party.CornerCut(site, b, k0, i, false, y); var c1 = Party.CornerCut(site, b, k0, i, true, y);
-                List<(double, double)> R((double, double) r) => Geo.MinusRanges(new List<(double, double)> {
-                    (c0 != null ? Math.Max(r.Item1, c0.Value.At(T)) : r.Item1, c1 != null ? Math.Min(r.Item2, c1.Value.At(T)) : r.Item2) }, cut);
+                List<(double, double)> Clip((double, double) r) => new List<(double, double)> {
+                    (c0 != null ? Math.Max(r.Item1, c0.Value.At(T)) : r.Item1, c1 != null ? Math.Min(r.Item2, c1.Value.At(T)) : r.Item2) };
+                List<(double, double)> R((double, double) r) => Geo.MinusRanges(Clip(r), cut);
                 op.Ctx(Geo.WallCtx(e.a, e.u, e.w, e.L), 1);
-                if (parapet)
+                void Edge(Func<(double, double), List<(double, double)>> ranges)
                 {
-                    Facade.StripPieces(op, F, m, R(m.Span(0, T)), y, y + 1.0, 0, T, C.wall, C.inner, Skip.Top | Skip.Bot);
-                    Facade.StripPieces(op, F, m, R(m.Span(-0.04, T + 0.05)), y + 1.0, y + 1.1, -0.04, T + 0.05, C.trim, null);
+                    if (parapet)
+                    {
+                        Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), y, y + 1.0, 0, T, C.wall, C.inner, Skip.Top | Skip.Bot);
+                        Facade.StripPieces(op, F, m, ranges(m.Span(-0.04, T + 0.05)), y + 1.0, y + 1.1, -0.04, T + 0.05, C.trim, null);
+                    }
+                    else Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), y, y + 0.3, 0, T, C.trim, C.trim, Skip.Bot);
                 }
-                else Facade.StripPieces(op, F, m, R(m.Span(0, T)), y, y + 0.3, 0, T, C.trim, C.trim, Skip.Bot);
+                Edge(R);
+                // the parapet stops where a core stands flush against the wall, whose bulkhead (LOD0's) takes the wall up. A
+                // building without insides builds none (LOD0 its cores, LOD1 its bulkheads, only for a walk-in one), and LOD1's
+                // stand clear of the wall: there the wall's top is open, so the parapet the prototype leaves out is filled in, by
+                // Unity only
+                if ((shell || op.Lean) && cores.Count > 0)
+                {
+                    op.Backing = true;
+                    Edge(r => { var all = Geo.MinusRanges(Clip(r), party); return Geo.MinusRanges(all, Geo.MinusRanges(all, cores)); });
+                    op.Backing = false;
+                }
                 if (sg != null) foreach (var (cs, ce) in R(m.Span(T / 2, T / 2))) Facade.PushSeg(sg, F, cs, ce, T / 2, T / 2);
             }
             foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && Courtyards.HoleAt(b, v, N)) Courtyards.RoofEdge(op, sg, b, v, C);
+        }
+
+        /// <summary>
+        /// Under a pitched roof, the outer walls' tops, by Unity only (<see cref="MeshBuilder.Backing"/>). The roof sits on them,
+        /// but where its edge rises above them (a cut corner's short edge, between a gable's rake and an eave) the wall is open
+        /// at the top, into the slab; the prototype's two-sided faces show its inside there, a back face culled shows through.
+        /// Not along a neighbour as high: its slab is there.
+        /// </summary>
+        void WallTops(MeshBuilder op, TierCtx g, Palette C)
+        {
+            if (op.ShapeOnly) return;
+            double y = Derived.RoofY(b), T = Dim.T_EXT; int k0 = Derived.TierStart(b, N);
+            op.Backing = true;
+            for (int i = 0; i < g.Wp.Count; i++)
+            {
+                var e = Geo.EdgeInfo(g.Wp, i, g.ccw); var m = Geo.MiterOf(g.cor, i, e.L);
+                var party = new List<(double, double)>(); foreach (var r in Party.Ranges(site, b, k0, i)) if (Party.Shares(r, y)) party.Add((r.s, r.e));
+                var c0 = Party.CornerCut(site, b, k0, i, false, y); var c1 = Party.CornerCut(site, b, k0, i, true, y);
+                var (s, en) = m.Span(0, T);
+                var all = new List<(double, double)> { (c0 != null ? Math.Max(s, c0.Value.At(T)) : s, c1 != null ? Math.Min(en, c1.Value.At(T)) : en) };
+                foreach (var (a, z) in Geo.MinusRanges(all, party))
+                {
+                    // mitred where it reaches the corner (as Facade.StripPieces)
+                    bool ms = a <= s + 1e-6, me = z >= en - 1e-6;
+                    double sA = ms ? m.S.s : a, kA = ms ? m.S.k : 0, eB = me ? m.E.s : z, kB = me ? m.E.k : 0;
+                    if (eB - sA < 1e-4 || eB + kB * T - (sA + kA * T) < 1e-4) continue;
+                    op.Quad(e.F.At(sA, y, 0), e.F.At(eB, y, 0), e.F.At(eB + kB * T, y, T), e.F.At(sA + kA * T, y, T), new P3(0, 1, 0), C.roof);
+                }
+            }
+            op.Backing = false;
         }
 
         // ---- cores ---------------------------------------------------------------------------
@@ -577,13 +647,29 @@ namespace Triband.Storey.Generate
                 void S(double px, double pz, double qx, double qz, double r) { var a = f.At2(px, pz); var c = f.At2(qx, qz); sg.Add(new Seg(a.x, a.z, c.x, c.z, r)); }
                 const Skip TB = Skip.Top | Skip.Bot;
                 var fl = Cores.CoreFlush(Derived.OutlineAt(b, k), s); bool fL = fl[0] != null, fR = fl[1] != null, fB = fl[3] != null; double TE = Dim.T_EXT;
+                // a core wall's end against the building's own wall, whose windows show it (the prototype's faces are two-sided):
+                // only Unity draws it, a centimetre in
+                void End(double x0, double x1, double y0, double y1, double z0, double z1, Skip face)
+                {
+                    if (face == Skip.Out) z1 -= 0.01; else if (face == Skip.In) z0 += 0.01; else if (face == Skip.UStart) x0 += 0.01; else x1 -= 0.01;
+                    op.Backing = true; Bx(x0, x1, y0, y1, z0, z1, C.core, null, Facade.AllBut(face)); op.Backing = false;
+                }
                 if (s.type == CoreType.Stairs)
                 {
                     double h = atRoof ? 2.7 : Derived.FloorH(b, k) - Dim.SLAB, xL = fL ? -1.3 : -1.45, xR = fR ? 1.3 : 1.45, zB = fB ? 2.6 : 2.75;
                     Skip ends = TB | Skip.Out | (atRoof ? Skip.In : Skip.None);
-                    op.Ctx(Wl(-1.3, -2.6, -1.3, 2.6, -1, 0), 1); if (!fL) Bx(-1.45, -1.3, y, y + h, -2.6, 2.6, C.core, C.coreIn, ends); else if (atRoof) Bx(-1.3 - TE, -1.3, y, y + h, -2.75, zB, C.wall, C.wall, TB | (fB ? Skip.Out : Skip.None));
-                    op.Ctx(Wl(1.3, -2.6, 1.3, 2.6, 1, 0), 1); if (!fR) Bx(1.3, 1.45, y, y + h, -2.6, 2.6, C.core, C.coreIn, ends); else if (atRoof) Bx(1.3, 1.3 + TE, y, y + h, -2.75, zB, C.wall, C.wall, TB | (fB ? Skip.Out : Skip.None));
-                    op.Ctx(Wl(-1.45, 2.6, 1.45, 2.6, 0, 1), 1); if (!fB) Bx(xL, xR, y, y + h, 2.6, 2.75, C.core, C.coreIn, TB | (fL ? Skip.UStart : Skip.None) | (fR ? Skip.UEnd : Skip.None)); else if (atRoof) Bx(fL ? -1.3 - TE : -1.45, fR ? 1.3 + TE : 1.45, y, y + h, 2.6, 2.6 + TE, C.wall, C.coreIn, TB);
+                    bool ow = !atRoof;   // below the roof a wall flush with the building's ends behind its windows (the bulkhead's own wall closes it above)
+                    op.Ctx(Wl(-1.3, -2.6, -1.3, 2.6, -1, 0), 1);
+                    if (!fL) { Bx(-1.45, -1.3, y, y + h, -2.6, 2.6, C.core, C.coreIn, ends); if (ow && fB) End(-1.45, -1.3, y, y + h, -2.6, 2.6, Skip.Out); } else if (atRoof) Bx(-1.3 - TE, -1.3, y, y + h, -2.75, zB, C.wall, C.wall, TB | (fB ? Skip.Out : Skip.None));
+                    op.Ctx(Wl(1.3, -2.6, 1.3, 2.6, 1, 0), 1);
+                    if (!fR) { Bx(1.3, 1.45, y, y + h, -2.6, 2.6, C.core, C.coreIn, ends); if (ow && fB) End(1.3, 1.45, y, y + h, -2.6, 2.6, Skip.Out); } else if (atRoof) Bx(1.3, 1.3 + TE, y, y + h, -2.75, zB, C.wall, C.wall, TB | (fB ? Skip.Out : Skip.None));
+                    op.Ctx(Wl(-1.45, 2.6, 1.45, 2.6, 0, 1), 1);
+                    if (!fB)
+                    {
+                        Bx(xL, xR, y, y + h, 2.6, 2.75, C.core, C.coreIn, TB | (fL ? Skip.UStart : Skip.None) | (fR ? Skip.UEnd : Skip.None));
+                        if (ow && fL) End(xL, xR, y, y + h, 2.6, 2.75, Skip.UStart); if (ow && fR) End(xL, xR, y, y + h, 2.6, 2.75, Skip.UEnd);
+                    }
+                    else if (atRoof) Bx(fL ? -1.3 - TE : -1.45, fR ? 1.3 + TE : 1.45, y, y + h, 2.6, 2.6 + TE, C.wall, C.coreIn, TB);
                     op.Ctx(Wl(0, -1.6, 0, 1.6, 1, 0), 1); Bx(-0.05, 0.05, y, y + (atRoof ? 1.1 : h), -1.6, 1.6, C.coreIn);
                     if (!fL) S(-1.375, -2.6, -1.375, 2.6, 0.075); else if (atRoof) S(-1.3 - TE / 2, -2.75, -1.3 - TE / 2, 2.75, TE / 2);
                     if (!fR) S(1.375, -2.6, 1.375, 2.6, 0.075); else if (atRoof) S(1.3 + TE / 2, -2.75, 1.3 + TE / 2, 2.75, TE / 2);
@@ -603,6 +689,9 @@ namespace Triband.Storey.Generate
                         double fh = Derived.FloorH(b, k), half = fh / 2; int n = 10; double run = 3.2 / n;
                         for (int i = 0; i < n; i++) { double z0 = -1.6 + i * run, t = y + (i + 1) * half / n; Bx(-1.25, -0.05, t - 0.2, t, z0, z0 + run, C.step, null, Skip.UEnd); }
                         Bx(-1.3, 1.3, y + half - 0.22, y + half, 1.6, 2.6, C.step, null, Skip.UStart | Skip.UEnd | Skip.Out);
+                        // its ends against the building's own walls, whose windows show them: only Unity draws them
+                        var against = (fL ? Skip.UStart : Skip.None) | (fR ? Skip.UEnd : Skip.None) | (fB ? Skip.Out : Skip.None);
+                        if (against != Skip.None) { op.Backing = true; Bx(-1.3, 1.3, y + half - 0.22, y + half, 1.6, 2.6, C.step, null, Facade.AllBut(against)); op.Backing = false; }
                         for (int i = 0; i < n; i++) { double z1 = 1.6 - i * run, t = y + half + (i + 1) * half / n; Bx(0.05, 1.25, t - 0.2, t, z1 - run, z1, C.step, null, Skip.UStart); }
                     }
                     void Rail(double x0, double x1)
@@ -659,12 +748,22 @@ namespace Triband.Storey.Generate
                 else
                 {
                     double h = atRoof ? 2.9 : Derived.FloorH(b, k) - Dim.SLAB, xL = fL ? -1.2 : -1.35, xR = fR ? 1.2 : 1.35, zB = fB ? 1.2 : 1.35;
-                    op.Ctx(Wl(-1.2, -1.2, -1.2, 1.2, -1, 0), 1); if (!fL) Bx(-1.35, -1.2, y, y + h, -1.2, 1.2, C.core, C.coreIn, TB | Skip.In | Skip.Out); else if (atRoof) Bx(-1.2 - TE, -1.2, y, y + h, -1.35, zB, C.wall, C.wall, TB | (fB ? Skip.Out : Skip.None));
-                    op.Ctx(Wl(1.2, -1.2, 1.2, 1.2, 1, 0), 1); if (!fR) Bx(1.2, 1.35, y, y + h, -1.2, 1.2, C.core, C.coreIn, TB | Skip.In | Skip.Out); else if (atRoof) Bx(1.2, 1.2 + TE, y, y + h, -1.35, zB, C.wall, C.wall, TB | (fB ? Skip.Out : Skip.None));
-                    op.Ctx(Wl(-1.35, 1.2, 1.35, 1.2, 0, 1), 1); if (!fB) Bx(xL, xR, y, y + h, 1.2, 1.35, C.core, C.liftIn, TB | (fL ? Skip.UStart : Skip.None) | (fR ? Skip.UEnd : Skip.None)); else if (atRoof) Bx(fL ? -1.2 - TE : -1.35, fR ? 1.2 + TE : 1.35, y, y + h, 1.2, 1.2 + TE, C.wall, C.liftIn, TB);
+                    bool ow = !atRoof;   // as the stairs'
+                    op.Ctx(Wl(-1.2, -1.2, -1.2, 1.2, -1, 0), 1);
+                    if (!fL) { Bx(-1.35, -1.2, y, y + h, -1.2, 1.2, C.core, C.coreIn, TB | Skip.In | Skip.Out); if (ow && fB) End(-1.35, -1.2, y, y + h, -1.2, 1.2, Skip.Out); } else if (atRoof) Bx(-1.2 - TE, -1.2, y, y + h, -1.35, zB, C.wall, C.wall, TB | (fB ? Skip.Out : Skip.None));
+                    op.Ctx(Wl(1.2, -1.2, 1.2, 1.2, 1, 0), 1);
+                    if (!fR) { Bx(1.2, 1.35, y, y + h, -1.2, 1.2, C.core, C.coreIn, TB | Skip.In | Skip.Out); if (ow && fB) End(1.2, 1.35, y, y + h, -1.2, 1.2, Skip.Out); } else if (atRoof) Bx(1.2, 1.2 + TE, y, y + h, -1.35, zB, C.wall, C.wall, TB | (fB ? Skip.Out : Skip.None));
+                    op.Ctx(Wl(-1.35, 1.2, 1.35, 1.2, 0, 1), 1);
+                    if (!fB)
+                    {
+                        Bx(xL, xR, y, y + h, 1.2, 1.35, C.core, C.liftIn, TB | (fL ? Skip.UStart : Skip.None) | (fR ? Skip.UEnd : Skip.None));
+                        if (ow && fL) End(xL, xR, y, y + h, 1.2, 1.35, Skip.UStart); if (ow && fR) End(xL, xR, y, y + h, 1.2, 1.35, Skip.UEnd);
+                    }
+                    else if (atRoof) Bx(fL ? -1.2 - TE : -1.35, fR ? 1.2 + TE : 1.35, y, y + h, 1.2, 1.2 + TE, C.wall, C.liftIn, TB);
                     op.Ctx(Wl(-1.35, -1.2, 1.35, -1.2, 0, -1), 1);
                     var ops = new List<Opening> { new Opening { u0 = -0.6, u1 = 0.6, y0 = 0, y1 = 2.3, door = true } };
                     Facade.WallOps(op, f, xL, xR, y, h, -1.35, -1.2, ops, C.core, C.coreIn, TB | (fL ? Skip.UStart : Skip.None) | (fR ? Skip.UEnd : Skip.None));
+                    if (ow && fL) End(xL, xR, y, y + h, -1.35, -1.2, Skip.UStart); if (ow && fR) End(xL, xR, y, y + h, -1.35, -1.2, Skip.UEnd);
                     Bx(-0.68, -0.59, y, y + 2.29, -1.4, -1.18, C.metal, null, Skip.Bot); Bx(0.59, 0.68, y, y + 2.29, -1.4, -1.18, C.metal, null, Skip.Bot); Bx(-0.68, 0.68, y + 2.29, y + 2.38, -1.4, -1.18, C.metal);
                     Bx(0.8, 0.92, y + 1.0, y + 1.3, -1.42, -1.35, C.liftButton);
                     if (!fL) S(-1.275, -1.35, -1.275, 1.35, 0.075); else if (atRoof) S(-1.2 - TE / 2, -1.35, -1.2 - TE / 2, 1.35, TE / 2);

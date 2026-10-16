@@ -50,6 +50,12 @@ namespace Triband.Storey.Generate
         public readonly List<int> Slot = new List<int>();
         public readonly List<int> I = new List<int>();
         public readonly List<ParamRow> Rows = new List<ParamRow>();
+        /// <summary>
+        /// The faces only Unity draws, as ranges of triangles: the backs of the roof's parts (<see cref="MeshBuilder.BackingTris"/>),
+        /// which the prototype draws two-sided, and what closes the massing where it is open (a corner's slit, the lid under
+        /// a pitched roof). Its census leaves them out.
+        /// </summary>
+        public readonly List<(int start, int end)> BackingTris = new List<(int, int)>();
         public int Tag;
         /// <summary>
         /// Per vertex, when several buildings share the mesh (a merged cell, <see cref="Lod.Cells"/>): each vertex's
@@ -82,7 +88,7 @@ namespace Triband.Storey.Generate
         /// </summary>
         public void Recycle()
         {
-            P.Clear(); N.Clear(); Fac.Clear(); Fac2.Clear(); Slot.Clear(); I.Clear(); Rows.Clear(); Tag = 0; Tags = null;
+            P.Clear(); N.Clear(); Fac.Clear(); Fac2.Clear(); Slot.Clear(); I.Clear(); Rows.Clear(); BackingTris.Clear(); Tag = 0; Tags = null;
             lock (spares) if (spares.Count < Spares && !spares.Contains(this)) spares.Push(this);
         }
 
@@ -103,6 +109,10 @@ namespace Triband.Storey.Generate
         {
             double T = Dim.T_EXT; int N = b.floors.Count; double ox = b.pos.x, oz = b.pos.z, top = Derived.RoofY(b);
             var stTop = Derived.StyleAt(b, N); bool pitched = Roofs.IsPitched(b); double yTop = pitched ? top : top + (stTop.parapet ? 1.1 : 0.3);
+            // under a pitched roof, the massing's lid: LOD1's roof slab, just below the roof where it sits on the walls. It
+            // shows only where the roof stops short of the walls (pulled back behind a neighbour's wall along an edge mostly
+            // shared, past the neighbour's end), which a back face culled would leave open
+            double yLid = top - 0.05;
             var M = Lod2Mesh.Make(); M.Tag = site.IndexOf(b) + 2 * Lod1.LOD_TAG;
             int slot = 0;
             site.partyMemo.TryRemove(b.id, out _);
@@ -140,6 +150,14 @@ namespace Triband.Storey.Generate
                     M.I.Add(bse + x); M.I.Add(bse + yy); M.I.Add(bse + z);
                 }
             }
+            // the triangles made since from: only Unity draws them
+            void Backed(int from)
+            {
+                if (M.Tris <= from) return;
+                int nb = M.BackingTris.Count;
+                if (nb > 0 && M.BackingTris[nb - 1].end == from) M.BackingTris[nb - 1] = (M.BackingTris[nb - 1].start, M.Tris);
+                else M.BackingTris.Add((from, M.Tris));
+            }
             void RoofPieces(List<RoofPart> parts)
             {
                 foreach (var p in parts)
@@ -155,6 +173,16 @@ namespace Triband.Storey.Generate
                         if (P3.Dot(P3.Cross(all[c] - all[a], all[d] - all[a]), p.N) < 0) { int x = c; c = d; d = x; }
                         M.I.Add(bse + a); M.I.Add(bse + c); M.I.Add(bse + d);
                     }
+                    // its back, just behind it, as LOD0's and LOD1's (Roofs.Draw): only Unity draws it
+                    int back = M.P.Count, from = M.Tris; var off = p.N * -Dim.BACK;
+                    foreach (var q in all) Vtx(q + off, p.N * -1, 0, 0, 0, 0, 0, K);
+                    for (int t = 0; t < tris.Count; t += 3)
+                    {
+                        int a = tris[t], c = tris[t + 1], d = tris[t + 2];
+                        if (P3.Dot(P3.Cross(all[c] - all[a], all[d] - all[a]), p.N) > 0) { int x = c; c = d; d = x; }
+                        M.I.Add(back + a); M.I.Add(back + c); M.I.Add(back + d);
+                    }
+                    Backed(from);
                 }
             }
             int Row(Palette C, double[]? spec = null, double[]? run = null)
@@ -201,19 +229,36 @@ namespace Triband.Storey.Generate
                     var e = Geo.EdgeInfo(g.Wp, i, g.ccw); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L); var (uS, uE) = Facade.Span(m, e.L);
                     double bay = blank.Contains(i) ? 0 : Facade.BayLayout(st, uS, uE).bay;
                     double yc = Derived.FloorBase(b, t.k0);
-                    var c0 = Party.CornerCut(site, b, t.k0, i, false, yc); var c1 = Party.CornerCut(site, b, t.k0, i, true, yc);
+                    var c0 = Party.CornerCut(site, b, t.k0, i, false, yc, false, out double c0Top); var c1 = Party.CornerCut(site, b, t.k0, i, true, yc, false, out double c1Top);
+                    double ms1 = m.S.At(T), me1 = m.E.At(T), ms0 = m.S.At(0), me0 = m.E.At(0);   // the corners mitred, as above a neighbour's top they are
                     if (c0 != null) m.S = c0.Value; if (c1 != null) m.E = c1.Value;
                     double s1 = m.S.At(T), e1 = m.E.At(T), s0 = m.S.At(0), e0 = m.E.At(0); var outN = new P3(e.w.x, 0, e.w.z);
                     foreach (var r in runs)
                     {
                         double y0 = Derived.FloorBase(b, r.k0), y1 = r.top ? yTop : Derived.FloorBase(b, r.k1), H = y1 - y0; slot = r.slot;
                         Quad(F.At(s1, y0, T), F.At(e1, y0, T), F.At(e1, y1, T), F.At(s1, y1, T), outN, bay, 1, s1, e1, H, uS, uE);
+                        // the tier's corner is cut for a neighbour lower than the run's top: above the neighbour the cut leaves a slit
+                        // to the corner, closed by Unity only (the prototype's massing has it too)
+                        foreach (var (cut, upTo, a, z) in new[] { (c0, c0Top, ms1, s1), (c1, c1Top, e1, me1) })
+                        {
+                            if (cut == null || y1 <= upTo + 1e-3 || z - a < 1e-3) continue;
+                            int from = M.Tris; double ya = Math.Max(y0, upTo);
+                            Quad(F.At(a, ya, T), F.At(z, ya, T), F.At(z, y1, T), F.At(a, y1, T), outN, 0, 4);
+                            Backed(from);
+                        }
                     }
                     slot = tierSlot;
                     if (last && !pitched)
                     {
                         Quad(F.At(s0, top, 0), F.At(e0, top, 0), F.At(e0, yTop, 0), F.At(s0, yTop, 0), new P3(-e.w.x, 0, -e.w.z), 0, st.parapet ? 4 : 3);
                         Quad(F.At(s0, yTop, 0), F.At(e0, yTop, 0), F.At(e1, yTop, T), F.At(s1, yTop, T), new P3(0, 1, 0), 0, 3);
+                    }
+                    else if (last)
+                    {
+                        // the lid's rim, over the wall (mitred: a corner cut for a neighbour is inside it or below the lid)
+                        int from = M.Tris;
+                        Quad(F.At(ms0, yLid, 0), F.At(me0, yLid, 0), F.At(me1, yLid, T), F.At(ms1, yLid, T), new P3(0, 1, 0), 0, 2);
+                        Backed(from);
                     }
                 }
                 if (b.details.Exists(d => d.kind == DetailKinds.Escape))
@@ -234,11 +279,31 @@ namespace Triband.Storey.Generate
                     foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, N)) rings.Add(v.shape);
                     Flat(rings, top, 2, false);
                 }
-                else if (last) RoofPieces(Roofs.Parts(site, b)!.Parts);
+                else if (last)
+                {
+                    RoofPieces(Roofs.Parts(site, b)!.Parts);
+                    // the lid, open where a courtyard opens through the roof (its walls' faces)
+                    int from = M.Tris; var rings = new List<List<Vec2>> { fp };
+                    foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && Courtyards.HoleAt(b, v, N)) rings.AddRange(Courtyards.Offset(v.shape, -T));
+                    Flat(rings, yLid, 2, false);
+                    Backed(from);
+                }
                 else
                 {
                     var tr = Roofs.TerraceRoof(site, b, t.k1);
-                    if (tr != null) RoofPieces(tr.Parts);
+                    if (tr != null)
+                    {
+                        RoofPieces(tr.Parts);
+                        // the lid under it, as under the top's: over the terrace and the walls it sits on
+                        double yl = Derived.FloorBase(b, t.k1) - 0.05; int from = M.Tris;
+                        foreach (var poly in Geo.TerracePolys(fp, Derived.OutlineAt(b, t.k1))) Flat(poly, yl, 2, false);
+                        foreach (var r in L0.TerraceRuns(t.k1))
+                        {
+                            var F = new Frame(r.a, r.u, r.w);
+                            Quad(F.At(r.S.s, yl, 0), F.At(r.E.s, yl, 0), F.At(r.E.At(T), yl, T), F.At(r.S.At(T), yl, T), new P3(0, 1, 0), 0, 2);
+                        }
+                        Backed(from);
+                    }
                     else
                     {
                         double y1 = Derived.FloorBase(b, t.k1);

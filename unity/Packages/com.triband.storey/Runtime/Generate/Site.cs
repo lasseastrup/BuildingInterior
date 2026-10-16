@@ -272,8 +272,15 @@ namespace Triband.Storey.Generate
         /// At a corner next to a party wall, a wall stops against the face of the wall holding the
         /// corner instead of mitring past the line. Null for the usual mitre.
         /// </summary>
-        public static Cut? CornerCut(Site site, BuildingData b, int k0, int i, bool end, double y, bool strip = false)
+        public static Cut? CornerCut(Site site, BuildingData b, int k0, int i, bool end, double y, bool strip = false) => CornerCut(site, b, k0, i, end, y, strip, out _);
+
+        /// <param name="upTo">
+        /// The height below which the cut holds (the neighbour's top, where this building owns the party wall); +∞ where it
+        /// holds at every height above <paramref name="y"/>. For a wall made in one piece over several storeys (the massing).
+        /// </param>
+        public static Cut? CornerCut(Site site, BuildingData b, int k0, int i, bool end, double y, bool strip, out double upTo)
         {
+            upTo = double.PositiveInfinity;
             var fp = Derived.OutlineAt(b, k0); int n = fp.Count, j = end ? (i + 1) % n : (i - 1 + n) % n;
             double Lj = Geo.EdgeLen(fp, j);
             Range? r = null;
@@ -281,7 +288,9 @@ namespace Triband.Storey.Generate
             if (r == null || y < r.Lo - 0.2) return null;   // below the shared band the neighbour isn't there: an open corner
             bool past = end ? r.sRaw < -0.02 : r.eRaw > Lj + 0.02;
             double off = Dim.T_EXT + (strip && past ? 0.06 : 0);
-            if (r.own && !(past && y < r.Hp + 0.01)) { if (!strip || y >= r.Hp) return null; off = -Dim.T_EXT; }
+            // a storey from the neighbour's top up meets no wall of its: mitred (cut, it left a slit at the corner)
+            if (r.own && !(past && y < r.Hp - 0.01)) { if (!strip || y >= r.Hp) return null; off = -Dim.T_EXT; }
+            else if (r.own) upTo = r.Hp - 0.01;
             int sg = Geo.Area2(fp) > 0 ? 1 : -1; var a = fp[i]; var c = fp[(i + 1) % n]; double L = Geo.EdgeLen(fp, i);
             double Ux = (c.x - a.x) / L, Uz = (c.z - a.z) / L, Wx = sg * Uz, Wz = -sg * Ux;
             var p = fp[j]; var q = fp[(j + 1) % n]; double M = Geo.EdgeLen(fp, j);

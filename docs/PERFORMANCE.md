@@ -60,7 +60,7 @@ Effort: S under a day, M a few days, L a week or more. Impact as estimated in ea
 
 The roadmap (§15) orders everything else.
 
-Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), LOD0's rooms as their own renderers (§7.7), and #8's priority for detail in view (§9.2). #7's cull switch is in as an experiment, off, to measure first (§7.1). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
+Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), LOD0's rooms as their own renderers (§7.7), #8's priority for detail in view (§9.2), and #7: the shells closed, the ray test in the suite and back faces culled on steady draws by default (§7.1). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
 
 ## 1. Scope and method
 
@@ -352,7 +352,7 @@ Recommendation:
 2. Add the ray test to the headless suite (zero back-face first hits from outside), next to the coplanar check.
 3. Give Opaque and Massing a cull property (`Cull [_StoreyCull]`), set to Back on the steady copies (`SiteRenderer.SteadyCopy`) and left Off on the originals. Effort: M (generator) + S (shader). Expected: about half the triangles past the vertex stage for the steady majority, in colour and shadow passes.
 
-Status: step 3 is in as a switch, off by default (`StoreyQualitySettings.cullBackFacesWhenSteady`, CHANGELOG), so the gain can be measured on an iPhone before steps 1 and 2: the recorder's GPU time at the same view with it on and off. Through the openings above, back faces show as holes while it is on.
+Status: done, and on by default on both tiers (`StoreyQualitySettings.cullBackFacesWhenSteady`, CHANGELOG). Step 1: wherever the prototype leaves a surface one-sided or a gap open from outside, Unity draws a back or a closing face, a centimetre or so off (a cut or fading building's materials draw both sides, and two faces back to back would flicker): the roof parts' backs at every LOD, the walls' tops under pitched and terrace roofs, a lid under LOD2's pitched roofs, slab edges above curtain-wall openings, strips' backs across openings, core walls' ends behind windows, and a few more (CHANGELOG). On the 1,000-building walk-in test city they add 1.3 % to LOD0's shell, 0.3 % to LOD1 and 9 % to LOD2 (4,265 triangles); the ones only clear glass shows go with LOD0's rooms (§7.7), drawn only near. Two of the openings were real gaps in the prototype as well: a corner cut a storey too high beside a party wall (fixed in both) and the walls' tops under a pitched roof where its edge rises above them (a cut corner's short edge), which the prototype's two-sided faces showed as the room's inside. Step 2: `BackFaceTests` casts 4,000 rays from eyes round each building of the demo street, the variants and a 40-building walk-in city, at each LOD as it is drawn, LOD0 near (rooms in, glass clear) and far (rooms out, panes painted over), and finds no back face first; it allows slivers only, a ray within 6° of the face or a front face within 5 cm (a backing face's edge seen aslant) or up to 30 cm behind it. What's left: the gain on the iPhone, from the recorder's GPU time at the same view with the switch on and off.
 
 ### 7.2 Vertex outputs are the full set in every pass (high)
 
@@ -870,6 +870,8 @@ Harness: for every building of `demo.json` (7) and `variants.json` (78), the opa
 | Triangles facing away from outside eyes | 49.8–50.2 % | 49.2–50.6 % | 53.5–53.7 % |
 | First hits on a back face, variants | 0.26–0.29 % (39–47 of 78 buildings) | 0.08 % (21–27) | 0.07 % (8) |
 | First hits on a back face, demo street | 2.3–2.7 % (5–6 of 7) | 4.0–4.1 % (4–5) | 0.9 % (3) |
+
+Since the shells were closed (§7.1), `BackFaceTests` finds none at any LOD on the demo street, the variants or a 40-building walk-in city: 4,000 rays a building, with LOD0 seen near (rooms in, glass clear) and far (rooms out, panes painted over), slivers aside. A sweep of 12,000 a building with another seed found one ray, 1.3° off a wall's face, slipping through the seam of two tiers' coplanar walls.
 
 ### A.4 Wall segments per floor (the walk model's collision query)
 

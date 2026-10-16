@@ -380,17 +380,37 @@ namespace Triband.Storey.Generate
             double cur = uA;
             foreach (var o in ops)
             {
-                if (o.u0 > cur) gb.OBox(F, cur, o.u0, y0, y0 + h, w0, w1, c, cIn, skip);
+                if (o.u0 > cur)
+                {
+                    gb.OBox(F, cur, o.u0, y0, y0 + h, w0, w1, c, cIn, skip);
+                    // a skipped end is the wall's (against what it meets at uA or uB); one at an opening is its jamb, which only
+                    // Unity draws back (the prototype's faces are two-sided)
+                    var jambs = skip & ((cur > uA ? Skip.UStart : Skip.None) | Skip.UEnd);
+                    if (jambs != Skip.None) { bool b0 = gb.Backing; gb.Backing = true; gb.OBox(F, cur, o.u0, y0, y0 + h, w0, w1, c, cIn, AllBut(jambs)); gb.Backing = b0; }
+                }
                 double a = Math.Max(o.u0, cur), e = o.u1;
                 if (e > a)
                 {
                     if (o.y0 > 0.001) gb.OBox(F, a, e, y0, y0 + o.y0, w0, w1, c, cIn, skip | Skip.Top);
                     if (o.y1 < h - 0.001) gb.OBox(F, a, e, y0 + o.y1, y0 + h, w0, w1, c, cIn, skip | Skip.Bot);
+                    // the opening's sill and head, which the prototype leaves to its two-sided faces: only Unity draws them
+                    bool was = gb.Backing; gb.Backing = true;
+                    if (o.y0 > 0.001) gb.OBox(F, a, e, y0, y0 + o.y0, w0, w1, c, cIn, AllBut(Skip.Top));
+                    if (o.y1 < h - 0.001) gb.OBox(F, a, e, y0 + o.y1, y0 + h, w0, w1, c, cIn, AllBut(Skip.Bot));
+                    gb.Backing = was;
                 }
                 cur = Math.Max(cur, o.u1);
             }
-            if (uB > cur) gb.OBox(F, cur, uB, y0, y0 + h, w0, w1, c, cIn, skip);
+            if (uB > cur)
+            {
+                gb.OBox(F, cur, uB, y0, y0 + h, w0, w1, c, cIn, skip);
+                var jamb = cur > uA ? skip & Skip.UStart : Skip.None;
+                if (jamb != Skip.None) { bool b0 = gb.Backing; gb.Backing = true; gb.OBox(F, cur, uB, y0, y0 + h, w0, w1, c, cIn, AllBut(jamb)); gb.Backing = b0; }
+            }
         }
+
+        /// <summary>Every face of a box skipped but <paramref name="keep"/>.</summary>
+        public static Skip AllBut(Skip keep) => (Skip.Out | Skip.In | Skip.UEnd | Skip.UStart | Skip.Top | Skip.Bot) & ~keep;
 
         public sealed class PanelOpt
         {
@@ -530,6 +550,66 @@ namespace Triband.Storey.Generate
                 h ^= h >> 16; h *= 0x7feb352du; h ^= h >> 15; h *= 0x846ca68bu; h ^= h >> 16;
                 return (byte)(h & 255);
             }
+        }
+
+        /// <summary>
+        /// The openings <paramref name="ops"/> merged, in the builder's own
+        /// lists (as <see cref="WallPanel"/> merges them): for a backing face over each, never two over one place.
+        /// </summary>
+        static List<Opening> Merged(MeshBuilder gb, List<Opening> ops)
+        {
+            var sc = gb.Panel ??= new PanelScratch();
+            return MergeOps(ops, sc.Merged, sc.Sorted, sc.Copies);
+        }
+
+        /// <summary>
+        /// Where an opening reaches above its storey's ceiling (a curtain wall's, <paramref name="h"/> − the slab), the slab
+        /// above shows through its top: its edge, a centimetre into the reveal (clear of a stair hole's side, which lies along
+        /// the wall's inner face facing in), facing out. Only Unity draws it (<see cref="MeshBuilder.Backing"/>): the prototype
+        /// draws the floors and ceilings two-sided, and shows their backs there. Only clear glass shows it: with the rooms,
+        /// when the storey has them (<paramref name="rooms"/>, <see cref="MeshBuilder.Inside"/>).
+        /// </summary>
+        public static void SlabEdges(MeshBuilder gb, Frame F, List<Opening> ops, double y, double h, Swatch c, bool rooms = false)
+        {
+            double ceil = h - Dim.SLAB; bool any = false;
+            foreach (var o in ops) if (o.y1 > ceil + 1e-3) any = true;
+            if (!any || gb.ShapeOnly) return;
+            var nw = new P3(F.w.x, 0, F.w.z); bool was = gb.Backing, wasIn = gb.Inside; gb.Backing = true; gb.Inside = wasIn || rooms;
+            foreach (var o in Merged(gb, ops))
+            {
+                if (o.y1 <= ceil + 1e-3) continue;
+                double y0 = y + Math.Max(o.y0, ceil), y1 = y + Math.Min(o.y1, h);
+                gb.Quad(F.At(o.u0, y0, 0.01), F.At(o.u1, y0, 0.01), F.At(o.u1, y1, 0.01), F.At(o.u0, y1, 0.01), nw, c);
+                // and the centimetre between it and the ceiling's edge, level with the ceiling
+                if (o.y0 < ceil) gb.Quad(F.At(o.u0, y0, 0), F.At(o.u1, y0, 0), F.At(o.u1, y0, 0.01), F.At(o.u0, y0, 0.01), new P3(0, -1, 0), c);
+            }
+            gb.Inside = wasIn; gb.Backing = was;
+        }
+
+        /// <summary>
+        /// A strip on the wall's face (a plinth, a foundation: <paramref name="ranges"/> along it, <paramref name="y0"/> to
+        /// <paramref name="y1"/> high, its back at <paramref name="w"/>) has no face against the wall (Skip.In); where it
+        /// runs across an opening (the storey's floor at <paramref name="y"/>), the opening shows that side: drawn there,
+        /// facing in, by Unity only (<see cref="MeshBuilder.Backing"/>). Only from inside, so from outside only through clear
+        /// glass and a room: with the rooms, when the storey has them (<paramref name="rooms"/>, <see cref="MeshBuilder.Inside"/>),
+        /// and not at LOD1 (a lean builder), whose windows are opaque.
+        /// </summary>
+        public static void StripBacks(MeshBuilder gb, Frame F, List<(double, double)> ranges, List<Opening> ops, double y, double y0, double y1, double w, Swatch c, bool rooms = false)
+        {
+            bool any = false;
+            foreach (var o in ops) if (y + o.y0 < y1 - 1e-4 && y + o.y1 > y0 + 1e-4) any = true;
+            if (!any || gb.ShapeOnly || gb.Lean) return;
+            var n = new P3(-F.w.x, 0, -F.w.z); bool was = gb.Backing, wasIn = gb.Inside; gb.Backing = true; gb.Inside = wasIn || rooms;
+            foreach (var o in Merged(gb, ops))
+            {
+                double b0 = Math.Max(y0, y + o.y0), b1 = Math.Min(y1, y + o.y1); if (b1 - b0 < 1e-4) continue;
+                foreach (var (a, e) in ranges)
+                {
+                    double u0 = Math.Max(a, o.u0), u1 = Math.Min(e, o.u1); if (u1 - u0 < 1e-4) continue;
+                    gb.Quad(F.At(u0, b0, w), F.At(u1, b0, w), F.At(u1, b1, w), F.At(u0, b1, w), n, c);
+                }
+            }
+            gb.Inside = wasIn; gb.Backing = was;
         }
 
         /// <summary>A strip split into pieces at ranges; the first and last take the mitred ends.</summary>

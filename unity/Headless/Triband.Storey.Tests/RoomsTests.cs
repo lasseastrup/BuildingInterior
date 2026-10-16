@@ -71,11 +71,13 @@ namespace Triband.Storey.Tests
                     Assert.True(end <= m.Tris);
                     if (!b.interior) { Assert.Empty(m.InsideTris); continue; }
                     if (m.InsideTris.Count > 0) with++;
-                    var marked = Marked(m);
+                    var marked = Marked(m); var backing = new bool[m.Tris];
+                    foreach (var (s, e) in m.BackingTris) for (int t = s; t < e; t++) backing[t] = true;
                     for (int t = 0; t < m.Tris; t++)
                     {
                         if (!marked[t]) continue;
-                        for (int j = 0; j < 3; j++) Assert.Contains(m.C[m.I[3 * t + j]].slot, Inside);
+                        // and Unity's backs that only clear glass shows, whatever their colour: a strip's over an opening, a slab's edge
+                        if (!backing[t]) for (int j = 0; j < 3; j++) Assert.Contains(m.C[m.I[3 * t + j]].slot, Inside);
                         Assert.True(storey[t] < b.floors.Count, $"{b.name}: a room on the roof");
                     }
                     Assert.Empty(Lod1.Build(site, b).InsideTris);

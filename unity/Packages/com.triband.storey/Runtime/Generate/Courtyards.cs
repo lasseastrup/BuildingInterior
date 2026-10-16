@@ -180,8 +180,14 @@ namespace Triband.Storey.Generate
                 {
                     Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.inner, new Facade.PanelOpt { inner = !shell, threshold = k == v.bottom, revealFrom = shell ? T * 0.45 : 0, rooms = rooms });
                     Facade.Dress(op, gl!, F, ops, y, C, shell, Derived.StyleAt(b, k));
+                    if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
                 }
-                if (bands) { var (bh, bd, bc) = Lod0.Shared.Band(Derived.StyleAt(b, k), C); Facade.StripPieces(op, F, m, new List<(double, double)> { m.Span(T, T + bd) }, y + h - bh, y + h, T, T + bd, bc, bc, Skip.In); }
+                if (bands)
+                {
+                    var (bh, bd, bc) = Lod0.Shared.Band(Derived.StyleAt(b, k), C); var rb = new List<(double, double)> { m.Span(T, T + bd) };
+                    Facade.StripPieces(op, F, m, rb, y + h - bh, y + h, T, T + bd, bc, bc, Skip.In);
+                    if (!lod1) Facade.StripBacks(op, F, rb, ops, y, y + h - bh, y + h, T, bc, rooms && !shell);
+                }
                 if (sg != null)
                 {
                     var (cs, ce) = m.Span(T / 2, T / 2);

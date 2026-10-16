@@ -117,10 +117,11 @@ namespace Triband.Storey.Unity
         int steadySynced = -1;
 
         /// <summary>
-        /// The steady copies cull back faces (experimental, docs/PERFORMANCE.md §7.1; the quality asset's Cull Back Faces When
-        /// Steady): about half of what most of the city draws never reaches the tiler. Off, every face is drawn, as on the
-        /// materials themselves, whose section cap shows a cut wall's inside. Through a door into a shell, and through a few of
-        /// LOD0's see-through windows, a back face shows today: culled, it is a hole.
+        /// The steady copies cull back faces (docs/PERFORMANCE.md §7.1; the quality asset's Cull Back Faces When Steady, on by
+        /// default): about half of what most of the city draws never reaches the tiler. Every one-sided surface the prototype
+        /// draws two-sided has its back (MeshBuilder.Backing), so none is open from outside, which the headless ray test
+        /// (BackFaceTests) checks. Off, every face is drawn, as on the materials themselves, whose section cap shows a cut
+        /// wall's inside.
         /// </summary>
         public bool CullSteadyBackFaces { get; set; }
         bool? steadyCulled;   // what the copies have, noted by Storey Diagnostics when it changes

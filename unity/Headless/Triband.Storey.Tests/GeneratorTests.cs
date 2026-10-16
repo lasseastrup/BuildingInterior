@@ -56,8 +56,10 @@ namespace Triband.Storey.Tests
         static Dictionary<string, Bucket> CensusOf(Lod2Mesh m, ColorResolver colors)
         {
             var B = new Dictionary<string, Bucket>(StringComparer.Ordinal);
+            var backing = new bool[m.Tris]; foreach (var (s, e) in m.BackingTris) for (int t = s; t < e; t++) backing[t] = true;
             for (int t = 0; t < m.I.Count; t += 3)
             {
+                if (backing[t / 3]) continue;
                 int a = m.I[t], bb = m.I[t + 1], c = m.I[t + 2];
                 P3 A = m.P[a], Bp = m.P[bb], Cp = m.P[c]; var n = m.N[a] * (1.0 / 127);
                 var (d, area) = Plane(A, Bp, Cp, n);
@@ -102,11 +104,26 @@ namespace Triband.Storey.Tests
         static string Key(P3 n, double d, Rgb c) =>
             $"{R(n.x)},{R(n.y)},{R(n.z)}|{R(d)}|{R(c.r)},{R(c.g)},{R(c.b)}";
 
+        /// <summary>
+        /// The faces only Unity draws (<see cref="MeshBuilder.BackingTris"/>): the backs of surfaces the prototype draws
+        /// two-sided, which no census of its holds.
+        /// </summary>
+        static bool[] Backing(MeshBuilder gb)
+        {
+            var o = new bool[gb.Tris];
+            foreach (var (s, e) in gb.BackingTris) for (int t = s; t < e; t++) o[t] = true;
+            return o;
+        }
+
+        /// <summary>The prototype's triangles: all but the faces only Unity draws.</summary>
+        static int PrototypeTris(MeshBuilder gb) => gb.Tris - gb.BackingTris.Sum(r => r.end - r.start);
+
         static Dictionary<string, Bucket> CensusOf(MeshBuilder gb, ColorResolver colors)
         {
-            var B = new Dictionary<string, Bucket>(StringComparer.Ordinal);
+            var B = new Dictionary<string, Bucket>(StringComparer.Ordinal); var backing = Backing(gb);
             for (int t = 0; t < gb.I.Count; t += 3)
             {
+                if (backing[t / 3]) continue;
                 int a = gb.I[t], bb = gb.I[t + 1], c = gb.I[t + 2];
                 P3 A = gb.P[a], Bp = gb.P[bb], Cp = gb.P[c]; var n = gb.N[a]; var col = colors.Resolve(gb.C[a]);
                 var (d, area) = Plane(A, Bp, Cp, n);
@@ -160,7 +177,7 @@ namespace Triband.Storey.Tests
             var (site, doc) = SiteOf(file);
             var b = doc.buildings[i];
             int want = Expected(file, i, lod).GetProperty("tris").GetInt32();
-            int got = lod == 0 ? Lod0.Build(site, b).Op.Tris : lod == 1 ? Lod1.Build(site, b, recessed: true).Tris : Lod2.Build(site, b).Tris;
+            int got = lod == 0 ? PrototypeTris(Lod0.Build(site, b).Op) : lod == 1 ? PrototypeTris(Lod1.Build(site, b, recessed: true)) : Lod2.Build(site, b) is var m2 ? m2.Tris - m2.BackingTris.Sum(r => r.end - r.start) : 0;
             Assert.InRange(got, want * 0.9, want * 1.1);
         }
 

@@ -530,7 +530,7 @@ function cornerCut(b,k0,i,end,y,strip){
   const r=partyRanges(b,k0,j).find(r=> end ? r.s<0.02 : r.e>Lj-0.02); if(!r) return null;
   const past = end ? r.sRaw < -0.02 : r.eRaw > Lj+0.02;
   let off=T_EXT+(strip && past ? 0.06 : 0);   // stop T in from the shared line (on the neighbour's wall face; strips also clear that wall's own bands)
-  if(r.own && !(past && y < r.Hp+0.01)){ if(!strip || y >= r.Hp) return null; off=-T_EXT; }   // the owner's bands and plinth stop on its own party wall's outer face
+  if(r.own && !(past && y < r.Hp-0.01)){ if(!strip || y >= r.Hp) return null; off=-T_EXT; }   // the owner's bands and plinth stop on its own party wall's outer face; a storey from the neighbour's top up meets no wall of its: mitred (it was cut, leaving a slit at the corner)
   const sg=area2(fp)>0?1:-1, a=fp[i], c=fp[(i+1)%n], L=edgeLen(fp,i), U=[(c.x-a.x)/L,(c.z-a.z)/L], Wn=[sg*U[1],-sg*U[0]];
   const p=fp[j], q=fp[(j+1)%n], M=edgeLen(fp,j), nq=[-sg*(q.z-p.z)/M, sg*(q.x-p.x)/M];   // inward normal of the party edge
   const un=U[0]*nq[0]+U[1]*nq[1], wn=Wn[0]*nq[0]+Wn[1]*nq[1]; if(Math.abs(un)<0.2) return null;

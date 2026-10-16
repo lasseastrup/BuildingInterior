@@ -351,6 +351,8 @@ namespace Triband.Storey.Generate
                         }
                         double pt = y + 0.24, pb = pt - 0.08;
                         Bx(u0, u1, pb, pt, T, T + 1.1, rail, null, Skip.In);
+                        // its side against the wall, which the door onto it shows from inside: only Unity draws it, a centimetre out
+                        if (lod == 0) { op.Backing = true; Bx(u0, u1, pb, pt, T + 0.01, T + 1.1, rail, null, Facade.AllBut(Skip.In)); op.Backing = false; }
                         Bx(u0, u1, pt + 0.9, pt + 0.95, T + 1.05, T + 1.1, rail);
                         if (lod == 0)
                         {
@@ -365,6 +367,10 @@ namespace Triband.Storey.Generate
                             {
                                 for (int j = 0; j < n; j++) { double uA = us + run * j, uB = us + run * (j + 1), yt = pt + rise * (j + 1); Bx(Math.Min(uA, uB), Math.Max(uA, uB), yt - 0.05, yt, T + 0.15, T + 0.95, rail); }
                                 foreach (var (ww, sg) in new[] { (T + 0.96, 1.0), (T + 0.14, -1.0) }) op.Quad(X(us, pt - 0.05, ww), X(ue, pt + h - 0.45, ww), X(ue, pt + h - 0.17, ww), X(us, pt + 0.23, ww), new P3(w.x * sg, 0, w.z * sg), dark);
+                                // the stringers' backs, a centimetre in (only Unity draws them: the prototype's are two-sided)
+                                op.Backing = true;
+                                foreach (var (ww, sg) in new[] { (T + 0.95, -1.0), (T + 0.15, 1.0) }) op.Quad(X(us, pt - 0.05, ww), X(ue, pt + h - 0.45, ww), X(ue, pt + h - 0.17, ww), X(us, pt + 0.23, ww), new P3(w.x * sg, 0, w.z * sg), dark);
+                                op.Backing = false;
                             }
                             else
                             {
@@ -373,6 +379,15 @@ namespace Triband.Storey.Generate
                                 var q = new[] { X(us, pt + 0.02, T + 0.2), X(us, pt + 0.02, T + 0.9), X(ue, pt + h - 0.12, T + 0.9), X(ue, pt + h - 0.12, T + 0.2) };
                                 var qb = new P3[4]; for (int j = 0; j < 4; j++) qb[j] = new P3(q[j].x, q[j].y - 0.06, q[j].z);
                                 op.Poly(q, nn, rail); op.Poly(qb, nn * -1, dark);
+                                // its edges (only Unity draws them: the prototype's faces are two-sided)
+                                op.Backing = true;
+                                P3 mid = (q[0] + q[1] + q[2] + q[3]) * 0.25;
+                                for (int j = 0; j < 4; j++)
+                                {
+                                    int jn = (j + 1) % 4; P3 o = (q[j] + q[jn]) * 0.5 - mid; o = o - nn * P3.Dot(o, nn);
+                                    op.Quad(q[j], q[jn], qb[jn], qb[j], o * (1 / Math.Sqrt(P3.Dot(o, o))), dark);
+                                }
+                                op.Backing = false;
                             }
                         }
                         break;

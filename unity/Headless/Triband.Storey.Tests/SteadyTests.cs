@@ -112,7 +112,7 @@ namespace Triband.Storey.Tests
             var sets = Regex.Matches(renderer, @"(\w+)\??\.SetFloat\(StoreyShaderIds\.Cull").Select(m => m.Groups[1].Value).ToArray();
             Assert.Equal(new[] { "opaqueSteady", "massingSteady" }, sets);
             Assert.Contains("CullSteadyBackFaces ? UnityEngine.Rendering.CullMode.Back : UnityEngine.Rendering.CullMode.Off", renderer);
-            Assert.Contains("site.CullSteadyBackFaces = quality != null && quality.cullBackFacesWhenSteady;", File.ReadAllText(Path.Combine(package, "Rendering", "StoreySite.cs")));
+            Assert.Contains("site.CullSteadyBackFaces = quality == null || quality.cullBackFacesWhenSteady;", File.ReadAllText(Path.Combine(package, "Rendering", "StoreySite.cs")));
             Assert.Contains("Cull = Shader.PropertyToID(\"_StoreyCull\")", File.ReadAllText(Path.Combine(package, "Rendering", "StoreyShaderIds.cs")));
         }
     }

@@ -585,7 +585,15 @@ namespace Triband.Storey.Generate
                 }
                 var col = p.Kind == RoofKind.Roof ? C.roof : p.Kind == RoofKind.Trim ? C.trim : p.Kind == RoofKind.Soffit ? C.trimShade : p.Kind == RoofKind.Window ? C.glassDark : C.wall;
                 var pts = new List<P3>(p.Pts); foreach (var h in p.Holes) pts.AddRange(h);
-                op.PolyTris(pts, Triangulate.Planar(p.Pts, p.Holes, p.N), p.N, col);
+                var tris = Triangulate.Planar(p.Pts, p.Holes, p.N);
+                op.PolyTris(pts, tris, p.N, col);
+                if (p.Kind == RoofKind.Window || p.Dormer || op.ShapeOnly) continue;
+                // its back, just behind it (Dim.BACK): a roof's parts are one-sided surfaces round an attic open at the eaves and
+                // gables, which the prototype draws two-sided. Only Unity draws it (MeshBuilder.Backing): culling back faces, the
+                // attic is closed from every side. Not a dormer's, a closed box whose window's reveal sits a centimetre from its
+                // head and sill
+                var back = new List<P3>(pts.Count); var off = p.N * -Dim.BACK; foreach (var q in pts) back.Add(q + off);
+                op.Backing = true; op.PolyTris(back, tris, p.N * -1, col); op.Backing = false;
             }
             return true;
         }
