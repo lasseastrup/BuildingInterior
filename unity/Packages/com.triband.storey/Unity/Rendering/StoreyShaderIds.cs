@@ -26,6 +26,8 @@ namespace Triband.Storey.Unity
         public static readonly int DetailColors = Shader.PropertyToID("_StoreyDetailColors");
         /// <summary>The growing tables' sizes as bound (wall ids, parameter rows, colour rows): every read's index is kept inside them.</summary>
         public static readonly int TableSize = Shader.PropertyToID("_StoreyTableSize");
+        /// <summary>Opaque's and Massing's cull mode (a <c>CullMode</c>): Off on the materials, Back on the steady copies when asked (<see cref="SiteRenderer.CullSteadyBackFaces"/>).</summary>
+        public static readonly int Cull = Shader.PropertyToID("_StoreyCull");
         /// <summary>Color Pipeline 2.1.11's atlas globals (StoreyPalette.hlsl), bound by Storey only when Color Pipeline is absent.</summary>
         public static readonly int PaletteTex = Shader.PropertyToID("_GlobalColorPaletteTex");
         public static readonly int AtlasWidth = Shader.PropertyToID("_ColorAtlasWidth");

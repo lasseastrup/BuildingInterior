@@ -641,6 +641,8 @@ namespace UnityEngine
         public void SetColor(string name, Color value) { }
         public void SetKeyword(in UnityEngine.Rendering.LocalKeyword keyword, bool value) { }
         public void CopyMatchingPropertiesFromMaterial(Material mat) { }
+        public void SetFloat(int nameID, float value) { }
+        public bool HasProperty(int nameID) => false;
         public int renderQueue { get; set; }
     }
 
@@ -667,6 +669,7 @@ namespace UnityEngine
 namespace UnityEngine.Rendering
 {
     public enum ShadowCastingMode { Off, On, TwoSided, ShadowsOnly }
+    public enum CullMode { Off = 0, Front = 1, Back = 2 }
     public enum RenderQueue { Background = 1000, Geometry = 2000, AlphaTest = 2450, GeometryLast = 2500, Transparent = 3000, Overlay = 4000 }
     public enum LightProbeUsage { Off = 0, BlendProbes = 1, UseProxyVolume = 2, CustomProvided = 4 }
 }

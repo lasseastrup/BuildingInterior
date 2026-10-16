@@ -29,3 +29,4 @@ MonoBehaviour:
   meshChunksKeptMB: 12
   occlusionOnFarMaterials: 0
   specularAndReflections: 0
+  cullBackFacesWhenSteady: 0

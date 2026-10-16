@@ -46,6 +46,7 @@ namespace Triband.Storey.Tests
             Assert.Equal(d.KeepChunkBytes, long.Parse(p["meshChunksKeptMB"]) << 20);
             Assert.Equal(d.FarOcclusion, p["occlusionOnFarMaterials"] == "1");
             Assert.Equal("1", p["specularAndReflections"]);   // URP's full PBR, as a site without a quality asset lights
+            Assert.Equal("0", p["cullBackFacesWhenSteady"]);   // an experiment until the shells are closed (docs/PERFORMANCE.md §7.1)
             // the minimum tier: full detail and shell switched at once, half the residency, 12 MB of chunks, no occlusion on
             // far materials, no specular or reflections, and nothing else
             Assert.Equal(new[] { "crossFadeFullDetail", "lod0Residency", "lod1Residency", "meshChunksKeptMB", "occlusionOnFarMaterials", "specularAndReflections" }, p.Keys.Where(k => p[k] != m[k]));

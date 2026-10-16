@@ -111,6 +111,15 @@ namespace Triband.Storey.Unity
 
         int steadySynced = -1;
 
+        /// <summary>
+        /// The steady copies cull back faces (experimental, docs/PERFORMANCE.md §7.1; the quality asset's Cull Back Faces When
+        /// Steady): about half of what most of the city draws never reaches the tiler. Off, every face is drawn, as on the
+        /// materials themselves, whose section cap shows a cut wall's inside. Through a door into a shell, and through a few of
+        /// LOD0's see-through windows, a back face shows today: culled, it is a hole.
+        /// </summary>
+        public bool CullSteadyBackFaces { get; set; }
+        bool? steadyCulled;   // what the copies have, noted by Storey Diagnostics when it changes
+
         /// <summary>Renderers given their steady copy or their own material again, and renderers made, since <see cref="StoreyDiagnostics"/> last read them (main thread).</summary>
         internal static int SteadySwaps, RenderersMade;
 
@@ -124,12 +133,28 @@ namespace Triband.Storey.Unity
             if (opaqueSteady == null && massingSteady == null) return;
             using var _t = StoreyTimings.Time("site: steady variants (before the cameras)");
             // the copies follow their materials' properties: always in edit mode, twice a second in Play mode
+            bool synced = false;
             if (!Application.isPlaying || Time.frameCount - steadySynced >= 30)
             {
-                steadySynced = Time.frameCount;
+                steadySynced = Time.frameCount; synced = true;
                 const int geometry = (int)UnityEngine.Rendering.RenderQueue.Geometry;
                 if (opaqueSteady != null) { opaqueSteady.CopyMatchingPropertiesFromMaterial(opaque); opaqueSteady.SetKeyword(opaqueKw, true); opaqueSteady.renderQueue = geometry; }
                 if (massingSteady != null) { massingSteady.CopyMatchingPropertiesFromMaterial(massing); massingSteady.SetKeyword(massingKw, true); massingSteady.renderQueue = geometry; }
+            }
+            // their cull mode, set again after the sync, which copies the material's (every face)
+            if (synced || steadyCulled != CullSteadyBackFaces)
+            {
+                float cull = (float)(CullSteadyBackFaces ? UnityEngine.Rendering.CullMode.Back : UnityEngine.Rendering.CullMode.Off);
+                if (opaqueSteady != null) opaqueSteady.SetFloat(StoreyShaderIds.Cull, cull);
+                if (massingSteady != null) massingSteady.SetFloat(StoreyShaderIds.Cull, cull);
+                if (steadyCulled != CullSteadyBackFaces && StoreyDiagnostics.Recording)
+                {
+                    // a shader without the property (a Color Palette Lit sample imported before it had one) draws every face whatever this says
+                    var without = opaqueSteady != null && !opaqueSteady.HasProperty(StoreyShaderIds.Cull) ? opaque.shader.name : massingSteady != null && !massingSteady.HasProperty(StoreyShaderIds.Cull) ? massing.shader.name : null;
+                    StoreyDiagnostics.Note($"back faces of steady buildings: {(CullSteadyBackFaces ? "culled" : "drawn")}" +
+                        (CullSteadyBackFaces && without != null ? $", but not by {without}: it has no _StoreyCull (re-import the Color Palette Lit sample)" : ""));
+                }
+                steadyCulled = CullSteadyBackFaces;
             }
             int active = StoreyGlobals.ActiveIndex, isolated = StoreyGlobals.IsolatedIndex; float iso = StoreyGlobals.IsolateAmount;
             bool farOcc = lods?.Settings.FarOcclusion ?? true;

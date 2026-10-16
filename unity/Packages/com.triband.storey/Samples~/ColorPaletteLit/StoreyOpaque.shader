@@ -5,6 +5,8 @@ Shader "Flamingo/Storey/Opaque"
     Properties
     {
         _StoreyShadowStrength ("Shadow Strength", Float) = 1
+        // Off (0): every face drawn. SiteRenderer sets Back (2) on the steady copies when the quality asset culls their back faces
+        [HideInInspector] _StoreyCull ("Cull", Float) = 0
     }
     SubShader
     {
@@ -12,7 +14,9 @@ Shader "Flamingo/Storey/Opaque"
         // at Geometry (SiteRenderer.SteadyCopy), so every opaque draw comes before every discarding one, as Apple's GPUs want
         // (docs/PERFORMANCE.md §7.6)
         Tags { "RenderType" = "Opaque" "Queue" = "AlphaTest" "RenderPipeline" = "UniversalPipeline" }
-        Cull Off
+        // Both faces by default: a cut wall shows its inside as the section cap (STOREY_CAP). The steady copies cull back faces
+        // when the quality asset says so (SiteRenderer.CullSteadyBackFaces, docs/PERFORMANCE.md §7.1)
+        Cull [_StoreyCull]
 
         HLSLINCLUDE
         #define STOREY_CAP

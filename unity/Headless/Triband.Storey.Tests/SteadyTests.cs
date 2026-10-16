@@ -88,5 +88,32 @@ namespace Triband.Storey.Tests
             var renderer = File.ReadAllText(Path.Combine(package, "Rendering", "SiteRenderer.cs"));
             Assert.Equal(3, Regex.Matches(renderer, @"renderQueue = (\(int\)UnityEngine\.Rendering\.RenderQueue\.Geometry|geometry)").Count);
         }
+
+        [Fact]
+        public void OnlyTheSteadyCopiesCullBackFacesAndOnlyWhenAsked()
+        {
+            // docs/PERFORMANCE.md §7.1: Opaque and Massing (the package's and the Color Palette Lit sample's) cull by a property
+            // that is Off on the materials, whose section cap draws a cut wall's inside (back faces); the renderer sets Back on
+            // the steady copies alone, when the quality asset says so (an experiment until the shells are closed). The glass,
+            // which has no cap, culls its back faces always
+            var package = Path.GetDirectoryName(Shaders)!;
+            var sample = Path.Combine(Path.GetDirectoryName(package)!, "Samples~", "ColorPaletteLit");
+            foreach (var dir in new[] { Shaders, sample })
+            {
+                foreach (var name in new[] { "StoreyOpaque.shader", "StoreyMassing.shader" })
+                {
+                    var text = Regex.Replace(File.ReadAllText(Path.Combine(dir, name)), @"//[^\n]*", "");
+                    Assert.Equal(new[] { "[_StoreyCull]" }, Regex.Matches(text, @"\bCull\s+(\S+)").Select(m => m.Groups[1].Value));
+                    Assert.Matches(new Regex(@"_StoreyCull\s*\(""Cull"",\s*Float\)\s*=\s*0\s"), text);   // CullMode.Off
+                }
+                Assert.Matches(new Regex(@"\bCull\s+Back\b"), File.ReadAllText(Path.Combine(dir, "StoreyGlass.shader")));
+            }
+            var renderer = File.ReadAllText(Path.Combine(package, "Rendering", "SiteRenderer.cs"));
+            var sets = Regex.Matches(renderer, @"(\w+)\??\.SetFloat\(StoreyShaderIds\.Cull").Select(m => m.Groups[1].Value).ToArray();
+            Assert.Equal(new[] { "opaqueSteady", "massingSteady" }, sets);
+            Assert.Contains("CullSteadyBackFaces ? UnityEngine.Rendering.CullMode.Back : UnityEngine.Rendering.CullMode.Off", renderer);
+            Assert.Contains("site.CullSteadyBackFaces = quality != null && quality.cullBackFacesWhenSteady;", File.ReadAllText(Path.Combine(package, "Rendering", "StoreySite.cs")));
+            Assert.Contains("Cull = Shader.PropertyToID(\"_StoreyCull\")", File.ReadAllText(Path.Combine(package, "Rendering", "StoreyShaderIds.cs")));
+        }
     }
 }

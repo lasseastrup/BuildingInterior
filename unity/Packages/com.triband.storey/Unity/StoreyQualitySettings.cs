@@ -76,6 +76,10 @@ namespace Triband.Storey.Unity
         [Tooltip("URP's specular highlights and reflection probe on Storey/Opaque and Storey/Massing. Off, they are lit by the diffuse term and the ambient alone, with a constant colour for reflections: no specular term and no cube-map fetch per pixel. The glass keeps both. Off on the minimum tier. One switch for the whole app: the last site to apply its quality sets it for every site.")]
         public bool specularAndReflections = true;
 
+        [Header("Experimental")]
+        [Tooltip("Buildings drawing steady (most of the city: none cut, fading or in the way) skip their back faces in the colour, depth and shadow passes, as an opaque material usually does, so about half their triangles never reach the tiler (docs/PERFORMANCE.md §7.1). Off until the shells are closed: through a door into a shell, and through a few of LOD0's see-through windows, a back face shows today, and with this on it is a hole. For measuring the gain on a device. Needs shaders with the _StoreyCull property: Storey's own, and the Color Palette Lit sample once re-imported.")]
+        public bool cullBackFacesWhenSteady = false;
+
         // No GPU occlusion culling or frame rate here. Unity has no per-renderer switch for GPU occlusion: it is each quality
         // level's Universal Renderer setting. The frame rate is the project's (Application.targetFrameRate), and Storey's own
         // budget is the milliseconds above. docs/SPEC.md §6.7 lists the project settings Storey needs.

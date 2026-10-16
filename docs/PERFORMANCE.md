@@ -60,7 +60,7 @@ Effort: S under a day, M a few days, L a week or more. Impact as estimated in ea
 
 The roadmap (§15) orders everything else.
 
-Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), and #8's priority for detail in view (§9.2). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
+Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), and #8's priority for detail in view (§9.2). #7's cull switch is in as an experiment, off, to measure first (§7.1). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
 
 ## 1. Scope and method
 
@@ -351,6 +351,8 @@ Recommendation:
 1. Close the shells: a backing face behind every opening in LOD1 and LOD2 (a door's reveal ends in a dark quad, as LOD1's windows end in a pane), and the missing interior faces the test finds in LOD0.
 2. Add the ray test to the headless suite (zero back-face first hits from outside), next to the coplanar check.
 3. Give Opaque and Massing a cull property (`Cull [_StoreyCull]`), set to Back on the steady copies (`SiteRenderer.SteadyCopy`) and left Off on the originals. Effort: M (generator) + S (shader). Expected: about half the triangles past the vertex stage for the steady majority, in colour and shadow passes.
+
+Status: step 3 is in as a switch, off by default (`StoreyQualitySettings.cullBackFacesWhenSteady`, CHANGELOG), so the gain can be measured on an iPhone before steps 1 and 2: the recorder's GPU time at the same view with it on and off. Through the openings above, back faces show as holes while it is on.
 
 ### 7.2 Vertex outputs are the full set in every pass (high)
 
