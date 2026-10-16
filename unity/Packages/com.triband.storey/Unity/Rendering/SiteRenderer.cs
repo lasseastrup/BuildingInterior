@@ -109,6 +109,9 @@ namespace Triband.Storey.Unity
 
         int steadySynced = -1;
 
+        /// <summary>Renderers given their steady copy or their own material again, and renderers made, since <see cref="StoreyDiagnostics"/> last read them (main thread).</summary>
+        internal static int SteadySwaps, RenderersMade;
+
         /// <summary>
         /// Each building's and cell's opaque and massing renderers on the steady copy of their material while nothing can
         /// hide their pixels (<see cref="global::Triband.Storey.Occlusion.Steady"/>), on the material itself otherwise: no
@@ -138,7 +141,7 @@ namespace Triband.Storey.Unity
                     bool on = global::Triband.Storey.Occlusion.Steady.Of(bt.idx, st.z, st.w, active, iso, isolated, w == 0 ? bt.mates : null, w == 2, farOcc);
                     if (on == bt.steady[w]) continue;
                     bt.steady[w] = on;
-                    foreach (var r in list) if (r != null) r.sharedMaterial = on ? copy : w == 2 ? massing : opaque;
+                    foreach (var r in list) if (r != null) { r.sharedMaterial = on ? copy : w == 2 ? massing : opaque; SteadySwaps++; }
                 }
             if (massingSteady == null) return;
             foreach (var c in cells.Values)
@@ -705,6 +708,11 @@ namespace Triband.Storey.Unity
             }
             for (int i = 0; i < d.opaque.Count; i++) Add(bt, 0, Part("LOD0", i, d.opaque.Count), MeshUpload.Upload(d.opaque[i], Part(name + " LOD0", i, d.opaque.Count), RowOf, bt.wallBase), opaque, true);
             for (int i = 0; i < d.glass!.Count; i++) Add(bt, 0, Part("LOD0 glass", i, d.glass.Count), MeshUpload.Upload(d.glass[i], Part(name + " glass", i, d.glass.Count), RowOf, bt.wallBase), glass, false);
+            if (StoreyDiagnostics.Recording)
+            {
+                long nv = 0; foreach (var p in d.opaque) nv += p.Verts; foreach (var p in d.glass) nv += p.Verts;
+                StoreyDiagnostics.Note($"LOD0 up: {name} ({bt.wallCount} walls at {bt.wallBase}, {d.opaque.Count} + {d.glass.Count} meshes, {nv:N0} vertices)");
+            }
             // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
             if (d.collision != null && bt.collision == null) bt.collisionMade = d.collision;
             if (lods != null && colliders && bt.collision == null) colliderPending.Add(bt.id);
@@ -788,6 +796,7 @@ namespace Triband.Storey.Unity
             bt.objs[which].Clear(); bt.meshes[which].Clear(); bt.solid[which].Clear(); bt.steady[which] = false;
             bt.rends[which].Clear(); bt.drawn[which] = true;
             if (which != 0) return;
+            if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 dropped: {site?.ById(bt.id)?.name ?? bt.id}");
             bt.mates = Array.Empty<int>();
             if (bt.wallBase >= 0) table.ReleaseWalls(bt.wallBase, bt.wallCount);
             bt.wallBase = -1; bt.wallCount = 0; bt.shape = null;
@@ -988,6 +997,7 @@ namespace Triband.Storey.Unity
             go.transform.SetParent(bt.root!.transform, false);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             var mr = go.AddComponent<MeshRenderer>();
+            RenderersMade++;
             mr.sharedMaterial = mat;
             mr.shadowCastingMode = shadows ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;   // the GPU Resident Drawer wants no probes on the renderer

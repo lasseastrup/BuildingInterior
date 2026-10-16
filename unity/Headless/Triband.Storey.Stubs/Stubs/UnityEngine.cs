@@ -753,7 +753,7 @@ namespace UnityEngine.Rendering
     public struct ScriptableRenderContext { }
     public abstract class RenderPipelineAsset : UnityEngine.ScriptableObject { }
     public static class GraphicsSettings { public static RenderPipelineAsset currentRenderPipeline => null; }
-    public struct AsyncGPUReadbackRequest { public bool hasError => false; }
+    public struct AsyncGPUReadbackRequest { public bool hasError => false; public Unity.Collections.NativeArray<T> GetData<T>(int layer = 0) where T : struct => default; }
     public static class AsyncGPUReadback
     {
         public static AsyncGPUReadbackRequest Request(UnityEngine.GraphicsBuffer src, int size, int offset, System.Action<AsyncGPUReadbackRequest> callback = null) => default;

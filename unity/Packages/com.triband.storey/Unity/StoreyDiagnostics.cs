@@ -68,6 +68,14 @@ namespace Triband.Storey.Unity
         GraphicsBuffer? probe;
         readonly Queue<int> asked = new Queue<int>();
         Action<UnityEngine.Rendering.AsyncGPUReadbackRequest>? onRead;
+        // the probe holds the number of the frame that wrote it: a readback that reads an earlier one wasn't run by the GPU
+        readonly int[] probeValue = new int[1];
+        int readbackStale;
+        // the GPU's own time (Frame Timing Stats): 0 frame after frame, once it has been more, says its work is thrown away
+        int gpuZero, gpuLastTimed = -1;
+        // the frames before the first sign of trouble, kept apart from the ring, which goes on and would lose them
+        string[]? incident; string incidentWhat = "";
+        readonly Dictionary<StoreySite, (string? building, int floor)> where = new Dictionary<StoreySite, (string?, int)>();
 
         readonly FrameTiming[] timing = new FrameTiming[1];
         float lastScale = -1;
@@ -92,8 +100,9 @@ namespace Triband.Storey.Unity
             if (started == 0) started = Stopwatch.GetTimestamp();
             path = FilePath;   // Application's paths are the main thread's only: the watchdog saves to this
             ring = new string[Math.Max(30, frames)]; ringNext = ringCount = 0;
-            lock (gate) { notes.Clear(); lastRaw = lastNote = null; repeats = 0; }
-            described.Clear();
+            lock (gate) { notes.Clear(); lastRaw = lastNote = null; repeats = 0; incident = null; incidentWhat = ""; }
+            described.Clear(); where.Clear();
+            readbackStale = 0; gpuZero = 0; gpuLastTimed = -1;
             // the record the last run left: set aside once a run, shown until closed; this run writes a new one
             if (!movedLastRun)
             {
@@ -145,7 +154,11 @@ namespace Triband.Storey.Unity
         }
 
         // in the background no frames come, and that's no stall
-        void OnApplicationPause(bool pause) { paused = pause; Add(pause ? "paused (in the background)" : "resumed"); if (!pause) Volatile.Write(ref frameAt, Stopwatch.GetTimestamp()); }
+        void OnApplicationPause(bool pause)
+        {
+            paused = pause; Add(pause ? "paused (in the background)" : "resumed");
+            if (!pause) { long now = Stopwatch.GetTimestamp(); Volatile.Write(ref frameAt, now); Volatile.Write(ref gpuDoneAt, now); }
+        }
 
         // the stages of the frame outside Storey's code, for a stall's note: each holds until the next is entered
         void FixedUpdate() => StoreyTimings.Enter("physics: after the scripts' FixedUpdate (the simulation step, contacts, collision callbacks)");
@@ -158,7 +171,11 @@ namespace Triband.Storey.Unity
         {
             int f = Time.frameCount;
             Volatile.Write(ref frameNo, f); Volatile.Write(ref frameAt, Stopwatch.GetTimestamp());
-            if (probe != null && asked.Count < 60) { asked.Enqueue(f); UnityEngine.Rendering.AsyncGPUReadback.Request(probe, 4, 0, onRead); }
+            if (probe != null && asked.Count < 60)
+            {
+                probeValue[0] = f; probe.SetData(probeValue);
+                asked.Enqueue(f); UnityEngine.Rendering.AsyncGPUReadback.Request(probe, 4, 0, onRead);
+            }
             Describe();
             var text = Line(f);
             lock (gate)
@@ -178,6 +195,14 @@ namespace Triband.Storey.Unity
         {
             int f = asked.Count > 0 ? asked.Dequeue() : -1;
             if (r.hasError) { Interlocked.Increment(ref gpuErrors); return; }
+            // a later frame's number is a write that came first; an earlier one, a copy the GPU never ran
+            var data = r.GetData<int>();
+            int got = data.Length > 0 ? data[0] : int.MinValue;
+            if (f >= 0 && got < f && readbackStale++ == 0)
+            {
+                Add($"GPU: the readback asked for in frame {f} read {got}: the GPU didn't run that frame's work");
+                Incident($"the first frame whose work the GPU didn't run ({f})");
+            }
             Volatile.Write(ref gpuDone, f - 1); Volatile.Write(ref gpuDoneAt, Stopwatch.GetTimestamp());
         }
 
@@ -190,7 +215,17 @@ namespace Triband.Storey.Unity
             {
                 FrameTimingManager.CaptureFrameTimings();
                 if (FrameTimingManager.GetLatestTimings(1, timing) > 0)
-                    b.Append(" cpu ").Append(F1(timing[0].cpuMainThreadFrameTime)).Append(" gpu ").Append(F1(timing[0].gpuFrameTime)).Append(" wait ").Append(F1(timing[0].cpuMainThreadPresentWaitTime));
+                {
+                    double g = timing[0].gpuFrameTime;
+                    b.Append(" cpu ").Append(F1(timing[0].cpuMainThreadFrameTime)).Append(" gpu ").Append(F1(g)).Append(" wait ").Append(F1(timing[0].cpuMainThreadPresentWaitTime));
+                    // the timings are a few frames late: the frame named is about when it changed
+                    if (g > 0) { if (gpuZero >= 30) Add($"GPU: frame times again, after {gpuZero} frames at 0 ms"); gpuZero = 0; gpuLastTimed = f; }
+                    else if (gpuLastTimed >= 0 && ++gpuZero == 30)
+                    {
+                        Add($"GPU: 0 ms a frame for 30 frames, since about frame {gpuLastTimed}: its work is being thrown away (after a GPU error?)");
+                        Incident($"the GPU's time went to 0 (about frame {gpuLastTimed})");
+                    }
+                }
             }
             int done = Volatile.Read(ref gpuDone);
             if (probe != null) b.Append(" gpu-").Append(done >= 0 ? (f - done).ToString(Inv) : "?");
@@ -215,6 +250,8 @@ namespace Triband.Storey.Unity
                 var o = s.Occlusion; var core = o != null && o.isActiveAndEnabled ? o.Core : null;
                 if (o == null || core == null) continue;
                 var v = core.View;
+                var at = (v.active?.name, v.active != null ? v.floor : -1);
+                if (!where.TryGetValue(s, out var was) || was != at) { where[s] = at; Add(v.active != null ? $"player in {v.active.name}, floor {v.floor}" : "player in no building"); }
                 b.Append(" | in ").Append(v.active != null ? v.active.name : "-");
                 if (v.active != null && r != null)
                 {
@@ -230,6 +267,12 @@ namespace Triband.Storey.Unity
                 if (o.player != null) { var p = o.player.position; b.Append(" | feet ").Append(F1(p.x)).Append(',').Append(F1(p.y)).Append(',').Append(F1(p.z)); }
                 var cam = o.viewCamera != null ? o.viewCamera : Camera.main;
                 if (cam != null) { var c = cam.transform.position; b.Append(" cam ").Append(F1(c.x)).Append(',').Append(F1(c.y)).Append(',').Append(F1(c.z)); }
+            }
+            // renderers given their steady copy or their own material again (each re-registered by the GPU Resident Drawer), and made
+            if (SiteRenderer.SteadySwaps > 0 || SiteRenderer.RenderersMade > 0)
+            {
+                b.Append(" | swaps ").Append(SiteRenderer.SteadySwaps).Append(" new ").Append(SiteRenderer.RenderersMade);
+                SiteRenderer.SteadySwaps = SiteRenderer.RenderersMade = 0;
             }
             b.Append(" | heap ").Append(GC.GetTotalMemory(false) >> 20).Append("MB");
             if (systemMemory.Valid || totalMemory.Valid || gfxMemory.Valid)
@@ -271,7 +314,9 @@ namespace Triband.Storey.Unity
             if (rp != null)
                 b.Append("pipeline asset: render scale ").Append(Prop(rp, "renderScale")).Append(", MSAA ").Append(Prop(rp, "msaaSampleCount")).Append(", HDR ").Append(Prop(rp, "supportsHDR"))
                     .Append(", depth texture ").Append(Prop(rp, "supportsCameraDepthTexture")).Append(", opaque texture ").Append(Prop(rp, "supportsCameraOpaqueTexture"))
-                    .Append(", GPU Resident Drawer ").Append(Prop(rp, "gpuResidentDrawerMode")).Append('\n');
+                    .Append(", GPU Resident Drawer ").Append(Prop(rp, "gpuResidentDrawerMode")).Append(", its occlusion culling ").Append(Prop(rp, "gpuResidentDrawerEnableOcclusionCullingInCameras")).Append('\n')
+                    .Append("shadows: main light ").Append(Prop(rp, "supportsMainLightShadows")).Append(", ").Append(Prop(rp, "mainLightShadowmapResolution")).Append(" px, ").Append(Prop(rp, "shadowCascadeCount"))
+                    .Append(" cascades to ").Append(Prop(rp, "shadowDistance")).Append(" m, soft ").Append(Prop(rp, "supportsSoftShadows")).Append('\n');
             return b.ToString();
         }
 
@@ -337,7 +382,7 @@ namespace Triband.Storey.Unity
                     stalled = 0; nextStall = 1;
                 }
                 // frames going on while the GPU finishes none: the GPU is stuck, or its work is being thrown away
-                if (probe != null && since < 0.5 && done >= 0)
+                if (probe != null && !paused && since < 0.5 && done >= 0)
                 {
                     if (!gpuStuck && gpuAgo > 2) { gpuStuck = true; Add($"GPU: no frame finished for {F1(gpuAgo)} s while the main thread went on to frame {Volatile.Read(ref frameNo)} (the GPU's last: {done})"); Save(); lastSave = now; }
                     else if (gpuStuck && gpuAgo < 0.5) { gpuStuck = false; Add("GPU: finishing frames again"); }
@@ -366,16 +411,33 @@ namespace Triband.Storey.Unity
             catch (Exception) { lock (gate) dirty = true; }   // nothing to tell it to; the next save tries again
         }
 
+        /// <summary>The frames in the ring now, kept as the frames before the first sign of trouble (the first only).</summary>
+        void Incident(string what)
+        {
+            lock (gate)
+            {
+                if (incident != null) return;
+                incident = new string[ringCount];
+                for (int i = 0; i < ringCount; i++) incident[i] = ring[(ringNext - ringCount + i + ring.Length) % ring.Length];
+                incidentWhat = what; dirty = true;
+            }
+        }
+
         string Text()
         {
-            var b = new StringBuilder(header.Length + notes.Count * 120 + ringCount * 260);
+            var b = new StringBuilder(header.Length + notes.Count * 120 + (ringCount + (incident?.Length ?? 0)) * 260);
             b.Append(header);
             b.Append("\nWhat happened:\n");
             foreach (var n in notes) b.Append(n).Append('\n');
+            if (incident != null)
+            {
+                b.Append("\nThe ").Append(incident.Length).Append(" frames before ").Append(incidentWhat).Append(" (columns as below):\n");
+                foreach (var l in incident) b.Append(l).Append('\n');
+            }
             b.Append("\nThe last ").Append(ringCount).Append(" frames: frame, time, its length; with Frame Timing Stats the main thread's, the GPU's and the present wait, ms; gpu-N: frames since the last the GPU finished")
                 .Append(" | per site: LOD0/1/2 shown, LOD0 resident, generating, waiting, built this frame, LOD ms, wall ids used/table")
                 .Append(" | in: the player's building, floor, clip height, cut, its state row (LOD, from, fade, slot+1) | in the way: building, kN its storey at the player, sN its slot")
-                .Append(" | feet, camera | managed heap; memory: the process's, Unity's, the graphics driver's\n");
+                .Append(" | feet, camera | swaps N new M: renderers given another material, and renderers made | managed heap; memory: the process's, Unity's, the graphics driver's\n");
             for (int i = 0; i < ringCount; i++) b.Append(ring[(ringNext - ringCount + i + ring.Length) % ring.Length]).Append('\n');
             return b.ToString();
         }
@@ -385,7 +447,7 @@ namespace Triband.Storey.Unity
         /// <summary>The header and what happened (the start and the end of it, when long): what the screen shows of a record.</summary>
         static string Summary(string record)
         {
-            int cut = record.IndexOf("\nThe last ", StringComparison.Ordinal);
+            int cut = record.IndexOf("\nThe ", StringComparison.Ordinal);   // the frames' sections; the notes are before them
             var lines = (cut >= 0 ? record.Substring(0, cut) : record).Split('\n');
             if (lines.Length <= 40) return string.Join("\n", lines);
             return string.Join("\n", lines, 0, 12) + "\n…\n" + string.Join("\n", lines, lines.Length - 26, 26);
