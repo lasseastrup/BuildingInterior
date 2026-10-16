@@ -8,12 +8,12 @@ using Xunit;
 namespace Triband.Storey.Tests
 {
     /// <summary>
-    /// The shaders' reads of the building table stay inside its buffers, those whose value then goes unused too. HLSL
-    /// evaluates both sides of ?: and of && and || (FXC, which compiles Unity's Metal shaders, never short-circuits), so a
-    /// read a condition seems to guard runs whatever the condition. D3D and Vulkan read an element outside a buffer as 0;
-    /// Metal leaves it undefined, and on an iPhone the GPU can fault, after which iOS stops running the app's GPU work: a
-    /// city that loads with artifacts and then freezes on a phone while the editor shows it fine. The shaders only compile
-    /// in Unity, so this reads their source.
+    /// The shaders' reads of the building table stay inside its buffers, those whose value then goes unused too. D3D and
+    /// Vulkan read an element outside a buffer as 0; Metal leaves it undefined, and on an iPhone the GPU can fault, after
+    /// which iOS stops running the app's GPU work: a city that loads with artifacts and then freezes on a phone, or freezes
+    /// later on an upper storey, while the editor shows it fine. A condition guards no read: HLSL evaluates both sides of ?:
+    /// and of && and || (FXC, which compiles Unity's Metal shaders, never short-circuits), and an if the compiler flattens
+    /// reads whatever its condition (it reads, then picks). The shaders only compile in Unity, so this reads their source.
     /// </summary>
     public class TableReadTests
     {
@@ -36,31 +36,9 @@ namespace Triband.Storey.Tests
 
         static string Code(string file) => Regex.Replace(File.ReadAllText(file), @"//[^\n]*", m => new string(' ', m.Length));   // comments blanked, positions held
 
-        [Fact]
-        public void AReadBehindAConditionKeepsItsIndexInItsTable()
-        {
-            int guarded = 0;
-            foreach (var f in Directory.GetFiles(Path.Combine(Package, "Unity", "Shaders"), "*.hlsl"))
-            {
-                var src = Code(f);
-                foreach (Match m in Regex.Matches(src, @"\b_Storey\w+\s*\["))
-                {
-                    // a read after a ?, && or || in its statement runs whether or not that condition holds
-                    int start = src.LastIndexOfAny(new[] { ';', '{', '}' }, m.Index) + 1;
-                    if (!Regex.IsMatch(src.Substring(start, m.Index - start), @"\?|&&|\|\|")) continue;
-                    guarded++;
-                    var index = Bracketed(src, m.Index + m.Length - 1);
-                    Assert.True(Regex.IsMatch(index, Kept),
-                        $"{Path.GetFileName(f)}: {m.Value}{index}] is read whether or not its condition holds, and nothing keeps its index in the table");
-                }
-            }
-            Assert.True(guarded > 0, "no read behind a condition found: has the shaders' code moved?");
-        }
-
         /// <summary>
-        /// Every read, not only those behind a ?: or && in their statement: a read inside an if runs whatever the condition
-        /// where the compiler flattens the if (it reads, then picks), and an index from a mesh's vertices or a state row is
-        /// only as good as the data. So each index goes through a clamp, or starts from a variable that one made.
+        /// Every read, whatever its statement: no condition guards it (see above), and an index from a mesh's vertices or a
+        /// state row is only as good as the data. So each index goes through a clamp, or starts from a variable that one made.
         /// </summary>
         [Fact]
         public void EveryReadKeepsItsIndexInItsTable()
