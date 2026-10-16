@@ -70,6 +70,7 @@ namespace Triband.Storey.Unity
         Action<UnityEngine.Rendering.AsyncGPUReadbackRequest>? onRead;
 
         readonly FrameTiming[] timing = new FrameTiming[1];
+        float lastScale = -1;
         readonly StringBuilder line = new StringBuilder(512);
         readonly Dictionary<StoreySite, StoreyOcclusion?> described = new Dictionary<StoreySite, StoreyOcclusion?>();
         static bool movedLastRun;
@@ -181,6 +182,10 @@ namespace Triband.Storey.Unity
             if (probe != null) b.Append(" gpu-").Append(done >= 0 ? (f - done).ToString(Inv) : "?");
             int errors = Volatile.Read(ref gpuErrors);
             if (errors > 0) b.Append(" readback errors ").Append(errors);
+            // dynamic resolution (Storey Auto Resolution, or the project's own): the share of each axis drawn
+            float scale = ScalableBufferManager.widthScaleFactor;
+            if (scale != 1) b.Append(" res ").Append(F2(scale));
+            if (scale != lastScale) { if (lastScale > 0) Add($"dynamic resolution: {F2(lastScale)} → {F2(scale)} of each axis"); lastScale = scale; }
             foreach (var s in StoreySite.AllSet)
             {
                 if (!s.isActiveAndEnabled) continue;
@@ -243,7 +248,19 @@ namespace Triband.Storey.Unity
             var rp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
             b.Append("Unity ").Append(Application.unityVersion).Append(", app ").Append(Application.version).Append("; quality ").Append(q >= 0 && q < names.Length ? names[q] : q.ToString(Inv))
                 .Append(", render pipeline ").Append(rp != null ? rp.name : "none").Append("; Frame Timing Stats ").Append(FrameTimingManager.IsFeatureEnabled() ? "on" : "off (no CPU and GPU times)").Append('\n');
+            // the pipeline asset's settings that weigh on the GPU, read by name: this assembly needs no URP types ("?": not
+            // there, or stripped from the build)
+            if (rp != null)
+                b.Append("pipeline asset: render scale ").Append(Prop(rp, "renderScale")).Append(", MSAA ").Append(Prop(rp, "msaaSampleCount")).Append(", HDR ").Append(Prop(rp, "supportsHDR"))
+                    .Append(", depth texture ").Append(Prop(rp, "supportsCameraDepthTexture")).Append(", opaque texture ").Append(Prop(rp, "supportsCameraOpaqueTexture"))
+                    .Append(", GPU Resident Drawer ").Append(Prop(rp, "gpuResidentDrawerMode")).Append('\n');
             return b.ToString();
+        }
+
+        static string Prop(object o, string name)
+        {
+            try { return Convert.ToString(o.GetType().GetProperty(name)?.GetValue(o), Inv) is string v && v.Length > 0 ? v : "?"; }
+            catch (Exception) { return "?"; }
         }
 
         /// <summary>A note, stamped with the time and the main thread's frame; the same one again counts up instead.</summary>
