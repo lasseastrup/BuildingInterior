@@ -119,6 +119,9 @@ namespace Triband.Storey.Unity
 
         // ---- allocation --------------------------------------------------------------------
 
+        /// <summary>The wall ids handed out now, of the <see cref="Wall"/> table's (for <see cref="StoreyDiagnostics"/>).</summary>
+        public int WallsInUse { get { int free = 0; foreach (var f in freeWalls) free += f.n; return Wall.Length - 1 - free; } }
+
         /// <summary>An occluder slot, or -1 when all are taken.</summary>
         public int AllocOccSlot() => freeSlot.Count > 0 ? freeSlot.Pop() : -1;
         public void ReleaseOccSlot(int slot) { freeSlot.Push(slot); }
@@ -137,6 +140,7 @@ namespace Triband.Storey.Unity
                 wall.Dispose(); wall = new GraphicsBuffer(GraphicsBuffer.Target.Structured, now, 4);
                 wallData.Dispose(); wallData = new GraphicsBuffer(GraphicsBuffer.Target.Structured, now, 16);
                 wallDirty.Grow(now); wallDataDirty.Grow(now);
+                if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"wall table grown: {was:N0} → {now:N0} ids");
                 ReleaseWalls(was, now - was);
                 got = TakeWalls(n);
             }
@@ -176,6 +180,7 @@ namespace Triband.Storey.Unity
                 var grown = new Vector4[Params.Length * 2]; Array.Copy(Params, grown, Params.Length); Params = grown;
                 prms.Dispose(); prms = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Params.Length, 16);
                 paramsDirty.Grow(Params.Length);
+                if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"parameter table grown to {Params.Length / ParamTexels:N0} rows");
             }
             var t = row.GpuTexels(colorRow); int o = x * ParamTexels;
             for (int i = 0; i < ParamTexels; i++) Params[o + i] = new Vector4((float)t[i * 4], (float)t[i * 4 + 1], (float)t[i * 4 + 2], (float)t[i * 4 + 3]);
@@ -193,6 +198,7 @@ namespace Triband.Storey.Unity
                 var grown = new uint[Colors.Length * 2]; Array.Copy(Colors, grown, Colors.Length); Colors = grown;
                 colors.Dispose(); colors = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Colors.Length * 4 / 16, 16);
                 colorsDirty = true;
+                if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"colour table grown to {Colors.Length / Generate.ColorRows.Words:N0} rows");
             }
             return x;
         }
@@ -231,6 +237,7 @@ namespace Triband.Storey.Unity
         /// <summary>Upload what changed and bind the buffers globally. Call once per frame before rendering.</summary>
         public void Upload()
         {
+            using var _t = StoreyTimings.Time("site: table upload");
             Send(state, State, stateDirty);
             Send(occ, Occ, occDirty);
             Send(wall, Wall, wallDirty);

@@ -86,6 +86,19 @@ namespace UnityEngine
         public static bool isMobilePlatform => false;
         public static int targetFrameRate { get => -1; set { } }
         public static event System.Action quitting { add { } remove { } }
+        public static string persistentDataPath => "";
+        public static string unityVersion => "";
+        public static string version => "";
+        public delegate void LogCallback(string condition, string stackTrace, LogType type);
+        public static event LogCallback logMessageReceivedThreaded { add { } remove { } }
+    }
+
+    public enum LogType { Error = 0, Assert = 1, Warning = 2, Log = 3, Exception = 4 }
+
+    public static class QualitySettings
+    {
+        public static string[] names => new string[0];
+        public static int GetQualityLevel() => 0;
     }
 
     public class ScriptableObject : Object
@@ -297,7 +310,7 @@ namespace UnityEngine
 
     public enum TextAnchor { UpperLeft = 0, UpperCenter = 1, UpperRight = 2, MiddleLeft = 3, MiddleCenter = 4, MiddleRight = 5, LowerLeft = 6, LowerCenter = 7, LowerRight = 8 }
 
-    public sealed class GUISkin : Object { public GUIStyle box => new GUIStyle(); public GUIStyle button => new GUIStyle(); }
+    public sealed class GUISkin : Object { public GUIStyle box => new GUIStyle(); public GUIStyle button => new GUIStyle(); public GUIStyle label => new GUIStyle(); }
 
     public sealed class GUILayoutOption { }
 
@@ -355,6 +368,7 @@ namespace UnityEngine
         public static int GetControlID(FocusType focus) => 0;
         public static int GetControlID(int hint, FocusType focus) => 0;
         public static Vector2 GUIToScreenPoint(Vector2 guiPoint) => guiPoint;
+        public static string systemCopyBuffer { get; set; } = "";
     }
 
     public enum EventType { MouseDown = 0, MouseUp = 1, MouseMove = 2, MouseDrag = 3, KeyDown = 4, Repaint = 7, Layout = 8, Used = 12, ValidateCommand = 13, ExecuteCommand = 14, MouseLeaveWindow = 21 }
@@ -466,6 +480,12 @@ namespace UnityEngine
         public static bool SupportsVertexAttributeFormat(UnityEngine.Rendering.VertexAttributeFormat format, int dimension) => true;
         public static int processorCount => System.Environment.ProcessorCount;
         public static DeviceType deviceType => DeviceType.Desktop;
+        public static string deviceModel => "";
+        public static string operatingSystem => "";
+        public static string graphicsDeviceName => "";
+        public static string graphicsDeviceVersion => "";
+        public static int systemMemorySize => 0;
+        public static bool supportsAsyncGPUReadback => false;
     }
 
     public enum DeviceType { Unknown, Handheld, Console, Desktop }
@@ -719,8 +739,16 @@ namespace UnityEngine.Rendering
     public readonly struct LocalKeyword { public bool isValid => false; }
     public readonly struct LocalKeywordSpace { public LocalKeyword FindKeyword(string name) => default; }
     public struct ScriptableRenderContext { }
+    public abstract class RenderPipelineAsset : UnityEngine.ScriptableObject { }
+    public static class GraphicsSettings { public static RenderPipelineAsset currentRenderPipeline => null; }
+    public struct AsyncGPUReadbackRequest { public bool hasError => false; }
+    public static class AsyncGPUReadback
+    {
+        public static AsyncGPUReadbackRequest Request(UnityEngine.GraphicsBuffer src, int size, int offset, System.Action<AsyncGPUReadbackRequest> callback = null) => default;
+    }
     public static class RenderPipelineManager
     {
         public static event System.Action<ScriptableRenderContext, System.Collections.Generic.List<UnityEngine.Camera>> beginContextRendering { add { } remove { } }
+        public static event System.Action<ScriptableRenderContext, System.Collections.Generic.List<UnityEngine.Camera>> endContextRendering { add { } remove { } }
     }
 }

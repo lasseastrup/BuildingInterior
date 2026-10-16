@@ -105,6 +105,7 @@ namespace Triband.Storey.Unity
                 // the layout changed: a new walk model, taking each building's shape from the renderer's LOD0 when it has one
                 // (built on a worker as the camera nears, long before the player is close enough to touch), and occlusion
                 // starts afresh
+                using var _w = StoreyTimings.Time("occlusion: a new walk model");
                 builtFor = s; world = new PlayWorld(s);
                 var shown = s;
                 world.Source = b => ReferenceEquals(r.Site, shown) ? r.ShapeOf(b.id) : null;
@@ -116,8 +117,8 @@ namespace Triband.Storey.Unity
             Vector3 pw = player != null ? player.position : hasFeet ? feet : cam.transform.position;
             var p = playerState; p.Spawn(pw.x - origin.x, pw.y - origin.y, pw.z - origin.z);
             var cw = cam.transform.position; var tw = cameraTarget ?? pw + Vector3.up * (float)FollowCamera.Chest;
-            occ!.Frame(p, (cw.x - origin.x, cw.y - origin.y, cw.z - origin.z), (tw.x - origin.x, tw.y - origin.y, tw.z - origin.z), Time.deltaTime);
-            Write(r, occ, origin, pw);
+            using (StoreyTimings.Time("occlusion: frame")) occ!.Frame(p, (cw.x - origin.x, cw.y - origin.y, cw.z - origin.z), (tw.x - origin.x, tw.y - origin.y, tw.z - origin.z), Time.deltaTime);
+            using (StoreyTimings.Time("occlusion: table and globals")) Write(r, occ, origin, pw);
         }
 
         void Neutral(SiteRenderer r)
@@ -193,7 +194,8 @@ namespace Triband.Storey.Unity
         void ShowFootprint(SiteRenderer r, BuildingData b, int k, int slot)
         {
             if (!footprints.TryGetValue((b.id, k, slot), out var mesh))
-                footprints[(b.id, k, slot)] = mesh = r.UploadExtra(SinkFootprint.Build(r.Site!, b, k), b.name + " footprint " + k, BuildingTable.FootprintRow(slot));
+                using (StoreyTimings.Time("occlusion: footprint", b.name))
+                    footprints[(b.id, k, slot)] = mesh = r.UploadExtra(SinkFootprint.Build(r.Site!, b, k), b.name + " footprint " + k, BuildingTable.FootprintRow(slot));
             var go = spareFootprints.Count > 0 ? spareFootprints.Pop() : NewFootprint();
             go.GetComponent<MeshFilter>().sharedMesh = mesh;
             go.layer = site!.gameObject.layer;   // the site's layer, like its buildings

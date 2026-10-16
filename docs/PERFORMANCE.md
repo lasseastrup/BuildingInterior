@@ -752,6 +752,7 @@ Every number in the docs, and nearly every one here, is headless. The plan's exi
 - A Memory Profiler snapshot after the walk.
 - `os_proc_available_memory()` headroom.
 - The first runs of a build with the scheme's Metal API Validation and Shader Validation on (Edit Scheme ▸ Run ▸ Diagnostics). A shader's read outside a buffer reads as 0 on D3D and Vulkan, so the editor on Windows never shows it, and a Mac's may not. Metal leaves it undefined: an iPhone can take a GPU fault, and iOS then stops running the app's GPU work (artifacts, then a frozen picture). Shader Validation names the shader and the line; without it, the console says "GPU Address Fault" or "Ignored (for causing prior/excessive GPU errors)". The 1,000-building test city loaded like that on an iPhone 11 Pro while Storey's shaders still read outside the building table where a condition seemed to guard the read (since kept in range: CHANGELOG, `TableReadTests`).
+- Without a Mac, **Storey Diagnostics** (*Add Component ▸ Storey*, CHANGELOG). It records the last few seconds of frames and what happened to a file. A stall's note names the stage the main thread is in and when the GPU last finished a frame. The next run shows the record with a Copy button. iOS's own log, where GPU faults are reported, is read from Windows with a tool such as iMazing's Console or libimobiledevice's `idevicesyslog`.
 
 **Headless additions.** These guard the fixes:
 - the back-face ray test (appendix A.3);

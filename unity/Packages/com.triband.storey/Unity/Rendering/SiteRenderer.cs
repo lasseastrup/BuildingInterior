@@ -117,6 +117,7 @@ namespace Triband.Storey.Unity
         void UpdateSteady()
         {
             if (opaqueSteady == null && massingSteady == null) return;
+            using var _t = StoreyTimings.Time("site: steady variants (before the cameras)");
             // the copies follow their materials' properties: always in edit mode, twice a second in Play mode
             if (!Application.isPlaying || Time.frameCount - steadySynced >= 30)
             {
@@ -476,7 +477,7 @@ namespace Triband.Storey.Unity
             bool writeView = claims || !OtherClaims();
             if (Occlusion != null)
             {
-                Occlusion(this);
+                using (StoreyTimings.Time("site: occlusion")) Occlusion(this);
                 StoreyGlobals.SetIsolate(0, -1);
                 StoreyGlobals.SetCap(new Color(0.23f, 0.25f, 0.24f));
                 palette.Bind();
@@ -636,7 +637,7 @@ namespace Triband.Storey.Unity
         void BuildDetail(Built bt, BuildingData b, int which)
         {
             object made;
-            using (StoreyTimings.Time(which == 0 ? "build: LOD0 on the main thread" : "build: LOD1 on the main thread")) made = Generate(site!, b, bt.idx, which, (blockStart, blockSize), colliders && bt.collision == null);
+            using (StoreyTimings.Time(which == 0 ? "build: LOD0 on the main thread" : "build: LOD1 on the main thread", b.name)) made = Generate(site!, b, bt.idx, which, (blockStart, blockSize), colliders && bt.collision == null);
             FinishDetail(bt, b.name, which, made);
         }
 
@@ -687,7 +688,7 @@ namespace Triband.Storey.Unity
         /// </summary>
         void FinishDetail(Built bt, string name, int which, object made)
         {
-            using var _t = StoreyTimings.Time(which == 0 ? "build: LOD0 upload" : "build: LOD1 upload");
+            using var _t = StoreyTimings.Time(which == 0 ? "build: LOD0 upload" : "build: LOD1 upload", name);
             var d = (Detail)made;
             if (which == 1)
             {
@@ -768,7 +769,8 @@ namespace Triband.Storey.Unity
             for (int i = 0; i < jobs.Count; i++)
             {
                 var j = jobs[i]; if (j.bt != bt || j.which != which) continue;
-                try { j.task.Wait(); } catch (AggregateException) { }
+                using (StoreyTimings.Time(which == 0 ? "build: LOD0 waited for (a worker's)" : "build: LOD1 waited for (a worker's)", j.name))
+                    try { j.task.Wait(); } catch (AggregateException) { }
                 jobs.RemoveAt(i); busy.Remove(bt.idx);
                 if (j.task.Status != System.Threading.Tasks.TaskStatus.RanToCompletion) return false;
                 if (!ReferenceEquals(j.site, site)) { Discard(j.task.Result); return false; }
@@ -833,8 +835,11 @@ namespace Triband.Storey.Unity
                 if (e != null && !e.Has0 && b != null)
                 {
                     // one already being generated is waited for, not built a second time
-                    if (!TakeJobNow(bt, 0)) BuildDetail(bt, b, 0);
+                    long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    bool waited = TakeJobNow(bt, 0);
+                    if (!waited) BuildDetail(bt, b, 0);
                     l.SetBuilt(bt.idx, 0, true); made++;
+                    if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 of {b.name} wanted at once: {StoreyDiagnostics.Ms(t0):0.0} ms, {(waited ? "a worker's, waited for" : "built on the main thread")}");
                 }
             }
             if (load != null) TakeLoad(sw);   // a layout loading over frames: the cells ready, within the budget
@@ -850,6 +855,7 @@ namespace Triband.Storey.Unity
                         eye.up.x, eye.up.y, eye.up.z, eye.fieldOfView, eye.aspect, 0.1, l.Settings.Far);
                     seen = lodView;
                 }
+                using var _p = StoreyTimings.Time("site: LOD picked and applied");
                 var f = l.Update(eye.position.x - o.x, eye.position.y - o.y, eye.position.z - o.z, eye.pixelsPerMetre, dt, forcedIdx, seen);
                 foreach (var (idx, which) in f.Drop) if (byIdx.TryGetValue(idx, out var bt)) DropDetail(bt, which);
                 for (int bi = 0; bi < f.Build.Count; bi++)
