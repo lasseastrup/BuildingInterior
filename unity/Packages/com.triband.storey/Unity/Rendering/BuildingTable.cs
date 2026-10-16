@@ -78,8 +78,12 @@ namespace Triband.Storey.Unity
         public Vector4[] Params { get; private set; } = new Vector4[ParamRowsStart * ParamTexels];
         /// <summary>Colour rows: per style, the palette index of each slot and the remap row, 24 16-bit entries in 12 words.</summary>
         public uint[] Colors { get; private set; } = new uint[ColorRowsStart * Generate.ColorRows.Words];
-        /// <summary>Palette indices of facade-detail model colours (slots 24 and up). Empty until detail models exist.</summary>
-        public readonly uint[] DetailColors = new uint[1];
+        /// <summary>
+        /// Palette indices of facade-detail model colours (slots 24 and up), none set until detail models exist. One for every
+        /// slot a vertex's byte can name: the shaders read it for every colour (StoreyPalette.hlsl), and on Metal a read past
+        /// a buffer's end can fault the GPU.
+        /// </summary>
+        public readonly uint[] DetailColors = new uint[256 - Generate.ColorRows.Entries];
 
         readonly GraphicsBuffer state, occ, details;
         GraphicsBuffer wall, wallData, prms, colors;   // these grow (WallIdsStart, ParamRowsStart)

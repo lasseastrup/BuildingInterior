@@ -64,7 +64,7 @@ bool StoreyPropGone(int ib, float pivotY)
     {
         if (i >= n) break;
         float4 a = _StoreyOcc[slot * STOREY_OCC_W + 1 + i];
-        float top = i + 1 < n ? _StoreyOcc[slot * STOREY_OCC_W + 2 + i].x : 1e6;
+        float top = i + 1 < n ? _StoreyOcc[slot * STOREY_OCC_W + 1 + min(i + 1, STOREY_OCC_W - 2)].x : 1e6;   // in the row: StoreySink's
         if (pivotY >= a.x && pivotY < top) return a.z > 0.5;
     }
     return false;

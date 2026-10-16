@@ -10,6 +10,12 @@
 // with no discard and no Sink, so tile-based GPUs treat it as opaque. SiteRenderer gives it only to buildings
 // that aren't cross-fading, isolated against, in the way, or the player's (or sharing a party wall with it):
 // Triband.Storey.Occlusion.Steady holds those conditions, and must change with StoreyOcclude below.
+//
+// Every read of these tables keeps its index inside the table, also where the value read then goes unused. HLSL
+// evaluates both sides of ?: and of && and || (FXC, which compiles Unity's Metal shaders, never short-circuits), so
+// `im >= 0 && _StoreyState[im]` reads row -1 for every wall without a neighbour. D3D and Vulkan read an element outside
+// a buffer as 0. Metal gives it no defined result: it reads whatever lies there, or the GPU faults, and after a fault iOS
+// stops running the app's GPU work (artifacts, then a frozen picture), while the editor may never show it.
 #ifndef STOREY_OCCLUSION_INCLUDED
 #define STOREY_OCCLUSION_INCLUDED
 
@@ -68,7 +74,7 @@ float3 StoreySink(float3 worldPos, float tag, float kind, out float origY)
     int ib = (int)(fmod(tag, 65536.0) + 0.5);
     int slot = (int)(_StoreyState[ib].w + 0.5) - 1;
     int im = (int)floor(kind / 8.0) - 1;   // a party wall also belongs to the neighbour: it stays unless the neighbour is sinking too
-    bool mateUp = im >= 0 && _StoreyState[im].w < 0.5;
+    bool mateUp = im >= 0 && _StoreyState[max(im, 0)].w < 0.5;
     if (slot >= 0 && abs((float)ib - _StoreyActive.x) > 0.5 && !mateUp)
     {
         int n = (int)(_StoreyOcc[slot * STOREY_OCC_W].x + 0.5);
@@ -82,7 +88,8 @@ float3 StoreySink(float3 worldPos, float tag, float kind, out float origY)
                 {
                     if (i >= n) break;
                     float4 a = _StoreyOcc[slot * STOREY_OCC_W + 1 + i];
-                    float top = i + 1 < n ? _StoreyOcc[slot * STOREY_OCC_W + 2 + i].x : 1e6;
+                    // the next storey's line, read on the last too: kept in the slot's row (past the last slot's, the buffer's end)
+                    float top = i + 1 < n ? _StoreyOcc[slot * STOREY_OCC_W + 1 + min(i + 1, STOREY_OCC_W - 2)].x : 1e6;
                     f += clamp(y - a.x, 0.0, top - a.x) * a.y;
                 }
                 worldPos.y += f - y;
@@ -171,7 +178,7 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
         else if (dot(v.wall.xy - _StoreyFocus.xz, _StoreyCamDir) > 0.4) clip(-1);
     }
     // 3. buildings between the camera and the player (never the player's own building, which is sliced above)
-    bool mateUp = mate >= 0.0 && _StoreyState[(int)mate].w < 0.5;
+    bool mateUp = mate >= 0.0 && _StoreyState[max((int)mate, 0)].w < 0.5;
     if (_StoreyOccMode > 0.5 && !act && v.occ > -0.5 && !mateUp)
     {
         int slot = (int)(v.occ + 0.5);
@@ -186,7 +193,7 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
             {
                 if (i >= n) break;
                 float4 a = _StoreyOcc[slot * STOREY_OCC_W + 1 + i];
-                float top = i + 1 < n ? _StoreyOcc[slot * STOREY_OCC_W + 2 + i].x : 1e6;
+                float top = i + 1 < n ? _StoreyOcc[slot * STOREY_OCC_W + 1 + min(i + 1, STOREY_OCC_W - 2)].x : 1e6;
                 if (v.origY < a.x || v.origY > top) continue;
                 if (a.z > 0.5) clip(-1);                                   // collapsed storey
                 float ceil_ = top - (STOREY_SLAB + 0.01);
@@ -224,7 +231,7 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
     }
 #else
     // Dissolve takes its shadow and depth away with it, dithered alike (Sink's squash is colour-pass only: its shadow stays)
-    if (_StoreyOccMode > 3.5 && !act && v.occ > -0.5 && !(mate >= 0.0 && _StoreyState[(int)mate].w < 0.5))
+    if (_StoreyOccMode > 3.5 && !act && v.occ > -0.5 && !(mate >= 0.0 && _StoreyState[max((int)mate, 0)].w < 0.5))
     {
         float4 hd = _StoreyOcc[(int)(v.occ + 0.5) * STOREY_OCC_W];
         if (hd.x < 0.5 && v.origY >= hd.w && StoreyBayer(screenPos) < hd.y) clip(-1);

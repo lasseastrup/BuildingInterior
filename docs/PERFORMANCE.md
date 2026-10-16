@@ -751,6 +751,7 @@ Every number in the docs, and nearly every one here, is headless. The plan's exi
 - Xcode: Time Profiler, Metal System Trace, GPU counters (for §7.1, §7.6 and §7.11).
 - A Memory Profiler snapshot after the walk.
 - `os_proc_available_memory()` headroom.
+- The first runs of a build with the scheme's Metal API Validation and Shader Validation on (Edit Scheme ▸ Run ▸ Diagnostics). A shader's read outside a buffer reads as 0 on D3D and Vulkan, so the editor on Windows never shows it, and a Mac's may not. Metal leaves it undefined: an iPhone can take a GPU fault, and iOS then stops running the app's GPU work (artifacts, then a frozen picture). Shader Validation names the shader and the line; without it, the console says "GPU Address Fault" or "Ignored (for causing prior/excessive GPU errors)". The 1,000-building test city loaded like that on an iPhone 11 Pro while Storey's shaders still read outside the building table where a condition seemed to guard the read (since kept in range: CHANGELOG, `TableReadTests`).
 
 **Headless additions.** These guard the fixes:
 - the back-face ray test (appendix A.3);

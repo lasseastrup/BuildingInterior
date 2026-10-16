@@ -114,8 +114,10 @@ Varyings StoreyVert(Attributes IN)
 #if defined(STOREY_DEPTH) || defined(STOREY_STEADY)
     float4 wall = 0;   // only the colour pass's cutaway reads a wall's data
 #else
-    // the wall's data by its id: one entry per wall, not 16 bytes on every vertex
-    float4 wall = wid > 0.5 ? _StoreyWallData[(int)(wid + 0.5)] : float4(0, 0, 0, 0);
+    // the wall's data by its id: one entry per wall, not 16 bytes on every vertex. Read for every vertex, as HLSL would
+    // read it inside a ?: anyway (StoreyOcclusion.hlsl): id 0, no wall, reads the first row
+    float4 wallRow = _StoreyWallData[(int)(wid + 0.5)];
+    float4 wall = wid > 0.5 ? wallRow : float4(0, 0, 0, 0);
 #endif
 #endif
     float origY;
@@ -147,7 +149,9 @@ Varyings StoreyVert(Attributes IN)
 #endif
     uint4 ce = (uint4)round(IN.color * 255.0);
     bool pane = IN.normalOS.w > 0.5 / 127.0;
-    OUT.color = float4(pane ? StoreyPaletteColor(ce.x | (ce.y << 8), 6u, paneTone) : StoreyVertexColor(IN.color), 1.0);   // a face's vertices share one swatch: exact per vertex
+    // one lookup, its slot and shade picked first (StoreyVertexColor's otherwise): HLSL evaluates both sides of a ?:, and
+    // the colour's side read a pane's number as its slot
+    OUT.color = float4(StoreyPaletteColor(ce.x | (ce.y << 8), pane ? 6u : ce.z, pane ? paneTone : ce.w / 128.0), 1.0);   // a face's vertices share one swatch: exact per vertex
     OUT.win = pane ? float4(IN.color.a, (IN.normalOS.w * 127.0 - 1.0) / 126.0, 1.0, (float)ce.z) : float4(0, 0, 0, 0);
 #endif
 #ifdef STOREY_STEADY

@@ -77,7 +77,7 @@ public readonly struct Swatch { public readonly StyleRef style; public readonly 
 Two buffers join the building table and are allocated and freed like LOD2's parameter rows:
 
 - `_StoreyColors` (`StructuredBuffer<uint4>`): **one row per building tier** of three `uint4`, 24 16-bit entries. Entries 0–16 are the palette indices of the style's seventeen colours in `ColorSlot` order, 17–22 are spare, and entry 23 is the **atlas row of the building's remap** (0 = none). At 48 bytes a row this is about 210 KiB for the 3,000-building test city, at 1.5 tiers per building.
-- `_StoreyDetailColors` (`StructuredBuffer<uint>`): the palette index of each colour used by facade-detail models (slot − 24, §3.9), written once from the detail catalogue. Empty until detail models exist.
+- `_StoreyDetailColors` (`StructuredBuffer<uint>`): the palette index of each colour used by facade-detail models (slot − 24, §3.9), written once from the detail catalogue. None is set until detail models exist, but the table has an entry for every slot a vertex's byte can name (24 to 255): the shader reads it for every colour (§3.5), and on Metal a read past a buffer's end can fault the GPU.
 
 The CPU writes a row when a building is uploaded or its colours change. It rewrites every row when the palette's indices may have moved (`OnMappingsInvalidated`), resolving each palette id to its current index through `ColorPaletteDefinition.Instance`. Party-wall faces point at the neighbour's row, so the neighbour's interior colour follows it without a rebuild. Party walls already rebuild when a neighbour's structure changes.
 
@@ -105,11 +105,17 @@ uint _ColorAtlasWidth;
 StructuredBuffer<uint4> _StoreyColors;       // per colour row, 3 x uint4: 24 x uint16 (17 style colours, spare, remap row)
 StructuredBuffer<uint>  _StoreyDetailColors; // per facade-detail colour: palette index
 
-// Color Pipeline 2.1.11's SampleColorPalette, same addressing
-float4 StoreyAtlas(uint i) { return LOAD_TEXTURE2D(_GlobalColorPaletteTex, int2(i % _ColorAtlasWidth, i / _ColorAtlasWidth)); }
+// Color Pipeline 2.1.11's SampleColorPalette, same addressing; the width kept off zero and the texel inside the texture
+float4 StoreyAtlas(uint i)
+{
+    uint w = max(_ColorAtlasWidth, 1u), tw, th;
+    _GlobalColorPaletteTex.GetDimensions(tw, th);
+    return LOAD_TEXTURE2D(_GlobalColorPaletteTex, int2(min(i % w, max(tw, 1u) - 1u), min(i / w, max(th, 1u) - 1u)));
+}
 
 uint StoreyRowEntry(uint row, uint e)
 {
+    e = min(e, 23u);   // inside the row, whatever e
     uint4 r = _StoreyColors[row * 3 + (e >> 3)];
     uint q = (e >> 1) & 3;
     uint w = q == 0 ? r.x : q == 1 ? r.y : q == 2 ? r.z : r.w;
@@ -118,7 +124,9 @@ uint StoreyRowEntry(uint row, uint e)
 
 float3 StoreyPaletteColor(uint row, uint slot, float tone)
 {
-    uint index = slot < 24 ? StoreyRowEntry(row, slot) : _StoreyDetailColors[slot - 24];
+    // HLSL reads both sides of a ?: whichever it uses: a style's slot reads detail colour 0, not slot - 24 wrapped round
+    uint detail = _StoreyDetailColors[slot >= 24 ? slot - 24 : 0];
+    uint index = slot < 24 ? StoreyRowEntry(row, slot) : detail;
     return StoreyAtlas(StoreyRowEntry(row, 23) * _ColorAtlasWidth + index).rgb * tone;
 }
 
@@ -131,7 +139,7 @@ float3 StoreyVertexColor(float4 c)   // the vertex Color attribute (§3.4)
 
 | Material | Change |
 |---|---|
-| `Storey/Opaque`, `Storey/Glass` | `StoreyVert` sets `OUT.color = float4(StoreyVertexColor(IN.color), 1)`. A face's vertices share one swatch, so resolving per vertex is exact, and the fragment program is untouched. The depth and shadow passes skip the lookup. |
+| `Storey/Opaque`, `Storey/Glass` | `StoreyVert` sets `OUT.color` from one `StoreyPaletteColor` lookup: the vertex's slot and shade, or a window pane's glass. A face's vertices share one swatch, so resolving per vertex is exact, and the fragment program is untouched. The depth and shadow passes skip the lookup. |
 | `Storey/Massing` | `StoreyFacadeColor` reads wall, trim, glass (times the row's shade) and roof through the parameter row's colour row. That is four atlas reads per fragment, alongside the parameter reads it already does. |
 | Section cap, isolate ghost, Sink darkening, LOD tint | Unchanged: these are presentation colours, not palette colours. The cap could take a palette entry from `StoreyColorSettings` later. |
 

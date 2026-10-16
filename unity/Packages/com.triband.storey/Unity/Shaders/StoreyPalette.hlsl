@@ -4,6 +4,9 @@
 // The atlas globals are declared as in com.triband.colorpipeline 2.1.11's Shaders/ColorPalette.hlsl instead of
 // including that file, so Storey's shaders compile without the package (the built-in hex palette binds the same
 // names) and Color Pipeline 3.0's two-step lookup is a change to StoreyAtlas alone. Needs Core.hlsl first.
+//
+// Every read here stays inside its buffer or texture, whatever the slot, as StoreyOcclusion.hlsl's do: HLSL reads
+// both sides of a ?: whichever it uses, and on Metal a read outside a buffer can fault the GPU.
 #ifndef STOREY_PALETTE_INCLUDED
 #define STOREY_PALETTE_INCLUDED
 
@@ -14,20 +17,25 @@ TEXTURE2D(_GlobalColorPaletteTex);          // ColorMappingManager's atlas (512 
 uint _ColorAtlasWidth;                      // 512 in 2.1.11
 #endif
 StructuredBuffer<uint4> _StoreyColors;      // per colour row, 3 x uint4: 24 x uint16 (20 style slots, spare, remap row)
-StructuredBuffer<uint>  _StoreyDetailColors; // per facade-detail colour (slot - 24): palette index
+StructuredBuffer<uint>  _StoreyDetailColors; // per facade-detail colour (slot - 24): palette index; one for every slot a byte names
 
 #define STOREY_REMAP_ENTRY 23
 #define STOREY_ROW_SLOTS 24
 
-// Color Pipeline 2.1.11's SampleColorPalette: flat index = remap row * width + palette index
+// Color Pipeline 2.1.11's SampleColorPalette: flat index = remap row * width + palette index. The width kept off zero and
+// the texel inside the texture: until Color Pipeline binds its atlas, both are whatever Unity has bound in its place
 float4 StoreyAtlas(uint i)
 {
-    return LOAD_TEXTURE2D(_GlobalColorPaletteTex, int2(i % _ColorAtlasWidth, i / _ColorAtlasWidth));
+    uint w = max(_ColorAtlasWidth, 1u), tw, th;
+    _GlobalColorPaletteTex.GetDimensions(tw, th);
+    return LOAD_TEXTURE2D(_GlobalColorPaletteTex, int2(min(i % w, max(tw, 1u) - 1u), min(i / w, max(th, 1u) - 1u)));
 }
 
-// Entry e of a colour row: the low (even e) or high half of word e / 2 (ColorRows.Pack on the CPU)
+// Entry e of a colour row: the low (even e) or high half of word e / 2 (ColorRows.Pack on the CPU). An e past the row
+// reads its last entry, not the next row's (or past the buffer's end)
 uint StoreyRowEntry(uint row, uint e)
 {
+    e = min(e, STOREY_ROW_SLOTS - 1u);
     uint4 r = _StoreyColors[row * 3 + (e >> 3)];
     uint q = (e >> 1) & 3;
     uint w = q == 0 ? r.x : (q == 1 ? r.y : (q == 2 ? r.z : r.w));
@@ -36,7 +44,9 @@ uint StoreyRowEntry(uint row, uint e)
 
 float3 StoreyPaletteColor(uint row, uint slot, float tone)
 {
-    uint index = slot < STOREY_ROW_SLOTS ? StoreyRowEntry(row, slot) : _StoreyDetailColors[slot - STOREY_ROW_SLOTS];
+    // both sides are read, whichever is used: a style's slot reads detail colour 0, not slot - 24 wrapped round
+    uint detail = _StoreyDetailColors[slot >= STOREY_ROW_SLOTS ? slot - STOREY_ROW_SLOTS : 0u];
+    uint index = slot < STOREY_ROW_SLOTS ? StoreyRowEntry(row, slot) : detail;
     return StoreyAtlas(StoreyRowEntry(row, STOREY_REMAP_ENTRY) * _ColorAtlasWidth + index).rgb * tone;
 }
 
