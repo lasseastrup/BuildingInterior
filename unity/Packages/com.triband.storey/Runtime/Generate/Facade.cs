@@ -168,7 +168,7 @@ namespace Triband.Storey.Generate
             var wk = OpeningKinds.Of(st, false); var dk = OpeningKinds.Of(st, true);
             foreach (var o in ops)
             {
-                if (o.door && dk != null && !o.bare) { OpeningKinds.Place(op, gl, F, dk, dk.lod0, o.u0, o.u1, y, y + o.y1, C, shell); continue; }
+                if (o.door && dk != null && !o.bare) { OpeningKinds.Place(op, gl, F, dk, dk.lod0, o.u0, o.u1, y, y + o.y1, C, shell); if (!shell) op.SeeThrough++; continue; }   // its leaf is left out
                 if (!o.door && wk != null) { OpeningKinds.Place(op, gl, F, wk, wk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell); continue; }
                 if (o.door)
                 {
@@ -178,6 +178,7 @@ namespace Triband.Storey.Generate
                     else if (arch && heads && !o.bare) Hood(op, F, o.u0 - 0.08 - HoodOver, o.u1 + 0.08 + HoodOver, y + o.y1 + 0.08, trim);
                     if (glazed && !o.bare) GlazedDoor(op, gl, F, o, y, C, shell);
                     else if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, T * 0.45, C.door, false);
+                    else op.SeeThrough++;
                 }
                 else
                 {
@@ -394,12 +395,14 @@ namespace Triband.Storey.Generate
         public sealed class PanelOpt
         {
             public bool outer = true, inner = true, ends, threshold;
+            /// <summary>The inner face is the rooms' (<see cref="MeshBuilder.Inside"/>): an outside wall's, seen only through its windows.</summary>
+            public bool rooms;
             public double? revealFrom; public Swatch? revealC;
 
             /// <summary>Every option set, as a new one with these would be (for options used again panel after panel).</summary>
-            public PanelOpt Set(bool outer = true, bool inner = true, bool ends = false, bool threshold = false, double? revealFrom = null, Swatch? revealC = null)
+            public PanelOpt Set(bool outer = true, bool inner = true, bool ends = false, bool threshold = false, double? revealFrom = null, Swatch? revealC = null, bool rooms = false)
             {
-                this.outer = outer; this.inner = inner; this.ends = ends; this.threshold = threshold; this.revealFrom = revealFrom; this.revealC = revealC;
+                this.outer = outer; this.inner = inner; this.ends = ends; this.threshold = threshold; this.revealFrom = revealFrom; this.revealC = revealC; this.rooms = rooms;
                 return this;
             }
         }
@@ -458,7 +461,7 @@ namespace Triband.Storey.Generate
                 gb.PolyTris(pts, tris, new P3(F.w.x * sign, 0, F.w.z * sign), c);
             }
             if (opt.outer) Face(w1, 1, cOut);
-            if (opt.inner) Face(w0, -1, cIn);
+            if (opt.inner) { bool was = gb.Inside; gb.Inside = was || opt.rooms; Face(w0, -1, cIn); gb.Inside = was; }
             double rw = opt.revealFrom ?? w0; Swatch rc = opt.revealC ?? cOut;
             var nu = new P3(F.u.x, 0, F.u.z);
             foreach (var o in os)

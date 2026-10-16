@@ -30,7 +30,8 @@ namespace Triband.Storey.Tests
         {
             var o = new List<PackedMesh>();
             var r = Lod0.Build(site, b);
-            o.AddRange(MeshPack.Pack(r.Op, true, (0, 10), weld: false)); o.AddRange(MeshPack.Pack(r.Glass, true, (0, 10), weld: false));
+            var rooms = new List<PackedMesh>();
+            o.AddRange(MeshPack.Pack(r.Op, true, (0, 10), weld: false, rooms: rooms)); o.AddRange(rooms); o.AddRange(MeshPack.Pack(r.Glass, true, (0, 10), weld: false));
             if (recycle) { r.Op.Recycle(); r.Glass.Recycle(); }
             var s = Lod1.Build(site, b);
             o.AddRange(MeshPack.Pack(s, true));

@@ -160,7 +160,11 @@ namespace Triband.Storey.Generate
         /// False for LOD0 and its glass: the generator already shares their vertices, and welding found under half a
         /// percent more while taking a fifth to a quarter of a worker's build (docs/CITY.md §7, WeldTests).
         /// </param>
-        public static List<PackedMesh> Pack(MeshBuilder gb, bool windows = false, (int start, int count)? mates = null, int maxVerts = MaxVerts, bool weld = true)
+        /// <param name="rooms">
+        /// Given, LOD0's rooms (<see cref="MeshBuilder.InsideTris"/>) are packed into it, apart from the rest, which is returned:
+        /// the renderer draws them only while the windows are clear (docs/PERFORMANCE.md §7.7).
+        /// </param>
+        public static List<PackedMesh> Pack(MeshBuilder gb, bool windows = false, (int start, int count)? mates = null, int maxVerts = MaxVerts, bool weld = true, List<PackedMesh>? rooms = null)
         {
             if (weld && !gb.Welded) gb.Weld();
             int nv = gb.Verts, ni = gb.I.Count;
@@ -194,7 +198,7 @@ namespace Triband.Storey.Generate
                 }
                 var st = pk.Styles.ToArray();
 
-                if (nv <= maxVerts)
+                if (nv <= maxVerts && (rooms == null || gb.InsideTris.Count == 0))
                 {
                     var v = new ChunkList<PackedMesh.Vertex>(); v.Resize(nv);
                     var cut = gb.Lean ? null : new ChunkList<PackedMesh.Cutaway>(); cut?.Resize(nv);
@@ -225,29 +229,87 @@ namespace Triband.Storey.Generate
                 int cap = Math.Min(maxVerts, MaxVerts);
                 var local = pk.Local; local.Resize(nv); for (int i = 0; i < nv; i++) local[i] = -1;
                 var pv = pk.Pv; var pi = pk.Pi;
-                void Close()
+                void Close(List<PackedMesh> into, int[] carried)
                 {
                     int n = pv.Count, m = pi.Count;
                     var v = new ChunkList<PackedMesh.Vertex>(); v.Resize(n);
                     var c = gb.Lean ? null : new ChunkList<PackedMesh.Cutaway>(); c?.Resize(n);
                     for (int k = 0; k < n; k++) { int x = pv[k]; pk.Vertex(x, in gb.P[x], gb.N.Index[x], gb.C.Index[x], ref v[k]); if (c != null) c[k] = new PackedMesh.Cutaway { kind = pk.Kind(gb.K[x]), wid = gb.WI[x] }; local[x] = -1; }
                     var ix = new ChunkList<ushort>(); ix.Resize(m); for (int k = 0; k < m; k++) ix[k] = (ushort)pi[k];
-                    out_.Add(new PackedMesh(v, c, ix, null, m, st) { Mates = neighbours });
+                    into.Add(new PackedMesh(v, c, ix, null, m, st) { Mates = carried });
                     pv.Clear(); pi.Clear();
                 }
-                for (int t = 0; t < ni; t += 3)
+                // the triangles from t0 up to t1 (indices) into the parts being filled
+                void Parts(int t0, int t1, List<PackedMesh> into, int[] carried)
                 {
-                    int a = I[t], b = I[t + 1], c = I[t + 2];
-                    int need = (local[a] < 0 ? 1 : 0) + (local[b] < 0 && b != a ? 1 : 0) + (local[c] < 0 && c != a && c != b ? 1 : 0);
-                    if (pv.Count + need > cap) Close();
-                    Take(a); Take(b); Take(c);
+                    for (int t = t0; t < t1; t += 3)
+                    {
+                        int a = I[t], b = I[t + 1], c = I[t + 2];
+                        int need = (local[a] < 0 ? 1 : 0) + (local[b] < 0 && b != a ? 1 : 0) + (local[c] < 0 && c != a && c != b ? 1 : 0);
+                        if (pv.Count + need > cap) Close(into, carried);
+                        Take(a); Take(b); Take(c);
+                    }
                 }
                 void Take(int x)
                 {
                     if (local[x] < 0) { local[x] = pv.Count; pv.Add(x); }
                     pi.Add(local[x]);
                 }
-                if (pi.Count > 0) Close();
+                // a share of the triangles (ranges of them, in order): one mesh of the vertices they use, in the order built,
+                // when they fit; else in parts as a whole mesh is. carried: the mesh's neighbours, or null to find them
+                // among the vertices used (the rooms': those of the party walls whose inner faces they hold)
+                void Share(List<(int start, int end)> tris, List<PackedMesh> into, int[]? carried)
+                {
+                    int used = 0;
+                    foreach (var (t0, t1) in tris)
+                        for (int t = t0 * 3; t < t1 * 3; t++) { int x = I[t]; if (local[x] == -1) { local[x] = -2; used++; } }
+                    if (used == 0) return;
+                    if (carried == null)
+                    {
+                        pk.Found.Clear();
+                        if (!gb.Lean) for (int x = 0; x < nv; x++) { if (local[x] != -2) continue; int k = pk.Kind(gb.K[x]); if (k >= 8) { int m = (k >> 3) - 1; if (!pk.Found.Contains(m)) pk.Found.Add(m); } }
+                        carried = pk.Found.Count > 0 ? pk.Found.ToArray() : Array.Empty<int>();
+                    }
+                    if (used > maxVerts)
+                    {
+                        // a vertex marked used reads as one not in the part being filled
+                        foreach (var (t0, t1) in tris) Parts(t0 * 3, t1 * 3, into, carried);
+                        if (pi.Count > 0) Close(into, carried);
+                        return;
+                    }
+                    var v = new ChunkList<PackedMesh.Vertex>(); v.Resize(used);
+                    var cut = gb.Lean ? null : new ChunkList<PackedMesh.Cutaway>(); cut?.Resize(used);
+                    for (int x = 0, n = 0; x < nv; x++)
+                    {
+                        if (local[x] != -2) continue;
+                        local[x] = n;
+                        pk.Vertex(x, in gb.P[x], gb.N.Index[x], gb.C.Index[x], ref v[n]);
+                        if (cut != null) cut[n] = new PackedMesh.Cutaway { kind = pk.Kind(gb.K[x]), wid = gb.WI[x] };
+                        n++;
+                    }
+                    int count = 0; foreach (var (t0, t1) in tris) count += (t1 - t0) * 3;
+                    ChunkList<ushort>? i16 = null; int[]? i32 = null;
+                    if (used <= MaxVerts) { i16 = new ChunkList<ushort>(); i16.Resize(count); } else i32 = new int[count];
+                    int at = 0;
+                    foreach (var (t0, t1) in tris)
+                        for (int t = t0 * 3; t < t1 * 3; t++, at++) { int q = local[I[t]]; if (i16 != null) i16[at] = (ushort)q; else i32![at] = q; }
+                    foreach (var (t0, t1) in tris) for (int t = t0 * 3; t < t1 * 3; t++) local[I[t]] = -1;
+                    into.Add(new PackedMesh(v, cut, i16, i32, count, st) { Mates = carried });
+                }
+                if (rooms != null && gb.InsideTris.Count > 0)
+                {
+                    // the rooms apart (docs/PERFORMANCE.md §7.7): the triangles outside the builder's ranges into the
+                    // meshes returned, those in them into rooms, each share with the vertices it uses
+                    var spans = pk.Spans; spans.Clear();
+                    int from = 0;
+                    foreach (var (a, e) in gb.InsideTris) { if (a > from) spans.Add((from, a)); from = e; }
+                    if (from < ni / 3) spans.Add((from, ni / 3));
+                    Share(spans, out_, neighbours);
+                    Share(gb.InsideTris, rooms, null);
+                    return out_;
+                }
+                Parts(0, ni, out_, neighbours);
+                if (pi.Count > 0) Close(out_, neighbours);
                 return out_;
             }
             finally { pk.Done(); packers.Give(pk); }
@@ -262,6 +324,7 @@ namespace Triband.Storey.Generate
             public readonly List<StyleRef> Styles = new List<StyleRef>();
             public readonly List<int> Found = new List<int>();
             public readonly ChunkList<int> Local = new ChunkList<int>(), Pv = new ChunkList<int>(), Pi = new ChunkList<int>();
+            public readonly List<(int start, int end)> Spans = new List<(int, int)>();
             // per entry of the builder's tables: a colour's style number (-1 until a vertex names it), slot and tone bytes, and
             // whether it is a pane's; a normal's packed bytes
             struct Colour { public int style; public byte b, a; public bool glass; }
@@ -281,7 +344,7 @@ namespace Triband.Storey.Generate
                 StyleIx.Clear(); Styles.Clear(); Found.Clear(); lastIx = -1;
             }
 
-            public void Done() { gb = null!; Local.Clear(); Pv.Clear(); Pi.Clear(); }
+            public void Done() { gb = null!; Local.Clear(); Pv.Clear(); Pi.Clear(); Spans.Clear(); }
 
             /// <summary>The builder's normals and colours packed, once each.</summary>
             public void Entries()

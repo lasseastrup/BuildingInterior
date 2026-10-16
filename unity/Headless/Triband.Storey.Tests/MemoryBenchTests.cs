@@ -84,7 +84,8 @@ namespace Triband.Storey.Tests
         static long Make(Site site, BuildingData b, bool reuse)
         {
             long a0 = GC.GetAllocatedBytesForCurrentThread();
-            var r = Lod0.Build(site, b); var meshes = MeshPack.Pack(r.Op, true, (0, 10), weld: false); meshes.AddRange(MeshPack.Pack(r.Glass, true, (0, 10), weld: false));
+            var r = Lod0.Build(site, b); var rooms = new List<PackedMesh>();
+            var meshes = MeshPack.Pack(r.Op, true, (0, 10), weld: false, rooms: rooms); meshes.AddRange(rooms); meshes.AddRange(MeshPack.Pack(r.Glass, true, (0, 10), weld: false));
             var s = Lod1.Build(site, b); meshes.AddRange(MeshPack.Pack(s, true));
             if (reuse) { r.Op.Recycle(); r.Glass.Recycle(); s.Recycle(); foreach (var p in meshes) p.Release(); }
             return GC.GetAllocatedBytesForCurrentThread() - a0;

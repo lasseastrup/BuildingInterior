@@ -156,7 +156,8 @@ namespace Triband.Storey.Generate
         /// The courtyard's facades on storey k. LOD0 (<paramref name="gl"/> given): panels with inner faces, see-through
         /// glass, frames, bands and collision; LOD1: the outside only, with opaque panes.
         /// </summary>
-        public static void Walls(MeshBuilder op, MeshBuilder? gl, List<Seg>? sg, BuildingData b, VoidData v, int k, Palette C)
+        /// <param name="rooms">LOD0: the walls' inner faces are the rooms' (<see cref="MeshBuilder.Inside"/>).</param>
+        public static void Walls(MeshBuilder op, MeshBuilder? gl, List<Seg>? sg, BuildingData b, VoidData v, int k, Palette C, bool rooms = false)
         {
             var g = RingOf(b, v); int n = g.Wp.Count; double T = Dim.T_EXT, y = Derived.FloorBase(b, k), h = Derived.FloorH(b, k);
             bool shell = Derived.ShellAt(b, k), lod1 = gl == null, bands = Derived.StyleAt(b, k).bands && k < b.floors.Count - 1;
@@ -177,7 +178,7 @@ namespace Triband.Storey.Generate
                 }
                 else
                 {
-                    Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.inner, new Facade.PanelOpt { inner = !shell, threshold = k == v.bottom, revealFrom = shell ? T * 0.45 : 0 });
+                    Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.inner, new Facade.PanelOpt { inner = !shell, threshold = k == v.bottom, revealFrom = shell ? T * 0.45 : 0, rooms = rooms });
                     Facade.Dress(op, gl!, F, ops, y, C, shell, Derived.StyleAt(b, k));
                 }
                 if (bands) { var (bh, bd, bc) = Lod0.Shared.Band(Derived.StyleAt(b, k), C); Facade.StripPieces(op, F, m, new List<(double, double)> { m.Span(T, T + bd) }, y + h - bh, y + h, T, T + bd, bc, bc, Skip.In); }

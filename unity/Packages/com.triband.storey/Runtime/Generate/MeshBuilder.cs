@@ -54,6 +54,18 @@ namespace Triband.Storey.Generate
         /// room behind the pane by it (docs/EDITOR.md §6.8). Only pane vertices have one.
         /// </summary>
         public readonly Dictionary<int, (double u, double v, byte id)> PaneUV = new Dictionary<int, (double u, double v, byte id)>();
+        /// <summary>
+        /// The rooms' triangles, as ranges (the first triangle, and one past the last), in the order made: what is seen only
+        /// through the windows, which the renderer draws apart, and only while the windows are clear (docs/PERFORMANCE.md
+        /// §7.7). <see cref="Inside"/> records them.
+        /// </summary>
+        public readonly List<(int start, int end)> InsideTris = new List<(int, int)>();
+        /// <summary>
+        /// Openings made that show what is behind them at any distance: a doorway with nothing in it (a walk-in storey's
+        /// doors but a glazed one) and an artist's glass, which LOD0's far windows don't paint over. Their storey's rooms
+        /// are not kept apart (<see cref="Inside"/>).
+        /// </summary>
+        public int SeeThrough;
         /// <summary>Building index + 65536 × LOD, written into every vertex at upload.</summary>
         public int Tag { get; private set; }
         public readonly bool Lean;
@@ -68,6 +80,36 @@ namespace Triband.Storey.Generate
 
         double[] curW = Zero4;
         int curK, curI;
+        bool inside;
+        int insideFrom;
+
+        /// <summary>Where the rooms' ranges stand now, for <see cref="TakeBackInside"/>.</summary>
+        public (int ranges, int end) InsideMark => InsideTris.Count == 0 ? (0, 0) : (InsideTris.Count, InsideTris[InsideTris.Count - 1].end);
+
+        /// <summary>What was recorded as the rooms' since <paramref name="mark"/> isn't after all: it stays with the rest.</summary>
+        public void TakeBackInside((int ranges, int end) mark)
+        {
+            if (inside) throw new InvalidOperationException("the rooms are taken back while still being made");
+            InsideTris.RemoveRange(mark.ranges, InsideTris.Count - mark.ranges);
+            if (mark.ranges > 0) InsideTris[mark.ranges - 1] = (InsideTris[mark.ranges - 1].start, mark.end);
+        }
+
+        /// <summary>The triangles made from now on are the rooms' (<see cref="InsideTris"/>), until it is set false again.</summary>
+        public bool Inside
+        {
+            get => inside;
+            set
+            {
+                if (value == inside) return;
+                inside = value;
+                int t = I.Count / 3;
+                if (value) { insideFrom = t; return; }
+                if (t == insideFrom) return;
+                int n = InsideTris.Count;
+                if (n > 0 && InsideTris[n - 1].end == insideFrom) InsideTris[n - 1] = (InsideTris[n - 1].start, t);   // one range with the one before
+                else InsideTris.Add((insideFrom, t));
+            }
+        }
         public static readonly double[] Zero4 = { 0, 0, 0, 0 };
 
         public MeshBuilder(int tag = 0, bool lean = false, bool shapeOnly = false) { Tag = tag; Lean = lean; ShapeOnly = shapeOnly; }
@@ -100,9 +142,9 @@ namespace Triband.Storey.Generate
         {
             if (ShapeOnly) return;
             lock (spares) if (spares.Contains(this)) return;
-            P.Clear(); N.Clear(); C.Clear(); K.Clear(); WI.Clear(); I.Clear(); PaneUV.Clear();
+            P.Clear(); N.Clear(); C.Clear(); K.Clear(); WI.Clear(); I.Clear(); PaneUV.Clear(); InsideTris.Clear();
             Walls = new List<(double[], int)>(); WallBase = new List<double>(); Solids = null;
-            StoreyBase = 0; curW = Zero4; curK = curI = 0; Welded = false;
+            StoreyBase = 0; curW = Zero4; curK = curI = 0; Welded = false; inside = false; insideFrom = 0; SeeThrough = 0;
             lock (spares) if (spares.Count < Spares) spares.Add(this);
         }
 

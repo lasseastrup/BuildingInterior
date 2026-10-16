@@ -263,7 +263,7 @@ namespace Triband.Storey.Unity
                     b.Append(" L0 ").Append(st.lod0).Append(" L1 ").Append(st.lod1).Append(" L2 ").Append(st.lod2).Append(" res0 ").Append(st.resident0)
                         .Append(" gen ").Append(st.generating).Append(" wait ").Append(st.queued).Append(" built ").Append(st.builtThisFrame).Append(" lod ").Append(F1(st.ms)).Append("ms");
                     if (st.loading > 0) b.Append(" loading ").Append(st.loading);
-                    b.Append(" v0 ").Append(st.lod0VerticesInView / 1000).Append("k/").Append(st.lod0Vertices / 1000).Append('k');
+                    b.Append(" v0 ").Append(st.lod0VerticesInView / 1000).Append("k/").Append(st.lod0Vertices / 1000).Append('k').Append(" rooms ").Append(st.roomsShown).Append('/').Append(st.lod0);
                 }
                 var r = s.Renderer;
                 if (r != null) b.Append(" walls ").Append(r.Table.WallsInUse).Append('/').Append(r.Table.Wall.Length);
@@ -288,11 +288,12 @@ namespace Triband.Storey.Unity
                 var cam = o.viewCamera != null ? o.viewCamera : Camera.main;
                 if (cam != null) { var c = cam.transform.position; b.Append(" cam ").Append(F1(c.x)).Append(',').Append(F1(c.y)).Append(',').Append(F1(c.z)); }
             }
-            // renderers given their steady copy or their own material again (each re-registered by the GPU Resident Drawer), and made
-            if (SiteRenderer.SteadySwaps > 0 || SiteRenderer.RenderersMade > 0)
+            // renderers given their steady copy or their own material again (each re-registered by the GPU Resident Drawer), made,
+            // and LOD0 rooms switched on or off
+            if (SiteRenderer.SteadySwaps > 0 || SiteRenderer.RenderersMade > 0 || SiteRenderer.RoomsSwitched > 0)
             {
-                b.Append(" | swaps ").Append(SiteRenderer.SteadySwaps).Append(" new ").Append(SiteRenderer.RenderersMade);
-                SiteRenderer.SteadySwaps = SiteRenderer.RenderersMade = 0;
+                b.Append(" | swaps ").Append(SiteRenderer.SteadySwaps).Append(" new ").Append(SiteRenderer.RenderersMade).Append(" rooms switched ").Append(SiteRenderer.RoomsSwitched);
+                SiteRenderer.SteadySwaps = SiteRenderer.RenderersMade = SiteRenderer.RoomsSwitched = 0;
             }
             b.Append(" | heap ").Append(GC.GetTotalMemory(false) >> 20).Append("MB");
             if (systemMemory.Valid || totalMemory.Valid || gfxMemory.Valid)

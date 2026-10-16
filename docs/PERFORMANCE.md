@@ -60,7 +60,7 @@ Effort: S under a day, M a few days, L a week or more. Impact as estimated in ea
 
 The roadmap (§15) orders everything else.
 
-Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), and #8's priority for detail in view (§9.2). #7's cull switch is in as an experiment, off, to measure first (§7.1). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
+Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), LOD0's rooms as their own renderers (§7.7), and #8's priority for detail in view (§9.2). #7's cull switch is in as an experiment, off, to measure first (§7.1). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
 
 ## 1. Scope and method
 
@@ -415,11 +415,13 @@ LOD0's see-through glass (`StoreyGlass.shader`) is transparent with no depth wri
 
 Recommendation: split LOD0's interior into its own renderer. Draw it (and the glass as glass) only while the glass is clear or the building is the player's or cut; in the painted band draw the opaque pane instead. Interiors cast shadows only for the player's building, which needs them for its indoor light (SPEC §5). Effort: M (the generator knows which faces are interior).
 
+Status: the rooms are their own renderers (CHANGELOG): the inner faces of a storey's outside walls, its partitions and its cores, 18.6% of a walk-in LOD0's triangles (21.9% on the demo street). They draw while the building's nearest point is within the distance its windows are painted over from, or while it can show its inside, and they cast shadows only for the player's building. Floors and ceilings stay with the shell: without their shadows the sun would light every storey through the windows of those above. What an opening shows at any distance stays with the shell too: a storey with a doorway or an artist's glass (which the fill doesn't paint), the top storey under a bulkhead's door, and every storey under a skylight or a straight flight's roof opening. A ray test from eyes 50 to 150 m away, with the painted panes opaque and every other glass clear, meets a room first in 1 of 20,000 rays on the demo street, 7 of 205,000 on the variants and none on the walk-in test city. Every one of those rays enters through a gap in the shell itself (§7.1 step 1). Measured on the two views the iPhone 11 Pro recorded: every LOD0 there is nearer than the painted-over distance (100 m), so the colour pass is unchanged and the gain is the shadow pass, 17.4–17.6% fewer LOD0 triangles per cascade. The colour pass gains only on LOD0s in their hysteresis band (100 to 127 m); painting the windows over sooner would widen it (at half the LOD0 distance, 4–10% fewer LOD0 triangles in those views), a look to judge on the device. The opaque pane in the painted band (cost 1) is still open.
+
 ### 7.8 Shadow casters (medium to high, depends on cascades)
 
 Every LOD0, LOD1 and cell renderer casts shadows (`ShadowCastingMode.On`: `SiteRenderer.Add`, `BuildCell`), and the shadow pass runs Storey's full vertex stage (§7.2). Shadow cost scales with triangles × cascades touched, and at street level LOD1 shells and cells fill the far cascades. Recommendations:
 - **Shadow proxies for distance:** let a building at LOD1 cast through its massing in the cell (a shadow-only pass of the massing that ignores the LOD hide for buildings at LOD1) and turn LOD1's own casting off. LOD1 is about 980 triangles, its massing 43, with the same outline and heights. *Done* (docs/CITY.md §3): the massing's shadow caster pass treats LOD1 and LOD2 alike, LOD1 renderers cast none, and a cell with LOD1 members but no LOD2 one draws into the shadow maps only. The prototype does the same (its cell stays drawn, every triangle clipped in its colour pass, three.js having no shadows-only mode); its street views show the same shadows but for roof bulkheads and canopies.
-- Interiors as above (§7.7).
+- Interiors as above (§7.7). *Done*: LOD0's rooms cast only for the player's building.
 - Per tier: cascades and shadow distance (§7.10).
 
 ### 7.9 Variants and pipeline-state warm-up

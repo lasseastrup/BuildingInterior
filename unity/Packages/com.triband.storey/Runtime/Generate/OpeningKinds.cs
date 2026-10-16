@@ -96,7 +96,7 @@ namespace Triband.Storey.Generate
                     }
                     else
                     {
-                        gl.Mesh(pp, pn, part.tris, C.glass);
+                        gl.Mesh(pp, pn, part.tris, C.glass); op.SeeThrough++;   // clear at any distance
                         var back = new int[part.tris.Length];
                         for (int t = 0; t < back.Length; t += 3) { back[t] = part.tris[t]; back[t + 1] = part.tris[t + 2]; back[t + 2] = part.tris[t + 1]; }
                         var inv = new P3[pn.Length]; for (int i = 0; i < pn.Length; i++) inv[i] = pn[i] * -1;

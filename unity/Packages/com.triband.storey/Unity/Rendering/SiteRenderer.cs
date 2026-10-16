@@ -42,8 +42,8 @@ namespace Triband.Storey.Unity
         {
             public string id = "";
             public int idx, wallBase = -1, wallCount;
-            // its LOD0's vertices, opaque and glass (0 without one): how much geometry it puts in a pass
-            public long lod0Verts;
+            // its LOD0's vertices, opaque and glass (0 without one): how much geometry it puts in a pass; and its rooms'
+            public long lod0Verts, roomsVerts;
             // while LOD0 is built: what is read of it after upload (collision segments, the wall list), not the generator's result
             public Lod0Shape? shape;
             public readonly List<int> rows = new List<int>();
@@ -58,6 +58,11 @@ namespace Triband.Storey.Unity
             // see Draws)
             public readonly List<MeshRenderer>[] rends = { new List<MeshRenderer>(), new List<MeshRenderer>(), new List<MeshRenderer>() };
             public readonly bool[] drawn = { true, true, true };
+            // LOD0's rooms (docs/PERFORMANCE.md §7.7): their renderers, drawn with the LOD0 while a window can show them
+            // (RoomsDraw), casting shadows for the building the player is in; whether they draw and cast now, and whether
+            // its nearest point is in the windows' clear distance
+            public readonly List<MeshRenderer> rooms = new List<MeshRenderer>();
+            public bool roomsOn = true, roomsCast, near = true;
             public int[] mates = Array.Empty<int>();
             public GameObject? root;
             public Mesh? collision;
@@ -130,11 +135,12 @@ namespace Triband.Storey.Unity
         /// </summary>
         void UpdateSteady()
         {
-            if (opaqueSteady == null && massingSteady == null) return;
+            bool copies = opaqueSteady != null || massingSteady != null;
+            if (!copies && roomsKept == 0) return;
             using var _t = StoreyTimings.Time("site: steady variants (before the cameras)");
             // the copies follow their materials' properties: always in edit mode, twice a second in Play mode
             bool synced = false;
-            if (!Application.isPlaying || Time.frameCount - steadySynced >= 30)
+            if (copies && (!Application.isPlaying || Time.frameCount - steadySynced >= 30))
             {
                 steadySynced = Time.frameCount; synced = true;
                 const int geometry = (int)UnityEngine.Rendering.RenderQueue.Geometry;
@@ -142,7 +148,7 @@ namespace Triband.Storey.Unity
                 if (massingSteady != null) { massingSteady.CopyMatchingPropertiesFromMaterial(massing); massingSteady.SetKeyword(massingKw, true); massingSteady.renderQueue = geometry; }
             }
             // their cull mode, set again after the sync, which copies the material's (every face)
-            if (synced || steadyCulled != CullSteadyBackFaces)
+            if (copies && (synced || steadyCulled != CullSteadyBackFaces))
             {
                 float cull = (float)(CullSteadyBackFaces ? UnityEngine.Rendering.CullMode.Back : UnityEngine.Rendering.CullMode.Off);
                 if (opaqueSteady != null) opaqueSteady.SetFloat(StoreyShaderIds.Cull, cull);
@@ -163,10 +169,12 @@ namespace Triband.Storey.Unity
                 for (int w = 0; w < 3; w++)
                 {
                     var list = bt.solid[w]; if (list.Count == 0) continue;
-                    var copy = w == 2 ? massingSteady : opaqueSteady; if (copy == null) continue;
+                    var copy = w == 2 ? massingSteady : opaqueSteady;
+                    if (copy == null && (w != 0 || bt.rooms.Count == 0)) continue;
                     var st = state[bt.idx];
                     bool on = global::Triband.Storey.Occlusion.Steady.Of(bt.idx, st.z, st.w, active, iso, isolated, w == 0 ? bt.mates : null, w == 2, farOcc);
-                    if (on == bt.steady[w]) continue;
+                    if (w == 0 && bt.rooms.Count > 0) RoomsDraw(bt, on, active);
+                    if (copy == null || on == bt.steady[w]) continue;
                     bt.steady[w] = on;
                     foreach (var r in list) if (r != null) { r.sharedMaterial = on ? copy : w == 2 ? massing : opaque; SteadySwaps++; }
                 }
@@ -179,6 +187,37 @@ namespace Triband.Storey.Unity
                 if (on == c.steady) continue;
                 c.steady = on;
                 foreach (var r in c.renderers) if (r != null) r.sharedMaterial = on ? massingSteady : massing;
+            }
+        }
+
+        // LOD0's rooms (docs/PERFORMANCE.md §7.7): whether they may be left out this frame (the automatic LOD, a perspective
+        // eye, LOD0's far windows painted over), and how many buildings have them (none: nothing to decide before the cameras)
+        bool roomsHide;
+        int roomsKept;
+
+        /// <summary>LOD0's rooms switched on or off since <see cref="StoreyDiagnostics"/> last read it (main thread).</summary>
+        internal static int RoomsSwitched;
+
+        /// <summary>
+        /// A building's LOD0 rooms drawn while a window can show them (docs/PERFORMANCE.md §7.7): its nearest point within
+        /// the distance from which LOD0's windows are painted over (<see cref="Built.near"/>; with the fixed LOD they never
+        /// are), anything able to show its inside (a cut or a fade: not <paramref name="steady"/>), or kept at full detail
+        /// (<see cref="Forced"/>). They cast shadows only for the building the player is in, whose own light needs them
+        /// (SPEC §5): elsewhere the shell's shadow keeps the sun out of them, through the windows only.
+        /// </summary>
+        void RoomsDraw(Built bt, bool steady, int active)
+        {
+            bool on = !roomsHide || bt.near || !steady || bt.idx == active || forcedIdx.Contains(bt.idx), cast = bt.idx == active;
+            if (on != bt.roomsOn)
+            {
+                bt.roomsOn = on; RoomsSwitched++;
+                foreach (var r in bt.rooms) if (r != null) r.enabled = on && bt.drawn[0];
+            }
+            if (cast != bt.roomsCast)
+            {
+                bt.roomsCast = cast;
+                var mode = cast ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
+                foreach (var r in bt.rooms) if (r != null) r.shadowCastingMode = mode;
             }
         }
 
@@ -229,6 +268,8 @@ namespace Triband.Storey.Unity
             /// are built first (docs/PERFORMANCE.md §9.2). A zero forward: no view, every building by its pixels alone.</summary>
             public Vector3 forward, up;
             public float fieldOfView, aspect;
+            /// <summary>An orthographic camera's, which stands in front of <see cref="position"/>: LOD0's windows aren't painted over by its distances, so the rooms always show.</summary>
+            public bool orthographic;
 
             /// <summary>A camera's eye. An orthographic one is treated as a perspective one far behind it, so detail goes by its zoom.</summary>
             public static LodEye Of(Camera c)
@@ -239,7 +280,7 @@ namespace Triband.Storey.Unity
                 const float back = 200;
                 float size = Mathf.Max(0.01f, c.orthographicSize);
                 return new LodEye { position = t.position - t.forward * back, pixelsPerMetre = c.pixelHeight / (2 * size) * back,
-                    forward = t.forward, up = t.up, fieldOfView = 2 * Mathf.Atan(size / back) * Mathf.Rad2Deg, aspect = c.aspect };
+                    forward = t.forward, up = t.up, fieldOfView = 2 * Mathf.Atan(size / back) * Mathf.Rad2Deg, aspect = c.aspect, orthographic = true };
             }
         }
 
@@ -263,13 +304,15 @@ namespace Triband.Storey.Unity
             /// for a pass. Past what it can hold with memoryless attachments, an iPhone throws the frame away.
             /// </summary>
             public long lod0Vertices, lod0VerticesInView;
+            /// <summary>LOD0s shown with their rooms drawn (docs/PERFORMANCE.md §7.7): the rest of <see cref="lod0"/> leave them out, or have none.</summary>
+            public int roomsShown;
 
             public override string ToString() =>
                 $"{buildings:N0} buildings: LOD0 {lod0}, LOD1 {lod1}, LOD2 {lod2}, not drawn {culled}\n" +
                 $"Resident: LOD0 {resident0}, LOD1 {resident1}\n" +
                 $"Cells: {cellsShown} of {cells} drawn ({cellMeshes} meshes)\n" +
                 $"Built this frame {builtThisFrame}, generating {generating}, waiting {queued}; LOD {ms:0.00} ms\n" +
-                $"LOD0 vertices: {lod0Vertices:N0} shown, {lod0VerticesInView:N0} in view" +
+                $"LOD0 vertices: {lod0Vertices:N0} shown, {lod0VerticesInView:N0} in view; rooms drawn in {roomsShown} of {lod0}" +
                 (loading > 0 ? $"\nLoading: {loading} cells to go" : "");
         }
 
@@ -502,8 +545,11 @@ namespace Triband.Storey.Unity
             {
                 float at = (float)lods.Settings.Lod0Distance(ge.pixelsPerMetre), clear = (float)Math.Min(1, Math.Max(0, lods.Settings.GlassClear));
                 StoreyGlobals.SetGlassFill(at * clear, clear >= 1 ? 0 : at);
+                // the rooms are left out past that distance (RoomsDraw), where no window shows them; an orthographic camera
+                // stands in front of its eye, nearer than the windows' distances say
+                roomsHide = clear < 1 && !ge.orthographic;
             }
-            else StoreyGlobals.SetGlassFill(0, 0);
+            else { StoreyGlobals.SetGlassFill(0, 0); roomsHide = false; }
             StoreyGlobals.SetLodTint(lodTint);
             // the view globals (active building, cutaway, isolate, occlusion) are one set for every site: written by the
             // site that has a view (the editor's, or the occlusion system's), and neutral only when none has
@@ -684,7 +730,7 @@ namespace Triband.Storey.Unity
         sealed class Detail
         {
             public List<PackedMesh> opaque = null!;
-            public List<PackedMesh>? glass;
+            public List<PackedMesh>? glass, rooms;
             public Lod0Shape? shape;
             public CollisionMesh? collision;
         }
@@ -711,8 +757,9 @@ namespace Triband.Storey.Unity
             using (markLod0.Auto()) l0 = Lod0.Build(site, b);
             l0.Op.RetagForUpload(idx); l0.Glass.RetagForUpload(idx);
             // the glass's panes carry their place too, to start as LOD1's; neither is welded (it would find almost nothing)
-            var full = new Detail { shape = l0.Shape };
-            using (markPack.Auto()) { full.opaque = MeshPack.Pack(l0.Op, true, mates, weld: false); full.glass = MeshPack.Pack(l0.Glass, true, mates, weld: false); }
+            // the rooms apart from the rest (docs/PERFORMANCE.md §7.7): drawn only while a window can show them
+            var full = new Detail { shape = l0.Shape, rooms = new List<PackedMesh>() };
+            using (markPack.Auto()) { full.opaque = MeshPack.Pack(l0.Op, true, mates, weld: false, rooms: full.rooms); full.glass = MeshPack.Pack(l0.Glass, true, mates, weld: false); }
             if (collider) using (markCollision.Auto()) full.collision = CollisionMesh.Build(site, b, l0.Shape);
             l0.Op.Recycle(); l0.Glass.Recycle();
             return full;
@@ -741,9 +788,12 @@ namespace Triband.Storey.Unity
             }
             for (int i = 0; i < d.opaque.Count; i++) Add(bt, 0, Part("LOD0", i, d.opaque.Count), MeshUpload.Upload(d.opaque[i], Part(name + " LOD0", i, d.opaque.Count), RowOf, bt.wallBase), opaque, true);
             for (int i = 0; i < d.glass!.Count; i++) Add(bt, 0, Part("LOD0 glass", i, d.glass.Count), MeshUpload.Upload(d.glass[i], Part(name + " glass", i, d.glass.Count), RowOf, bt.wallBase), glass, false);
-            long nv = 0; foreach (var p in d.opaque) nv += p.Verts; foreach (var p in d.glass) nv += p.Verts;
-            bt.lod0Verts = nv;
-            if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 up: {name} ({bt.wallCount} walls at {bt.wallBase}, {d.opaque.Count} + {d.glass.Count} meshes, {nv:N0} vertices)");
+            // the rooms: their shadow only for the building the player is in (RoomsDraw)
+            if (bt.rooms.Count == 0 && d.rooms!.Count > 0) roomsKept++;
+            for (int i = 0; i < d.rooms!.Count; i++) Add(bt, 0, Part("LOD0 rooms", i, d.rooms.Count), MeshUpload.Upload(d.rooms[i], Part(name + " rooms", i, d.rooms.Count), RowOf, bt.wallBase), opaque, false, rooms: true);
+            long nv = 0, nr = 0; foreach (var p in d.opaque) nv += p.Verts; foreach (var p in d.glass) nv += p.Verts; foreach (var p in d.rooms) nr += p.Verts;
+            bt.lod0Verts = nv; bt.roomsVerts = nr;
+            if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 up: {name} ({bt.wallCount} walls at {bt.wallBase}, {d.opaque.Count} + {d.glass.Count} + {d.rooms.Count} meshes, {nv + nr:N0} vertices, {nr:N0} of them the rooms')");
             // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
             if (d.collision != null && bt.collision == null) bt.collisionMade = d.collision;
             if (lods != null && colliders && bt.collision == null) colliderPending.Add(bt.id);
@@ -755,6 +805,7 @@ namespace Triband.Storey.Unity
             if (!(made is Detail d)) return;
             foreach (var p in d.opaque) p.Release();
             if (d.glass != null) foreach (var p in d.glass) p.Release();
+            if (d.rooms != null) foreach (var p in d.rooms) p.Release();
         }
 
         /// <summary>A mesh's name, numbered when it comes in parts.</summary>
@@ -827,6 +878,8 @@ namespace Triband.Storey.Unity
             bt.objs[which].Clear(); bt.meshes[which].Clear(); bt.solid[which].Clear(); bt.steady[which] = false;
             bt.rends[which].Clear(); bt.drawn[which] = true;
             if (which != 0) return;
+            if (bt.rooms.Count > 0) roomsKept--;
+            bt.rooms.Clear(); bt.roomsVerts = 0;
             if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 dropped: {site?.ById(bt.id)?.name ?? bt.id}");
             bt.mates = Array.Empty<int>();
             if (bt.wallBase >= 0) table.ReleaseWalls(bt.wallBase, bt.wallCount);
@@ -921,16 +974,28 @@ namespace Triband.Storey.Unity
                     if (byIdx.TryGetValue(idx, out var cb)) ShowDetail(cb);
                 }
                 stats.lod0 = f.Count[0]; stats.lod1 = f.Count[1]; stats.lod2 = f.Count[2]; stats.culled = f.Count[3];
-                // the LOD0 geometry shown, and in the view (by each building's box, as the LOD manager sees it)
-                long shownV = 0, viewV = 0;
+                // the LOD0 geometry shown, and in the view (by each building's box, as the LOD manager sees it); and each LOD0
+                // with rooms, whether its nearest point is in the distance from which its windows are painted over (RoomsDraw),
+                // on from 5 % beyond it and off from 10 %, so a building on the line doesn't flick (and a camera moving after
+                // this frame's eye stays inside it)
+                double paint = l.Settings.Lod0Distance(eye.pixelsPerMetre), ex = eye.position.x - o.x, ey = eye.position.y - o.y, ez = eye.position.z - o.z;
+                long shownV = 0, viewV = 0; int roomsShown = 0;
                 foreach (var bt in built.Values)
                 {
-                    if (bt.lod0Verts == 0 || !(l.Get(bt.idx) is LodManager.Entry e) || !e.Visible(0)) continue;
-                    shownV += bt.lod0Verts;
+                    if (bt.lod0Verts == 0 || !(l.Get(bt.idx) is LodManager.Entry e)) continue;
+                    if (bt.rooms.Count > 0)
+                    {
+                        double dx = Math.Max(Math.Max(e.x0 - ex, 0), ex - e.x1), dy = Math.Max(Math.Max(-ey, 0), ey - e.y1), dz = Math.Max(Math.Max(e.z0 - ez, 0), ez - e.z1);
+                        bt.near = Math.Sqrt(dx * dx + dy * dy + dz * dz) < paint * (bt.near ? 1.1 : 1.05);
+                    }
+                    if (!e.Visible(0)) continue;
+                    long v = bt.lod0Verts + (bt.roomsOn ? bt.roomsVerts : 0);
+                    if (bt.rooms.Count > 0 && bt.roomsOn) roomsShown++;
+                    shownV += v;
                     if (seen == null || seen.Sees((e.x0 + e.x1) / 2, e.y1 / 2, (e.z0 + e.z1) / 2, 0.5 * Math.Sqrt((e.x1 - e.x0) * (e.x1 - e.x0) + e.y1 * e.y1 + (e.z1 - e.z0) * (e.z1 - e.z0))))
-                        viewV += bt.lod0Verts;
+                        viewV += v;
                 }
-                stats.lod0Vertices = shownV; stats.lod0VerticesInView = viewV;
+                stats.lod0Vertices = shownV; stats.lod0VerticesInView = viewV; stats.roomsShown = roomsShown;
             }
             MergeCells();
             int shown = 0, pieces = 0;
@@ -1029,7 +1094,7 @@ namespace Triband.Storey.Unity
 
         int RowOf(StyleRef s) => book!.RowOf(s);
 
-        void Add(Built bt, int which, string name, Mesh mesh, Material mat, bool shadows)
+        void Add(Built bt, int which, string name, Mesh mesh, Material mat, bool shadows, bool rooms = false)
         {
             mesh.hideFlags = flags;
             bt.meshes[which].Add(mesh);
@@ -1042,8 +1107,14 @@ namespace Triband.Storey.Unity
             mr.sharedMaterial = mat;
             mr.shadowCastingMode = shadows ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;   // the GPU Resident Drawer wants no probes on the renderer
-            bt.rends[which].Add(mr);
-            mr.enabled = bt.drawn[which] = Draws(bt, which);
+            bool on = bt.drawn[which] = Draws(bt, which);
+            if (rooms)
+            {
+                // LOD0's rooms: switched with the LOD0, and by RoomsDraw
+                bt.rooms.Add(mr); mr.enabled = on && bt.roomsOn;
+                if (bt.roomsCast) mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            }
+            else { bt.rends[which].Add(mr); mr.enabled = on; }
             if (mat == opaque || mat == massing)
             {
                 bt.solid[which].Add(mr);
@@ -1067,6 +1138,7 @@ namespace Triband.Storey.Unity
                 if (on == bt.drawn[w]) continue;
                 bt.drawn[w] = on;
                 foreach (var r in bt.rends[w]) if (r != null) r.enabled = on;
+                if (w == 0) foreach (var r in bt.rooms) if (r != null) r.enabled = on && bt.roomsOn;
             }
         }
 
@@ -1074,6 +1146,7 @@ namespace Triband.Storey.Unity
         {
             FinishBake(true);   // its collider may be cooking: no mesh is destroyed while a bake reads it
             table.SetState(b.idx, new Vector4(3, 3, 1, 0));
+            if (b.rooms.Count > 0) { roomsKept--; b.rooms.Clear(); }
             if (b.wallBase >= 0) table.ReleaseWalls(b.wallBase, b.wallCount);
             foreach (var r in b.rows) table.ReleaseRow(r);
             if (b.root != null) Kill(b.root);

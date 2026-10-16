@@ -115,6 +115,15 @@ namespace Triband.Storey.Generate
         public IEnumerable<int> Steps(Lod0Result r)
         {
             var op = r.Op; var gl = r.Glass;
+            // the rooms (MeshBuilder.Inside): what a storey shows only through its windows, which LOD0's far windows paint over:
+            // the walls' inner faces, the partitions and the cores. The floors and ceilings stay with the shell, which casts
+            // shadows (the rooms only for the building the player is in): without them the sun would light every storey
+            // through the windows of those above. What the roof shows at any distance stays with the shell too: every storey
+            // under an atrium's skylight or a straight flight's railed opening (stacked over the flights), and the top storey
+            // under a bulkhead's door
+            bool open = false, bulkhead = false;
+            if (!Roofs.IsPitched(b)) foreach (var v in b.voids) if (v.kind == VoidKind.Atrium && Courtyards.HoleAt(b, v, N)) open = true;
+            foreach (var s in b.shafts) if (Cores.StairHoleAt(b, s, N)) { if (s.type == CoreType.Flight) open = true; else bulkhead = true; }
             for (int k = 0; k <= N; k++)
             {
                 var sg = new List<Seg>(); var g = At(k); bool sb = Derived.IsSetback(b, k); var Cb = At(Math.Max(0, k - 1)).C;
@@ -124,19 +133,23 @@ namespace Triband.Storey.Generate
                 if ((!(sh && shBelow) || k == N || sb) && !op.ShapeOnly) Slab(op, k, Cb, sh, false);   // no walls or segments: none for a shape
                 if (sb) { if (!Roofs.Draw(op, Roofs.TerraceRoof(site, b, k), Cb)) Terrace(op, sg, k, Cb); Overhang(op, k, g.C); }
                 foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && k == v.bottom && Courtyards.Live(b, v)) Courtyards.Pave(op, b, v, g.C);
+                // the storey's rooms are kept apart unless one of its openings shows them at any distance (a doorway, an
+                // artist's glass), which is known once its walls are made: until then they are only marked
+                bool apart = k < N && !open && !(bulkhead && k == N - 1); var mark = op.InsideMark; int seen = op.SeeThrough;
                 if (k < N)
                 {
-                    FacadeStorey(op, gl, sg, k, g); Details.Build(op, site, b, k, g.C, 0);
+                    FacadeStorey(op, gl, sg, k, g, apart); Details.Build(op, site, b, k, g.C, 0);
                     foreach (var br in b.bridges) if (br.k == k && Bridges.Span(site, b, br) is BridgeSpan bs) Bridges.Build(op, gl, r.Extra, bs, g.C);
-                    foreach (var v in b.voids) if (Courtyards.WallsAt(b, v, k)) Courtyards.Walls(op, gl, sg, b, v, k, g.C);
-                    if (!sh) { Interior(op, sg, k, g.C); foreach (var v in b.voids) if (Courtyards.RailsAt(b, v, k)) Courtyards.Rails(op, sg, b, v, k, g.C); }
+                    foreach (var v in b.voids) if (Courtyards.WallsAt(b, v, k)) Courtyards.Walls(op, gl, sg, b, v, k, g.C, apart);
+                    if (!sh) { op.Inside = apart; Interior(op, sg, k, g.C); foreach (var v in b.voids) if (Courtyards.RailsAt(b, v, k)) Courtyards.Rails(op, sg, b, v, k, g.C); op.Inside = false; }
                 }
                 else
                 {
                     Roof(op, sg, g, Cb);
                     if (!Roofs.IsPitched(b)) foreach (var v in b.voids) if (v.kind == VoidKind.Atrium && Courtyards.HoleAt(b, v, N)) Courtyards.Skylight(op, gl, sg, b, v, Cb);
                 }
-                if (!shell && !Derived.Filled(b, k)) Shafts(op, sg, k, g.C);
+                if (!shell && !Derived.Filled(b, k)) Shafts(op, sg, k, g.C, apart);
+                if (apart && op.SeeThrough != seen) op.TakeBackInside(mark);
                 r.Segs.Add(sg);
                 yield return k;
             }
@@ -338,7 +351,8 @@ namespace Triband.Storey.Generate
         // ---- facade -------------------------------------------------------------------------
 
         /// <summary>LOD0 facade of one storey: panels with window and door holes, recessed panes, frames and trims.</summary>
-        public void FacadeStorey(MeshBuilder op, MeshBuilder gl, List<Seg> sg, int k, TierCtx g)
+        /// <param name="rooms">The walls' inner faces are the rooms' (<see cref="MeshBuilder.Inside"/>).</param>
+        public void FacadeStorey(MeshBuilder op, MeshBuilder gl, List<Seg> sg, int k, TierCtx g, bool rooms = false)
         {
             var Wp = g.Wp; var C = g.C; int n = Wp.Count; bool shell = Derived.ShellAt(b, k); double h = Derived.FloorH(b, k), y = Derived.FloorBase(b, k), T = Dim.T_EXT;   // shell: this storey (a filled one is closed as a shell building is)
             for (int i = 0; i < n; i++)
@@ -354,7 +368,7 @@ namespace Triband.Storey.Generate
                     var ops = Piece(all, party, pc.lo, pc.hi);
                     var wc = Geo.WallCtx(e.a, e.u, e.w, e.L);
                     op.Ctx(wc, party ? 1 + 8 * (pc.r!.pIdx + 1) : 1); gl.Ctx(wc, 1);
-                    Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : C.wall, C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? T * 0.45 : 0));
+                    Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : C.wall, C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? T * 0.45 : 0, rooms: rooms));
                     var stk = Derived.StyleAt(b, k);
                     Facade.Dress(op, gl, F, ops, y, C, shell, stk);
                     if (!party && stk.bricks is double density && density > 0)
@@ -546,11 +560,13 @@ namespace Triband.Storey.Generate
 
         // ---- cores ---------------------------------------------------------------------------
 
-        public void Shafts(MeshBuilder op, List<Seg> sg, int k, Palette C)
+        /// <summary>The cores at level k. <paramref name="rooms"/>: below the roof, they are the rooms' (<see cref="MeshBuilder.Inside"/>).</summary>
+        public void Shafts(MeshBuilder op, List<Seg> sg, int k, Palette C, bool rooms = false)
         {
             foreach (var s in b.shafts)
             {
                 if (!Cores.Levels(b, s).Contains(k)) continue;
+                op.Inside = rooms && k < N;
                 var f = Cores.FrameOf(b, s); double y = Derived.FloorBase(b, k); bool atRoof = k == N;
                 double[] Wl(double x0, double z0, double x1, double z1, double nx, double nz)
                 {
@@ -659,6 +675,7 @@ namespace Triband.Storey.Generate
                     if (atRoof) Bx(fL ? -1.2 - TE - 0.1 : -1.45, fR ? 1.2 + TE + 0.1 : 1.45, y + h, y + h + 0.2, -1.45, fB ? 1.2 + TE + 0.1 : 1.45, C.roof);
                 }
             }
+            op.Inside = false;
         }
     }
     }
