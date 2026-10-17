@@ -499,6 +499,26 @@ namespace UnityEngine
         public int[] GetTriangles(int submesh) => System.Array.Empty<int>();
         public void RecalculateNormals() { }
         public bool isReadable => true;
+
+        public static MeshDataArray AllocateWritableMeshData(int meshCount) => default;
+        public static void ApplyAndDisposeWritableMeshData(MeshDataArray data, Mesh mesh, UnityEngine.Rendering.MeshUpdateFlags flags = UnityEngine.Rendering.MeshUpdateFlags.Default) { }
+
+        public struct MeshDataArray : System.IDisposable
+        {
+            public int Length => 0;
+            public MeshData this[int index] => default;
+            public void Dispose() { }
+        }
+
+        public struct MeshData
+        {
+            public void SetVertexBufferParams(int vertexCount, params UnityEngine.Rendering.VertexAttributeDescriptor[] attributes) { }
+            public Unity.Collections.NativeArray<T> GetVertexData<T>(int stream = 0) where T : struct => default;
+            public void SetIndexBufferParams(int indexCount, UnityEngine.Rendering.IndexFormat format) { }
+            public Unity.Collections.NativeArray<T> GetIndexData<T>() where T : struct => default;
+            public int subMeshCount { get => 0; set { } }
+            public void SetSubMesh(int index, UnityEngine.Rendering.SubMeshDescriptor desc, UnityEngine.Rendering.MeshUpdateFlags flags = UnityEngine.Rendering.MeshUpdateFlags.Default) { }
+        }
     }
 }
 
@@ -753,6 +773,7 @@ namespace Unity.Collections
         public T this[int index] { get => default; set { } }
         public int Length => 0;
         public void Dispose() { }
+        public static void Copy(T[] src, int srcIndex, NativeArray<T> dst, int dstIndex, int length) { }
     }
 }
 

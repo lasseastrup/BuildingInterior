@@ -231,7 +231,7 @@ namespace Triband.Storey.Tests
             Assert.Contains("double paint = l.Settings.Lod0Distance(eye.pixelsPerMetre)", renderer);
             Assert.Contains("bool near = Math.Sqrt(dx * dx + dy * dy + dz * dz) < paint * (p!.near ? 1.1 : 1.05);", renderer);
             Assert.Contains("if (near != p.near) { p.near = near; steadyDirty.Add(bt.idx); }", renderer);   // looked at again (docs/PERFORMANCE.md §3.3)
-            Assert.Contains("Add(bt, 0, nm, MeshUpload.Upload(d.rooms[r], nm, RowOf, bt.wallBase), opaque, false, rooms: true);", renderer);
+            Assert.Contains("Add(bt, 0, nm, MeshOf(d.rooms[r], nm, bt.wallBase, st, k), opaque, false, rooms: true);", renderer);
         }
     }
 }

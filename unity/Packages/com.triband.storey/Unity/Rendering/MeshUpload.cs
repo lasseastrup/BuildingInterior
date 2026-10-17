@@ -2,6 +2,7 @@
 using System;
 using Triband.Storey.Generate;
 using Triband.Storey.Lod;
+using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -85,13 +86,103 @@ namespace Triband.Storey.Unity
             else { mesh.SetIndexBufferParams(ni, IndexFormat.UInt32); mesh.SetIndexBufferData(pm.I32!, 0, 0, ni, Quiet); }
             mesh.subMeshCount = 1;
             mesh.SetSubMesh(0, new SubMeshDescriptor(0, ni), Quiet);
-            mesh.bounds = new Bounds(new Vector3((pm.X0 + pm.X1) / 2, (pm.Y0 + pm.Y1) / 2, (pm.Z0 + pm.Z1) / 2), new Vector3(pm.X1 - pm.X0, pm.Y1 - pm.Y0, pm.Z1 - pm.Z0));
+            mesh.bounds = BoundsOf(pm);
             // no Mesh.Optimize: it crashed the editor natively in its vertex-cache pass on valid LOD0 meshes, and the generator's
             // own order is within a few percent of a vertex-cache optimiser's (measured with Forsyth's: 1.88 → 1.80 misses a triangle)
             mesh.UploadMeshData(true);
             pm.Release();   // its chunks are copied: they go to the next build
             return mesh;
         }
+
+        /// <summary>
+        /// Whether a worker's build is written into Unity's native mesh data on a build thread (docs/PERFORMANCE.md §4.1):
+        /// the main thread then only allocates it and makes the mesh from it, where it copied every vertex and index in. On
+        /// by default; off by itself, for the session, if Unity refuses it there (a warning says so), and then the main
+        /// thread copies as before.
+        /// </summary>
+        public static bool WriteOffMainThread { get; set; } = true;
+
+        // a build thread's write Unity refused, and whether the main thread has said so
+        static volatile Exception? refused;
+        static bool told;
+
+        /// <summary>Native mesh data for one mesh, for a build thread to write (<see cref="Write"/>); none (Length 0) when that is off or Unity refuses it. Main thread.</summary>
+        internal static Mesh.MeshDataArray Allocate()
+        {
+            if (!WriteOffMainThread) return default;
+            try { return Mesh.AllocateWritableMeshData(1); }
+            catch (Exception e) { Refused(e); return default; }
+        }
+
+        /// <summary>
+        /// A finished packed mesh written into native mesh data, on any thread: its vertices, cutaway stream and indices, in
+        /// the layouts <see cref="Upload(PackedMesh, string, Func{StyleRef, int}, int)"/> gives them. Its chunks stay (the
+        /// main thread gives them back once the mesh is made, <see cref="Apply"/>). False when Unity refused it.
+        /// </summary>
+        internal static bool Write(PackedMesh pm, Mesh.MeshDataArray data)
+        {
+            try
+            {
+                var md = data[0];
+                int nv = pm.Verts, ni = pm.Indices;
+                md.SetVertexBufferParams(nv, pm.Cut != null ? Lod0Layout : LeanLayout);
+                var v = md.GetVertexData<PackedMesh.Vertex>(0);
+                for (int c = 0, at = 0; at < nv; c++, at += Chunks.Size) NativeArray<PackedMesh.Vertex>.Copy(pm.V.Chunk(c), 0, v, at, Math.Min(Chunks.Size, nv - at));
+                if (pm.Cut != null)
+                {
+                    var k = md.GetVertexData<PackedMesh.Cutaway>(1);
+                    for (int c = 0, at = 0; at < nv; c++, at += Chunks.Size) NativeArray<PackedMesh.Cutaway>.Copy(pm.Cut.Chunk(c), 0, k, at, Math.Min(Chunks.Size, nv - at));
+                }
+                md.SetIndexBufferParams(ni, pm.I16 != null ? IndexFormat.UInt16 : IndexFormat.UInt32);
+                if (pm.I16 != null)
+                {
+                    var ix = md.GetIndexData<ushort>();
+                    for (int c = 0, at = 0; at < ni; c++, at += Chunks.Size) NativeArray<ushort>.Copy(pm.I16.Chunk(c), 0, ix, at, Math.Min(Chunks.Size, ni - at));
+                }
+                else NativeArray<int>.Copy(pm.I32!, 0, md.GetIndexData<int>(), 0, ni);
+                md.subMeshCount = 1;
+                md.SetSubMesh(0, new SubMeshDescriptor(0, ni), Quiet);
+                return true;
+            }
+            catch (Exception e) { refused ??= e; return false; }
+        }
+
+        /// <summary>
+        /// The mesh a build thread wrote (<see cref="Write"/>), made on the main thread: the data handed to it, its bounds
+        /// set, uploaded and its CPU copy released, the packed mesh's chunks given back. Null when Unity refused it; the
+        /// data is disposed either way.
+        /// </summary>
+        internal static Mesh? Apply(PackedMesh pm, Mesh.MeshDataArray data, string name)
+        {
+            var mesh = new Mesh { name = name };
+            try { Mesh.ApplyAndDisposeWritableMeshData(data, mesh, Quiet); }
+            catch (Exception e)
+            {
+                Refused(e);
+                try { data.Dispose(); } catch (Exception) { }   // whether a refused apply disposed it isn't said
+                if (Application.isPlaying) UnityEngine.Object.Destroy(mesh); else UnityEngine.Object.DestroyImmediate(mesh);
+                return null;
+            }
+            mesh.bounds = BoundsOf(pm);
+            mesh.UploadMeshData(true);
+            pm.Release();
+            return mesh;
+        }
+
+        /// <summary>Writing off the main thread switched off for the session, and why said once (main thread).</summary>
+        internal static void Refused(Exception? e = null)
+        {
+            e ??= refused; if (e == null || told) return;
+            told = true; WriteOffMainThread = false;
+            Debug.LogWarning($"Storey: detail meshes are copied on the main thread from now on: Unity refused mesh data written on a build thread ({e.GetType().Name}: {e.Message})");
+            if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"mesh data off the main thread refused, copied on it from now on: {e.GetType().Name}: {e.Message}");
+        }
+
+        /// <summary>Whether a build thread's write was refused and not yet said (the main thread then calls <see cref="Refused"/>).</summary>
+        internal static bool WasRefused => refused != null && !told;
+
+        static Bounds BoundsOf(PackedMesh pm) =>
+            new Bounds(new Vector3((pm.X0 + pm.X1) / 2, (pm.Y0 + pm.Y1) / 2, (pm.Z0 + pm.Z1) / 2), new Vector3(pm.X1 - pm.X0, pm.Y1 - pm.Y0, pm.Z1 - pm.Z0));
 
         /// <summary>
         /// A mesh the generator made, packed here and uploaded as one (32-bit indices past 65,535 vertices): for meshes

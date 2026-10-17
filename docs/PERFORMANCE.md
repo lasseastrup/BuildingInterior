@@ -210,6 +210,15 @@ The managed chunks are copied into the mesh's native data on the main thread, an
 
 Status: step 1 leaves the main thread (CHANGELOG). The colour rows (a lookup per style) and the wall base (an allocation in the building table) are still found on the main thread, which owns the table. `PackedMesh.Finish` then writes them into every vertex on a build thread, in the build's own lane, and `MeshUpload.Upload` finishes only a mesh not yet finished. `MeshPackTests.AMeshFinishedOnABuildThreadIsTheSameBytes` checks the bytes against a finish on the calling thread. Steps 2 and 3 stay on the main thread, a part at a time within the budget (§3.2), until `AllocateWritableMeshData` (§15, phase 4).
 
+Status (phase 4): step 2 leaves the main thread for a worker's build (CHANGELOG).
+- **Allocation.** When a build is staged, the main thread allocates one `Mesh.MeshDataArray` per part. That is the one call kept there, since whether Unity allows the allocation off the main thread isn't documented.
+- **Writing.** The build thread that finishes the parts writes each one into its native mesh data: the vertex streams in the upload's layouts, then the indices and the sub-mesh. The packed structs are the streams' strides, which `UploadSafetyTests` checks.
+- **Making the mesh.** Each part's turn in the budget makes its mesh from that data (`Mesh.ApplyAndDisposeWritableMeshData`), sets its bounds and uploads it with `UploadMeshData(true)`, where the main thread copied every vertex and index in itself.
+- **Abandoned builds.** Their data is disposed on the main thread once their build thread is done with it.
+- **On by default** (`MeshUpload.WriteOffMainThread`). If Unity refuses any of it, the session goes back to copying on the main thread, with one warning in the console and in Storey Diagnostics. A build finished on the main thread (the editor's forced buildings, a site without build threads) copies as before.
+- **Not changed.** Cells are still copied on the main thread when they are uploaded: their piece count is known only once a build thread has packed them.
+- **To measure on the device.** The recorder's `build: LOD0 upload` timings, against a run with `WriteOffMainThread` off. Unity's own share, the GPU buffers made from the data, stays on the main thread.
+
 ### 4.2 Vertex formats
 
 | Mesh | Layout | Bytes |

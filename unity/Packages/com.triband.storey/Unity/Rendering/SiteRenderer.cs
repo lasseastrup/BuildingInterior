@@ -739,6 +739,7 @@ namespace Triband.Storey.Unity
         public void Frame(bool lodTint, SiteView? view = null)
         {
             FinishBake(false);
+            if (unwritten.Count > 0) DisposeUnwritten(false);
             if (colliderPending.Count > 0) BuildColliders();
             if (lods != null) UpdateLods();
             else if (shownLod != lod)
@@ -1008,25 +1009,28 @@ namespace Triband.Storey.Unity
             return k < d.glass!.Count ? d.glass[k] : d.rooms![k - d.glass.Count];
         }
 
-        /// <summary>The <paramref name="k"/>th of a build's meshes uploaded, with its renderer (off until the LOD is shown).</summary>
-        void UploadPart(Built bt, string name, int which, Detail d, int k)
+        /// <summary>
+        /// The <paramref name="k"/>th of a build's meshes uploaded, with its renderer (off until the LOD is shown); a staged
+        /// build's (<paramref name="st"/>) from the native mesh data a build thread wrote it into, where it did.
+        /// </summary>
+        void UploadPart(Built bt, string name, int which, Detail d, int k, Staged? st = null)
         {
             int no = d.opaque.Count;
             if (which == 1)
             {
                 // no shadow of its own: the building casts through its massing while at LOD1 (docs/PERFORMANCE.md §7.8)
                 string n1 = Named(name, "LOD1", k, no);
-                Add(bt, 1, n1, MeshUpload.Upload(d.opaque[k], n1, RowOf), opaque, false);
+                Add(bt, 1, n1, MeshOf(d.opaque[k], n1, -1, st, k), opaque, false);
                 return;
             }
             int ng = d.glass!.Count, nr = d.rooms!.Count;
-            if (k < no) { string n0 = Named(name, "LOD0", k, no); Add(bt, 0, n0, MeshUpload.Upload(d.opaque[k], n0, RowOf, bt.wallBase), opaque, true); return; }
-            if (k < no + ng) { int g = k - no; string ns = Named(name, "LOD0 glass", g, ng); Add(bt, 0, ns, MeshUpload.Upload(d.glass[g], ns, RowOf, bt.wallBase), glass, false); return; }
+            if (k < no) { string n0 = Named(name, "LOD0", k, no); Add(bt, 0, n0, MeshOf(d.opaque[k], n0, bt.wallBase, st, k), opaque, true); return; }
+            if (k < no + ng) { int g = k - no; string ns = Named(name, "LOD0 glass", g, ng); Add(bt, 0, ns, MeshOf(d.glass[g], ns, bt.wallBase, st, k), glass, false); return; }
             // the rooms: their shadow only for the building the player is in (RoomsDraw)
             int r = k - no - ng;
             if ((bt.parts?.rooms.Count ?? 0) == 0) roomsKept++;
             string nm = Named(name, "LOD0 rooms", r, nr);
-            Add(bt, 0, nm, MeshUpload.Upload(d.rooms[r], nm, RowOf, bt.wallBase), opaque, false, rooms: true);
+            Add(bt, 0, nm, MeshOf(d.rooms[r], nm, bt.wallBase, st, k), opaque, false, rooms: true);
         }
 
         /// <summary>A build up: LOD0's numbers and its collider asked for.</summary>
@@ -1051,6 +1055,9 @@ namespace Triband.Storey.Unity
             public Built bt = null!; public Site site = null!; public string name = ""; public int which; public BuildLane lane;
             public Detail d = null!; public System.Threading.Tasks.Task<int> finishing = null!; public int next, parts;
             public long started;   // the job's
+            // each part's native mesh data and whether the build thread wrote it (docs/PERFORMANCE.md §4.1); null when
+            // writing it there is off
+            public Mesh.MeshDataArray[]? data; public bool[]? written;
         }
         readonly List<Staged> staged = new List<Staged>();
 
@@ -1072,11 +1079,72 @@ namespace Triband.Storey.Unity
                 for (int i = 0; i < r.Length; i++) r[i] = RowOf(pm.Styles[i]);
             }
             int which = j.which;
+            // the native mesh data each part is written into on the build thread, allocated here (docs/PERFORMANCE.md §4.1)
+            Mesh.MeshDataArray[]? data = null;
+            if (MeshUpload.WriteOffMainThread)
+            {
+                data = new Mesh.MeshDataArray[n];
+                for (int k = 0; k < n; k++) data[k] = MeshUpload.Allocate();
+            }
+            var written = data != null ? new bool[n] : null;
             staged.Add(new Staged
             {
-                bt = j.bt, site = j.site, name = j.name, which = which, lane = j.lane, d = d, parts = n, started = j.started,
-                finishing = BuildThreads.Shared.Run(() => { for (int k = 0; k < n; k++) PartAt(which, d, k).Finish(rows[k], wallBase); return n; }, j.lane),
+                bt = j.bt, site = j.site, name = j.name, which = which, lane = j.lane, d = d, parts = n, started = j.started, data = data, written = written,
+                finishing = BuildThreads.Shared.Run(() => FinishParts(which, d, rows, wallBase, data, written), j.lane),
             });
+        }
+
+        /// <summary>
+        /// A staged build's parts finished on a build thread (their colour rows and wall ids), and each written into the
+        /// native mesh data allocated for it, where there is some: the main thread then only makes the mesh from it.
+        /// </summary>
+        static int FinishParts(int which, Detail d, int[][] rows, int wallBase, Mesh.MeshDataArray[]? data, bool[]? written)
+        {
+            int n = rows.Length;
+            for (int k = 0; k < n; k++)
+            {
+                var pm = PartAt(which, d, k);
+                pm.Finish(rows[k], wallBase);
+                if (data != null && data[k].Length > 0) written![k] = MeshUpload.Write(pm, data[k]);
+            }
+            return n;
+        }
+
+        /// <summary>
+        /// A part's mesh (main thread): made from the native mesh data a build thread wrote it into (docs/PERFORMANCE.md
+        /// §4.1), or copied in here (a build finished on the main thread, writing it off, or Unity refusing it).
+        /// </summary>
+        Mesh MeshOf(PackedMesh pm, string name, int wallBase, Staged? st, int k)
+        {
+            var data = st?.data;
+            if (data != null && data[k].Length > 0)
+            {
+                var md = data[k]; data[k] = default;
+                if (st!.written![k] && MeshUpload.Apply(pm, md, name) is Mesh made) return made;
+                if (!st.written[k]) md.Dispose();
+                if (MeshUpload.WasRefused) MeshUpload.Refused();
+            }
+            return MeshUpload.Upload(pm, name, RowOf, wallBase);
+        }
+
+        // native mesh data of builds let go while a build thread may still be writing it: disposed on the main thread once
+        // the thread is done with it (docs/PERFORMANCE.md §4.1)
+        static readonly List<(System.Threading.Tasks.Task task, Mesh.MeshDataArray[] data, int from)> unwritten = new List<(System.Threading.Tasks.Task, Mesh.MeshDataArray[], int)>();
+
+        static void DisposeData(Mesh.MeshDataArray[] data, int from)
+        {
+            for (int k = from; k < data.Length; k++) if (data[k].Length > 0) { data[k].Dispose(); data[k] = default; }
+        }
+
+        /// <summary>The native mesh data of builds let go, disposed once their threads are done with it (<paramref name="wait"/>: waited for).</summary>
+        static void DisposeUnwritten(bool wait)
+        {
+            for (int i = unwritten.Count - 1; i >= 0; i--)
+            {
+                var (task, data, from) = unwritten[i];
+                if (!task.IsCompleted) { if (!wait) continue; try { task.Wait(); } catch (AggregateException) { } }
+                DisposeData(data, from); unwritten.RemoveAt(i);
+            }
         }
 
         /// <summary>
@@ -1102,7 +1170,7 @@ namespace Triband.Storey.Unity
                 }
                 if (!st.finishing.IsCompleted || !(forced || made == 0 || sw.Elapsed.TotalMilliseconds <= budget)) continue;
                 using (StoreyTimings.Time(st.which == 0 ? "build: LOD0 upload" : "build: LOD1 upload", st.name))
-                    do { UploadPart(st.bt, st.name, st.which, st.d, st.next++); made++; }
+                    do { UploadPart(st.bt, st.name, st.which, st.d, st.next++, st); made++; }
                     while (st.next < st.parts && (forced || sw.Elapsed.TotalMilliseconds <= budget));
                 if (st.next < st.parts) continue;   // the rest next frame
                 staged.RemoveAt(i--); busy.Remove(st.bt.idx);
@@ -1137,8 +1205,9 @@ namespace Triband.Storey.Unity
         {
             int from = st.next;
             void Release() { for (int k = from; k < st.parts; k++) PartAt(st.which, st.d, k).Release(); }
-            if (st.finishing.IsCompleted) Release();
-            else st.finishing.ContinueWith(_ => Release(), System.Threading.CancellationToken.None, System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously, System.Threading.Tasks.TaskScheduler.Default);
+            if (st.finishing.IsCompleted) { Release(); if (st.data != null) DisposeData(st.data, from); return; }
+            st.finishing.ContinueWith(_ => Release(), System.Threading.CancellationToken.None, System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously, System.Threading.Tasks.TaskScheduler.Default);
+            if (st.data != null) unwritten.Add((st.finishing, st.data, from));   // its native data on the main thread, once the build thread is done
         }
 
         /// <summary>A building's staged build, finished and uploaded now (the editor wants it at once): false when it has none.</summary>
@@ -1151,7 +1220,7 @@ namespace Triband.Storey.Unity
                     try { st.finishing.Wait(); } catch (AggregateException) { }
                 staged.RemoveAt(i); busy.Remove(bt.idx);
                 if (st.finishing.IsFaulted || !ReferenceEquals(st.site, site)) { Unstage(st, true); return false; }
-                while (st.next < st.parts) UploadPart(bt, st.name, which, st.d, st.next++);
+                while (st.next < st.parts) UploadPart(bt, st.name, which, st.d, st.next++, st);
                 EndDetail(bt, st.name, which, st.d);
                 return true;
             }
@@ -1856,6 +1925,7 @@ namespace Triband.Storey.Unity
         public void Dispose()
         {
             Clear();
+            DisposeUnwritten(true);   // every site's: their build threads finish a few meshes at most
             if (cellRoot != null) Kill(cellRoot);
             if (detailRoot != null) Kill(detailRoot);   // the objects kept for later with it
             spareObjects.Clear();

@@ -77,12 +77,35 @@ namespace Triband.Storey.Tests
             Assert.DoesNotContain("FinishDetail(", take);
             int forced = take.IndexOf("TakeStaged(sw, made, BuildLane.Forced)", System.StringComparison.Ordinal), detail = take.IndexOf("TakeStaged(sw, made, BuildLane.Detail)", System.StringComparison.Ordinal), pre = take.IndexOf("TakeStaged(sw, made, BuildLane.Background)", System.StringComparison.Ordinal);
             Assert.True(forced > 0 && detail > forced && pre > detail, "the lanes' uploads in order");
-            Assert.Contains("BuildThreads.Shared.Run(() => { for (int k = 0; k < n; k++) PartAt(which, d, k).Finish(rows[k], wallBase); return n; }, j.lane)", renderer);
-            Assert.Contains("do { UploadPart(st.bt, st.name, st.which, st.d, st.next++); made++; }", renderer);
+            Assert.Contains("BuildThreads.Shared.Run(() => FinishParts(which, d, rows, wallBase, data, written), j.lane)", renderer);
+            Assert.Contains("do { UploadPart(st.bt, st.name, st.which, st.d, st.next++, st); made++; }", renderer);
             Assert.Contains("while (st.next < st.parts && (forced || sw.Elapsed.TotalMilliseconds <= budget));", renderer);
             int rest = renderer.IndexOf("if (st.next < st.parts) continue;", System.StringComparison.Ordinal), built = renderer.IndexOf("l.SetBuilt(st.bt.idx, st.which, true);", System.StringComparison.Ordinal);
             Assert.True(rest > 0 && built > rest, "built once the last mesh is up");
             Assert.Contains("if (!pm.Finished)", Text("Unity", "Rendering", "MeshUpload.cs"));
+        }
+
+        /// <summary>
+        /// docs/PERFORMANCE.md §4.1: the build thread that finishes a staged build's meshes writes each into the native mesh
+        /// data the main thread allocated for it, and the main thread makes the mesh from that, copying it in itself only
+        /// when there is none (or Unity refused it). Native data is read as the packed structs, so their sizes are the
+        /// layouts' strides.
+        /// </summary>
+        [Fact]
+        public void AStagedBuildIsWrittenIntoMeshDataOnItsBuildThread()
+        {
+            string Text(params string[] path) => System.IO.File.ReadAllText(UnityAsset.Package("com.triband.storey", path));
+            var renderer = Text("Unity", "Rendering", "SiteRenderer.cs");
+            int a = renderer.IndexOf("static int FinishParts(", System.StringComparison.Ordinal), b = renderer.IndexOf("Mesh MeshOf(", a, System.StringComparison.Ordinal);
+            Assert.True(a > 0 && b > a);
+            var finish = renderer.Substring(a, b - a);
+            Assert.True(finish.IndexOf("pm.Finish(rows[k], wallBase);", System.StringComparison.Ordinal) < finish.IndexOf("MeshUpload.Write(pm, data[k])", System.StringComparison.Ordinal), "written once finished");
+            Assert.Contains("data[k] = MeshUpload.Allocate();", renderer);
+            var upload = Text("Unity", "Rendering", "MeshUpload.cs");
+            Assert.Contains("md.SetVertexBufferParams(nv, pm.Cut != null ? Lod0Layout : LeanLayout);", upload);
+            Assert.Contains("mesh.SetVertexBufferParams(nv, pm.Cut != null ? Lod0Layout : LeanLayout);", upload);
+            Assert.Equal(24, System.Runtime.CompilerServices.Unsafe.SizeOf<PackedMesh.Vertex>());   // float3, SNorm8 × 4, UNorm8 × 4, float
+            Assert.Equal(8, System.Runtime.CompilerServices.Unsafe.SizeOf<PackedMesh.Cutaway>());   // float × 2, stream 1
         }
 
         [Fact]
