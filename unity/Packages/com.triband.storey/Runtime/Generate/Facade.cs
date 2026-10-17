@@ -120,11 +120,11 @@ namespace Triband.Storey.Generate
                 double c = Math.Max(uS + Dim.DOOR_EXT / 2 + 0.3, Math.Min(uE - Dim.DOOR_EXT / 2 - 0.3, bt * L));
                 ops.Add(New().Set(c - Dim.DOOR_EXT / 2, c + Dim.DOOR_EXT / 2, 0, Math.Min(Math.Min(2.5, h - 0.4), under), door: true, bare: true));
             }
-            var shaftHere = new List<Cores.Flush>();
+            List<Cores.Flush>? shaftHere = null;   // made only where a lift is flush with this edge
             foreach (var s in b.shafts)
             {
-                if (s.type != CoreType.Lift || !Cores.Levels(b, s).Contains(k)) continue;
-                foreach (var f in Cores.CoreFlush(Derived.OutlineAt(b, k), s)) if (f != null && f.i == i) shaftHere.Add(f);
+                if (s.type != CoreType.Lift || !Cores.Serves(b, s, k)) continue;
+                foreach (var f in Cores.CoreFlush(Derived.OutlineAt(b, k), s)) if (f != null && f.i == i) (shaftHere ??= new List<Cores.Flush>()).Add(f);
             }
             var blank = Derived.TierStart(b, k) > 0 ? b.floors[Derived.TierStart(b, k)].blank : b.blank;
             if (!blank.Contains(i))
@@ -140,7 +140,7 @@ namespace Triband.Storey.Generate
                         double u0 = c - ww / 2, u1 = c + ww / 2;
                         bool blocked = false;
                         foreach (var o in ops) if (o.door && u1 > o.u0 - 0.3 && u0 < o.u1 + 0.3) blocked = true;
-                        foreach (var f in shaftHere) if (u1 > f.s0 - 0.1 && u0 < f.s1 + 0.1) blocked = true;
+                        if (shaftHere != null) foreach (var f in shaftHere) if (u1 > f.s0 - 0.1 && u0 < f.s1 + 0.1) blocked = true;
                         if (blocked) continue;
                         ops.Add(New().Set(u0, u1, ws.y0, ws.y1, full: ws.full != null));
                     }

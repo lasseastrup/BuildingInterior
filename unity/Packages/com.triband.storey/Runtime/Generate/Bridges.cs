@@ -137,11 +137,13 @@ namespace Triband.Storey.Generate
             return o;
         }
 
-        /// <summary>The doors bridges open in building b's walls: storey, edge and position along it.</summary>
+        static readonly List<(int k, int edge, double t)> NoDoors = new List<(int, int, double)>();   // shared: read it, don't add to it
+
+        /// <summary>The doors bridges open in building b's walls: storey, edge and position along it. Read the list; don't change it.</summary>
         public static List<(int k, int edge, double t)> Doors(Site site, BuildingData b)
         {
+            if (b.bridges.Count == 0 && !site.Bridged(b.id)) return NoDoors;   // a list a wall: nothing made for none
             var o = new List<(int, int, double)>();
-            if (b.bridges.Count == 0 && !site.Bridged(b.id)) return o;
             foreach (var s in Touching(site, b))
             {
                 if (ReferenceEquals(s.A, b)) o.Add((s.br.k, s.edgeA, s.tA));

@@ -44,6 +44,9 @@ namespace Triband.Storey.Generate
 
         public static bool ShaftRoof(BuildingData b, CoreData s) => s.roof && Derived.ShaftTop(b, s) == b.floors.Count - 1 && !Roofs.IsPitched(b);
 
+        /// <summary>The shaft serves storey <paramref name="k"/> (or the roof): <see cref="Levels"/> holds it, with no list made.</summary>
+        public static bool Serves(BuildingData b, CoreData s, int k) => (k >= s.bottom && k <= Derived.ShaftTop(b, s)) || (k == b.floors.Count && ShaftRoof(b, s));
+
         public static List<int> Levels(BuildingData b, CoreData s)
         {
             var out_ = new List<int>();

@@ -642,7 +642,7 @@ namespace Triband.Storey.Generate
         {
             foreach (var s in b.shafts)
             {
-                if (!Cores.Levels(b, s).Contains(k)) continue;
+                if (!Cores.Serves(b, s, k)) continue;
                 op.Inside = rooms && k < N;
                 var f = Cores.FrameOf(b, s); double y = Derived.FloorBase(b, k); bool atRoof = k == N;
                 double[] Wl(double x0, double z0, double x1, double z1, double nx, double nz)

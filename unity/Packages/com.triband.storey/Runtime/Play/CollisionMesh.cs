@@ -69,10 +69,12 @@ namespace Triband.Storey.Play
             int N = b.floors.Count;
             // runs of the same segment up consecutive storeys: (key) -> (seg, y0, y1)
             var open = new Dictionary<(double, double, double, double, double), (Seg s, double y0, double y1)>();
+            var here = new HashSet<(double, double, double, double, double)>();   // a storey's, made once for every storey
+            var done = new List<(double, double, double, double, double)>();
             for (int k = 0; k < l0.Segs.Count; k++)
             {
                 double y0 = Derived.FloorBase(b, k), y1 = k < N ? Derived.FloorBase(b, k + 1) : y0 + RoofWallHeight;
-                var here = new HashSet<(double, double, double, double, double)>();
+                here.Clear();
                 foreach (var s in l0.Segs[k])
                 {
                     var key = (s.ax, s.az, s.bx, s.bz, s.r);
@@ -85,7 +87,8 @@ namespace Triband.Storey.Play
                     }
                 }
                 // runs that stop below this storey are done
-                foreach (var key in new List<(double, double, double, double, double)>(open.Keys))
+                done.Clear(); done.AddRange(open.Keys);
+                foreach (var key in done)
                     if (!here.Contains(key)) { var r = open[key]; Box(r.s, r.y0, r.y1); open.Remove(key); }
             }
             foreach (var r in open.Values) Box(r.s, r.y0, r.y1);
@@ -98,15 +101,17 @@ namespace Triband.Storey.Play
             double ux, uz; if (L < 1e-9) { ux = 1; uz = 0; } else { ux = dx / L; uz = dz / L; }
             double nx = -uz, nz = ux, r = s.r;
             double ax = s.ax - ux * r, az = s.az - uz * r, bx = s.bx + ux * r, bz = s.bz + uz * r;
-            int[] c = new int[8];
-            (double x, double z)[] xz = { (ax - nx * r, az - nz * r), (bx - nx * r, bz - nz * r), (bx + nx * r, bz + nz * r), (ax + nx * r, az + nz * r) };
-            for (int i = 0; i < 4; i++) { c[i] = V(xz[i].x, y0, xz[i].z); c[i + 4] = V(xz[i].x, y1, xz[i].z); }
+            // the corners, bottom then top of each, as they were made from arrays (none made now: a box a wall run)
+            int c0 = V(ax - nx * r, y0, az - nz * r), c4 = V(ax - nx * r, y1, az - nz * r);
+            int c1 = V(bx - nx * r, y0, bz - nz * r), c5 = V(bx - nx * r, y1, bz - nz * r);
+            int c2 = V(bx + nx * r, y0, bz + nz * r), c6 = V(bx + nx * r, y1, bz + nz * r);
+            int c3 = V(ax + nx * r, y0, az + nz * r), c7 = V(ax + nx * r, y1, az + nz * r);
             var u = new P3(ux, 0, uz); var n = new P3(nx, 0, nz);
-            Quad(c[0], c[1], c[5], c[4], new P3(-n.x, 0, -n.z), CollisionKind.Wall);   // the −n side
-            Quad(c[2], c[3], c[7], c[6], n, CollisionKind.Wall);                        // the +n side
-            Quad(c[1], c[2], c[6], c[5], u, CollisionKind.Wall);                        // the b end
-            Quad(c[3], c[0], c[4], c[7], new P3(-u.x, 0, -u.z), CollisionKind.Wall);   // the a end
-            Quad(c[4], c[5], c[6], c[7], Up, CollisionKind.Wall);                       // the top
+            Quad(c0, c1, c5, c4, new P3(-n.x, 0, -n.z), CollisionKind.Wall);   // the −n side
+            Quad(c2, c3, c7, c6, n, CollisionKind.Wall);                        // the +n side
+            Quad(c1, c2, c6, c5, u, CollisionKind.Wall);                        // the b end
+            Quad(c3, c0, c4, c7, new P3(-u.x, 0, -u.z), CollisionKind.Wall);   // the a end
+            Quad(c4, c5, c6, c7, Up, CollisionKind.Wall);                       // the top
         }
 
         // ---- floors ----
@@ -128,19 +133,37 @@ namespace Triband.Storey.Play
         void Floors(BuildingData b)
         {
             int N = b.floors.Count;
+            // a level's walkable area is the union of the outlines below and here, grown, less the holes open there: made
+            // once for the levels that share them, the middle storeys of a tier (docs/PERFORMANCE.md §8.7), where each made
+            // it again, a Clipper union, offset and difference apiece
+            var made = new Dictionary<(object? below, object? here, ulong holes), List<List<List<Vec2>>>>();
+            bool keyed = b.shafts.Count + b.voids.Count <= 64;
             for (int k = 0; k <= N; k++)
             {
                 // a level nobody can stand on: between two storeys with no inside (not a roof or a terrace)
                 if (k < N && Derived.ShellAt(b, k) && Derived.ShellAt(b, k - 1) && !Derived.IsSetback(b, k)) continue;
-                var outlines = new List<List<Vec2>>();
-                if (k > 0) outlines.Add(World(b, Derived.OutlineAt(b, k - 1)));   // the storey below's roof or terrace
-                if (k < N) outlines.Add(World(b, Derived.OutlineAt(b, k)));       // this storey's floor (an overhang reaches past the one below)
-                var holes = new List<List<Vec2>>();
-                foreach (var s in b.shafts) if (Cores.StairHoleAt(b, s, k)) holes.Add(HoleOf(b, s));
-                foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, k)) holes.Add(World(b, v.shape));
+                var below = k > 0 ? Derived.OutlineAt(b, k - 1) : null; var at = k < N ? Derived.OutlineAt(b, k) : null;
+                ulong open = 0;
+                if (keyed)
+                {
+                    for (int i = 0; i < b.shafts.Count; i++) if (Cores.StairHoleAt(b, b.shafts[i], k)) open |= 1UL << i;
+                    for (int i = 0; i < b.voids.Count; i++) if (Courtyards.HoleAt(b, b.voids[i], k)) open |= 1UL << (b.shafts.Count + i);
+                }
+                var key = (below as object, at as object, open);
+                if (!keyed || !made.TryGetValue(key, out var polys))
+                {
+                    var outlines = new List<List<Vec2>>();
+                    if (below != null) outlines.Add(World(b, below));   // the storey below's roof or terrace
+                    if (at != null) outlines.Add(World(b, at));         // this storey's floor (an overhang reaches past the one below)
+                    var holes = new List<List<Vec2>>();
+                    foreach (var s in b.shafts) if (Cores.StairHoleAt(b, s, k)) holes.Add(HoleOf(b, s));
+                    foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, k)) holes.Add(World(b, v.shape));
+                    // as far out as the walk model lets the player stand: slabs run out under the walls
+                    polys = Geo.GrownUnion(outlines, Dim.T_EXT + 0.02, holes);
+                    if (keyed) made[key] = polys;
+                }
                 double y = Derived.FloorBase(b, k);
-                // as far out as the walk model lets the player stand: slabs run out under the walls
-                foreach (var poly in Geo.GrownUnion(outlines, Dim.T_EXT + 0.02, holes)) Flat(poly, y, CollisionKind.Floor);
+                foreach (var poly in polys) Flat(poly, y, CollisionKind.Floor);
             }
         }
 
