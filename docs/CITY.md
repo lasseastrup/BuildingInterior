@@ -118,6 +118,7 @@ A city too big for one layout is split into districts: one Storey Site each, a s
 1. Open the district scenes alongside it and press **Add open district scenes**: each becomes a district, with its area read from its Storey Site. **Read areas** reads them again after editing.
 2. Put the district scenes in the build's scene list (the inspector warns about those missing).
 3. In Play mode, a district within **Load Radius** (300 m) of the player is loaded additively, nearest first and **Max Loading** at a time. One loaded is unloaded once it is past **Unload Radius** (400 m), and the one the player is in never is (`Districts.Plan`).
+4. A district unloaded doesn't unload its layout asset (Unity unloads a scene's assets only with `Resources.UnloadUnusedAssets`). Each site in Play mode uses its layout and its neighbours' while it is enabled (`StoreyDocumentAsset.Use` and `Release`). A layout no site uses keeps its parse while it is among the last two let go (`StoreyDocumentAsset.KeepUnused`), so a player turning back finds it parsed, and loses it after; its text stays with the asset (docs/PERFORMANCE.md §6.5).
 
 ## 6. Trying it in Unity
 

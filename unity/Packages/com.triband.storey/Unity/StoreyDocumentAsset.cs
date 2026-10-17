@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Triband.Storey.Unity
@@ -12,6 +13,11 @@ namespace Triband.Storey.Unity
     /// default one), and the model must stay engine-free to be testable headlessly, so the
     /// text is the serialized form and <see cref="Document"/> is a cache. The summary is
     /// computed at import for the inspector.
+    /// <para>In Play mode the sites using a layout say so (<see cref="Use"/>, <see cref="Release"/>): with none, the parse
+    /// is let go once the layout falls off the last few no site uses (<see cref="KeepUnused"/>), and parsed again when
+    /// asked for. A district's scene unloaded doesn't unload its assets, so every district visited kept its parse for the
+    /// session (docs/PERFORMANCE.md §6.5). The text stays: a district's scene loaded again finds this same object, and a
+    /// player can't read the text back from disk.</para>
     /// </remarks>
     public sealed class StoreyDocumentAsset : ScriptableObject
     {
@@ -65,6 +71,48 @@ namespace Triband.Storey.Unity
             var d = parse.Document;
             if (d != null) { cached = d; parse = null; }
             return d;
+        }
+
+        // the sites using each layout in Play mode, and the last few no site uses, kept parsed for a return
+        static readonly Lod.Users<StoreyDocumentAsset> users = new Lod.Users<StoreyDocumentAsset>(2);
+        static readonly List<StoreyDocumentAsset> letGo = new List<StoreyDocumentAsset>();
+
+        // a Play session without a domain reload starts with no users
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ForgetUsers() => users.Clear();
+
+        /// <summary>
+        /// How many layouts no site uses keep their parse, the last let go (2 unless set): a player turning back into a
+        /// district they just left finds it parsed. Fewer hold less memory; more parse less on a return.
+        /// </summary>
+        public static int KeepUnused
+        {
+            get => users.Keep;
+            set { users.Keep = value; users.Trim(letGo); LetGo(); }
+        }
+
+        /// <summary>How many users this layout has now: sites showing it, or using it as a neighbour's (Play mode).</summary>
+        public int Users => users.Count(this);
+
+        /// <summary>
+        /// One more user of this layout: its parse is kept until each user has called <see cref="Release"/>. Storey's sites
+        /// call both in Play mode, for their own layout and their neighbours'. Code of a project's own reading
+        /// <see cref="Document"/> over frames can too: otherwise the parse may be let go meanwhile, and asking again parses
+        /// it again, a new document.
+        /// </summary>
+        public void Use() => users.Use(this);
+
+        /// <summary>One user fewer. With none left the parse is kept while this is among the last <see cref="KeepUnused"/> layouts let go.</summary>
+        public void Release()
+        {
+            users.Release(this, letGo);
+            LetGo();
+        }
+
+        static void LetGo()
+        {
+            foreach (var a in letGo) { a.cached = null; a.parse = null; }   // a parse running finishes on its thread, unread
+            letGo.Clear();
         }
 
         internal void Set(string text, DocumentSummary s)

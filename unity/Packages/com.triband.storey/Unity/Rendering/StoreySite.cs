@@ -216,7 +216,28 @@ namespace Triband.Storey.Unity
 
         void OnEnable() { useGUILayout = false; all.Add(this); Enabled?.Invoke(this); Refresh(); }
 
-        void OnDisable() { all.Remove(this); TearDown(); }
+        void OnDisable() { all.Remove(this); TearDown(); Hold(false); }
+
+        // the layouts this site uses in Play mode, its own and its neighbours': a layout no site uses lets its parse go
+        // (docs/PERFORMANCE.md §6.5)
+        readonly List<StoreyDocumentAsset> held = new List<StoreyDocumentAsset>(), holding = new List<StoreyDocumentAsset>();
+
+        /// <summary>Use the layouts the site needs now (none when it shows nothing, or outside Play mode), and release the rest.</summary>
+        void Hold(bool showing)
+        {
+            holding.Clear();
+            if (showing && Application.isPlaying && layout != null)
+            {
+                holding.Add(layout);
+                foreach (var n in neighbours) if (n != null && n.layout != null && !holding.Contains(n.layout)) holding.Add(n.layout);
+            }
+            bool same = holding.Count == held.Count;
+            for (int i = 0; same && i < held.Count; i++) same = ReferenceEquals(held[i], holding[i]);
+            if (same) return;
+            foreach (var a in holding) a.Use();   // first: a layout in both is never let go in between
+            foreach (var a in held) a.Release();
+            held.Clear(); held.AddRange(holding);
+        }
 
         void TearDown() { Disabling?.Invoke(this); site?.Dispose(); site = null; shownJson = null; preview = null; neighboursFor = null; neighboursSeen.Clear(); }
 
@@ -233,6 +254,7 @@ namespace Triband.Storey.Unity
         public void Refresh()
         {
             using var _t = StoreyTimings.Time("site: refresh (all of the below)");
+            Hold(layout != null && opaque != null && glass != null && massing != null);
             if (layout == null || opaque == null || glass == null || massing == null) { if (site != null) TearDown(); return; }
             bool auto = lodMode == LodMode.Automatic;
             if (site != null && (builtWith[0] != opaque || builtWith[1] != glass || builtWith[2] != massing || builtAuto != auto)) TearDown();   // materials or the LOD mode changed

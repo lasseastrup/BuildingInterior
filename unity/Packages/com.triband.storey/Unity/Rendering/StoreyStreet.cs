@@ -34,10 +34,11 @@ namespace Triband.Storey.Unity
         public string remapTo = "";
 
         SiteRenderer? site;
+        StoreyDocumentAsset? held;   // the layout shown, used while it is (StoreyDocumentAsset.Use)
 
         void Start() { Rebuild(); }
 
-        void OnDestroy() { site?.Dispose(); site = null; }
+        void OnDestroy() { site?.Dispose(); site = null; held?.Release(); held = null; }
 
         void LateUpdate()
         {
@@ -50,6 +51,7 @@ namespace Triband.Storey.Unity
         public void Rebuild()
         {
             site?.Dispose(); site = null;
+            layout?.Use(); held?.Release(); held = layout;
             if (layout == null || opaque == null || glass == null || massing == null) return;
             site = new SiteRenderer(transform, opaque, glass, massing);
             foreach (var kv in remaps) site.SetRemap(kv.Key, kv.Value.original, kv.Value.overwrite);
