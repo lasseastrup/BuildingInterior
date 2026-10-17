@@ -37,9 +37,16 @@ namespace Triband.Storey.Editor
                     Undo.RecordObject(t, "Read district areas"); ReadAreas(t);
                 }
             }
-            var inBuild = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToHashSet();
-            var missing = t.districts.Where(d => d.scene.Length > 0 && !inBuild.Contains(d.scene)).Select(d => d.scene).ToList();
-            if (missing.Count > 0) EditorGUILayout.HelpBox("Not in the build's scene list, so they can't be loaded: " + string.Join(", ", missing), MessageType.Warning);
+            if (t.source == StoreyDistricts.SceneSource.BuildScenes)
+            {
+                var inBuild = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToHashSet();
+                var missing = t.districts.Where(d => d.scene.Length > 0 && !inBuild.Contains(d.scene)).Select(d => d.scene).ToList();
+                if (missing.Count > 0) EditorGUILayout.HelpBox("Not in the build's scene list, so they can't be loaded: " + string.Join(", ", missing), MessageType.Warning);
+            }
+            else if (System.Type.GetType("Triband.Storey.Addressables.AddressableDistrictScenes, Triband.Storey.Addressables") == null)
+                EditorGUILayout.HelpBox("The districts come from Addressables, but the Addressables package isn't in the project (Window ▸ Package Management ▸ Package Manager).", MessageType.Warning);
+            else
+                EditorGUILayout.HelpBox("Mark each district scene addressable, with its path as its address (the default), and keep it out of the build's scene list. Its layout is released with its bundles when the district unloads.", MessageType.Info);
             var flat = t.districts.Where(d => d.area == Vector4.zero).Select(d => d.scene).ToList();
             if (flat.Count > 0) EditorGUILayout.HelpBox("No area yet (open the scene and press Read areas): " + string.Join(", ", flat), MessageType.Info);
         }

@@ -727,7 +727,16 @@ namespace UnityEngine.SceneManagement
         public static Scene GetSceneByPath(string scenePath) => default;
         public static UnityEngine.AsyncOperation LoadSceneAsync(string sceneName, LoadSceneMode mode) => null;
         public static UnityEngine.AsyncOperation UnloadSceneAsync(string sceneName) => null;
+        public static event UnityEngine.Events.UnityAction<Scene, LoadSceneMode> sceneLoaded { add { } remove { } }
+        public static event UnityEngine.Events.UnityAction<Scene> sceneUnloaded { add { } remove { } }
     }
+}
+
+namespace UnityEngine.Events
+{
+    public delegate void UnityAction();
+    public delegate void UnityAction<T0>(T0 arg0);
+    public delegate void UnityAction<T0, T1>(T0 arg0, T1 arg1);
 }
 
 namespace Unity.Collections

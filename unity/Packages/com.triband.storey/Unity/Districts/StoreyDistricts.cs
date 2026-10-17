@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace Triband.Storey.Unity
 {
@@ -34,9 +33,19 @@ namespace Triband.Storey.Unity
         [Min(0)] public float unloadRadius = 400;
         [Tooltip("How many districts may be loading at once: a scene loading costs frames.")]
         [Range(1, 4)] public int maxLoading = 1;
+        [Tooltip("Where the district scenes come from: the build's scene list, or Addressables (add the Addressables package; a district's address is its scene's path, the address Addressables gives by default). A district unloaded through Addressables releases its scene's bundles, and with them its layout and whatever no loaded district uses; from the scene list its assets stay loaded.")]
+        public SceneSource source = SceneSource.BuildScenes;
 
-        readonly Dictionary<string, AsyncOperation> loading = new Dictionary<string, AsyncOperation>(StringComparer.Ordinal);
-        readonly Dictionary<string, AsyncOperation> unloading = new Dictionary<string, AsyncOperation>(StringComparer.Ordinal);
+        /// <summary>Where the district scenes come from.</summary>
+        public enum SceneSource { BuildScenes, Addressables }
+
+        /// <summary>
+        /// Makes the Addressables loader: set by Storey's Addressables support (the <c>Triband.Storey.Addressables</c>
+        /// assembly) when the package is in the project; null otherwise.
+        /// </summary>
+        public static Func<IDistrictScenes>? AddressablesScenes { get; set; }
+
+        IDistrictScenes? scenes; SceneSource scenesFor;
         readonly List<Lod.Districts.Area> areas = new List<Lod.Districts.Area>();
         readonly List<Lod.Districts.Load> states = new List<Lod.Districts.Load>();
         readonly List<int> toLoad = new List<int>(), toUnload = new List<int>();   // the plan, every frame, without garbage
@@ -44,32 +53,32 @@ namespace Triband.Storey.Unity
         /// <summary>Where each district's scene is now (for a loading screen or a debug overlay).</summary>
         public IReadOnlyList<Lod.Districts.Load> States => states;
 
+        void OnDisable() { (scenes as IDisposable)?.Dispose(); scenes = null; }
+
+        /// <summary>The loader for <see cref="source"/>, made when first needed; null for Addressables without the package.</summary>
+        IDistrictScenes? Scenes()
+        {
+            if (scenes != null && scenesFor == source) return scenes;
+            (scenes as IDisposable)?.Dispose(); scenes = null; scenesFor = source;
+            if (source == SceneSource.BuildScenes) scenes = new BuildSceneDistricts();
+            else if (AddressablesScenes != null) scenes = AddressablesScenes();
+            else Debug.LogError("Storey: the districts come from Addressables, but the Addressables package isn't in the project.");
+            return scenes;
+        }
+
         void Update()
         {
             if (!Application.isPlaying || districts.Count == 0) return;
             var f = focus != null ? focus : Camera.main != null ? Camera.main.transform : null;
             if (f == null) return;
+            var from = Scenes();
+            if (from == null) return;
             areas.Clear(); states.Clear();
-            foreach (var d in districts)
-            {
-                areas.Add(d.Area);
-                if (loading.TryGetValue(d.scene, out var lo)) { if (!lo.isDone) { states.Add(Lod.Districts.Load.Loading); continue; } loading.Remove(d.scene); }
-                if (unloading.TryGetValue(d.scene, out var un)) { if (!un.isDone) { states.Add(Lod.Districts.Load.Unloading); continue; } unloading.Remove(d.scene); }
-                states.Add(SceneManager.GetSceneByPath(d.scene).isLoaded ? Lod.Districts.Load.Loaded : Lod.Districts.Load.Unloaded);
-            }
+            foreach (var d in districts) { areas.Add(d.Area); states.Add(from.StateOf(d.scene)); }
             var p = f.position;
             Lod.Districts.Plan(areas, states, p.x, p.z, toLoad, toUnload, loadRadius, unloadRadius, maxLoading);
-            foreach (int i in toLoad)
-            {
-                var op = SceneManager.LoadSceneAsync(districts[i].scene, LoadSceneMode.Additive);
-                if (op == null) { Debug.LogError($"Storey: can't load district \"{districts[i].scene}\": is it in the build's scene list?"); continue; }
-                loading[districts[i].scene] = op; states[i] = Lod.Districts.Load.Loading;
-            }
-            foreach (int i in toUnload)
-            {
-                var op = SceneManager.UnloadSceneAsync(districts[i].scene);
-                if (op != null) { unloading[districts[i].scene] = op; states[i] = Lod.Districts.Load.Unloading; }
-            }
+            foreach (int i in toLoad) states[i] = from.Load(districts[i].scene) ? Lod.Districts.Load.Loading : from.StateOf(districts[i].scene);
+            foreach (int i in toUnload) if (from.Unload(districts[i].scene)) states[i] = Lod.Districts.Load.Unloading;
         }
     }
 }

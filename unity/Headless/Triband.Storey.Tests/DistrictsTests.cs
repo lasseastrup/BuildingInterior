@@ -177,5 +177,17 @@ namespace Triband.Storey.Tests
             var st = new List<Districts.Load> { Districts.Load.Loaded };
             Assert.Empty(Districts.Plan(new List<Districts.Area> { new Districts.Area(0, 0, 100, 100) }, st, 50, 50, loadRadius: 0, unloadRadius: 0).unload);
         }
+
+        /// <summary>A district whose load failed (not in the build, no such address) is neither tried again nor unloaded, and holds no loading slot.</summary>
+        [Fact]
+        public void AFailedDistrictIsLeftAlone()
+        {
+            var st = new List<Districts.Load> { Districts.Load.Failed, Districts.Load.Unloaded, Districts.Load.Unloaded };
+            var (load, unload) = Districts.Plan(Row, st, 50, 50, loadRadius: 1000, unloadRadius: 1200, maxLoading: 1);
+            Assert.Equal(new[] { 1 }, load);
+            Assert.Empty(unload);
+            (load, unload) = Districts.Plan(Row, st, 5000, 50, loadRadius: 100, unloadRadius: 200);
+            Assert.Empty(load); Assert.Empty(unload);
+        }
     }
 }

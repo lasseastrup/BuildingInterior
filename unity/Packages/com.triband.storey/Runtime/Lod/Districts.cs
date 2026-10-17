@@ -35,8 +35,8 @@ namespace Triband.Storey.Lod
             return best;
         }
 
-        /// <summary>Where a district's scene is.</summary>
-        public enum Load { Unloaded, Loading, Loaded, Unloading }
+        /// <summary>Where a district's scene is. Failed: its load failed (not in the build, no such address), and it is neither loaded nor unloaded again.</summary>
+        public enum Load { Unloaded, Loading, Loaded, Unloading, Failed }
 
         /// <summary>
         /// What to load and unload this frame. A district within <paramref name="loadRadius"/> of the point is wanted;

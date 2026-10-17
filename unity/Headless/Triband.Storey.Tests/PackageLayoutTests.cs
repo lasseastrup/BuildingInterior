@@ -314,7 +314,9 @@ namespace Triband.Storey.Tests
         /// any project that happens to have the package, including the one it was developed
         /// in, and fails at import for a consumer who does not. Only Unity's own packages are
         /// checked, because those are the ones whose assembly name does not resemble their
-        /// package name.
+        /// package name. An optional integration (Addressables) may reference one it doesn't
+        /// declare when, as with Color Pipeline, a versionDefines entry on that package switches
+        /// it off through its defineConstraints.
         /// </summary>
         [Theory, MemberData(nameof(Packages))]
         public void EveryUnityPackageReferencedIsAlsoDeclared(string package)
@@ -325,8 +327,9 @@ namespace Triband.Storey.Tests
                 foreach (var r in a.References)
                 {
                     if (!UnityPackages.TryGetValue(r, out var dep)) continue;
-                    Assert.True(p.Dependencies.Contains(dep),
-                        $"{a.Relative} references {r}, but {p.Name}/package.json does not declare {dep}.");
+                    bool gated = a.VersionDefines.Where(v => v.name == dep).Select(v => v.define).Any(a.DefineConstraints.Contains);
+                    Assert.True(p.Dependencies.Contains(dep) || gated,
+                        $"{a.Relative} references {r}, but {p.Name}/package.json does not declare {dep}, and no versionDefines entry on it gates the assembly.");
                 }
             }
         }
@@ -370,6 +373,7 @@ namespace Triband.Storey.Tests
             ["Unity.TextMeshPro"] = "com.unity.textmeshpro",
             ["UnityEngine.UI"] = "com.unity.ugui",
             ["Unity.Addressables"] = "com.unity.addressables",
+            ["Unity.ResourceManager"] = "com.unity.addressables",
         };
 
         // ---- what Unity needs beside every file ------------------------------------

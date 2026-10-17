@@ -1,0 +1,16 @@
+{
+  "name": "Triband.Storey.Addressables",
+  "rootNamespace": "Triband.Storey.Addressables",
+  "references": [
+    "Triband.Storey",
+    "Triband.Storey.Unity",
+    "Unity.Addressables",
+    "Unity.ResourceManager"
+  ],
+  "defineConstraints": ["STOREY_ADDRESSABLES"],
+  "versionDefines": [
+    { "name": "com.unity.addressables", "expression": "1.21.0", "define": "STOREY_ADDRESSABLES" }
+  ],
+  "autoReferenced": true,
+  "noEngineReferences": false
+}
