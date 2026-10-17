@@ -36,16 +36,30 @@ namespace Triband.Storey.Lod
         /// <param name="from">A point in the layout (the camera): the cells nearest it first; otherwise in the layout's order.</param>
         /// <param name="on">The threads the massings are built on: <see cref="BuildThreads.Shared"/> unless given.</param>
         public LayoutLoad(Site site, IEnumerable<BuildingData> buildings, int threads, (double x, double z)? from = null, BuildThreads? on = null)
+            : this(site, Plan(site, buildings, from), threads, on) { }
+
+        /// <summary>A load of cells planned already (<see cref="Plan"/>, on a build thread with the site: docs/PERFORMANCE.md §6.2).</summary>
+        public LayoutLoad(Site site, List<BuildingData[]> plan, int threads, BuildThreads? on = null)
         {
             this.site = site; this.on = on ?? BuildThreads.Shared;
-            var groups = buildings.GroupBy(b => { var bb = Site.BoundsOf(b); return Cells.KeyOf((bb.x0 + bb.x1) / 2, (bb.z0 + bb.z1) / 2); });
-            if (from is (double fx, double fz))
-                groups = groups.OrderBy(g => { double cx = (g.Key.x + 0.5) * Cells.Size - fx, cz = (g.Key.z + 0.5) * Cells.Size - fz; return cx * cx + cz * cz; });
-            cells = groups.Select(g => g.ToArray()).ToList();
+            cells = plan;
             made = new Task<Lod2Mesh[]>?[cells.Count];
             ahead = Math.Max(0, threads) * AheadPerThread;
-            Buildings = cells.Sum(c => c.Length);
+            int n = 0; foreach (var c in cells) n += c.Length; Buildings = n;
             Start();
+        }
+
+        /// <summary>
+        /// The buildings by cell (by the centre of each one's bounds, as the site has them), the cells nearest
+        /// <paramref name="from"/> first when given, otherwise in the layout's order. Engine-free, so a load can be planned
+        /// on a build thread straight after the layout is parsed.
+        /// </summary>
+        public static List<BuildingData[]> Plan(Site site, IEnumerable<BuildingData> buildings, (double x, double z)? from = null)
+        {
+            var groups = buildings.GroupBy(b => { var bb = site.Bounds(b); return Cells.KeyOf((bb.x0 + bb.x1) / 2, (bb.z0 + bb.z1) / 2); });
+            if (from is (double fx, double fz))
+                groups = groups.OrderBy(g => { double cx = (g.Key.x + 0.5) * Cells.Size - fx, cz = (g.Key.z + 0.5) * Cells.Size - fz; return cx * cx + cz * cz; });
+            return groups.Select(g => g.ToArray()).ToList();
         }
 
         /// <summary>The cells, and how many have been taken.</summary>

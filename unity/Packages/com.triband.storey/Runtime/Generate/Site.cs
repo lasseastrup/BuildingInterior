@@ -17,6 +17,7 @@ namespace Triband.Storey.Generate
         readonly Dictionary<string, int> index = new Dictionary<string, int>(StringComparer.Ordinal);
         readonly Dictionary<string, BuildingData> byId = new Dictionary<string, BuildingData>(StringComparer.Ordinal);
         readonly Dictionary<(int, int), List<BuildingData>> grid = new Dictionary<(int, int), List<BuildingData>>();
+        readonly (double x0, double z0, double x1, double z1)[] bounds;
         // the memos are filled as buildings are generated, which may be on several threads at once (docs/CITY.md §2)
         internal readonly ConcurrentDictionary<string, ConcurrentDictionary<long, List<Party.Range>>> partyMemo = new ConcurrentDictionary<string, ConcurrentDictionary<long, List<Party.Range>>>(StringComparer.Ordinal);
         internal readonly ConcurrentDictionary<string, BridgeSpan?> bridgeMemo = new ConcurrentDictionary<string, BridgeSpan?>(StringComparer.Ordinal);
@@ -42,12 +43,13 @@ namespace Triband.Storey.Generate
         Site(List<BuildingData> buildings, Dictionary<BuildingData, string>? keys)
         {
             Buildings = buildings; Own = buildings.Count; this.keys = keys;
+            bounds = new (double, double, double, double)[buildings.Count];
             for (int i = 0; i < buildings.Count; i++)
             {
                 var b = buildings[i];
                 index[b.id] = i; byId[b.id] = b;
                 foreach (var br in b.bridges) bridged.Add(br.to);
-                var bb = BoundsOf(b);
+                var bb = bounds[i] = BoundsOf(b);
                 for (int gx = (int)Math.Floor(bb.x0 / BGRID); gx <= (int)Math.Floor(bb.x1 / BGRID); gx++)
                     for (int gz = (int)Math.Floor(bb.z0 / BGRID); gz <= (int)Math.Floor(bb.z1 / BGRID); gz++)
                     {
@@ -124,11 +126,17 @@ namespace Triband.Storey.Generate
         /// <summary>World bounding box of every outline of a building.</summary>
         public static (double x0, double z0, double x1, double z1) BoundsOf(BuildingData b)
         {
+            // every storey's outline is the footprint or a setback's shape (Derived.OutlineAt): each looked at once, where
+            // asking every storey for its outline walked down the floors for each (quadratic in storeys; docs/PERFORMANCE.md §6.2)
             double x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9;
-            for (int k = 0; k <= b.floors.Count; k++)
-                foreach (var p in Derived.OutlineAt(b, k)) { x0 = Math.Min(x0, p.x); z0 = Math.Min(z0, p.z); x1 = Math.Max(x1, p.x); z1 = Math.Max(z1, p.z); }
+            void Add(List<Vec2> fp) { foreach (var p in fp) { x0 = Math.Min(x0, p.x); z0 = Math.Min(z0, p.z); x1 = Math.Max(x1, p.x); z1 = Math.Max(z1, p.z); } }
+            Add(b.footprint);
+            for (int k = 1; k < b.floors.Count; k++) if (b.floors[k].HasShape) Add(b.floors[k].shape);
             return (x0 + b.pos.x, z0 + b.pos.z, x1 + b.pos.x, z1 + b.pos.z);
         }
+
+        /// <summary>A building's bounds as the site was made with them (<see cref="BoundsOf"/>, once a building).</summary>
+        public (double x0, double z0, double x1, double z1) Bounds(BuildingData b) => bounds[index[b.id]];
 
         /// <summary>
         /// The buildings listed in the grid cells a box covers: every building whose box overlaps it, and some more. One

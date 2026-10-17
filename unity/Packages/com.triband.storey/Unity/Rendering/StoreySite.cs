@@ -169,8 +169,8 @@ namespace Triband.Storey.Unity
         public bool LoadOverFrames { get; set; } = true;
 
         /// <summary>The layout is still loading over frames: its text is being parsed, or some of its buildings aren't built yet.</summary>
-        public bool Loading => site != null && (parsing || site.Loading);
-        bool parsing;
+        public bool Loading => site != null && (parsing || preparing || site.Loading);
+        bool parsing, preparing;
 
         /// <summary>
         /// Show an edited layout that is not saved yet, building again what <paramref name="change"/> names (all of it
@@ -279,9 +279,16 @@ namespace Triband.Storey.Unity
             }
             // the camera before a load, so one over frames starts with the cells nearest it
             if (auto && Application.isPlaying && (pendingAll || (preview == null && shownJson != layout.Json))) EyeFor(site);
+            preparing = false;
             if (preview == null)
             {
-                if (shownJson != layout.Json && !parsing) { site.Show(layout.Document); shownJson = layout.Json; }
+                // in Play mode, loading over frames, the site index and the load plan are made on a build thread first, as the
+                // parse was (docs/PERFORMANCE.md §6.2)
+                if (shownJson != layout.Json && !parsing)
+                {
+                    if (!(Application.isPlaying && LoadOverFrames) || site.Prepare(layout.Document)) { site.Show(layout.Document); shownJson = layout.Json; }
+                    else preparing = true;
+                }
             }
             else if (pendingAll) site.Show(preview);
             else if (pending.Count > 0) site.Rebuild(preview, pending);

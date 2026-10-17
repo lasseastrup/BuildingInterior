@@ -12,6 +12,25 @@ namespace Triband.Storey.Tests
     /// </summary>
     public class DerivedTests
     {
+        [Fact]
+        public void ABuildingsBoundsAreEveryStoreysOutlines()
+        {
+            // Site.BoundsOf looks at the footprint and each setback's shape once, where it asked every storey for its outline
+            // (docs/PERFORMANCE.md §6.2): the same box
+            var docs = new[] { PrototypeJson.Read(Fixtures.Text("demo.json")).Document, PrototypeJson.Read(Fixtures.Text("variants.json")).Document };
+            var city = new StoreyDocument(); Edit.TestCity.Generate(city, 300, walkIn: true);
+            int n = 0;
+            foreach (var b in docs.SelectMany(d => d.buildings).Concat(city.buildings))
+            {
+                double x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9;
+                for (int k = 0; k <= b.floors.Count; k++)
+                    foreach (var p in Derived.OutlineAt(b, k)) { x0 = System.Math.Min(x0, p.x); z0 = System.Math.Min(z0, p.z); x1 = System.Math.Max(x1, p.x); z1 = System.Math.Max(z1, p.z); }
+                Assert.Equal((x0 + b.pos.x, z0 + b.pos.z, x1 + b.pos.x, z1 + b.pos.z), Generate.Site.BoundsOf(b));
+                n++;
+            }
+            Assert.True(n > 300);
+        }
+
         static readonly Dictionary<string, object?> Corpus = (Dictionary<string, object?>)Json.Parse(Fixtures.Text("derived.json"))!;
         static double Tol => (double)((Dictionary<string, object?>)Corpus["tolerance"]!)["absolute"]!;
 

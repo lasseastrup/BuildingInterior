@@ -245,6 +245,12 @@ namespace Triband.Storey.Unity
         bool lodBusy;
         LodStats stats;
 
+        // cells packed on a build thread, in Play mode (docs/PERFORMANCE.md §3.2): a cell shows the meshes it had until its
+        // new ones are uploaded
+        sealed class CellJob { public (int x, int z) key; public Cell cell = null!; public System.Threading.Tasks.Task<List<Cells.Packed>> task = null!; }
+        readonly List<CellJob> cellJobs = new List<CellJob>();
+        readonly List<(int x, int z)> dirtyLater = new List<(int, int)>();
+
         sealed class Cell
         {
             public readonly SortedDictionary<int, Built> members = new SortedDictionary<int, Built>();
@@ -331,7 +337,48 @@ namespace Triband.Storey.Unity
         public string District { get; set; } = "";
         public List<(List<BuildingData> buildings, string district, double dx, double dz)> Neighbours { get; } = new List<(List<BuildingData>, string, double, double)>();
 
-        Site NewSite(StoreyDocument doc) => Neighbours.Count == 0 ? new Site(doc.buildings) : Site.WithContext(doc.buildings, District, Neighbours);
+        Site NewSite(StoreyDocument doc) => MakeSite(doc, District, Neighbours);
+
+        static Site MakeSite(StoreyDocument doc, string district, List<(List<BuildingData> buildings, string district, double dx, double dz)> neighbours) =>
+            neighbours.Count == 0 ? new Site(doc.buildings) : Site.WithContext(doc.buildings, district, neighbours);
+
+        // a layout's site index and load plan, made on a build thread ahead of Show (docs/PERFORMANCE.md §6.2)
+        sealed class Prepared
+        {
+            public StoreyDocument doc = null!; public string district = "";
+            public List<(List<BuildingData> buildings, string district, double dx, double dz)> neighbours = null!;
+            public System.Threading.Tasks.Task<(Site site, List<BuildingData[]> plan)> task = null!;
+        }
+        Prepared? prepared;
+
+        /// <summary>
+        /// Make a layout's site index (every building's bounds, its grid, the neighbouring districts' buildings along the
+        /// edge) and its load plan on a build thread, ahead of <see cref="Show"/>: false until they are made, then
+        /// <see cref="Show"/> takes them, where it made them on the main thread (18 ms for 3,000 buildings headless; docs/
+        /// PERFORMANCE.md §6.2). Set <see cref="District"/> and <see cref="Neighbours"/> first. True at once with the fixed
+        /// LOD, which plans no load.
+        /// </summary>
+        public bool Prepare(StoreyDocument doc)
+        {
+            if (lods == null) return true;
+            if (prepared != null && ReferenceEquals(prepared.doc, doc) && SameNeighbours(prepared)) return prepared.task.IsCompleted;
+            var neighbours = new List<(List<BuildingData>, string, double, double)>(Neighbours); string district = District;   // copies: a build thread reads them
+            var o = parent.position;
+            (double, double)? from = Eye is LodEye eye ? (eye.position.x - o.x, eye.position.z - o.z) : ((double, double)?)null;
+            prepared = new Prepared
+            {
+                doc = doc, district = district, neighbours = neighbours,
+                task = BuildThreads.Shared.Run(() => { var made = MakeSite(doc, district, neighbours); return (made, LayoutLoad.Plan(made, doc.buildings, from)); }, BuildLane.Load),
+            };
+            return prepared.task.IsCompleted;
+        }
+
+        bool SameNeighbours(Prepared p)
+        {
+            if (p.district != District || p.neighbours.Count != Neighbours.Count) return false;
+            for (int i = 0; i < Neighbours.Count; i++) if (!p.neighbours[i].Equals(Neighbours[i])) return false;
+            return true;
+        }
 
         /// <summary>The automatic LOD's camera this frame. Null keeps every building at the LOD it shows.</summary>
         public LodEye? Eye { get; set; }
@@ -476,7 +523,7 @@ namespace Triband.Storey.Unity
         public bool LoadOverFrames { get; set; } = true;
 
         /// <summary>The layout is still loading over frames: some of its buildings are not built yet.</summary>
-        public bool Loading => load != null;
+        public bool Loading => load != null || cellJobs.Count > 0;
         LayoutLoad? load;
 
         /// <summary>Build everything again.</summary>
@@ -501,7 +548,12 @@ namespace Triband.Storey.Unity
                     blockSize = 0; site = null; return;
                 }
             }
-            site = NewSite(doc);
+            // the site index and the load plan, made on a build thread ahead when they were asked for this layout (Prepare)
+            (Site site, List<BuildingData[]> plan)? ready = null;
+            if (prepared != null && ReferenceEquals(prepared.doc, doc) && SameNeighbours(prepared) && prepared.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion)
+                ready = prepared.task.Result;
+            prepared = null;
+            using (StoreyTimings.Time("site: index the layout")) site = ready?.site ?? NewSite(doc);
             book?.Dispose();
             book = new ColorRowBook(new ColorResolver(site), palette, table);
             foreach (var kv in remaps) book.SetRemap(kv.Key, kv.Value.original, kv.Value.overwrite);
@@ -510,7 +562,8 @@ namespace Triband.Storey.Unity
             // every building's (docs/CITY.md §7), built on the workers ahead of the cell being taken. A massing reaching
             // into another cell only has that one merged again
             var o = parent.position;
-            load = new LayoutLoad(site, doc.buildings, Threads, Eye is LodEye eye ? (eye.position.x - o.x, eye.position.z - o.z) : ((double, double)?)null);
+            load = ready != null ? new LayoutLoad(site, ready.Value.plan, Threads)
+                : new LayoutLoad(site, doc.buildings, Threads, Eye is LodEye eye ? (eye.position.x - o.x, eye.position.z - o.z) : ((double, double)?)null);
             if (!(first && LoadOverFrames && Application.isPlaying)) TakeLoad(null);
         }
 
@@ -525,7 +578,7 @@ namespace Triband.Storey.Unity
             while (l.TryTake(sw == null, out var bs, out var made))
             {
                 for (int i = 0; i < bs.Length; i++) Build(bs[i], made[i]);
-                MergeCells();
+                MergeCells(sw == null);
                 if (sw != null && sw.Elapsed.TotalMilliseconds > budget) break;
             }
             if (!l.Done) return;
@@ -1045,7 +1098,8 @@ namespace Triband.Storey.Unity
                 }
                 stats.lod0Vertices = shownV; stats.lod0VerticesInView = viewV; stats.roomsShown = roomsShown;
             }
-            MergeCells();
+            if (cellJobs.Count > 0) made = TakeCells(sw, made);
+            MergeCells(false);
             int shown = 0, pieces = 0;
             foreach (var c in cells.Values)
             {
@@ -1063,7 +1117,7 @@ namespace Triband.Storey.Unity
                 pieces += c.renderers.Count;
             }
             var (r0, r1) = l.Resident();
-            lodBusy = fading || queued > 0 || jobs.Count > 0 || load != null;
+            lodBusy = fading || queued > 0 || jobs.Count > 0 || load != null || cellJobs.Count > 0;
             stats.loading = load != null ? load.Count - load.Taken : 0;
             stats.buildings = built.Count; stats.resident0 = r0; stats.resident1 = r1;
             stats.cells = cells.Count; stats.cellMeshes = pieces; stats.cellsShown = shown;
@@ -1071,36 +1125,93 @@ namespace Triband.Storey.Unity
             budgetSpent += sw.Elapsed.TotalMilliseconds;
         }
 
-        /// <summary>The cells a building was built into, rebuilt in or removed from, merged again.</summary>
-        void MergeCells()
+        /// <summary>
+        /// The cells a building was built into, rebuilt in or removed from, merged again. In Play mode with build threads
+        /// they are packed on one (<paramref name="now"/> false; docs/PERFORMANCE.md §3.2) and uploaded in a later frame
+        /// within the budget (<see cref="TakeCells"/>); a cell whose pack is still under way is merged again once it is in.
+        /// </summary>
+        void MergeCells(bool now)
         {
-            foreach (var key in dirtyCells) BuildCell(key);
+            if (dirtyCells.Count == 0) return;
+            bool later = !now && Application.isPlaying && lods != null && BuildThreads.Shared.Count > 0;
+            foreach (var key in dirtyCells)
+            {
+                if (later && Packing(key)) { dirtyLater.Add(key); continue; }
+                BuildCell(key, later);
+            }
             dirtyCells.Clear();
+            foreach (var key in dirtyLater) dirtyCells.Add(key);
+            dirtyLater.Clear();
+        }
+
+        bool Packing((int x, int z) key)
+        {
+            foreach (var j in cellJobs) if (j.key == key && cells.TryGetValue(key, out var c) && ReferenceEquals(c, j.cell)) return true;
+            return false;
         }
 
         /// <summary>
         /// A cell's massings merged again (a member was built, rebuilt or removed). Once merged, the members' massings are
         /// let go: the cell's meshes hold them. A member's is made again when its cell is next merged (docs/CITY.md §7).
+        /// <paramref name="later"/>: packed on a build thread, uploaded when it is done.
         /// </summary>
-        void BuildCell((int x, int z) key)
+        void BuildCell((int x, int z) key, bool later = false)
         {
             using var _t = StoreyTimings.Time("site: cells merged");
             StoreyTimings.Count("cells merged");
             if (!cells.TryGetValue(key, out var c)) return;
+            if (c.members.Count == 0) { KillCell(c); cells.Remove(key); return; }
+            c.order = c.members.Keys.ToArray();
+            var members = new List<Cells.Member>(c.members.Count);
+            foreach (var bt in c.members.Values) members.Add(new Cells.Member(MassingOf(bt), bt.idx + 2 * Lod1.LOD_TAG, bt.rowMap!));
+            // the massings go into the packed cell, and their lists to the next ones built (a member's is made again from the
+            // layout when its cell is merged again)
+            foreach (var bt in c.members.Values) bt.l2 = null;
+            bool half = MeshUpload.HalfMassing;
+            if (later) { cellJobs.Add(new CellJob { key = key, cell = c, task = BuildThreads.Shared.Run(() => PackCell(members, half), BuildLane.Load) }); return; }
+            UploadCell(key, c, PackCell(members, half));
+        }
+
+        /// <summary>A cell's members packed straight into the upload's layout, in chunks that go back once uploaded (no merged lists in between); their massings given back. Engine-free: any thread.</summary>
+        static List<Cells.Packed> PackCell(List<Cells.Member> members, bool half)
+        {
+            var pieces = Cells.Pack(members, half);
+            foreach (var m in members) m.Mesh.Recycle();
+            return pieces;
+        }
+
+        void KillCell(Cell c)
+        {
             foreach (var r in c.renderers) if (r != null) Kill(r.gameObject);
             foreach (var m in c.meshes) Kill(m);
             c.renderers.Clear(); c.meshes.Clear();
-            if (c.members.Count == 0) { cells.Remove(key); return; }
-            c.order = c.members.Keys.ToArray();
+        }
+
+        /// <summary>
+        /// The cells packed on the build threads, uploaded within the budget (one a frame at least). One whose members
+        /// changed meanwhile is let go (it is merged again), as is one of a layout no longer shown.
+        /// </summary>
+        int TakeCells(System.Diagnostics.Stopwatch sw, int made)
+        {
+            for (int i = 0; i < cellJobs.Count; i++)
+            {
+                var j = cellJobs[i]; if (!j.task.IsCompleted) continue;
+                bool current = cells.TryGetValue(j.key, out var c) && ReferenceEquals(c, j.cell) && !dirtyCells.Contains(j.key);
+                bool ok = current && j.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion;
+                if (ok && made > 0 && sw.Elapsed.TotalMilliseconds > budget) continue;   // next frame
+                cellJobs.RemoveAt(i--);
+                if (j.task.IsFaulted) { var ex = j.task.Exception!; Debug.LogException(ex.InnerException ?? ex); continue; }
+                if (!ok) { if (j.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion) foreach (var p in j.task.Result) p.Release(); continue; }
+                using (StoreyTimings.Time("site: cells uploaded")) UploadCell(j.key, c!, j.task.Result);
+                made++;
+            }
+            return made;
+        }
+
+        void UploadCell((int x, int z) key, Cell c, List<Cells.Packed> pieces)
+        {
+            KillCell(c);
             if (cellRoot == null) { cellRoot = new GameObject("Cells") { hideFlags = flags, layer = layer }; cellRoot.transform.SetParent(parent, false); }
-            var members = new List<Cells.Member>(c.members.Count);
-            foreach (var bt in c.members.Values) members.Add(new Cells.Member(MassingOf(bt), bt.idx + 2 * Lod1.LOD_TAG, bt.rowMap!));
-            // packed straight into the upload's layout, in chunks that go back once uploaded (no merged lists in between)
-            var pieces = Cells.Pack(members, MeshUpload.HalfMassing);
-            // the massings are in the packed cell now: their lists go to the next ones built (a member's is made again from
-            // the layout when its cell is merged again)
-            foreach (var m in members) m.Mesh.Recycle();
-            foreach (var bt in c.members.Values) bt.l2 = null;
             for (int i = 0; i < pieces.Count; i++)
             {
                 string name = $"Cell {key.x},{key.z}" + (pieces.Count > 1 ? $" ({i + 1})" : "");
@@ -1335,8 +1446,12 @@ namespace Triband.Storey.Unity
             FinishBake(true, discard: true);
             foreach (var b in built.Values) Release(b);
             built.Clear(); byIdx.Clear();
-            foreach (var key in new List<(int, int)>(cells.Keys)) { cells[key].members.Clear(); BuildCell(key); }
+            foreach (var c in cells.Values) KillCell(c);
             cells.Clear(); dirtyCells.Clear();
+            foreach (var j in cellJobs)
+                j.task.ContinueWith(t => { if (t.Status == System.Threading.Tasks.TaskStatus.RanToCompletion) foreach (var p in t.Result) p.Release(); },
+                    System.Threading.CancellationToken.None, System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously, System.Threading.Tasks.TaskScheduler.Default);
+            cellJobs.Clear();
             lods?.Clear();
             // what they make is for the old layout: they finish unread, and give their packed meshes' chunks back
             foreach (var j in jobs)

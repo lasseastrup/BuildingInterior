@@ -146,6 +146,8 @@ Detail is uploaded on the main thread "for up to 6 ms a frame, at least one when
 - Six milliseconds is 36 % of a 60 fps frame. AAA streaming budgets on the main thread are typically 1 to 2 ms at 60 fps; make the budget per tier, and count it per mesh part. Carry the remaining parts to the next frame and show the building when all have arrived.
 - `TakeLoad` (a load over frames) and `MergeCells` share the same clock; `Cells.Pack` runs on the main thread in `BuildCell` (`SiteRenderer.cs:901`). Moving the packing to the build threads (the row map is known once the rows are written) leaves only the upload.
 
+Status: `Cells.Pack` runs on the build threads in Play mode (CHANGELOG); a cell keeps its meshes until its new ones are uploaded, within the budget.
+
 ### 3.3 Per-frame loops that could be event-driven (low to medium)
 
 - `UpdateSteady` (`SiteRenderer.cs:115-149`) runs for every live site before every render context. It visits every building's three renderer lists and calls `Steady.Of` for every member of every cell, about 3,000 calls on the test city, whether or not anything changed. The inputs change only when a building's state row changes (LodManager's `Changed`), its occluder slot changes, or the active or isolated building changes. Keep a dirty set from those and re-evaluate only those buildings and their cells. Guard it with the frame count as well, so a frame with several render calls evaluates once.
@@ -258,6 +260,8 @@ Recommendation (S–M):
 - Build the `Site` and the cell plan on the build thread straight after the parse; both are engine-free.
 - Cache each building's bounds and tier starts once.
 - With neighbours, see §6.3.
+
+Status: done (CHANGELOG). In Play mode, loading over frames, the site index and the load plan are made on a build thread after the parse (`SiteRenderer.Prepare`, `LayoutLoad.Plan`): 6.5–7 ms and 2.3–3 ms for 3,000 buildings headless, off the main thread. `Site.BoundsOf` reads each distinct outline once (2.3 ms for 3,000 buildings, from 7.5), and the site keeps the bounds (`Site.Bounds`). The colour-row book stays on the main thread (it writes the building table). Tier starts are left as they are: with the bounds no longer quadratic, the per-storey walks that remain are within single storeys' work.
 
 ### 6.3 Neighbouring districts are parsed whole for a few edge buildings (high in a streamed city)
 
