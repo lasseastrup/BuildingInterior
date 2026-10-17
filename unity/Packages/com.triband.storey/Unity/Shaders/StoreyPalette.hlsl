@@ -29,14 +29,32 @@ StructuredBuffer<uint>  _StoreyDetailColors; // per facade-detail colour (slot -
 float4 _StoreyTableSize;
 #endif
 
-// Color Pipeline 2.1.11's SampleColorPalette: flat index = remap row * width + palette index. The width kept off zero and
-// the texel inside the texture: until Color Pipeline binds its atlas, both are whatever Unity has bound in its place
-float4 StoreyAtlas(uint i)
+// The atlas's width and size, found once for several lookups (StoreyStyleColors). A width that is a power of two (Color
+// Pipeline's 512, Storey's own palette's) is split by a shift and a mask: an integer divide or modulo by a value the
+// compiler can't see is hundreds of clocks on Apple's GPUs (docs/PERFORMANCE.md §7.4). The width kept off zero and the
+// texel inside the texture: until Color Pipeline binds its atlas, both are whatever Unity has bound in its place
+struct StoreyAtlasSize { uint w, shift, tw, th; bool pow2; };
+
+StoreyAtlasSize StoreyAtlasSizeNow()
 {
-    uint w = max(_ColorAtlasWidth, 1u), tw, th;
-    _GlobalColorPaletteTex.GetDimensions(tw, th);
-    return LOAD_TEXTURE2D(_GlobalColorPaletteTex, int2(min(i % w, max(tw, 1u) - 1u), min(i / w, max(th, 1u) - 1u)));
+    StoreyAtlasSize a;
+    a.w = max(_ColorAtlasWidth, 1u);
+    a.pow2 = (a.w & (a.w - 1u)) == 0u;
+    a.shift = firstbithigh(a.w);
+    _GlobalColorPaletteTex.GetDimensions(a.tw, a.th);
+    return a;
 }
+
+// Color Pipeline 2.1.11's SampleColorPalette: flat index = remap row * width + palette index
+float4 StoreyAtlasAt(uint i, StoreyAtlasSize a)
+{
+    uint x, y;
+    [branch] if (a.pow2) { x = i & (a.w - 1u); y = i >> a.shift; }   // the same for every pixel of a draw: a real branch
+    else { x = i % a.w; y = i / a.w; }
+    return LOAD_TEXTURE2D(_GlobalColorPaletteTex, int2(min(x, max(a.tw, 1u) - 1u), min(y, max(a.th, 1u) - 1u)));
+}
+
+float4 StoreyAtlas(uint i) { return StoreyAtlasAt(i, StoreyAtlasSizeNow()); }
 
 // Entry e of a colour row: the low (even e) or high half of word e / 2 (ColorRows.Pack on the CPU). An e past the row
 // reads its last entry, not the next row's (or past the buffer's end); a row past the table (from a vertex), its last row
@@ -56,6 +74,24 @@ float3 StoreyPaletteColor(uint row, uint slot, float tone)
     uint detail = _StoreyDetailColors[min(slot >= STOREY_ROW_SLOTS ? slot - STOREY_ROW_SLOTS : 0u, STOREY_DETAIL_COLORS - 1u)];
     uint index = slot < STOREY_ROW_SLOTS ? StoreyRowEntry(row, slot) : detail;
     return StoreyAtlas(StoreyRowEntry(row, STOREY_REMAP_ENTRY) * _ColorAtlasWidth + index).rgb * tone;
+}
+
+// A style's four facade colours at once, shaded, for the massing's every pixel (StoreyFacade.hlsl): wall, trim, roof and
+// glass are entries 0, 1, 4 and 6 of the colour row, all four in its first uint4, and the remap row (entry 23) is the
+// high half of its third uint4's w (ColorRows.Pack). Two buffer loads where four StoreyPaletteColor lookups made eight,
+// and four detail-colour loads that a style's slot never uses, besides finding the atlas's size once, not four times
+// (docs/PERFORMANCE.md §7.4). A row past the table reads its last row.
+void StoreyStyleColors(uint row, float4 tones, out float3 wall, out float3 trim, out float3 roof, out float3 glass)
+{
+    row = min(row, (uint)max((int)_StoreyTableSize.z - 1, 0));
+    uint4 slots = _StoreyColors[row * 3];
+    uint4 last = _StoreyColors[row * 3 + 2];
+    StoreyAtlasSize a = StoreyAtlasSizeNow();
+    uint base = (last.w >> 16) * _ColorAtlasWidth;
+    wall = StoreyAtlasAt(base + (slots.x & 0xFFFF), a).rgb * tones.x;
+    trim = StoreyAtlasAt(base + (slots.x >> 16), a).rgb * tones.y;
+    roof = StoreyAtlasAt(base + (slots.z & 0xFFFF), a).rgb * tones.z;
+    glass = StoreyAtlasAt(base + (slots.w & 0xFFFF), a).rgb * tones.w;
 }
 
 // The LOD0/LOD1 vertex colour attribute (UNorm8 x 4): row low byte, row high byte, slot, shade x 128

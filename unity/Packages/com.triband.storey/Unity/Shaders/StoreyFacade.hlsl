@@ -25,9 +25,9 @@ float4 StoreyParam(float slot, int i) { return _StoreyParams[clamp((int)(slot + 
 float3 StoreyFacadeColor(float4 fac, float2 fac2, float slot)
 {
     float fu = fwidth(fac.x), fv = fwidth(fac.y);
-    float4 c0 = StoreyParam(slot, 0); uint row = (uint)(c0.x + 0.5);
-    float3 wall = StoreyPaletteColor(row, 0, c0.y), trim = StoreyPaletteColor(row, 1, c0.z);
-    float3 glass = StoreyPaletteColor(row, 6, c0.w), roof = StoreyPaletteColor(row, 4, StoreyParam(slot, 1).x);   // ColorSlot Wall, Trim, Glass, Roof
+    float4 c0 = StoreyParam(slot, 0);
+    float3 wall, trim, roof, glass;   // ColorSlot Wall, Trim, Roof, Glass, each with its shade
+    StoreyStyleColors((uint)(c0.x + 0.5), float4(c0.y, c0.z, StoreyParam(slot, 1).x, c0.w), wall, trim, roof, glass);
     float kind = fac2.y;   // 1 facade, 2 roof, 3 trim, 4 plain wall
     if (kind > 1.5) return kind < 2.5 ? roof : (kind < 3.5 ? trim : wall);
     float4 sp = StoreyParam(slot, 4), run = StoreyParam(slot, 5);   // sp.x: gap for full-width styles (<0: fixed width), y: width, z: sill, w: head
