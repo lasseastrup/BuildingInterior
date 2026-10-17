@@ -322,8 +322,15 @@ namespace Triband.Storey
         public static (ulong value0, ulong value1) Parts(string id)
         {
             if (!IsPaletteId(id)) throw new System.FormatException($"\"{id}\" is not a palette id");
-            return (ulong.Parse(id.Substring(0, 16), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture),
-                    ulong.Parse(id.Substring(16), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture));
+            return (Hex64(id, 0), Hex64(id, 16));
+        }
+
+        // sixteen hex digits from s[from], read in place: no substring to parse (docs/PERFORMANCE.md §6.8)
+        static ulong Hex64(string s, int from)
+        {
+            ulong v = 0;
+            for (int i = from; i < from + 16; i++) { char c = s[i]; v = v << 4 | (uint)(c <= '9' ? c - '0' : (c | 0x20) - 'a' + 10); }
+            return v;
         }
 
         /// <summary>A CSS literal as <c>#RRGGBB</c> in capitals: <c>#abc</c> and <c>#AABBCC</c> are one colour.</summary>

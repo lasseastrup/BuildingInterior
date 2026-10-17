@@ -78,7 +78,9 @@ namespace Triband.Storey.Tests
             Assert.Equal(256 - ColorRows.Entries, Define(palette, "STOREY_DETAIL_COLORS"));
             // the growing tables' sizes go up with their buffers, in the order the shaders read them (x wall ids, y
             // parameter rows, z colour rows)
-            Assert.Matches(new Regex(@"SetGlobalVector\(StoreyShaderIds\.TableSize,\s*new Vector4\(Wall\.Length,\s*Params\.Length\s*/\s*ParamTexels,\s*Colors\.Length\s*/\s*Generate\.ColorRows\.Words"), table);
+            Assert.Matches(new Regex(@"SetGlobalVector\(StoreyShaderIds\.TableSize,\s*new Vector4\(Wall\.Length,\s*Params\.Length\s*/\s*ParamTexels,\s*Colors\.Length\s*/\s*Generate\.ColorRows\.Uint4s"), table);
+            // a colour row is three of the buffer's elements, uint4s, as the shaders read it (_StoreyColors[row * 3 + …])
+            Assert.Matches(new Regex(@"public struct ColorWords \{ public uint x, y, z, w; \}"), table);
             foreach (var src in new[] { occlusion, palette, facade }) Assert.Contains("float4 _StoreyTableSize;", src);
         }
 

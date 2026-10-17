@@ -563,6 +563,9 @@ namespace Triband.Storey.Unity
             using (StoreyTimings.Time("site: index the layout")) site = ready?.site ?? NewSite(doc);
             book?.Dispose();
             book = new ColorRowBook(new ColorResolver(site), palette, table);
+            // the table's rows for the layout, made once where they doubled as the load went: a building has three massing
+            // rows and one colour row in the test cities (more grow the tables as before; docs/PERFORMANCE.md §6.8)
+            table.Reserve(doc.buildings.Count * 3 + 64, doc.buildings.Count + 64);
             foreach (var kv in remaps) book.SetRemap(kv.Key, kv.Value.original, kv.Value.overwrite);
             if (lods == null) { foreach (var b in doc.buildings) Build(b); carry.Clear(); return; }
             // cell by cell, each merged as soon as its buildings are built: a few cells' massings are held at a time, not

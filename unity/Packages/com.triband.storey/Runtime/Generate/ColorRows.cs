@@ -106,6 +106,9 @@ namespace Triband.Storey.Generate
         /// <summary>Color Pipeline 2.1.11's atlas width; the shaders address the same way.</summary>
         public const int Capacity = 512;
         readonly Dictionary<string, int> byHex = new Dictionary<string, int>(StringComparer.Ordinal);
+        // the reference as a layout writes it: the same few strings come again and again, and normalising one made a new
+        // string every time (4 MB a 3,000-building load, docs/PERFORMANCE.md §6.8)
+        readonly Dictionary<string, int> byRef = new Dictionary<string, int>(StringComparer.Ordinal);
 
         /// <summary>Linear colours by index.</summary>
         public readonly List<Rgb> Colors = new List<Rgb>();
@@ -126,12 +129,16 @@ namespace Triband.Storey.Generate
 
         public int IndexOf(string colorRef)
         {
+            if (byRef.TryGetValue(colorRef, out int i)) return i;
             if (ColorRef.IsPaletteId(colorRef))
                 throw new FormatException($"palette id {colorRef} needs Color Pipeline; the built-in palette knows CSS colours only");
             string key = ColorRef.Normalise(colorRef);
-            if (byHex.TryGetValue(key, out int i)) return i;
-            if (Colors.Count == Capacity) throw new InvalidOperationException($"the built-in palette is full ({Capacity} colours)");
-            i = Colors.Count; byHex[key] = i; Colors.Add(Generate.Colors.Col(key)); Version++;
+            if (!byHex.TryGetValue(key, out i))
+            {
+                if (Colors.Count == Capacity) throw new InvalidOperationException($"the built-in palette is full ({Capacity} colours)");
+                i = Colors.Count; byHex[key] = i; Colors.Add(Generate.Colors.Col(key)); Version++;
+            }
+            byRef[colorRef] = i;
             return i;
         }
     }

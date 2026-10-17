@@ -40,13 +40,16 @@ namespace Triband.Storey.ColorPipeline
             ColorMappingManager.OnMappingsInvalidated += Raise;
         }
 
-        void Raise() { memo.Clear(); Invalidated?.Invoke(); }
+        void Raise() { memo.Clear(); ids.Clear(); Invalidated?.Invoke(); }
 
         // colour reference -> palette index. Color Pipeline finds an id by walking the palette, twice a lookup, and a
         // colour row asks for every slot of every style: thousands of walks an edit. A remembered id is checked against
         // the palette before it is used (an entry moved or deleted is looked up again); a CSS colour's nearest entry is
         // kept until the palette changes size or Color Pipeline invalidates its mappings.
         readonly Dictionary<string, int> memo = new Dictionary<string, int>(StringComparer.Ordinal);
+        // a palette id's index with its parsed id, which checks the entry is still there: it was parsed on every lookup,
+        // hit or not (docs/PERFORMANCE.md §6.8)
+        readonly Dictionary<string, (int at, SerializableGUID id)> ids = new Dictionary<string, (int, SerializableGUID)>(StringComparer.Ordinal);
         ColorPaletteDefinition? memoFor; int memoCount = -1;
         public void Dispose() => ColorMappingManager.OnMappingsInvalidated -= Raise;
 
@@ -68,12 +71,12 @@ namespace Triband.Storey.ColorPipeline
         public int IndexOf(string colorRef)
         {
             var palette = Palette; var list = palette.Colors;
-            if (!ReferenceEquals(palette, memoFor) || list.Count != memoCount) { memo.Clear(); memoFor = palette; memoCount = list.Count; }
+            if (!ReferenceEquals(palette, memoFor) || list.Count != memoCount) { memo.Clear(); ids.Clear(); memoFor = palette; memoCount = list.Count; }
+            if (ids.TryGetValue(colorRef, out var known) && known.at < list.Count && list[known.at].ID == known.id) return known.at;
             if (ColorRef.IsPaletteId(colorRef))
             {
                 var id = Guid(colorRef);
-                if (memo.TryGetValue(colorRef, out int at) && at < list.Count && list[at].ID == id) return at;
-                for (int i = 0; i < list.Count; i++) if (list[i].ID == id) { memo[colorRef] = i; return i; }
+                for (int i = 0; i < list.Count; i++) if (list[i].ID == id) { ids[colorRef] = (i, id); return i; }
                 return 0;   // a deleted entry: palette colour 0, quietly
             }
             if (memo.TryGetValue(colorRef, out int hit)) return hit;

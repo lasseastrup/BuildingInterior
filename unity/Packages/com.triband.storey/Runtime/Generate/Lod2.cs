@@ -29,10 +29,27 @@ namespace Triband.Storey.Generate
         /// </summary>
         public double[] GpuTexels(int colorRow)
         {
+            Check();
+            return new[] { colorRow, wall.tone, trim.tone, glass.tone, roof.tone, 0, 0, 0, band[0], band[1], band[2], band[3], 0, 0, 0, 0, spec[0], spec[1], spec[2], spec[3], run[0], run[1], run[2], run[3] };
+        }
+
+        /// <summary>
+        /// <see cref="GpuTexels(int)"/> as the table stores them, floats, into <paramref name="into"/> (24 of them): the table
+        /// writes a row without an array of its own (docs/PERFORMANCE.md §6.8).
+        /// </summary>
+        public void GpuTexels(int colorRow, Span<float> into)
+        {
+            Check();
+            into[0] = colorRow; into[1] = (float)wall.tone; into[2] = (float)trim.tone; into[3] = (float)glass.tone;
+            into[4] = (float)roof.tone; into[5] = 0; into[6] = 0; into[7] = 0;
+            for (int i = 0; i < 4; i++) { into[8 + i] = (float)band[i]; into[12 + i] = 0; into[16 + i] = (float)spec[i]; into[20 + i] = (float)run[i]; }
+        }
+
+        void Check()
+        {
             if (wall.slot != ColorSlot.Wall || trim.slot != ColorSlot.Trim || glass.slot != ColorSlot.Glass || roof.slot != ColorSlot.Roof
                 || !trim.style.Equals(wall.style) || !glass.style.Equals(wall.style) || !roof.style.Equals(wall.style))
                 throw new InvalidOperationException("a parameter row's colours must be the wall, trim, glass and roof of one style");
-            return new[] { colorRow, wall.tone, trim.tone, glass.tone, roof.tone, 0, 0, 0, band[0], band[1], band[2], band[3], 0, 0, 0, 0, spec[0], spec[1], spec[2], spec[3], run[0], run[1], run[2], run[3] };
         }
     }
 

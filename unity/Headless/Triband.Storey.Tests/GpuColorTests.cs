@@ -89,12 +89,31 @@ namespace Triband.Storey.Tests
                 }
         }
 
+        /// <summary>The building table writes a row's texels straight from the row, as floats: the same values, no garbage (docs/PERFORMANCE.md §6.8).</summary>
+        [Theory, MemberData(nameof(Files))]
+        public void MassingRowsGoIntoTheTableAsTheirTexels(string file)
+        {
+            var doc = PrototypeJson.Read(Fixtures.Text(file)).Document; var site = new Site(doc.buildings);
+            var into = new float[24]; var rows = new List<ParamRow>();
+            foreach (var b in doc.buildings) rows.AddRange(Lod2.Build(site, b).Rows);
+            foreach (var row in rows)
+            {
+                row.GpuTexels(37, into);
+                Assert.Equal(row.GpuTexels(37).Select(x => (float)x), into);
+            }
+            Assert.True(rows.Count > 20, $"{rows.Count} rows");
+            long a0 = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 100; i++) foreach (var row in rows) row.GpuTexels(i, into);
+            Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - a0);
+        }
+
         [Fact]
         public void AParameterRowMixingStylesIsRefused()
         {
             var a = new Palette(new StyleRef(0, 0)); var b = new Palette(new StyleRef(1, 0));
             var row = new ParamRow { wall = a.wall, trim = b.trim, glass = a.glassDark, roof = a.roof };
             Assert.Throws<InvalidOperationException>(() => row.GpuTexels(0));
+            Assert.Throws<InvalidOperationException>(() => row.GpuTexels(0, new float[24]));
         }
 
         /// <summary>StoreyPalette.hlsl and StoreyFacade.hlsl hard-code these numbers.</summary>
@@ -171,6 +190,21 @@ namespace Triband.Storey.Tests
             Assert.Throws<FormatException>(() => p.IndexOf("0123456789abcdef0123456789abcdef"));
             for (int i = 2; i < HexPaletteIndex.Capacity; i++) p.IndexOf($"#{i:X6}");
             Assert.Throws<InvalidOperationException>(() => p.IndexOf("#FEDCBA"));
+        }
+
+        /// <summary>A reference the palette has seen is found again as the layout writes it, not normalised anew each time (docs/PERFORMANCE.md §6.8).</summary>
+        [Fact]
+        public void TheHexPaletteFindsAReferenceAgainWithoutGarbage()
+        {
+            var p = new HexPaletteIndex();
+            string[] refs = { "#abc", "#AABBCC", "#aabbcc", "#112233", "#abc" };
+            Assert.Equal(new[] { 0, 0, 0, 1, 0 }, refs.Select(p.IndexOf));
+            Assert.Equal(new[] { 0, 0, 0, 1, 0 }, refs.Select(p.IndexOf));
+            Assert.Equal(2, p.Version);
+            Assert.Equal(2, p.Colors.Count);
+            long a0 = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 1000; i++) foreach (var r in refs) p.IndexOf(r);
+            Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - a0);
         }
     }
 }

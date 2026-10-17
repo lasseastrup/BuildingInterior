@@ -76,8 +76,15 @@ namespace Triband.Storey.Unity
         public Vector4[] WallData { get; private set; } = new Vector4[WallIdsStart];
         /// <summary>LOD2 parameter rows: wall, trim, glass, roof colours, window spec, run data.</summary>
         public Vector4[] Params { get; private set; } = new Vector4[ParamRowsStart * ParamTexels];
-        /// <summary>Colour rows: per style, the palette index of each slot and the remap row, 24 16-bit entries in 12 words.</summary>
-        public uint[] Colors { get; private set; } = new uint[ColorRowsStart * Generate.ColorRows.Words];
+        /// <summary>
+        /// Colour rows: per style, the palette index of each slot and the remap row, 24 16-bit entries in 12 words, three of
+        /// the buffer's 16-byte elements a row, so a changed row goes up alone (docs/PERFORMANCE.md §6.8).
+        /// </summary>
+        public ColorWords[] Colors { get; private set; } = new ColorWords[ColorRowsStart * Generate.ColorRows.Uint4s];
+
+        /// <summary>Four words of a colour row: one of the colour buffer's elements (a <c>uint4</c> to the shaders).</summary>
+        public struct ColorWords { public uint x, y, z, w; }
+        readonly uint[] packed = new uint[Generate.ColorRows.Words];
         /// <summary>
         /// Palette indices of facade-detail model colours (slots 24 and up), none set until detail models exist. One for every
         /// slot a vertex's byte can name: the shaders read it for every colour (StoreyPalette.hlsl), and on Metal a read past
@@ -89,11 +96,11 @@ namespace Triband.Storey.Unity
         GraphicsBuffer wall, wallData, prms, colors;   // these grow (WallIdsStart, ParamRowsStart)
         // what changed since the last upload, chunk by chunk: a frame uploads a few kilobytes, not every buffer whole
         readonly Lod.DirtyChunks stateDirty = new Lod.DirtyChunks(MaxBuildings, 64), wallDirty = new Lod.DirtyChunks(WallIdsStart, 256),
-            wallDataDirty = new Lod.DirtyChunks(WallIdsStart, 64), paramsDirty = new Lod.DirtyChunks(ParamRowsStart * ParamTexels, 16 * ParamTexels);
-        // partial uploads only where an array element is a buffer element; the colour rows (words in 16-byte elements,
-        // written on loads and edits only) go up whole
+            wallDataDirty = new Lod.DirtyChunks(WallIdsStart, 64), paramsDirty = new Lod.DirtyChunks(ParamRowsStart * ParamTexels, 16 * ParamTexels),
+            colorsDirty = new Lod.DirtyChunks(ColorRowsStart * Generate.ColorRows.Uint4s, 16 * Generate.ColorRows.Uint4s);
+        // partial uploads only where an array element is a buffer element
         readonly Lod.DirtyChunks occDirty = new Lod.DirtyChunks(OccSlots * OccWidth, OccWidth);   // a chunk an occluder slot
-        bool colorsDirty = true, detailsDirty = true;
+        bool detailsDirty = true;
         readonly List<(int start, int count)> runs = new List<(int, int)>();
 
         // free lists, as the prototype keeps them
@@ -111,7 +118,7 @@ namespace Triband.Storey.Unity
             occ = new GraphicsBuffer(GraphicsBuffer.Target.Structured, OccSlots * OccWidth, 16);
             wall = new GraphicsBuffer(GraphicsBuffer.Target.Structured, WallIdsStart, 4);
             wallData = new GraphicsBuffer(GraphicsBuffer.Target.Structured, WallIdsStart, 16);
-            stateDirty.MarkAll(); occDirty.MarkAll(); wallDirty.MarkAll(); wallDataDirty.MarkAll(); paramsDirty.MarkAll();
+            stateDirty.MarkAll(); occDirty.MarkAll(); wallDirty.MarkAll(); wallDataDirty.MarkAll(); paramsDirty.MarkAll(); colorsDirty.MarkAll();
             prms = new GraphicsBuffer(GraphicsBuffer.Target.Structured, ParamRowsStart * ParamTexels, 16);
             colors = new GraphicsBuffer(GraphicsBuffer.Target.Structured, ColorRowsStart * Generate.ColorRows.Uint4s, 16);
             details = new GraphicsBuffer(GraphicsBuffer.Target.Structured, DetailColors.Length, 4);
@@ -174,18 +181,43 @@ namespace Triband.Storey.Unity
         public int WriteRow(Generate.ParamRow row, int colorRow)
         {
             int x = freeRow.Count > 0 ? freeRow.Pop() : nextRow++;
-            if ((x + 1) * ParamTexels > Params.Length)
-            {
-                // full: twice the size, a new buffer of it next upload
-                var grown = new Vector4[Params.Length * 2]; Array.Copy(Params, grown, Params.Length); Params = grown;
-                prms.Dispose(); prms = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Params.Length, 16);
-                paramsDirty.Grow(Params.Length);
-                if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"parameter table grown to {Params.Length / ParamTexels:N0} rows");
-            }
-            var t = row.GpuTexels(colorRow); int o = x * ParamTexels;
-            for (int i = 0; i < ParamTexels; i++) Params[o + i] = new Vector4((float)t[i * 4], (float)t[i * 4 + 1], (float)t[i * 4 + 2], (float)t[i * 4 + 3]);
+            if ((x + 1) * ParamTexels > Params.Length) GrowParams(x + 1);
+            Span<float> t = stackalloc float[ParamTexels * 4];   // the row's texels, no array of their own (docs/PERFORMANCE.md §6.8)
+            row.GpuTexels(colorRow, t); int o = x * ParamTexels;
+            for (int i = 0; i < ParamTexels; i++) Params[o + i] = new Vector4(t[i * 4], t[i * 4 + 1], t[i * 4 + 2], t[i * 4 + 3]);
             paramsDirty.Mark(o, ParamTexels);
             return x;
+        }
+
+        // full: doubled until it holds rows, a new buffer of it next upload
+        void GrowParams(int rows)
+        {
+            int n = Params.Length; while (n < rows * ParamTexels) n *= 2;
+            if (n == Params.Length) return;
+            var grown = new Vector4[n]; Array.Copy(Params, grown, Params.Length); Params = grown;
+            prms.Dispose(); prms = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Params.Length, 16);
+            paramsDirty.Grow(Params.Length);
+            if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"parameter table grown to {Params.Length / ParamTexels:N0} rows");
+        }
+
+        void GrowColors(int rows)
+        {
+            int n = Colors.Length; while (n < rows * Generate.ColorRows.Uint4s) n *= 2;
+            if (n == Colors.Length) return;
+            var grown = new ColorWords[n]; Array.Copy(Colors, grown, Colors.Length); Colors = grown;
+            colors.Dispose(); colors = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Colors.Length, 16);
+            colorsDirty.Grow(Colors.Length);
+            if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"colour table grown to {Colors.Length / Generate.ColorRows.Uint4s:N0} rows");
+        }
+
+        /// <summary>
+        /// Room for this many more parameter and colour rows than are in use, made at once: a layout loading sizes the tables
+        /// once, where they doubled as it went, each doubling a new buffer and a copy (docs/PERFORMANCE.md §6.8).
+        /// </summary>
+        public void Reserve(int paramRows, int colorRows)
+        {
+            GrowParams(nextRow + paramRows);
+            GrowColors(nextColorRow + colorRows);
         }
         public void ReleaseRow(int row) => freeRow.Push(row);
 
@@ -193,13 +225,7 @@ namespace Triband.Storey.Unity
         public int AllocColorRow()
         {
             int x = freeColorRow.Count > 0 ? freeColorRow.Pop() : nextColorRow++;
-            if ((x + 1) * Generate.ColorRows.Words > Colors.Length)
-            {
-                var grown = new uint[Colors.Length * 2]; Array.Copy(Colors, grown, Colors.Length); Colors = grown;
-                colors.Dispose(); colors = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Colors.Length * 4 / 16, 16);
-                colorsDirty = true;
-                if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"colour table grown to {Colors.Length / Generate.ColorRows.Words:N0} rows");
-            }
+            if ((x + 1) * Generate.ColorRows.Uint4s > Colors.Length) GrowColors(x + 1);
             return x;
         }
         public void ReleaseColorRow(int row) => freeColorRow.Push(row);
@@ -207,8 +233,11 @@ namespace Triband.Storey.Unity
         /// <summary>A style's palette indices (in <see cref="Generate.ColorSlot"/> order) and its remap's atlas row (0 = none).</summary>
         public void WriteColorRow(int row, int[] paletteIndices, int remapRow)
         {
-            Generate.ColorRows.Pack(paletteIndices, remapRow, Colors, row * Generate.ColorRows.Words);
-            colorsDirty = true;
+            Generate.ColorRows.Pack(paletteIndices, remapRow, packed, 0);
+            int o = row * Generate.ColorRows.Uint4s;
+            for (int q = 0; q < Generate.ColorRows.Uint4s; q++)
+                Colors[o + q] = new ColorWords { x = packed[q * 4], y = packed[q * 4 + 1], z = packed[q * 4 + 2], w = packed[q * 4 + 3] };
+            colorsDirty.Mark(o, Generate.ColorRows.Uint4s);
         }
 
         // ---- writes ---------------------------------------------------------------------------
@@ -243,7 +272,7 @@ namespace Triband.Storey.Unity
             Send(wall, Wall, wallDirty);
             Send(wallData, WallData, wallDataDirty);
             Send(prms, Params, paramsDirty);
-            if (colorsDirty) { colors.SetData(Colors); colorsDirty = false; }
+            Send(colors, Colors, colorsDirty);
             if (detailsDirty) { details.SetData(DetailColors); detailsDirty = false; }
             Shader.SetGlobalBuffer(StoreyShaderIds.State, state);
             Shader.SetGlobalBuffer(StoreyShaderIds.Occ, occ);
@@ -254,7 +283,7 @@ namespace Triband.Storey.Unity
             Shader.SetGlobalBuffer(StoreyShaderIds.DetailColors, details);
             // with the buffers, their sizes: the shaders keep every index inside them, a vertex's own ids too (on Metal a read
             // past a buffer's end can fault the GPU, StoreyOcclusion.hlsl)
-            Shader.SetGlobalVector(StoreyShaderIds.TableSize, new Vector4(Wall.Length, Params.Length / ParamTexels, Colors.Length / Generate.ColorRows.Words, 0));
+            Shader.SetGlobalVector(StoreyShaderIds.TableSize, new Vector4(Wall.Length, Params.Length / ParamTexels, Colors.Length / Generate.ColorRows.Uint4s, 0));
         }
 
         /// <summary>The changed chunks of one buffer, uploaded.</summary>

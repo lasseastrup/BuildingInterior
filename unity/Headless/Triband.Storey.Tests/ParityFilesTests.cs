@@ -64,6 +64,29 @@ namespace Triband.Storey.Tests
             Assert.Throws<FormatException>(() => ColorRef.Parts("#FFFFFF"));
         }
 
+        /// <summary>An id is read in place, without substrings (docs/PERFORMANCE.md §6.8): the halves <c>ulong.Parse</c> gives, in any case.</summary>
+        [Fact]
+        public void PaletteIdsAreReadInPlace()
+        {
+            var rnd = new Random(7); var bytes = new byte[16];
+            for (int i = 0; i < 2000; i++)
+            {
+                rnd.NextBytes(bytes);
+                ulong a = i == 0 ? 0 : i == 1 ? ulong.MaxValue : BitConverter.ToUInt64(bytes, 0), b = i == 0 ? ulong.MaxValue : i == 1 ? 0 : BitConverter.ToUInt64(bytes, 8);
+                string id = ColorRef.PaletteId(a, b);
+                string mixed = string.Concat(id.Select((c, k) => k % 3 == 0 ? char.ToUpperInvariant(c) : c));
+                var want = (ulong.Parse(id.Substring(0, 16), System.Globalization.NumberStyles.HexNumber), ulong.Parse(id.Substring(16), System.Globalization.NumberStyles.HexNumber));
+                Assert.Equal((a, b), want);
+                Assert.Equal(want, ColorRef.Parts(id));
+                Assert.Equal(want, ColorRef.Parts(id.ToUpperInvariant()));
+                Assert.Equal(want, ColorRef.Parts(mixed));
+            }
+            string one = "629f6fbed82c07cde3e70682c2094cac"; ColorRef.Parts(one);
+            long a0 = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 100; i++) ColorRef.Parts(one);
+            Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - a0);
+        }
+
         [Fact]
         public void TheEntriesMatchTheBlock()
         {

@@ -337,6 +337,18 @@ Fixes:
 - Size `Params` and `Colors` from the layout at load.
 - Upload colour rows by dirty range instead of whole.
 
+Status: done (CHANGELOG). The built-in palette remembers each reference as the layout writes it, and Color Pipeline's remembers each palette id with the id it parsed, which checks the entry is still there: an id is parsed only on a miss, and in place (`ColorRef.Parts`, no substrings). A parameter row's texels go into the table from the stack (`ParamRow.GpuTexels`' span overload). A layout sizes both tables once as it loads (`BuildingTable.Reserve`: three parameter rows and one colour row a building, the test cities' ratio, and a margin; a layout with more grows them as before). Colour rows go up by the chunks that changed, three of the buffer's elements a row (`BuildingTable.ColorWords`). Headless, for the 3,000-building test city:
+
+| | Before | After |
+|---|---|---|
+| Colour rows, built-in palette | 16.8 ms, 5.6 MB | 7.1 ms, 1.0 MB |
+| Colour rows, palette ids (Color Pipeline's lookup, emulated) | 63.2 ms, 10.2 MB | 13.9 ms, 2.8 MB |
+| Texels | 1.9 MB | none |
+| Parameter table | four doublings to 16,384 rows: 2.9 MB, four GPU buffers | made once at 16,384 rows: 1.6 MB, one buffer |
+| Colour rows uploaded | the whole table at every change | the changed chunks |
+
+What the colour rows still make is a row's palette indices and the book's maps (about 340 bytes a row). The emulated Color Pipeline lookup leaves out walking the palette on a miss, which happens once a palette id.
+
 ### 6.9 Smaller items
 
 - **Block allocation.** `IndexBlocks` is first-fit with one block per site (`IndexBlocks.cs:21-41`). Load two 3,000-building sites and unload the first, and a 3,500-building site is refused with 5,176 indices free. Streaming random 50–300-building districts near the 8,176 cap refused 192 of 10,097 loads. Use best-fit or several blocks per site. Low impact at district sizes.
