@@ -309,11 +309,11 @@ namespace Triband.Storey.Unity
                 if (cam != null) { var c = cam.transform.position; b.Append(" cam ").Append(F1(c.x)).Append(',').Append(F1(c.y)).Append(',').Append(F1(c.z)); }
             }
             // renderers given their steady copy or their own material again (each re-registered by the GPU Resident Drawer), made,
-            // and LOD0 rooms switched on or off
-            if (SiteRenderer.SteadySwaps > 0 || SiteRenderer.RenderersMade > 0 || SiteRenderer.RoomsSwitched > 0)
+            // kept from a drop and given a new mesh, and LOD0 rooms switched on or off
+            if (SiteRenderer.SteadySwaps > 0 || SiteRenderer.RenderersMade > 0 || SiteRenderer.RenderersReused > 0 || SiteRenderer.RoomsSwitched > 0)
             {
-                b.Append(" | swaps ").Append(SiteRenderer.SteadySwaps).Append(" new ").Append(SiteRenderer.RenderersMade).Append(" rooms switched ").Append(SiteRenderer.RoomsSwitched);
-                SiteRenderer.SteadySwaps = SiteRenderer.RenderersMade = SiteRenderer.RoomsSwitched = 0;
+                b.Append(" | swaps ").Append(SiteRenderer.SteadySwaps).Append(" new ").Append(SiteRenderer.RenderersMade).Append(" reused ").Append(SiteRenderer.RenderersReused).Append(" rooms switched ").Append(SiteRenderer.RoomsSwitched);
+                SiteRenderer.SteadySwaps = SiteRenderer.RenderersMade = SiteRenderer.RenderersReused = SiteRenderer.RoomsSwitched = 0;
             }
             b.Append(" | heap ").Append(GC.GetTotalMemory(false) >> 20).Append("MB");
             if (systemMemory.Valid || totalMemory.Valid || gfxMemory.Valid)

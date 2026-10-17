@@ -180,6 +180,16 @@ Recommendations:
 - **Steady material swaps.** A building starting or ending a cross-fade, entering or leaving the camera's way, or becoming the active building swaps `sharedMaterial` on its renderers. Under the GPU Resident Drawer a material swap re-registers the renderer in full, on the main thread at PostLateUpdate: its instances are freed and recreated, its data uploaded again and the batches rebuilt [R1]. Every LOD transition costs two swaps per renderer (fade start and end). Count them during a fast walk and profile `GPUResidentDrawer` there; at a few per second the cost is small.
 - `StoreySite` has an `OnGUI` (the stats overlay). IMGUI calls it for every GUI event every frame even when the overlay is off [CPU-9]. Move the overlay to a development-only component.
 
+Status: done, except the steady swaps, which stay as they are (CHANGELOG).
+- **Building roots.** A building's object is made with its first collider; the detail objects no longer sit under it. With a collider cap of 64, that is at most 64 building objects, where the test city made 3,007 at load.
+- **The per-building record.** `Built` keeps its per-LOD lists in a `Parts` object, made with the building's first renderer and let go with its last.
+- **Pooled detail objects.** Each detail mesh's object comes from a pool when it can (up to 256 kept per site), under one `Detail` object of the site's, so it is never moved between hierarchies. A drop switches the object off, takes its mesh from it and keeps it. Storey Diagnostics counts the objects made against those reused ("new" and "reused").
+- **Hierarchy capacity.** The site's transform hierarchy gets room at each load (`SiteRenderer.Reserve`): its cells (about one per ten buildings), the detail objects the residency caps allow, and the colliders' objects. With the fixed LOD it is four objects a building.
+- **Names.** Objects and meshes are named after their building in the editor and in development builds only. A release player names them "LOD0", "LOD1", "LOD0 glass", "LOD0 rooms", "LOD2", "Cell", "Collision" and "Building", so no string is built per mesh.
+- **Stats overlay.** It is a component of its own (`StoreyLodStatsOverlay`), added in Play mode while **Show Lod Stats** is on. `StoreySite` has no `OnGUI`.
+- **Steady swaps.** Still counted in Storey Diagnostics' "swaps"; a profile of the GPU Resident Drawer in a fast walk is still to do on the device.
+- **Meshes** are still made per build (§4.3).
+
 ### 3.5 Colliders on the main thread
 
 The design is right: collision meshes made on the workers, cooked in an `IJobParallelFor` with `Physics.BakeMesh`, and assigned with the same cooking options so nothing is cooked twice (`SiteRenderer.cs:1007-1076`). Remaining costs:
@@ -215,6 +225,8 @@ This is already lean (Plan §6.5). If the minimum tier's memory binds, two furth
 ### 4.3 Meshes and objects are not reused
 
 Every detail build creates `Mesh` objects and every drop destroys them. Mesh creation is cheap next to the copy, but pooling the part objects (§3.4) and keeping their meshes (`SetVertexBufferParams` reallocates as needed) removes managed-wrapper churn and keeps the GPU Resident Drawer's mesh registrations stable.
+
+Status: the part objects are pooled (§3.4). The meshes are still made per build: an uploaded mesh's CPU copy is released (`UploadMeshData(true)`), so it can't take the next build's data in place.
 
 ## 5. The building table and shader globals
 

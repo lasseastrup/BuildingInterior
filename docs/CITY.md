@@ -133,7 +133,7 @@ A city too big for one layout is split into districts: one Storey Site each, a s
 
 ## 7. Memory
 
-What a Storey Site holds, measured headlessly (.NET 8, not Unity) by replaying the renderer's Play-mode load frame by frame with its engine-free code, then the allocation test's five-minute walk. Each figure is the C# live set after a full collection, the GPU's meshes and building table in the formats uploaded, and the colliders' meshes. PhysX's cooked copies of the colliders aren't counted, nor Unity's own objects (a GameObject per building and per mesh). MB = 2²⁰ bytes.
+What a Storey Site holds, measured headlessly (.NET 8, not Unity) by replaying the renderer's Play-mode load frame by frame with its engine-free code, then the allocation test's five-minute walk. Each figure is the C# live set after a full collection, the GPU's meshes and building table in the formats uploaded, and the colliders' meshes. PhysX's cooked copies of the colliders aren't counted, nor Unity's own objects (a GameObject per detail mesh and per cell piece, kept for reuse, and per building with a collider). MB = 2²⁰ bytes.
 
 | | First view loaded | After the walk | Peak |
 |---|---|---|---|

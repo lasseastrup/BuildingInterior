@@ -84,5 +84,30 @@ namespace Triband.Storey.Tests
             Assert.True(rest > 0 && built > rest, "built once the last mesh is up");
             Assert.Contains("if (!pm.Finished)", Text("Unity", "Rendering", "MeshUpload.cs"));
         }
+
+        [Fact]
+        public void ABuildingsObjectsAreMadeForItsDetailAndColliderAloneAndKept()
+        {
+            // docs/PERFORMANCE.md §3.4: a building's own object comes with its first collider, not at load; a detail mesh's
+            // object is one kept from a drop when there is one, under the site's detail object, and a drop keeps it with
+            // no mesh (taken from it before the mesh goes); the stats overlay is a component of its own
+            string Text(params string[] path) => System.IO.File.ReadAllText(UnityAsset.Package("com.triband.storey", path));
+            var renderer = Text("Unity", "Rendering", "SiteRenderer.cs");
+            string Method(string start, string next)
+            {
+                int a = renderer.IndexOf(start, System.StringComparison.Ordinal); Assert.True(a > 0, start);
+                int b = renderer.IndexOf(next, a, System.StringComparison.Ordinal); Assert.True(b > a, next);
+                return renderer.Substring(a, b - a);
+            }
+            Assert.DoesNotContain("new GameObject", Method("void Build(BuildingData b, Lod2Mesh? made = null)", "int[] WriteRows("));
+            Assert.DoesNotContain("new GameObject", Method("void Add(Built bt, int which,", "PartObject TakeObject("));
+            Assert.Contains("TakeObject(name)", Method("void Add(Built bt, int which,", "PartObject TakeObject("));
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(renderer, @"Root\(bt\)"));
+            Assert.Contains("Root(bt).AddComponent<MeshCollider>()", renderer);
+            var drop = Method("void DropDetail(Built bt, int which)", "/// <summary>");
+            Assert.True(drop.IndexOf("FreeObject(o)", System.StringComparison.Ordinal) < drop.IndexOf("Kill(m)", System.StringComparison.Ordinal), "the objects let go of their meshes first");
+            Assert.Contains("o.renderer.enabled = false; o.filter.sharedMesh = null;", renderer);
+            Assert.DoesNotContain("OnGUI", Text("Unity", "Rendering", "StoreySite.cs"));
+        }
     }
 }

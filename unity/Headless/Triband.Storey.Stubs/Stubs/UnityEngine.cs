@@ -625,6 +625,9 @@ namespace UnityEngine
         public Matrix4x4 worldToLocalMatrix => default;
         public void SetParent(Transform parent, bool worldPositionStays) { }
         public bool IsChildOf(Transform parent) => false;
+        public Transform root => this;
+        public int hierarchyCount => 1;
+        public int hierarchyCapacity { get; set; }
         public Vector3 TransformPoint(Vector3 position) => position;
     }
 

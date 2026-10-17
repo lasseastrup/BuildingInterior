@@ -32,7 +32,7 @@ namespace Triband.Storey.Unity
         public StoreyQualitySettings? quality;
         [Tooltip("Tint by LOD, as the prototype's stats card does.")]
         public bool lodTint;
-        [Tooltip("Automatic LOD: show its numbers (LOD counts, resident meshes, cells, build time) in the Game view, and in the Scene view while the site is selected.")]
+        [Tooltip("Automatic LOD: show its numbers (LOD counts, resident meshes, cells, build time) in the Game view in Play mode, and in the Scene view while the site is selected.")]
         public bool showLodStats;
         [Tooltip("Give every building a MeshCollider from a collision mesh of its floors, stairs, walls and roofs, for physics characters and raycasts. Storey's own play kit walks without them.")]
         public bool generateColliders = true;
@@ -214,9 +214,9 @@ namespace Triband.Storey.Unity
         /// <summary><see cref="All"/> as the set itself, for a loop every frame (the interface boxes its enumerator).</summary>
         internal static HashSet<StoreySite> AllSet => all;
 
-        void OnEnable() { useGUILayout = false; all.Add(this); Enabled?.Invoke(this); Refresh(); }
+        void OnEnable() { all.Add(this); Enabled?.Invoke(this); Refresh(); }
 
-        void OnDisable() { all.Remove(this); TearDown(); Hold(false); }
+        void OnDisable() { all.Remove(this); TearDown(); Hold(false); if (overlay != null) overlay.enabled = false; }
 
         // the layouts this site uses in Play mode, its own and its neighbours': a layout no site uses lets its parse go
         // (docs/PERFORMANCE.md §6.5)
@@ -242,14 +242,18 @@ namespace Triband.Storey.Unity
 
         void TearDown() { Disabling?.Invoke(this); site?.Dispose(); site = null; shownJson = null; preview = null; neighboursFor = null; neighboursSeen.Clear(); }
 
-        void OnGUI()
+        // the numbers in the Game view: a component of their own while shown, in Play mode (docs/PERFORMANCE.md §3.4)
+        StoreyLodStatsOverlay? overlay;
+
+        void LateUpdate()
         {
-            if (!showLodStats || LodStats is not SiteRenderer.LodStats st) return;
-            GUI.Box(new Rect(10, 10, 400, 76), "");
-            GUI.Label(new Rect(18, 14, 390, 72), st.ToString());
+            bool show = showLodStats && Application.isPlaying;
+            if (show && overlay == null) { overlay = gameObject.AddComponent<StoreyLodStatsOverlay>(); overlay.hideFlags = HideFlags.HideAndDontSave; overlay.site = this; }
+            if (overlay != null && overlay.enabled != show) overlay.enabled = show;
+            Refresh();
         }
 
-        void LateUpdate() => Refresh();
+        void OnDestroy() { if (overlay != null) Destroy(overlay); }
 
         /// <summary>Build what is out of date and set this frame's globals. Edit mode calls it on every scene update.</summary>
         public void Refresh()
