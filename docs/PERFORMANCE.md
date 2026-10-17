@@ -805,6 +805,8 @@ Status: the performance run is in (CHANGELOG): **Storey Performance Run** (the p
 - the cutaway's work per storey;
 - the footprint's allocation.
 
+Status: in the suite, all but the cutaway's (§10.1, with its fix). `BackFaceTests` casts the rays. `CityBenchTests.ReadingTheCitysLayoutFitsItsBudget` reads the 3,000-building test city under 38 MB of garbage (34.5 MB) and 600 ms (133–200 ms headless). `CityBenchTests.ShowingTheCityHoldsItsFrameBriefly` keeps the Show frame's own work, with the index and the plan made ahead, under 4 ms (0.23 ms; 6.6 ms with them made in the frame). `FirstMeetingTests.AFootprintMakesLittleGarbage` keeps a footprint under 24 KB (2.4 KB).
+
 ## 15. Roadmap
 
 Ordered so that each step is measured by the one before it. Effort: S under a day, M a few days, L a week or more.

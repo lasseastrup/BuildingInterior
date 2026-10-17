@@ -53,6 +53,66 @@ namespace Triband.Storey.Tests
             Assert.True(merge < 3000, "the cells in under 3 s");
         }
 
+        /// <summary>
+        /// Reading the city's layout (docs/PERFORMANCE.md §6.1, §14): on a build thread, but its garbage is collected with
+        /// every thread stopped, the main thread's too. 34.5 MB and 133–163 ms when the reader stopped making a path per
+        /// element (25.6 MB of it the JSON tree); it made 57.8 MB in 210–237 ms.
+        /// </summary>
+        [Fact]
+        public void ReadingTheCitysLayoutFitsItsBudget()
+        {
+            var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document; TestCity.Generate(d, 3000);
+            var text = PrototypeJson.Write(d);
+            PrototypeJson.Read(text);   // warm up
+            long a0 = GC.GetAllocatedBytesForCurrentThread(); PrototypeJson.Read(text); long made = GC.GetAllocatedBytesForCurrentThread() - a0;
+            double best = double.MaxValue;
+            for (int i = 0; i < 3; i++) { var sw = Stopwatch.StartNew(); PrototypeJson.Read(text); best = Math.Min(best, sw.Elapsed.TotalMilliseconds); }
+            log.WriteLine($"{d.buildings.Count} buildings, {text.Length / 1048576.0:0.0} M characters: read in {best:0} ms, {made / 1048576.0:0.0} MB allocated");
+            Assert.True(made < 38L << 20, $"{made / 1048576.0:0.0} MB: reading makes no garbage per element beyond the tree");
+            Assert.True(best < 600, $"{best:0} ms");
+        }
+
+        sealed class Rows : IColorRowSink
+        {
+            int next;
+            public int AllocColorRow() => next++;
+            public void ReleaseColorRow(int row) { }
+            public void WriteColorRow(int row, int[] paletteIndices, int remapRow) { }
+        }
+
+        /// <summary>
+        /// The frame a layout is shown in (docs/PERFORMANCE.md §6.2, §14): in Play mode, loading over frames, the site index
+        /// and the load plan are made on a build thread first (<c>SiteRenderer.Prepare</c>), so the frame only makes the
+        /// colour-row book and starts the load. Made in the frame, the index and the plan held it 9–10 ms.
+        /// </summary>
+        [Fact]
+        public void ShowingTheCityHoldsItsFrameBriefly()
+        {
+            var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document; TestCity.Generate(d, 3000);
+            var threads = new BuildThreads(2);
+            try
+            {
+                double frame = double.MaxValue, inFrame = double.MaxValue;
+                for (int i = 0; i < 3; i++)
+                {
+                    var site = new Site(d.buildings); var plan = LayoutLoad.Plan(site, d.buildings, (0, 0));   // Prepare, on a build thread
+                    var sw = Stopwatch.StartNew();
+                    var book = new ColorRowBook(new ColorResolver(site), new HexPaletteIndex(), new Rows());
+                    var load = new LayoutLoad(site, plan, threads.Count, threads);
+                    frame = Math.Min(frame, sw.Elapsed.TotalMilliseconds);
+                    while (load.TryTake(true, out _, out _)) { }
+                    GC.KeepAlive(book);
+                    sw.Restart();
+                    var unprepared = new Site(d.buildings); var all = new LayoutLoad(unprepared, d.buildings, threads.Count, (0, 0), threads);
+                    inFrame = Math.Min(inFrame, sw.Elapsed.TotalMilliseconds);
+                    while (all.TryTake(true, out _, out _)) { }
+                }
+                log.WriteLine($"{d.buildings.Count} buildings: the Show frame's own work {frame:0.00} ms; with the index and the plan made in it {inFrame:0.0} ms");
+                Assert.True(frame < 4, $"{frame:0.00} ms");
+            }
+            finally { threads.Resize(0); }
+        }
+
         [Fact]
         public void ADetailBuildFitsTheFrameBudget()
         {
