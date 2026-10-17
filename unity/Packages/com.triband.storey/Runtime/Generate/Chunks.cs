@@ -120,12 +120,18 @@ namespace Triband.Storey.Generate
 
         public ref T this[int i]
         {
+            // inlined, with the throw apart: a throw with its message in the getter (string.Format and boxing) kept the
+            // compiler from inlining it, and packing reads every vertex through it (docs/PERFORMANCE.md §8.2)
+            [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
             get
             {
-                if ((uint)i >= (uint)count) throw new ArgumentOutOfRangeException(nameof(i), $"{i} of {count}");
+                if ((uint)i >= (uint)count) OutOfRange(i, count);
                 return ref chunks[i >> Chunks.Shift][i & Chunks.Mask];
             }
         }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        static void OutOfRange(int i, int count) => throw new ArgumentOutOfRangeException(nameof(i), $"{i} of {count}");
 
         T IReadOnlyList<T>.this[int i] => this[i];
 

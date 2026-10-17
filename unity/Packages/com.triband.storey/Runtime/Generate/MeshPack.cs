@@ -57,6 +57,14 @@ namespace Triband.Storey.Generate
         public int Verts { get; }
         public int Indices { get; }
 
+        // the bounds taken by the caller as it wrote the vertices (MeshPack's single pass)
+        internal PackedMesh(ChunkList<Vertex> v, ChunkList<Cutaway>? cut, ChunkList<ushort>? i16, int[]? i32, int indices, StyleRef[] styles,
+            float x0, float y0, float z0, float x1, float y1, float z1)
+        {
+            V = v; Cut = cut; I16 = i16; I32 = i32; Styles = styles; Verts = v.Count; Indices = indices;
+            X0 = x0; Y0 = y0; Z0 = z0; X1 = x1; Y1 = y1; Z1 = z1;
+        }
+
         internal PackedMesh(ChunkList<Vertex> v, ChunkList<Cutaway>? cut, ChunkList<ushort>? i16, int[]? i32, int indices, StyleRef[] styles)
         {
             V = v; Cut = cut; I16 = i16; I32 = i32; Styles = styles; Verts = v.Count; Indices = indices;
@@ -178,12 +186,18 @@ namespace Triband.Storey.Generate
             // a bad index crashes natively on the GPU: a managed exception here, where it says which
             if (ni % 3 != 0) throw new InvalidOperationException($"{ni} indices is not whole triangles");
             var I = gb.I;
-            for (int i = 0; i < ni; i++) if ((uint)I[i] >= (uint)nv) throw new InvalidOperationException($"index {I[i]} of {nv} vertices");
 
             var pk = packers.Take();
             pk.Start(gb, windows, mates);
             try
             {
+                if (nv <= maxVerts && (rooms == null || gb.InsideTris.Count == 0))
+                {
+                    pk.Entries();
+                    out_.Add(Whole(gb, pk, nv, ni));
+                    return out_;
+                }
+                for (int i = 0; i < ni; i++) if ((uint)I[i] >= (uint)nv) BadIndex(I[i], nv);
                 // each normal and colour of the builder's tables packed once; the styles numbered in the order the vertices
                 // first name them (a vertex holds its style's number until Finish gives it the style's colour row); and the
                 // neighbours the party walls name, in the order first named. (The builder's lists, and the packed mesh's, are
@@ -198,36 +212,14 @@ namespace Triband.Storey.Generate
                 var neighbours = Array.Empty<int>();
                 if (!gb.Lean)
                 {
-                    for (int i = 0; i < nv; i++) { int k = pk.Kind(gb.K[i]); if (k >= 8) { int m = (k >> 3) - 1; if (!pk.Found.Contains(m)) pk.Found.Add(m); } }
+                    for (int c = 0, at = 0; at < nv; c++, at += Chunks.Size)
+                    {
+                        var K = gb.K.Chunk(c); int n = Math.Min(Chunks.Size, nv - at);
+                        for (int j = 0; j < n; j++) { int k = pk.Kind(K[j]); if (k >= 8) { int m = (k >> 3) - 1; if (!pk.Found.Contains(m)) pk.Found.Add(m); } }
+                    }
                     if (pk.Found.Count > 0) neighbours = pk.Found.ToArray();
                 }
                 var st = pk.Styles.ToArray();
-
-                if (nv <= maxVerts && (rooms == null || gb.InsideTris.Count == 0))
-                {
-                    var v = new ChunkList<PackedMesh.Vertex>(); v.Resize(nv);
-                    var cut = gb.Lean ? null : new ChunkList<PackedMesh.Cutaway>(); cut?.Resize(nv);
-                    for (int c = 0, at = 0; at < nv; c++, at += Chunks.Size)
-                    {
-                        var P = gb.P.Chunk(c); var N = gb.N.Index.Chunk(c); var C = gb.C.Index.Chunk(c); var V = v.Chunk(c); int m = Math.Min(Chunks.Size, nv - at);
-                        for (int j = 0; j < m; j++) pk.Vertex(at + j, in P[j], N[j], C[j], ref V[j]);
-                        if (cut == null) continue;
-                        var K = gb.K.Chunk(c); var W = gb.WI.Chunk(c); var U = cut.Chunk(c);
-                        for (int j = 0; j < m; j++) U[j] = new PackedMesh.Cutaway { kind = pk.Kind(K[j]), wid = W[j] };
-                    }
-                    if (nv <= MaxVerts)
-                    {
-                        var i16 = new ChunkList<ushort>(); i16.Resize(ni);
-                        for (int c = 0, at = 0; at < ni; c++, at += Chunks.Size)
-                        {
-                            var src = I.Chunk(c); var dst = i16.Chunk(c); int m = Math.Min(Chunks.Size, ni - at);
-                            for (int j = 0; j < m; j++) dst[j] = (ushort)src[j];
-                        }
-                        out_.Add(new PackedMesh(v, cut, i16, null, ni, st) { Mates = neighbours });
-                    }
-                    else out_.Add(new PackedMesh(v, cut, null, I.ToArray(), ni, st) { Mates = neighbours });
-                    return out_;
-                }
 
                 // in parts: each vertex's place in the part being filled (-1: not in it). A vertex is packed into each part
                 // that takes it, as it would be packed whole.
@@ -267,12 +259,17 @@ namespace Triband.Storey.Generate
                 {
                     int used = 0;
                     foreach (var (t0, t1) in tris)
-                        for (int t = t0 * 3; t < t1 * 3; t++) { int x = I[t]; if (local[x] == -1) { local[x] = -2; used++; } }
+                        for (int t = t0 * 3; t < t1 * 3; t++) { ref int lx = ref local[I[t]]; if (lx == -1) { lx = -2; used++; } }
                     if (used == 0) return;
                     if (carried == null)
                     {
                         pk.Found.Clear();
-                        if (!gb.Lean) for (int x = 0; x < nv; x++) { if (local[x] != -2) continue; int k = pk.Kind(gb.K[x]); if (k >= 8) { int m = (k >> 3) - 1; if (!pk.Found.Contains(m)) pk.Found.Add(m); } }
+                        if (!gb.Lean)
+                            for (int ch = 0, from = 0; from < nv; ch++, from += Chunks.Size)
+                            {
+                                var L = local.Chunk(ch); var K = gb.K.Chunk(ch); int n = Math.Min(Chunks.Size, nv - from);
+                                for (int j = 0; j < n; j++) { if (L[j] != -2) continue; int k = pk.Kind(K[j]); if (k >= 8) { int m = (k >> 3) - 1; if (!pk.Found.Contains(m)) pk.Found.Add(m); } }
+                            }
                         carried = pk.Found.Count > 0 ? pk.Found.ToArray() : Array.Empty<int>();
                     }
                     if (used > maxVerts)
@@ -284,13 +281,18 @@ namespace Triband.Storey.Generate
                     }
                     var v = new ChunkList<PackedMesh.Vertex>(); v.Resize(used);
                     var cut = gb.Lean ? null : new ChunkList<PackedMesh.Cutaway>(); cut?.Resize(used);
-                    for (int x = 0, n = 0; x < nv; x++)
+                    for (int ch = 0, from = 0, n = 0; from < nv; ch++, from += Chunks.Size)
                     {
-                        if (local[x] != -2) continue;
-                        local[x] = n;
-                        pk.Vertex(x, in gb.P[x], gb.N.Index[x], gb.C.Index[x], ref v[n]);
-                        if (cut != null) cut[n] = new PackedMesh.Cutaway { kind = pk.Kind(gb.K[x]), wid = gb.WI[x] };
-                        n++;
+                        var L = local.Chunk(ch); var P = gb.P.Chunk(ch); var N = gb.N.Index.Chunk(ch); var C = gb.C.Index.Chunk(ch); int m = Math.Min(Chunks.Size, nv - from);
+                        var K = cut != null ? gb.K.Chunk(ch) : null; var W = cut != null ? gb.WI.Chunk(ch) : null;
+                        for (int j = 0; j < m; j++)
+                        {
+                            if (L[j] != -2) continue;
+                            L[j] = n;
+                            pk.Vertex(from + j, in P[j], N[j], C[j], ref v[n]);
+                            if (cut != null) cut[n] = new PackedMesh.Cutaway { kind = pk.Kind(K![j]), wid = W![j] };
+                            n++;
+                        }
                     }
                     int count = 0; foreach (var (t0, t1) in tris) count += (t1 - t0) * 3;
                     ChunkList<ushort>? i16 = null; int[]? i32 = null;
@@ -318,6 +320,60 @@ namespace Triband.Storey.Generate
                 return out_;
             }
             finally { pk.Done(); packers.Give(pk); }
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        static void BadIndex(int index, int verts) => throw new InvalidOperationException($"index {index} of {verts} vertices");
+
+        /// <summary>
+        /// A mesh packed whole, in one pass over its vertices and one over its indices (docs/PERFORMANCE.md §8.2): each
+        /// vertex's style named, written, its party-wall neighbour found and its place in the bounds taken as it goes; each
+        /// index checked as it is copied. Four passes and the bounds' fifth before; the same mesh.
+        /// </summary>
+        static PackedMesh Whole(MeshBuilder gb, Packer pk, int nv, int ni)
+        {
+            var v = new ChunkList<PackedMesh.Vertex>(); v.Resize(nv);
+            var cut = gb.Lean ? null : new ChunkList<PackedMesh.Cutaway>(); cut?.Resize(nv);
+            float x0 = float.MaxValue, y0 = x0, z0 = x0, x1 = float.MinValue, y1 = x1, z1 = x1;
+            var found = pk.Found;
+            for (int c = 0, at = 0; at < nv; c++, at += Chunks.Size)
+            {
+                var P = gb.P.Chunk(c); var N = gb.N.Index.Chunk(c); var C = gb.C.Index.Chunk(c); var V = v.Chunk(c); int m = Math.Min(Chunks.Size, nv - at);
+                for (int j = 0; j < m; j++)
+                {
+                    int ce = C[j];
+                    pk.Name(ce);   // styles numbered in the order the vertices first name them, as before
+                    ref var q = ref V[j];
+                    pk.Vertex(at + j, in P[j], N[j], ce, ref q);
+                    x0 = Math.Min(x0, q.x); y0 = Math.Min(y0, q.y); z0 = Math.Min(z0, q.z); x1 = Math.Max(x1, q.x); y1 = Math.Max(y1, q.y); z1 = Math.Max(z1, q.z);
+                }
+                if (cut == null) continue;
+                var K = gb.K.Chunk(c); var W = gb.WI.Chunk(c); var U = cut.Chunk(c);
+                for (int j = 0; j < m; j++)
+                {
+                    int k = pk.Kind(K[j]);
+                    U[j] = new PackedMesh.Cutaway { kind = k, wid = W[j] };
+                    if (k >= 8) { int n = (k >> 3) - 1; if (!found.Contains(n)) found.Add(n); }
+                }
+            }
+            if (pk.Styles.Count > 65536) throw new InvalidOperationException($"{pk.Styles.Count} styles in one mesh");
+            var I = gb.I;
+            ChunkList<ushort>? i16 = null; int[]? i32 = null;
+            if (nv <= MaxVerts)
+            {
+                i16 = new ChunkList<ushort>(); i16.Resize(ni);
+                for (int c = 0, at = 0; at < ni; c++, at += Chunks.Size)
+                {
+                    var src = I.Chunk(c); var dst = i16.Chunk(c); int m = Math.Min(Chunks.Size, ni - at);
+                    for (int j = 0; j < m; j++) { int x = src[j]; if ((uint)x >= (uint)nv) BadIndex(x, nv); dst[j] = (ushort)x; }
+                }
+            }
+            else
+            {
+                i32 = I.ToArray();
+                foreach (int x in i32) if ((uint)x >= (uint)nv) BadIndex(x, nv);
+            }
+            return new PackedMesh(v, cut, i16, i32, ni, pk.Styles.ToArray(), x0, y0, z0, x1, y1, z1) { Mates = found.Count > 0 ? found.ToArray() : Array.Empty<int>() };
         }
 
         // what packing a mesh works with, lent out for each (its lists' chunks go back after each mesh)
