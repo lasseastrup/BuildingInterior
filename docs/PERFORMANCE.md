@@ -568,6 +568,8 @@ Every wall face is a rectangle with rectangular holes in its own (u, y) plane, t
 
 A rectilinear triangulator would do it in O(openings): split the face at every opening's u0 and u1 and fan each column, sharing break heights so no T-junctions appear. Keep Earcut for slabs and roofs. The census is triangulation-independent, and the topology tests guard the T-junctions. Estimated −15 to −20 % of LOD0; effort M.
 
+Status: not done. It changes every wall's triangles, so the meshes can't be compared to the byte as the other changes here were, and a T-junction left would show as a crack on a device before any test here caught it. Worth doing with a device to look at.
+
 ### 8.5 Work done again for every LOD (medium)
 
 - **Roof parts.** A pitched building's straight skeleton and roof clipping run for LOD0, LOD1, LOD2, the walk shape and the collision mesh: five times. `BuildShape` builds them only to draw nothing (`Lod0.cs:525`). Memoise per site and building. Status: done (CHANGELOG): the top roof and each roofed setback's are made once a site (`Site.roofMemo`), and every LOD reads them. On the plain test city each of LOD0, LOD1, the collision mesh and the walk shape allocates 13 KB less, LOD2 a third of what it did (6.8 KB, was 20.1), and LOD2 takes 0.021–0.023 ms where it took 0.035–0.043 (headless); the same meshes.
@@ -581,12 +583,25 @@ A rectilinear triangulator would do it in O(openings): split the face at every o
 
 A plain LOD0 hands out 117 wall ids for 37 distinct walls. 42 of them (36 %) are used by no vertex, and glass never shares an opaque wall's id (`Lod0.cs:67, 355-366`; `MeshBuilder.cs:198-204` clones `W` for each). Each id costs two `double[4]` allocations (15–20 % of LOD0's steady garbage), a row in the building table (`FinishDetail` writes three times the rows), shape memory, and a pass of the per-frame cutaway loops (§10.1). Intern walls by (W, kind, storey base) in `Ctx`, give glass its wall's id, create an id only when a vertex uses it, and store W as four floats.
 
+Status: not done. The ids are what the cutaway slides by, on the CPU and in the shaders; changing how they are handed out changes every LOD0's wall data, which the occlusion tests cover only in part. The cutaway's own work per frame is cut by §10.1 instead.
+
 ### 8.7 The long tail and memory per build
 
 - **Steady LOD0 garbage (98–204 KB)**: `double[]` (10 %), wall-list growth (9 %), range lists and arrays (17 %), `Opening`s (10 %), `WinSpec` (a class per `Ops` call), segment-list copies from `TrimExcess`, and `Bridges.Doors` allocating before its early return (`Bridges.cs:143`). Scratch lists through `Lod0.Shared`, `WinSpec` as a struct, and pre-sized wall and segment lists cut it by an estimated 2–3×.
 - **Latent: `Derived.StyleAt`** clones a `FacadeStyle`, rule dictionary included, on every call for a setback tier with its own style (`Derived.cs:83-90`). That is 132–193 calls per LOD0. The test city has no such tiers; authored buildings will. Memoise per building and tier.
 - **Collision meshes** run a Clipper union, inflate and difference per walkable level: `GrownUnion` 1.4 times a plain building and 9.9 a walk-in one (0.34 / 0.81 ms, 69 / 335 KB). Middle storeys share outline and holes; memoise by those. Status: done (CHANGELOG): a level's area is made once for the levels with the same outlines below and at it and the same holes open, and a wall run's box makes no arrays. A walk-in building's collision mesh takes 0.25 ms and allocates 153 KB, where it took 0.44 ms and 366 KB; a plain one's allocates 40 KB, was 54 (headless, the same meshes).
 - **Peak memory per build.** The builder holds 46 bytes a vertex (24 of them double positions); `Lod2Mesh` 100 bytes a vertex (normals and facade numbers as doubles). The largest tower holds 14.6 MB of builders and 11 MB packed at once. With two to four threads on towers, transient peaks of 25–100 MB are possible, and chunks past the keep cap become garbage. Use float positions in the builder (packing converts to float anyway), and build one large tower at a time on the minimum tier.
+
+Status of the rest of §8 (headless, a building on average, back to back with the code before; every mesh of both test cities the same to the byte throughout, 36,828 compared): the collision memo above, and the allocations of the openings (§8.5). `Derived.StyleAt` isn't memoised: a memo by object would hand the editor's in-place edits a stale copy. `WinSpec` stays a class (a public type, about 5 KB a building). Float positions in the builder, the quad and box fast paths, the split path's contiguous parts and integer gable keys are not done. Where the detail pipeline stands now:
+
+| | Plain city, before → now | Walk-in city, before → now |
+|---|---|---|
+| LOD0 generate | 1.02–1.05 → 0.91–0.93 ms (best of nine) | 2.80 → 2.45–2.61 ms |
+| LOD0 pack | 0.80–0.86 → 0.52–0.60 ms | 5.3–5.5 → 2.6–2.9 ms |
+| Collision mesh | 0.11 → 0.08 ms, 67 → 40 KB | 0.41–0.46 → 0.25 ms, 372 → 153 KB |
+| LOD1 generate, weld and pack | 0.41–0.48 → 0.33–0.37 ms, 62 → 44 KB | 0.73–0.75 → 0.57–0.60 ms, 101 → 66 KB |
+| LOD2 | 0.033–0.043 → 0.021–0.023 ms, 20 → 7 KB | 0.031 → 0.025–0.029 ms, 11 → 6 KB |
+| LOD0 garbage | 90 → 72 KB | 252 → 211 KB |
 
 ### 8.8 Burst, IL2CPP and what a port needs
 
