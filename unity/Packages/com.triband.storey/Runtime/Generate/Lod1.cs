@@ -31,7 +31,6 @@ namespace Triband.Storey.Generate
             int idx = site.IndexOf(b), N = b.floors.Count; double T = Dim.T_EXT;
             var op = MeshBuilder.Make(idx + LOD_TAG, lean: true);
             if (solids) op.Solids = new List<Solid>();
-            site.partyMemo.TryRemove(b.id, out _);
             var L0 = new Lod0.Shared(site, b);
             L0.Slab(op, N, L0.At(N).C, true, true);
             for (int k = 0; k < N; k++)

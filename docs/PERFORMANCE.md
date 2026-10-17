@@ -307,6 +307,8 @@ Recommendation:
 - Then keep the memo for the site's lifetime instead of clearing a building's entry at each build (§8.5). The ranges change only with the layout, and a new `Site` is made for every load and edit anyway.
 - Key it by (building index, tier, edge) in one map, rather than a `ConcurrentDictionary` per building, created with a low concurrency level.
 
+Status: done (CHANGELOG). One map per site, keyed by building index, tier and edge, with a low concurrency level, kept for the site's life (no build clears it: a site is made anew for every load and edit). An edge no neighbour shares gets a shared empty list. Nothing is kept for it when no building is near it at all; otherwise only its entry in the map. The scan allocates nothing until a neighbour's edge runs along this one: the near buildings come into a lent list, and a neighbour's tiers are walked without `Tiers`' lists. On the 3,000-building test city, building every massing allocates 58.5 MB, where it allocated 75.0, and takes 105–160 ms, where it took 168–209. The site after it holds 1.8 MB, where it held 4.0 MB (headless).
+
 ### 6.7 The parsed model is about three times its information (medium)
 
 The 8.9 MB document is about 178,000 objects:

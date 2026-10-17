@@ -115,7 +115,6 @@ namespace Triband.Storey.Generate
             double yLid = top - 0.05;
             var M = Lod2Mesh.Make(); M.Tag = site.IndexOf(b) + 2 * Lod1.LOD_TAG;
             int slot = 0;
-            site.partyMemo.TryRemove(b.id, out _);
             var L0 = new Lod0.Shared(site, b);
 
             void Vtx(P3 p, P3 nr, double u, double h, double s0, double s1, double bay, double kind)

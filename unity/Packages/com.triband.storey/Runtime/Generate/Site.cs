@@ -18,8 +18,10 @@ namespace Triband.Storey.Generate
         readonly Dictionary<string, BuildingData> byId = new Dictionary<string, BuildingData>(StringComparer.Ordinal);
         readonly Dictionary<(int, int), List<BuildingData>> grid = new Dictionary<(int, int), List<BuildingData>>();
         readonly (double x0, double z0, double x1, double z1)[] bounds;
-        // the memos are filled as buildings are generated, which may be on several threads at once (docs/CITY.md §2)
-        internal readonly ConcurrentDictionary<string, ConcurrentDictionary<long, List<Party.Range>>> partyMemo = new ConcurrentDictionary<string, ConcurrentDictionary<long, List<Party.Range>>>(StringComparer.Ordinal);
+        // the memos are filled as buildings are generated, which may be on several threads at once (docs/CITY.md §2). The
+        // party walls' is one map for every building, tier and edge (Party.Ranges), kept for the site's life: a site is made
+        // anew for every load and every edit (docs/PERFORMANCE.md §6.6)
+        internal readonly ConcurrentDictionary<long, List<Party.Range>> partyMemo = new ConcurrentDictionary<long, List<Party.Range>>(4, 1024);
         internal readonly ConcurrentDictionary<string, BridgeSpan?> bridgeMemo = new ConcurrentDictionary<string, BridgeSpan?>(StringComparer.Ordinal);
         /// <summary>Each pitched roof's rise above its walls (<see cref="Roofs.Rise"/>), filled by the massing's build.</summary>
         internal readonly ConcurrentDictionary<string, double> riseMemo = new ConcurrentDictionary<string, double>(StringComparer.Ordinal);
@@ -158,6 +160,16 @@ namespace Triband.Storey.Generate
                     if (grid.TryGetValue((gx, gz), out var l)) foreach (var b in l) out_.Add(b);
             return out_;
         }
+
+        /// <summary><see cref="Near"/> into a list of the caller's (cleared first), each building once, in the same order: no garbage.</summary>
+        internal void Near(double x, double z, double rad, List<BuildingData> into)
+        {
+            into.Clear();
+            for (int gx = (int)Math.Floor((x - rad) / BGRID); gx <= (int)Math.Floor((x + rad) / BGRID); gx++)
+                for (int gz = (int)Math.Floor((z - rad) / BGRID); gz <= (int)Math.Floor((z + rad) / BGRID); gz++)
+                    if (grid.TryGetValue((gx, gz), out var l))
+                        foreach (var b in l) if (!into.Contains(b)) into.Add(b);   // a few buildings: a scan beats a set
+        }
     }
 
     /// <summary>
@@ -213,38 +225,56 @@ namespace Triband.Storey.Generate
             return b.floors.Count;
         }
 
-        /// <summary>Party ranges along tier k0's edge i, sorted by start.</summary>
+        /// <summary>None: the list an edge with no party wall gets, one for every such edge. Read it; nothing may change it.</summary>
+        static readonly List<Range> None = new List<Range>();
+        static readonly Lender<List<BuildingData>> nearLists = new Lender<List<BuildingData>>(8);
+
+        /// <summary>
+        /// Party ranges along tier k0's edge i, sorted by start. The list is the site's (kept for its life): read it,
+        /// don't change it. An edge no neighbour shares, nearly every one, makes nothing: with no building near it nothing
+        /// is kept either, and with one near but sharing nothing only its entry in the site's map (docs/PERFORMANCE.md §6.6).
+        /// </summary>
         public static List<Range> Ranges(Site site, BuildingData b, int k0, int i)
         {
-            var m = site.partyMemo.GetOrAdd(b.id, _ => new ConcurrentDictionary<long, List<Range>>());
-            long key = (long)k0 << 32 | (uint)i;   // the tier and the edge, without making text
-            if (m.TryGetValue(key, out var hit)) return hit;
+            long key = (long)site.IndexOf(b) << 32 | (long)(k0 & 0xFFFF) << 16 | (uint)(i & 0xFFFF);   // the building, tier and edge, without text
+            if (site.partyMemo.TryGetValue(key, out var hit)) return hit;
 
             var fp = Derived.OutlineAt(b, k0); var a = fp[i]; var c = fp[(i + 1) % fp.Count];
             double ax = a.x + b.pos.x, az = a.z + b.pos.z, cx = c.x + b.pos.x, cz = c.z + b.pos.z, L = Geo.Hypot(cx - ax, cz - az); if (L == 0) L = 1;
             double ux = (cx - ax) / L, uz = (cz - az) / L;
-            var found = new Dictionary<string, (BuildingData p, double s, double e, double sRaw, double eRaw)>(StringComparer.Ordinal);
-            var order = new List<string>();
-            foreach (var p in site.Near((ax + cx) / 2, (az + cz) / 2, L / 2 + 1))
+            // made only once a neighbour's edge runs along this one (few edges have one)
+            Dictionary<string, (BuildingData p, double s, double e, double sRaw, double eRaw)>? found = null;
+            List<string>? order = null;
+            var near = nearLists.Take();
+            site.Near((ax + cx) / 2, (az + cz) / 2, L / 2 + 1, near);
+            bool other = false;
+            foreach (var p in near)
             {
                 if (ReferenceEquals(p, b)) continue;
-                foreach (var t in Tiers(p))
+                other = true;
+                for (int t0 = 0; ; t0 = TierEnd(p, t0))   // each tier's outline (Tiers, without its lists)
                 {
-                    var q = Derived.OutlineAt(p, t.k0);
+                    var q = Derived.OutlineAt(p, t0);
                     for (int j = 0; j < q.Count; j++)
                     {
                         var P0 = q[j]; var Q0 = q[(j + 1) % q.Count];
                         double px = P0.x + p.pos.x, pz = P0.z + p.pos.z, qx = Q0.x + p.pos.x, qz = Q0.z + p.pos.z, M = Geo.Hypot(qx - px, qz - pz); if (M == 0) M = 1;
                         if (((qx - px) * ux + (qz - pz) * uz) / M > -0.9999) continue;
                         if (Math.Abs((px - ax) * uz - (pz - az) * ux) > 0.01 || Math.Abs((qx - ax) * uz - (qz - az) * ux) > 0.01) continue;
-                        double t0 = (px - ax) * ux + (pz - az) * uz, t1 = (qx - ax) * ux + (qz - az) * uz;
-                        double s0 = Math.Max(0, Math.Min(t0, t1)), e0 = Math.Min(L, Math.Max(t0, t1)); if (e0 - s0 < 0.1) continue;
+                        double u0 = (px - ax) * ux + (pz - az) * uz, u1 = (qx - ax) * ux + (qz - az) * uz;
+                        double s0 = Math.Max(0, Math.Min(u0, u1)), e0 = Math.Min(L, Math.Max(u0, u1)); if (e0 - s0 < 0.1) continue;
+                        found ??= new Dictionary<string, (BuildingData p, double s, double e, double sRaw, double eRaw)>(StringComparer.Ordinal);
+                        order ??= new List<string>();
                         if (found.TryGetValue(p.id, out var f))
-                            found[p.id] = (p, Math.Min(f.s, s0), Math.Max(f.e, e0), Math.Min(f.sRaw, Math.Min(t0, t1)), Math.Max(f.eRaw, Math.Max(t0, t1)));
-                        else { found[p.id] = (p, s0, e0, Math.Min(t0, t1), Math.Max(t0, t1)); order.Add(p.id); }
+                            found[p.id] = (p, Math.Min(f.s, s0), Math.Max(f.e, e0), Math.Min(f.sRaw, Math.Min(u0, u1)), Math.Max(f.eRaw, Math.Max(u0, u1)));
+                        else { found[p.id] = (p, s0, e0, Math.Min(u0, u1), Math.Max(u0, u1)); order.Add(p.id); }
                     }
+                    if (TierEnd(p, t0) >= p.floors.Count) break;
                 }
             }
+            nearLists.Give(near);
+            if (!other) return None;   // no building near it: as quick to ask again as to look up, so nothing is kept
+            if (found == null || order == null) return site.partyMemo[key] = None;
             var out_ = new List<Range>();
             foreach (var id in order)
             {
@@ -262,8 +292,9 @@ namespace Triband.Storey.Generate
                     pIdx = site.IndexOf(p), pInner = new Swatch(new StyleRef(site.IndexOf(p), 0), ColorSlot.Interior),
                 });
             }
+            if (out_.Count == 0) return site.partyMemo[key] = None;
             out_.Sort((x, y) => x.s.CompareTo(y.s));
-            m[key] = out_;
+            site.partyMemo[key] = out_;
             return out_;
         }
 
