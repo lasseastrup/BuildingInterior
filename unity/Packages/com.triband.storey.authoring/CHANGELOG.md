@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Tools ▸ Storey ▸ Test City…**, the Storey Test City window (docs/CITY.md §1). It makes a test city in the selected site's layout from settings kept per user: how many buildings (up to 8,000), the seed (or a new one at random), a height multiplier and the most storeys, and which buildings are walk-in. That is a share of them, exact, spread through the city or the ones nearest the middle, with a lift above the storeys set; or the prototype's own mix. It shows the site's test city now (buildings, walk-in, storeys, lifts), makes it again or removes it, and with no site selected lists the scene's to pick.
 - A build step for Storey's shaders (`StoreyShaderStripping`, docs/PERFORMANCE.md §7.9). It leaves out the minimum tier's lighting variants (`STOREY_SIMPLE_LIGHTING`) when no quality asset the build can use turns Specular And Reflections off: one a scene in the build depends on, or any in the project's `Assets` folder. That halves the opaque and massing colour passes' variants in such a build. The scripting define `STOREY_KEEP_ALL_SHADER_VARIANTS` keeps them. After a build, the Console has a line for each of Storey's shaders: its variants compiled, and how many were left out.
 - Facade details as assets (docs/EDITOR.md §6.12). The Facade tab's **Place on walls** lists every Facade Detail asset: the package's five (AC unit, Vent, Dish, Fire escape, Awning), then the project's. They were five buttons written into the code. **Details by rule** has a slider for each of the project's details with a rule.
   - A Facade Detail's inspector says where it goes and what places it, in words. Setting a mesh names its parts from the model's materials and takes its size from the mesh.
@@ -21,6 +22,7 @@
 - The automatic LOD picks for the Scene view's camera, and the editor updates when that camera moves. The LOD stats are shown in the Scene view for a selected site (`StoreyLodEditor`).
 
 ### Changed
+- The Test City menu (Make 300, 1,000 or 3,000 Buildings, the walk-in ones and Remove Test City) is the Storey Test City window. Making a city no longer asks first: Undo takes it back.
 - A style carries the key of the preset it was applied from (`FacadeStyle.preset`: a package preset's own, `brick` and the rest as the prototype names them, or a project preset's asset GUID), and the **Preset** list shows that preset as the style's, a project's too. A field of the style edited by hand takes the key off (*Custom*), as in the prototype, except the roof, which a preset never sets; before, no edit did, so an edited style still showed its preset, and so did a preset saved from it. **Save as preset…** names the style after the new asset and shows it as the style's.
 - The test city moved from the site's inspector to **Tools ▸ Storey ▸ Test City** (Make 300, 1,000 or 3,000 Buildings, which asks first, and Remove Test City), acting on the selected site.
 - The Interior tab's tools (Select, Wall, Door, Erase, Stairs, Lift) are buttons with drawn icons, the name under each and what it does in the tooltip.

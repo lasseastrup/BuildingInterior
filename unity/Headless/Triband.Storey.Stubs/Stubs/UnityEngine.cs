@@ -372,6 +372,7 @@ namespace UnityEngine
         public static void Box(Rect position, string text, GUIStyle style) { }
         public static bool enabled { get; set; }
         public static GUISkin skin => new GUISkin();
+        public static void FocusControl(string name) { }
     }
 
     public static class GUILayoutUtility

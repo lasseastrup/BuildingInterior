@@ -129,6 +129,8 @@ namespace UnityEditor
         public void Repaint() { }
         public Rect position { get => default; set { } }
         public void ShowNotification(GUIContent notification, double fadeoutWait) { }
+        public static T GetWindow<T>(bool utility, string title, bool focus) where T : EditorWindow => null;
+        public Vector2 minSize { get => default; set { } }
     }
 
     public static class Menu
@@ -151,6 +153,10 @@ namespace UnityEditor
     {
         public static bool GetBool(string key, bool defaultValue = false) => defaultValue;
         public static void SetBool(string key, bool value) { }
+        public static int GetInt(string key, int defaultValue = 0) => defaultValue;
+        public static void SetInt(string key, int value) { }
+        public static float GetFloat(string key, float defaultValue = 0) => defaultValue;
+        public static void SetFloat(string key, float value) { }
     }
 
     public static class SessionState
@@ -287,6 +293,9 @@ namespace UnityEditor
         public static string DelayedTextField(string label, string text, params GUILayoutOption[] options) => text;
         public static double DelayedDoubleField(string label, double value, params GUILayoutOption[] options) => value;
         public static float Slider(string label, float value, float leftValue, float rightValue, params GUILayoutOption[] options) => value;
+        public static float Slider(GUIContent label, float value, float leftValue, float rightValue, params GUILayoutOption[] options) => value;
+        public static int IntSlider(GUIContent label, int value, int leftValue, int rightValue, params GUILayoutOption[] options) => value;
+        public static int IntField(GUIContent label, int value, params GUILayoutOption[] options) => value;
         public static bool Toggle(string label, bool value, params GUILayoutOption[] options) => value;
         public static bool Toggle(GUIContent label, bool value, params GUILayoutOption[] options) => value;
         public static System.Enum EnumPopup(string label, System.Enum selected, params GUILayoutOption[] options) => selected;
@@ -296,6 +305,7 @@ namespace UnityEditor
         public static void LabelField(string label, params GUILayoutOption[] options) { }
         public static void LabelField(string label, GUIStyle style, params GUILayoutOption[] options) { }
         public static void LabelField(string label, string label2, params GUILayoutOption[] options) { }
+        public static void LabelField(string label, string label2, GUIStyle style, params GUILayoutOption[] options) { }
         public static void LabelField(GUIContent label, params GUILayoutOption[] options) { }
         public static void LabelField(GUIContent label, GUIStyle style, params GUILayoutOption[] options) { }
         public static void PrefixLabel(string label) { }

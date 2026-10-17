@@ -12,8 +12,17 @@ How Storey draws a few thousand buildings: a test city to measure with, the auto
 - It is the prototype's `cityBuildings`, number for number: the same seeded generator (20260928) and the same calls in the same order. `TestCityTests` checks every one of the 3,000 buildings against `Fixtures/city.json`.
   - To make that file: `cd prototype/tools && npm run city`.
 - Generated buildings are marked `gen`. Making a city again replaces them. `TestCity.Clear` removes them.
+- `TestCity.Options` varies it: how many buildings, the share of them walk-in, the seed, a height multiplier and cap, and the storeys above which a walk-in building gets a lift. The defaults make the prototype's city. The walk-in share, the heights and the lifts change no other draw, so a seed lays out the same blocks, outlines and styles whatever they are. The share is exact: of 1,000 buildings at 10%, 100 are walk-in, picked through the city by a random stream of their own, or the 100 nearest the middle. `TestCityTests` checks each.
 
-In the editor: select a Storey Site, then **Tools ▸ Storey ▸ Test City ▸ Make 300 / 1,000 / 3,000 Buildings**. It asks before adding them. **Make … Walk-in Buildings** makes the same city with every building walk-in: switchback stairs from the ground to the top where they fit (about 95% of buildings or more), and a lift beside them above five storeys. Use it to test interiors, LOD0 and the occlusion at scale. **Remove Test City** takes them out. It's in a menu rather than the site's inspector so nobody adds thousands of buildings by accident. The city is an edit like any other, so it is saved with the layout and can be undone.
+In the editor, **Tools ▸ Storey ▸ Test City…** opens the **Storey Test City** window. Select a Storey Site (with none selected, the window lists the scene's), set the city and press **Make test city**:
+
+- **Buildings**: how many, up to 8,000, with 300, 1,000 and 3,000 a click away. Fewer are made if the blocks round the layout's own buildings run out (the Console says so).
+- **Seed**: another lays out another city, and **New** picks one at random. The prototype's is 20260928.
+- **Height ×** multiplies every building's storeys (the prototype's are 1 to 40), and **Most storeys** caps them, at most 60.
+- **Walk-in %**: that share of the buildings is walk-in, with switchback stairs from the ground to the top where they fit (in about 95% of buildings or more) and a lift beside them above **Lift above** storeys (5). The others are shells. **Nearest the middle** makes them the ones nearest the middle, where the city is made from, instead of spread through it.
+- **The prototype's mix** makes them walk-in as the prototype does instead: about 6% of the buildings of 12 storeys or fewer, with a stair core in the middle where one fits, and no lifts. **Prototype's city** puts back the prototype's seed, heights and mix.
+
+The window shows the site's test city now: its buildings, how many are walk-in, their storeys and lifts. **Make test city again** replaces it and **Remove test city** takes it out. Use a walk-in city to test interiors, LOD0 and the occlusion at scale. The settings are kept for next time, per user. It's a window rather than part of the site's inspector so nobody adds thousands of buildings by accident. The city is an edit like any other, so it is saved with the layout and can be undone.
 
 ## 2. The automatic LOD
 
@@ -125,7 +134,7 @@ A city too big for one layout is split into districts: one Storey Site each, a s
 ## 6. Trying it in Unity
 
 1. Select a Storey Site. In **Site settings**, check that LOD mode is *Automatic* and turn on **Show LOD stats**.
-2. **Tools ▸ Storey ▸ Test City ▸ Make 3,000 Buildings**.
+2. **Tools ▸ Storey ▸ Test City…**: set **Buildings** to 3,000 and press **Make test city**.
 3. Orbit and zoom in the Scene view.
    - The stats in the corner show how many buildings are at each LOD, how many meshes are resident, how many cells are drawn, and the LOD time.
    - Turn on **LOD tint** to see the LODs in colour.

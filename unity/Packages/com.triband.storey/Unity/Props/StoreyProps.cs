@@ -329,7 +329,7 @@ namespace Triband.Storey.Unity
             }
             // sites gone or switched off are forgotten (their props are filed again below)
             goneSites.Clear();
-            foreach (var s in siteVersions.Keys) if (s == null || !s.isActiveAndEnabled) goneSites.Add(s);
+            foreach (var s in siteVersions.Keys) if (s == null || !s.isActiveAndEnabled) goneSites.Add(s!);   // destroyed is == null, but still the key
             foreach (var s in goneSites) siteVersions.Remove(s);
             for (int i = 0; i < entries.Count; i++)
             {
