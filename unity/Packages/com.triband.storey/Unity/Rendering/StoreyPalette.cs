@@ -71,7 +71,17 @@ namespace Triband.Storey.Unity
         public event Action? Invalidated { add => index.Invalidated += value; remove => index.Invalidated -= value; }
 
         public StyleDefaults Defaults => index.Defaults;
-        public int IndexOf(string colorRef) => index.IndexOf(colorRef);
+        public int IndexOf(string colorRef)
+        {
+            int i = index.IndexOf(colorRef);
+            if (index.Unplaced > 0 && !warned)
+            {
+                warned = true;
+                Debug.LogWarning($"Storey: the built-in palette is full ({HexPaletteIndex.Capacity} colours): {colorRef}, and any colour after it, is drawn as the nearest it has. Color Pipeline's palette has no such limit.");
+            }
+            return i;
+        }
+        bool warned;
         public int RegisterRemap(IReadOnlyList<string> original, IReadOnlyList<string> overwrite) => index.RegisterRemap(original, overwrite);
 
         public void Bind()

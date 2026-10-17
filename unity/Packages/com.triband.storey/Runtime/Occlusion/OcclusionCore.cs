@@ -136,14 +136,35 @@ namespace Triband.Storey.Occlusion
         int cutFrame;
         bool[] gone = new bool[8];
 
-        /// <summary>What the segment test needs of a building, worked out once (its tiers' starts and ends, its roof's rise).</summary>
-        sealed class Shape { public List<(int k0, int k1)> tiers = null!; public double rise; }
+        /// <summary>
+        /// What the segment test needs of a building, worked out once: its tiers' starts and ends, each tier's outline's box
+        /// (building-local), and its roof's rise.
+        /// </summary>
+        sealed class Shape { public List<(int k0, int k1)> tiers = null!; public (double x0, double z0, double x1, double z1)[] boxes = null!; public (double x0, double z0, double x1, double z1) box; public double rise; }
         readonly Dictionary<BuildingData, Shape> shapes = new Dictionary<BuildingData, Shape>();
+        // the most buildings' shapes and occluder records kept (docs/PERFORMANCE.md §10.5): they only grew, 648 KB after 400
+        // occluders. Past the cap the shapes are made again as they are met, and the records of buildings not in the way go
+        internal const int ShapesKept = 2048, RecordsKept = 256;
+        internal int shapesKept = ShapesKept, recordsKept = RecordsKept;   // a test's own
         Shape ShapeOf(BuildingData b)
         {
-            if (!shapes.TryGetValue(b, out var s)) shapes[b] = s = new Shape { tiers = Party.Tiers(b), rise = Roofs.IsPitched(b) ? Roofs.Rise(World.Site, b) : 1.1 };
-            return s;
+            if (shapes.TryGetValue(b, out var s)) return s;
+            if (shapes.Count >= shapesKept) shapes.Clear();
+            var tiers = Party.Tiers(b); var boxes = new (double, double, double, double)[tiers.Count];
+            double X0 = double.MaxValue, Z0 = X0, X1 = double.MinValue, Z1 = X1;
+            for (int i = 0; i < tiers.Count; i++)
+            {
+                double x0 = double.MaxValue, z0 = x0, x1 = double.MinValue, z1 = x1;
+                foreach (var v in Derived.OutlineAt(b, tiers[i].k0)) { x0 = Math.Min(x0, v.x); z0 = Math.Min(z0, v.z); x1 = Math.Max(x1, v.x); z1 = Math.Max(z1, v.z); }
+                boxes[i] = (x0, z0, x1, z1);
+                X0 = Math.Min(X0, x0); Z0 = Math.Min(Z0, z0); X1 = Math.Max(X1, x1); Z1 = Math.Max(Z1, z1);
+            }
+            return shapes[b] = new Shape { tiers = tiers, boxes = boxes, box = (X0, Z0, X1, Z1), rise = Roofs.IsPitched(b) ? Roofs.Rise(World.Site, b) : 1.1 };
         }
+
+        // how far from a tier's outline the segment test can hit: a wall's thickness (DistToEdges), or 5 cm (an edge
+        // grazed), and a rounding's worth over
+        static readonly double Reach = Math.Max(Dim.T_EXT, 0.05) + 1e-6;
 
         public OcclusionCore(PlayWorld world, OcclusionSettings settings) { World = world; Settings = settings; }
 
@@ -359,8 +380,12 @@ namespace Triband.Storey.Occlusion
         public bool SegmentHits(BuildingData b, (double x, double y, double z) p, (double x, double y, double z) q)
         {
             int N = b.floors.Count; var shape = ShapeOf(b); double extra = shape.rise;
-            foreach (var (k0, k1) in shape.tiers)
+            // the whole segment clear of every tier's box: no hit, and no tier's heights worked out
+            var all = shape.box; double px = p.x - b.pos.x, pz = p.z - b.pos.z, qx = q.x - b.pos.x, qz = q.z - b.pos.z;
+            if (Math.Max(px, qx) < all.x0 - Reach || Math.Min(px, qx) > all.x1 + Reach || Math.Max(pz, qz) < all.z0 - Reach || Math.Min(pz, qz) > all.z1 + Reach) return false;
+            for (int ti = 0; ti < shape.tiers.Count; ti++)
             {
+                var (k0, k1) = shape.tiers[ti];
                 double y0 = Derived.FloorBase(b, k0), y1 = Derived.FloorBase(b, k1) + (k1 == N ? extra : 0), dy = q.y - p.y, t0 = 0, t1 = 1;
                 if (Math.Abs(dy) < 1e-9) { if (p.y < y0 || p.y > y1) continue; }
                 else
@@ -371,6 +396,10 @@ namespace Triband.Storey.Occlusion
                 var fp = Derived.OutlineAt(b, k0);
                 var A = new Vec2(p.x + (q.x - p.x) * t0 - b.pos.x, p.z + (q.z - p.z) * t0 - b.pos.z);
                 var B = new Vec2(p.x + (q.x - p.x) * t1 - b.pos.x, p.z + (q.z - p.z) * t1 - b.pos.z);
+                // the segment's box clear of the tier's outline's, widened by the test's reach: no hit (89 % of the
+                // candidates miss, and this rejects most of them before the edges are looked at, docs/PERFORMANCE.md §10.5)
+                var bx = shape.boxes[ti];
+                if (Math.Max(A.x, B.x) < bx.x0 - Reach || Math.Min(A.x, B.x) > bx.x1 + Reach || Math.Max(A.z, B.z) < bx.z0 - Reach || Math.Min(A.z, B.z) > bx.z1 + Reach) continue;
                 bool Near(Vec2 v, Vec2 w) => Tiers.SegCross(A, B, v, w)
                     || Math.Min(Math.Min(Tiers.SegDist(v.x, v.z, A.x, A.z, B.x, B.z).d, Tiers.SegDist(w.x, w.z, A.x, A.z, B.x, B.z).d),
                                 Math.Min(Tiers.SegDist(A.x, A.z, v.x, v.z, w.x, w.z).d, Tiers.SegDist(B.x, B.z, v.x, v.z, w.x, w.z).d)) < 0.05;
@@ -400,23 +429,24 @@ namespace Triband.Storey.Occlusion
         /// <summary>Slice: just under the ceiling of the occluder's storey at the player's height (at least head height).</summary>
         static double SliceHeight(BuildingData b, PlayerState p)
         {
-            int N = b.floors.Count, k = 0;
-            for (int j = 1; j < N; j++) if (p.y + 0.5 >= Derived.FloorBase(b, j)) k = j;
-            return Math.Max(Derived.FloorBase(b, k) + Derived.FloorH(b, k) - Dim.SLAB - 0.01, p.y + 2.0);
+            int N = b.floors.Count, k = 0; double yj = b.elevation, yk = yj;   // the bases summed going up
+            for (int j = 1; j < N; j++) { yj = Derived.NextFloorBase(b, j - 1, yj); if (p.y + 0.5 >= yj) { k = j; yk = yj; } }
+            return Math.Max(yk + Derived.FloorH(b, k) - Dim.SLAB - 0.01, p.y + 2.0);
         }
 
         /// <summary>The occluder's storey at the player's height, the floor count when the player is above its roof.</summary>
         static int OccStorey(BuildingData b, PlayerState p)
         {
-            int N = b.floors.Count, k = 0;
-            for (int j = 1; j <= N; j++) if (p.y + 0.5 >= Derived.FloorBase(b, j)) k = j;
+            int N = b.floors.Count, k = 0; double yj = b.elevation;   // the bases summed going up
+            for (int j = 1; j <= N; j++) { yj = Derived.NextFloorBase(b, j - 1, yj); if (p.y + 0.5 >= yj) k = j; }
             return k;
         }
 
         static void Plan(SinkPlan plan, BuildingData b, int k)
         {
             int N = b.floors.Count; plan.segs.Clear();
-            for (int j = k; j <= N; j++) plan.segs.Add((Derived.FloorBase(b, j), j < N ? Derived.FloorH(b, j) : 0));
+            double yj = Derived.FloorBase(b, k);
+            for (int j = k; j <= N; yj = Derived.NextFloorBase(b, j, yj), j++) plan.segs.Add((yj, j < N ? Derived.FloorH(b, j) : 0));
             int nc = plan.segs.Count;
             plan.stag = Math.Min(0.03, 0.1 / Math.Max(nc, 1));
             plan.total = (nc - 1) * plan.stag + SinkDur;
@@ -424,10 +454,30 @@ namespace Triband.Storey.Occlusion
 
         Occluder Record(BuildingData b)
         {
-            if (!records.TryGetValue(b.id, out var r)) records[b.id] = r = new Occluder { b = b };
+            if (!records.TryGetValue(b.id, out var r))
+            {
+                if (records.Count >= recordsKept) ForgetIdle();
+                records[b.id] = r = new Occluder { b = b };
+            }
             r.b = b;
             return r;
         }
+
+        readonly List<string> idle = new List<string>();
+
+        /// <summary>
+        /// The records of the buildings not in the way let go: at rest, nothing of theirs is carried over. One hit this frame
+        /// and not yet active stays (it is about to take a slot).
+        /// </summary>
+        void ForgetIdle()
+        {
+            idle.Clear();
+            foreach (var kv in records) if (!active.Contains(kv.Value) && !hits.Contains(kv.Value)) idle.Add(kv.Key);
+            foreach (var id in idle) records.Remove(id);
+        }
+
+        /// <summary>How many buildings' shapes and occluder records are kept now (for tests).</summary>
+        internal (int shapes, int records) Kept => (shapes.Count, records.Count);
 
         /// <summary>The three rays' ends, the feet, chest and head, 0.5 m short so the character's own body touching a wall doesn't count.</summary>
         (double x, double y, double z)[] Targets(PlayerState p, (double x, double y, double z) c)

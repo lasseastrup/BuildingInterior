@@ -135,11 +135,32 @@ namespace Triband.Storey.Generate
             string key = ColorRef.Normalise(colorRef);
             if (!byHex.TryGetValue(key, out i))
             {
-                if (Colors.Count == Capacity) throw new InvalidOperationException($"the built-in palette is full ({Capacity} colours)");
-                i = Colors.Count; byHex[key] = i; Colors.Add(Generate.Colors.Col(key)); Version++;
+                var c = Generate.Colors.Col(key);
+                if (Colors.Count == Capacity)
+                {
+                    // full: the nearest colour it has stands in, where it threw, which broke the next district's build in a
+                    // long session of streamed districts (docs/PERFORMANCE.md §6.9); counted, for the renderer to say so
+                    i = Nearest(c); Unplaced++;
+                }
+                else { i = Colors.Count; Colors.Add(c); Version++; }
+                byHex[key] = i;
             }
             byRef[colorRef] = i;
             return i;
+        }
+
+        /// <summary>Colours met once the palette was full, each drawn as the nearest one it has (none: every colour has its own).</summary>
+        public int Unplaced { get; private set; }
+
+        int Nearest(Rgb c)
+        {
+            int best = 0; double bd = double.MaxValue;
+            for (int k = 0; k < Colors.Count; k++)
+            {
+                var o = Colors[k]; double dr = o.r - c.r, dg = o.g - c.g, db = o.b - c.b, d = dr * dr + dg * dg + db * db;
+                if (d < bd) { bd = d; best = k; }
+            }
+            return best;
         }
     }
 }

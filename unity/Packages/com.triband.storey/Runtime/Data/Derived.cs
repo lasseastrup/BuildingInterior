@@ -38,6 +38,13 @@ namespace Triband.Storey
             return y + (k - n) * FloorH(b, n);
         }
 
+        /// <summary>
+        /// Storey k + 1's floor base from storey k's (<paramref name="baseK"/>, as <see cref="FloorBase"/> gives it): the same
+        /// sums in the same order, so a loop up a building's storeys takes O(N), where FloorBase for each took O(N²)
+        /// (docs/PERFORMANCE.md §10.5).
+        /// </summary>
+        public static double NextFloorBase(BuildingData b, int k, double baseK) => k < 0 ? b.elevation : baseK + FloorH(b, k);
+
         public static double RoofY(BuildingData b) => FloorBase(b, b.floors.Count);
 
         /// <summary>The floor whose outline storey <paramref name="k"/> uses: the nearest setback at or below it, else 0.</summary>

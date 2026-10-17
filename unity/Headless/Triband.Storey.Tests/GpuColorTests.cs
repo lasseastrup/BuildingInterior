@@ -196,7 +196,14 @@ namespace Triband.Storey.Tests
             Assert.Equal(Colors.Col("#AABBCC"), p.Colors[0]);
             Assert.Throws<FormatException>(() => p.IndexOf("0123456789abcdef0123456789abcdef"));
             for (int i = 2; i < HexPaletteIndex.Capacity; i++) p.IndexOf($"#{i:X6}");
-            Assert.Throws<InvalidOperationException>(() => p.IndexOf("#FEDCBA"));
+            Assert.Equal(0, p.Unplaced);
+            // full: a new colour is drawn as the nearest it has, where it threw and broke the next build (docs/PERFORMANCE.md §6.9)
+            var want = Colors.Col("#FEDCBA");
+            int nearest = Enumerable.Range(0, p.Colors.Count).OrderBy(k => Math.Pow(p.Colors[k].r - want.r, 2) + Math.Pow(p.Colors[k].g - want.g, 2) + Math.Pow(p.Colors[k].b - want.b, 2)).First();
+            Assert.Equal(nearest, p.IndexOf("#FEDCBA"));
+            Assert.Equal(nearest, p.IndexOf("#fedcba"));
+            Assert.Equal(1, p.Unplaced);
+            Assert.Equal(HexPaletteIndex.Capacity, p.Colors.Count);
         }
 
         /// <summary>A reference the palette has seen is found again as the layout writes it, not normalised anew each time (docs/PERFORMANCE.md §6.8).</summary>

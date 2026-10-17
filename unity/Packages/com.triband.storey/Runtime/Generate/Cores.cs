@@ -69,6 +69,10 @@ namespace Triband.Storey.Generate
             return IsStairs(s) && k >= s.bottom && (k < T || (k == T && ShaftRoof(b, s))) && !Derived.Filled(b, k) && !Derived.Filled(b, k + 1);
         }
 
+        /// <summary>Whether storey <paramref name="k"/> is one of <see cref="Stops(BuildingData, CoreData)"/>, without the list (the walk model asks every frame).</summary>
+        public static bool StopsAt(BuildingData b, CoreData s, int k) =>
+            ((k >= s.bottom && k <= Derived.ShaftTop(b, s)) || (k == b.floors.Count && ShaftRoof(b, s))) && !Derived.Filled(b, k);
+
         /// <summary>The storeys a core can be used on: its levels but the filled ones (a lift passes those without stopping).</summary>
         public static List<int> Stops(BuildingData b, CoreData s)
         {

@@ -54,7 +54,7 @@ namespace Triband.Storey.Unity
             public readonly MeshFilter?[] filters = new MeshFilter?[OcclusionCore.Slots];
             public readonly bool[] shown = new bool[OcclusionCore.Slots];
             // what was written into the site's table: the occluders' rows and the walls down
-            public readonly HashSet<int> occluding = new HashSet<int>();
+            public HashSet<int> occluding = new HashSet<int>(), occludingNow = new HashSet<int>();
             public HashSet<int> wallsSet = new HashSet<int>(), wallsNow = new HashSet<int>();
         }
 
@@ -268,25 +268,25 @@ namespace Triband.Storey.Unity
             foreach (int id in w.wallsSet) if (!wallsNow.Contains(id)) table.SetWall(id, 0);
             (w.wallsSet, w.wallsNow) = (wallsNow, w.wallsSet);
 
-            // buildings in the way: the slot in each one's state row, the rows with world heights
-            foreach (int i in w.occluding) table.SetOccluder(i, -1);
-            w.occluding.Clear();
+            // buildings in the way: the slot in each one's state row, the rows with world heights. Written where they changed
+            // (docs/PERFORMANCE.md §10.4): every occluder's slot was cleared and set again, and its 64 texels marked for
+            // upload, every frame, about 1 KB an occluder a frame and its building looked at again by the steady pass
+            var occNow = w.occludingNow; occNow.Clear();
             Array.Clear(w.shown, 0, w.shown.Length);
             for (int ai = 0; ai < o.Active.Count; ai++)
             {
                 var oc = o.Active[ai];
                 if (oc.slot < 0) continue;
                 int idx = r.TableIndexOf(oc.b.id); if (idx < 0) continue;
-                table.SetOccluder(idx, oc.slot); w.occluding.Add(idx);
+                table.SetOccluder(idx, oc.slot); occNow.Add(idx);
                 int at = oc.slot * OcclusionCore.RowTexels, n = (int)o.Rows[at * 4];
-                var hd = new Vector4(o.Rows[at * 4], o.Rows[at * 4 + 1], o.Rows[at * 4 + 2] + lift, o.Rows[at * 4 + 3] + lift);
-                table.Occ[at] = hd;
-                table.MarkOccDirty(oc.slot);
+                bool changed = Put(table.Occ, at, new Vector4(o.Rows[at * 4], o.Rows[at * 4 + 1], o.Rows[at * 4 + 2] + lift, o.Rows[at * 4 + 3] + lift));
                 for (int i = 1; i < OcclusionCore.RowTexels; i++)
                 {
                     int q = (at + i) * 4;
-                    table.Occ[at + i] = new Vector4(o.Rows[q] + (i <= n ? lift : 0), o.Rows[q + 1], o.Rows[q + 2], o.Rows[q + 3]);
+                    changed |= Put(table.Occ, at + i, new Vector4(o.Rows[q] + (i <= n ? lift : 0), o.Rows[q + 1], o.Rows[q + 2], o.Rows[q + 3]));
                 }
+                if (changed) table.MarkOccDirty(oc.slot);
                 // the footprint stands in once the building starts to go: Sink's at once, Dissolve's fading in as it fades out
                 if (oc.k < oc.b.floors.Count && (core.mode == OccluderMode.Sink ? oc.t > 0 : core.mode == OccluderMode.Dissolve && oc.a > 0))
                 {
@@ -294,6 +294,8 @@ namespace Triband.Storey.Unity
                     table.SetLod(BuildingTable.FootprintRow(oc.slot), 0, 0, core.mode == OccluderMode.Dissolve ? (float)oc.a : 1);
                 }
             }
+            foreach (int i in w.occluding) if (!occNow.Contains(i)) table.SetOccluder(i, -1);   // out of the way now
+            (w.occluding, w.occludingNow) = (occNow, w.occluding);
             for (int i = 0; i < w.slots.Length; i++) { var go = w.slots[i]; if (!w.shown[i] && go != null && go.activeSelf) go.SetActive(false); }
             var modeG = core.mode switch
             {
@@ -304,6 +306,14 @@ namespace Triband.Storey.Unity
                 _ => StoreyGlobals.OcclusionMode.SinkOrSlice,
             };
             StoreyGlobals.SetOcclusion(modeG, playerWorld + Vector3.up * 1.1f, (float)core.holeRadius);
+        }
+
+        /// <summary>A texel of the occluder rows written: true when it differs (exactly: an approximate test could let small steps drift unsent).</summary>
+        static bool Put(Vector4[] occ, int i, Vector4 v)
+        {
+            var o = occ[i];
+            if (o.x == v.x && o.y == v.y && o.z == v.z && o.w == v.w) return false;
+            occ[i] = v; return true;
         }
 
         // a footprint's mesh carries its row, so it is kept per slot: drawn through the slot's row, always at LOD0, never

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Triband.Storey.Lod
 {
     /// <summary>
-    /// Contiguous blocks of indices out of a fixed range, first fit, merged again when given back (docs/CITY.md §5): the
+    /// Contiguous blocks of indices out of a fixed range, best fit, merged again when given back (docs/CITY.md §5): the
     /// shared building table hands each Storey Site one block for its layout's buildings.
     /// </summary>
     public sealed class IndexBlocks
@@ -17,17 +17,22 @@ namespace Triband.Storey.Lod
         /// <summary>How many indices are free in all (not necessarily in one block).</summary>
         public int Free { get { int t = 0; foreach (var f in free) t += f.n; return t; } }
 
-        /// <summary>A block of <paramref name="n"/> indices (the first returned), or -1 when no free block is that long.</summary>
+        /// <summary>
+        /// A block of <paramref name="n"/> indices (the first returned), or -1 when no free block is that long: from the
+        /// smallest free block it fits (the first of those), which leaves the large ones for large districts. First fit
+        /// broke them up: streaming 50–300-building districts with about 7,000 indices in use, it refused three loads in ten
+        /// where best fit refuses one in seven (docs/PERFORMANCE.md §6.9).
+        /// </summary>
         public int Alloc(int n)
         {
             if (n <= 0) return 0;
+            int pick = -1;
             for (int i = 0; i < free.Count; i++)
-            {
-                var f = free[i]; if (f.n < n) continue;
-                if (f.n == n) free.RemoveAt(i); else free[i] = (f.start + n, f.n - n);
-                return f.start;
-            }
-            return -1;
+                if (free[i].n >= n && (pick < 0 || free[i].n < free[pick].n)) pick = i;
+            if (pick < 0) return -1;
+            var f = free[pick];
+            if (f.n == n) free.RemoveAt(pick); else free[pick] = (f.start + n, f.n - n);
+            return f.start;
         }
 
         /// <summary>Give a block back.</summary>

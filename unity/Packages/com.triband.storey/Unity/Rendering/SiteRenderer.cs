@@ -1807,10 +1807,10 @@ namespace Triband.Storey.Unity
             }
             colliderPending.Clear();
             if (baking.Count == 0) return;
-            var ids = new int[baking.Count];
-            for (int i = 0; i < ids.Length; i++) ids[i] = baking[i].mesh.GetInstanceID();
-            bakeIds = new NativeArray<int>(ids, Allocator.Persistent);   // it may outlive the four frames a TempJob array may
-            bakeJob = new BakeJob { meshes = bakeIds }.Schedule(ids.Length, 1);
+            // it may outlive the four frames a TempJob array may; filled in place, without an array of its own
+            bakeIds = new NativeArray<int>(baking.Count, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            for (int i = 0; i < baking.Count; i++) bakeIds[i] = baking[i].mesh.GetInstanceID();
+            bakeJob = new BakeJob { meshes = bakeIds }.Schedule(baking.Count, 1);
             JobHandle.ScheduleBatchedJobs();
             if (!Application.isPlaying) FinishBake(true);
         }
@@ -1868,11 +1868,18 @@ namespace Triband.Storey.Unity
             if (b.collision != null) { Kill(b.collision); b.collision = null; }
         }
 
+        // ToMesh's arrays, kept from one collider to the next and grown as needed (docs/PERFORMANCE.md §3.5): two arrays a
+        // collider were garbage. The mesh copies what it is given
+        Vector3[] colliderV = Array.Empty<Vector3>();
+        ushort[] colliderI16 = Array.Empty<ushort>();
+        int[] colliderI32 = Array.Empty<int>();
+
         /// <summary>Positions and indices only, 16-bit when they fit; kept readable, as physics needs.</summary>
         Mesh ToMesh(CollisionMesh cm, string name)
         {
             int n = cm.P.Count;
-            var v = new Vector3[n];
+            if (colliderV.Length < n) colliderV = new Vector3[Math.Max(n, colliderV.Length * 2)];
+            var v = colliderV;
             double x0 = double.MaxValue, y0 = x0, z0 = x0, x1 = double.MinValue, y1 = x1, z1 = x1;
             for (int i = 0; i < n; i++)
             {
@@ -1887,14 +1894,17 @@ namespace Triband.Storey.Unity
             int ni = cm.I.Count;
             if (n <= 65535)
             {
-                var ix = new ushort[ni]; for (int i = 0; i < ni; i++) ix[i] = (ushort)cm.I[i];
+                if (colliderI16.Length < ni) colliderI16 = new ushort[Math.Max(ni, colliderI16.Length * 2)];
+                var ix = colliderI16; for (int i = 0; i < ni; i++) ix[i] = (ushort)cm.I[i];
                 m.SetIndexBufferParams(ni, UnityEngine.Rendering.IndexFormat.UInt16);
                 m.SetIndexBufferData(ix, 0, 0, ni, quiet);
             }
             else
             {
+                if (colliderI32.Length < ni) colliderI32 = new int[Math.Max(ni, colliderI32.Length * 2)];
+                cm.I.CopyTo(colliderI32);
                 m.SetIndexBufferParams(ni, UnityEngine.Rendering.IndexFormat.UInt32);
-                m.SetIndexBufferData(cm.I.ToArray(), 0, 0, ni, quiet);
+                m.SetIndexBufferData(colliderI32, 0, 0, ni, quiet);
             }
             m.subMeshCount = 1;
             m.SetSubMesh(0, new UnityEngine.Rendering.SubMeshDescriptor(0, ni), quiet);

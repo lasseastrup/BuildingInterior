@@ -230,9 +230,11 @@ namespace Triband.Storey.Play
         /// <summary>The storey a height is on: a floor line counts from 0.9 m below it, so the switch comes halfway up a flight.</summary>
         public static int FloorAtY(BuildingData b, double y)
         {
-            int N = b.floors.Count;
-            for (int k = N; k > 0; k--) if (y >= Derived.FloorBase(b, k) - 0.9) return k;
-            return 0;
+            // the highest storey whose floor is less than 0.9 m above y, the bases summed going up (FloorBase for each storey
+            // from the top took O(N²): 3.9 µs in a 38-storey building)
+            int N = b.floors.Count, at = 0; double yk = b.elevation;
+            for (int k = 1; k <= N; k++) { yk = Derived.NextFloorBase(b, k - 1, yk); if (y >= yk - 0.9) at = k; }
+            return at;
         }
 
         /// <summary>Inside one of the building's tier outlines (building-local).</summary>
@@ -316,10 +318,9 @@ namespace Triband.Storey.Play
                     if (Bridges.Span(Site, b, br) is BridgeSpan bs && Bridges.DeckAt(bs, x, z) is double dy && dy <= y + StepUp && dy > best) best = dy;
                 double lx = x - b.pos.x, lz = z - b.pos.z;
                 if (!OnAnyTier(b, lx, lz)) continue;
-                int N = b.floors.Count;
-                for (int k = 0; k <= N; k++)
+                int N = b.floors.Count; double yk = b.elevation;   // storey k's floor base, summed going up
+                for (int k = 0; k <= N; yk = Derived.NextFloorBase(b, k, yk), k++)
                 {
-                    double yk = Derived.FloorBase(b, k);
                     if (yk > y + StepUp || yk <= best) continue;
                     if (!(k > 0 && OnOutline(Derived.OutlineAt(b, k - 1), lx, lz)) && !(k < N && OnOutline(Derived.OutlineAt(b, k), lx, lz))) continue;   // the storey below's roof or terrace, or this storey's floor
                     if (HoleAt(b, k, lx, lz)) continue;
@@ -334,19 +335,21 @@ namespace Triband.Storey.Play
                         // one ramp per storey up the flight lane, from its run's start to its end
                         double hw = Dim.FLIGHT_W / 2, z0 = -Dim.FLIGHT_D / 2 + Dim.FLIGHT_LANDING, z1 = Dim.FLIGHT_D / 2 - Dim.FLIGHT_LANDING;
                         if (q.x <= -hw || q.x >= -hw + Dim.FLIGHT_LANE || q.z <= z0 || q.z >= z1) continue;
-                        for (int k = s.bottom; k <= N; k++)
+                        double fb = Derived.FloorBase(b, s.bottom);
+                        for (int k = s.bottom; k <= N; fb = Derived.NextFloorBase(b, k, fb), k++)
                         {
                             if (!Cores.HasFlight(b, s, k)) continue;
-                            double hy = Derived.FloorBase(b, k) + (q.z - z0) / (z1 - z0) * Derived.FloorH(b, k);
+                            double hy = fb + (q.z - z0) / (z1 - z0) * Derived.FloorH(b, k);
                             if (hy <= y + StepUp && hy > best) best = hy;
                         }
                         continue;
                     }
                     if (Math.Abs(q.x) >= 1.3 || q.z <= -1.6 || q.z >= 2.6) continue;
-                    for (int k = s.bottom; k <= N; k++)
+                    double sb = Derived.FloorBase(b, s.bottom);
+                    for (int k = s.bottom; k <= N; sb = Derived.NextFloorBase(b, k, sb), k++)
                     {
                         if (!Cores.HasFlight(b, s, k)) continue;
-                        double yb = Derived.FloorBase(b, k), half = Derived.FloorH(b, k) / 2, hy;
+                        double yb = sb, half = Derived.FloorH(b, k) / 2, hy;
                         if (q.z >= 1.6) hy = yb + half;                                   // the mid landing
                         else if (q.x < 0) hy = yb + (q.z + 1.6) / 3.2 * half;             // the first flight, up along +w
                         else hy = yb + half + (1.6 - q.z) / 3.2 * half;                   // the second, back down along -w and up
@@ -434,7 +437,7 @@ namespace Triband.Storey.Play
             {
                 if (s.type != CoreType.Lift) continue;
                 var q = ToCore(s, x - b.pos.x, z - b.pos.z);
-                if (Math.Abs(q.x) < 1.2 && Math.Abs(q.z) < 1.2 && Cores.Stops(b, s).Contains(floor)) return (b, s, floor);
+                if (Math.Abs(q.x) < 1.2 && Math.Abs(q.z) < 1.2 && Cores.StopsAt(b, s, floor)) return (b, s, floor);
             }
             return null;
         }

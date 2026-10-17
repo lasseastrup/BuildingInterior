@@ -115,7 +115,7 @@ namespace Triband.Storey.Generate
         /// <summary>A bridge as it stands in the layout now, or null when it no longer meets (memoised per site).</summary>
         public static BridgeSpan? Span(Site site, BuildingData A, BridgeData br)
         {
-            string key = A.id + "/" + br.id;
+            var key = (A, br);
             if (site.bridgeMemo.TryGetValue(key, out var m)) return m;
             BridgeSpan? s = null;
             var B = site.ById(br.to);

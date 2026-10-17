@@ -26,6 +26,9 @@ The URP settings below are starting points, not measurements. Every number in th
 | URP Global Settings, Strip Unused Variants | On | On | URP leaves out its keywords' variants for features no pipeline asset in the build uses. Storey's build step leaves out the minimum tier's lighting variants when no quality asset in the build uses them (`StoreyShaderStripping`). |
 | Player Settings, Frame Timing Stats | On | On | The CPU and GPU times in Storey Diagnostics, Storey Performance Run and Storey Auto Resolution. |
 | Shader warm-up | Storey Shader Warm-Up with a traced collection for Metal | The same, traced on the minimum tier's settings | A pipeline state met mid-game is compiled in that frame (docs/PERFORMANCE.md §7.9). |
+| `Application.backgroundLoadingPriority` | BelowNormal (Unity's default: about 4 ms of integration a frame) | Low (about 2 ms), or BelowNormal behind a loading screen | A district's scene integrates its assets on the main thread in the same frames as Storey's **Build Budget Ms** (2 and 4 ms): the two share the frame. Measure Unity's `Application.Integrate Assets in Background` marker on the device (docs/PERFORMANCE.md §6.9). |
+| Physics broadphase | Automatic Box Pruning | Automatic Box Pruning | Colliders come and go with buildings' LOD0 (up to the quality asset's **Colliders Kept**); sweep-and-prune, the default, degrades with many static colliders added and removed (docs/PERFORMANCE.md §10.6). |
+| `Physics.autoSyncTransforms` | Off | Off | Unity's default; on, every transform change syncs physics at once. |
 
 ## Shader warm-up
 

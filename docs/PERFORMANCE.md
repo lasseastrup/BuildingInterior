@@ -197,6 +197,8 @@ The design is right: collision meshes made on the workers, cooked in an `IJobPar
 - Cooking is `UseFastMidphase` only: no `CookForFasterSimulation`, mesh cleaning or welding. That is the fastest cook. Whether characters see internal-edge bumps on the welded meshes without the faster-simulation data is a feel question for the play kit [CPU-5].
 - `AddComponent<MeshCollider>` and `sharedMesh` assignment insert a static shape into PhysX's scene-query structure, deferred and batched [CPU-5]. At the walk's pace (37 colliders kept after five minutes) that is negligible.
 
+Status: the arrays are done (CHANGELOG). `ToMesh` keeps its position and index arrays from one collider to the next and grows them as needed, and a batch's ids go straight into its native array. The cooking options stay a feel question for the play kit.
+
 ## 4. Mesh upload and geometry memory
 
 ### 4.1 The upload path (medium)
@@ -410,6 +412,13 @@ What the colour rows still make is a row's palette indices and the book's maps (
 - **Background loading priority.** `Application.backgroundLoadingPriority` is left at its default (BelowNormal: 4 ms of integration a frame) [CPU-7]. Document it beside `buildBudgetMs`: they share the frame.
 - **Activation.** A district's scene activation runs every object's `Awake`/`OnEnable` in one frame [CPU-7]. The layout asset's 3.9 MB string field loads with it. Measure the integration step on device (Profiler marker `Application.Integrate Assets in Background`) and keep district scenes small and the layout binary (§6.4).
 
+Status (CHANGELOG):
+- **Block allocation** is best fit (`IndexBlocks.Alloc`). Streaming 50–300-building districts with about 7,000 of the 8,176 indices in use, first fit refused 2,204 of 7,449 loads and best fit 865 of 6,090; with about 6,000 in use, 7 against 4 (`IndexBlocksTests`). Several blocks per site would need party walls' neighbour indices to follow them, and isn't done.
+- **The built-in palette** draws a colour met when it is full as the nearest it has, where it threw and broke the next district's build. The renderer warns once.
+- **The building table's arrays** still never shrink.
+- **Background loading priority** is documented beside each tier's build budget (`Documentation~/quality-tiers.md`).
+- **Activation** stays a measurement for the device. The layout no longer loads its text in a player (§6.5).
+
 ## 7. Shaders and the GPU
 
 What runs: three URP shaders (Opaque for LOD0 and LOD1, Massing for LOD2 and the cells, Glass for LOD0's see-through panes) built from `StoreyLit.hlsl`, `StoreyFragment.hlsl`, `StoreyOcclusion.hlsl`, `StoreyPalette.hlsl`, `StoreyWindow.hlsl` and `StoreyFacade.hlsl`. Each opaque and massing renderer draws in the colour pass, the shadow caster pass (once per cascade it touches) and the DepthOnly pass when a depth prepass runs. Nothing of the URP setup is committed yet (`unity/ProjectSettings` holds only the editor version), so the costs below are the shaders' own; §7.10 lists the project settings that decide the rest.
@@ -477,6 +486,8 @@ These run only for the few buildings being cut, faded or in the way, but those a
 - **Sink's storey search in the fragment stage** (`StoreyOcclusion.hlsl:177-188`) walks the occluder's storeys bottom up: up to n iterations and two buffer loads per pixel. The vertex stage already walks them (`StoreySink`). Pass the storey (or its row) from the vertex stage, or use a binary search. Triangles never cross a storey line by construction (SPEC §5.1).
 - **Cutout and Fade** compute `mul(UNITY_MATRIX_VP, _StoreyPlayer)` per pixel (uniform for the whole draw) and `mul(UNITY_MATRIX_VP, worldPos)`, which duplicates `SV_Position` (`StoreyOcclusion.hlsl:201-209`). Set the player's clip position per camera (`beginCameraRendering`) and use `SV_Position.xy` and `.w`.
 - **Precision**: all of it is `float`. URP's own lighting is `half` on mobile. On the A10, FP16 runs at twice the FP32 rate (about 690 against 350 GOPS); from the A15 the rates are equal, and `half` saves registers, occupancy and bandwidth instead [R6]. Colours, normals, window uvs and dither values are safe in `half`; positions and the cutaway's plane tests are not. Unity ignores the `h` literal suffix: write `half(x)`.
+
+Status: not done. These are shader changes to the few buildings being cut, faded or in the way, which only a device's GPU timings and eyes can check. The steady variant (§7.6), which most of the city draws with, has none of this code. Revisit if a frame capture shows the occluders' pixels expensive. The interpolants are `half` since §7.2.
 
 ### 7.6 Discarding draws are interleaved with opaque ones (high on Apple GPUs, effort S)
 
@@ -748,6 +759,8 @@ Status: done (CHANGELOG): an object per slot, its mesh, layer and state set only
 
 Each frame `Write` clears every occluding building's slot and sets it again (`StoreyOcclusion.cs:155, 163`), which dirties its state chunk. It also rewrites the occluder's 64 texels and marks them dirty unconditionally (`:164-171`). That is about 2 KB of upload per occluder per frame, up to 32 KB with 16. Diff the occluding set and mark rows only when they change.
 
+Status: done (CHANGELOG). A slot is set where it changed and cleared only for a building out of the way now, and an occluder's texels go up only when one of them changed (compared exactly, so small steps can't drift unsent). A settled occluder sends nothing a frame, and its building is no longer looked at again by the steady pass every frame (§3.3).
+
 ### 10.5 Smaller items
 
 - `SegmentHits` has no cheap rejection: 89 % of candidate tests miss. A 2D box test against the outline's bounds rejected 88 % with no false rejections over 24,938 tests. The three rays share one plan segment, so test the plan once.
@@ -757,6 +770,12 @@ Each frame `Write` clears every occluding building's slot and sets it again (`St
   Cap them (LRU), or clear on district change.
 - `PlayWorld.FloorAtY` and `SurfaceAt` are quadratic in storeys through `Derived.FloorBase`: `Locate` takes 3.9 µs in a 38-storey building.
 - `Bridges.Span` builds a string key on every call (`Bridges.cs:118`), from `SurfaceAt` per bridge per walker sub-step: 40 bytes each. The fixture cities have no bridges.
+
+Status of these four (CHANGELOG; the occlusion harness of appendix A.6, x64; its runs on this machine vary by about 30 %):
+- **`SegmentHits`** first tests the segment against the box of all the building's tiers, then each tier's box, widened by the test's reach. The same answers as the old test on 12,000 random segments (`PlayWalkTests.TheSegmentTestsBoxRejectionRejectsNoHit`) and on the prototype's corpus. 0.39–0.50 µs a candidate, where it took 1.0–2.9 µs. The three rays still test the plan each.
+- **Caches.** The occlusion core keeps at most 2,048 buildings' shapes and 256 occluder records; past that, the shapes are made again as they are met, and the records of buildings not in the way go. A walk with the caps at 24 and 6 answers frame by frame as one without them (`PlayWalkTests.TheCoresCapsChangeNothingButMemory`). The footprint meshes are capped since §10.3.
+- **Floor heights.** `FloorAtY`, `SurfaceAt`, and the core's Slice height, storey and Sink plan sum a building's floor bases going up (`Derived.NextFloorBase`, the same values to the bit, `DerivedTests`). `Locate` in a 38-storey building takes 2.6 µs, where it took 7.4. `LiftAt` asks whether a storey is a stop without making the stops' list (`Cores.StopsAt`): 1.9 µs and no garbage, where it took 5.5 µs and 736 bytes.
+- **Bridges.** `Bridges.Span` memoises by the building and bridge objects: no garbage, where the string key cost 40 bytes a call.
 - No Profiler markers in `StoreyOcclusion`, `StoreyProps` or the play kit. Add `Storey.Occlusion`, `Storey.Occlusion.Cutaway`, `Storey.Props`, `Storey.Walk` and `Storey.HUD` before the first device run (PLAY.md §5.5). Done (CHANGELOG), named as Storey's other stages are (`StoreyTimings`, which Storey Diagnostics' stall notes read too): "Storey occlusion: view and buildings in the way" and "Storey occlusion: cutaway" inside "Storey occlusion: frame" (`OcclusionCore.FrameView`, `FrameCutaway`), "Storey props: frame", "Storey walk: character", "Storey walk: camera" and "Storey hud: the place and the lift panel".
 - Forced LOD0 (§3.1): a simulated 467-second run (two build threads, LOD builds at 4× and 8× the measured time, 750 and 1,170 px screens, running at 7 m/s with the camera swinging) had 0 of 69 buildings entering the way without their LOD0. The blocking build is a spawn, teleport and district-entry problem, not a continuous-play one.
 
@@ -765,6 +784,8 @@ Each frame `Write` clears every occluding building's slot and sets it again (`St
 Covered in §3.5: built on the workers, cooked with `Physics.BakeMesh` in a job, assigned with matching cooking options, capped at 64. Two notes for the project's physics settings:
 - Sweep-and-prune, Unity's default broadphase, degrades when many colliders are added and removed. Unity 6.3 recommends Automatic Box Pruning for large worlds with many static colliders [CPU-5].
 - Leave `Physics.autoSyncTransforms` off [CPU-5].
+
+Status: both are in `Documentation~/quality-tiers.md`'s table, per tier.
 
 ## 11. Props, facade details, windows and the play kit
 

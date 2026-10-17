@@ -133,5 +133,100 @@ namespace Triband.Storey.Tests
             Assert.True(n > 0);
             Assert.True(bad.Count == 0, $"{bad.Count} of {n}:\n" + string.Join("\n", bad.Take(10)));
         }
+
+        /// <summary>
+        /// The segment test's box rejection (docs/PERFORMANCE.md §10.5) rejects no hit: over random segments round the walk-in
+        /// test city's buildings, near and far, through every tier's height, it answers as the test without it does.
+        /// </summary>
+        [Fact]
+        public void TheSegmentTestsBoxRejectionRejectsNoHit()
+        {
+            var d = new StoreyDocument(); Edit.TestCity.Generate(d, 200, walkIn: true);
+            var site = new Generate.Site(d.buildings); var world = new PlayWorld(site);
+            var core = new OcclusionCore(world, new OcclusionSettings());
+            var rnd = new Random(11); int hits = 0, n = 0;
+            foreach (var b in d.buildings)
+            {
+                var (x0, z0, x1, z1) = Generate.Site.BoundsOf(b); double top = Derived.RoofY(b) + 3;
+                for (int i = 0; i < 60; i++)
+                {
+                    double R() => rnd.NextDouble();
+                    // ends in a box twice the building's size round it, some of them just past its outline
+                    var p = (x0 - (x1 - x0) / 2 + R() * 2 * (x1 - x0), b.elevation - 1 + R() * (top - b.elevation + 1), z0 - (z1 - z0) / 2 + R() * 2 * (z1 - z0));
+                    var q = (x0 - (x1 - x0) / 2 + R() * 2 * (x1 - x0), b.elevation - 1 + R() * (top - b.elevation + 1), z0 - (z1 - z0) / 2 + R() * 2 * (z1 - z0));
+                    if (i % 3 == 0) q = (p.Item1 + (R() - 0.5) * 0.8, p.Item2, p.Item3 + (R() - 0.5) * 0.8);   // short ones, at the walls
+                    bool want = Reference(world, b, p, q), got = core.SegmentHits(b, p, q);
+                    Assert.True(want == got, $"{b.name}: {got}, without the box test {want}");
+                    if (want) hits++; n++;
+                }
+            }
+            Assert.True(hits > n / 10 && hits < n * 9 / 10, $"{hits} of {n} hit");
+        }
+
+        /// <summary>
+        /// The occlusion core keeps so many buildings' shapes and occluder records, where they only grew (docs/PERFORMANCE.md
+        /// §10.5): a walk round the 3,000-building test city with the caps at a handful answers frame by frame as the same
+        /// walk without them, and keeps no more than the caps.
+        /// </summary>
+        [Fact]
+        public void TheCoresCapsChangeNothingButMemory()
+        {
+            var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document; Edit.TestCity.Generate(d, 3000);
+            var world = new PlayWorld(new Generate.Site(d.buildings));
+            var free = new OcclusionCore(world, new OcclusionSettings { mode = OccluderMode.Sink }) { shapesKept = int.MaxValue, recordsKept = int.MaxValue };
+            var capped = new OcclusionCore(world, new OcclusionSettings { mode = OccluderMode.Sink }) { shapesKept = 24, recordsKept = 6 };
+            // a point somewhere in the city every 40 frames, a low camera swinging round it: many buildings in the way
+            double cx0 = d.buildings.Min(b => b.pos.x), cx1 = d.buildings.Max(b => b.pos.x), cz0 = d.buildings.Min(b => b.pos.z), cz1 = d.buildings.Max(b => b.pos.z);
+            var rnd = new Random(5); var p = new PlayerState(); var cam = new FollowCamera();
+            const double dt = 1.0 / 60; int inTheWay = 0, mostShapes = 0, mostRecords = 0;
+            for (int f = 0; f < 2400; f++)
+            {
+                if (f % 40 == 0)
+                {
+                    p = new PlayerState(); p.Spawn(cx0 + rnd.NextDouble() * (cx1 - cx0), 0, cz0 + rnd.NextDouble() * (cz1 - cz0));
+                    cam = new FollowCamera { yaw = rnd.NextDouble() * 6.28, pitch = 0.3, dist = 16 }; cam.Snap(p);
+                }
+                cam.yaw += 0.02;
+                Walker.Step(world, p, new MoveInput(f % 300 < 150 ? 0.4 : -0.3, 1, true), cam.yaw, dt);
+                cam.Follow(p, dt);
+                var pos = cam.Position();
+                free.Frame(p, pos, (cam.tx, cam.ty, cam.tz), dt); capped.Frame(p, pos, (cam.tx, cam.ty, cam.tz), dt);
+                Assert.Equal(free.Active.Select(r => (r.b.id, r.slot, r.a, r.t, r.k)), capped.Active.Select(r => (r.b.id, r.slot, r.a, r.t, r.k)));
+                Assert.Equal(free.Rows, capped.Rows);
+                Assert.Equal((free.View.active?.id, free.View.floor, free.View.clipY), (capped.View.active?.id, capped.View.floor, capped.View.clipY));
+                if (free.Active.Count > 0) inTheWay++;
+                mostShapes = Math.Max(mostShapes, capped.Kept.shapes); mostRecords = Math.Max(mostRecords, capped.Kept.records);
+            }
+            Assert.True(inTheWay > 100, $"{inTheWay} frames with buildings in the way");
+            Assert.True(free.Kept.shapes > 24 && free.Kept.records > 6, $"uncapped: {free.Kept}");
+            Assert.True(mostShapes <= 24 && mostRecords <= 6 + OcclusionCore.Slots, $"capped kept at most {mostShapes} shapes and {mostRecords} records");
+        }
+
+        // the segment test as it was before its box rejection
+        static bool Reference(PlayWorld world, BuildingData b, (double x, double y, double z) p, (double x, double y, double z) q)
+        {
+            int N = b.floors.Count; double extra = Generate.Roofs.IsPitched(b) ? Generate.Roofs.Rise(world.Site, b) : 1.1;
+            foreach (var (k0, k1) in Generate.Party.Tiers(b))
+            {
+                double y0 = Derived.FloorBase(b, k0), y1 = Derived.FloorBase(b, k1) + (k1 == N ? extra : 0), dy = q.y - p.y, t0 = 0, t1 = 1;
+                if (Math.Abs(dy) < 1e-9) { if (p.y < y0 || p.y > y1) continue; }
+                else
+                {
+                    double a = (y0 - p.y) / dy, c = (y1 - p.y) / dy; if (a > c) { var x = a; a = c; c = x; }
+                    t0 = Math.Max(0, a); t1 = Math.Min(1, c); if (t0 >= t1) continue;
+                }
+                var fp = Derived.OutlineAt(b, k0);
+                var A = new Vec2(p.x + (q.x - p.x) * t0 - b.pos.x, p.z + (q.z - p.z) * t0 - b.pos.z);
+                var B = new Vec2(p.x + (q.x - p.x) * t1 - b.pos.x, p.z + (q.z - p.z) * t1 - b.pos.z);
+                bool Near(Vec2 v, Vec2 w) => Edit.Tiers.SegCross(A, B, v, w)
+                    || Math.Min(Math.Min(Edit.Tiers.SegDist(v.x, v.z, A.x, A.z, B.x, B.z).d, Edit.Tiers.SegDist(w.x, w.z, A.x, A.z, B.x, B.z).d),
+                                Math.Min(Edit.Tiers.SegDist(A.x, A.z, v.x, v.z, w.x, w.z).d, Edit.Tiers.SegDist(B.x, B.z, v.x, v.z, w.x, w.z).d)) < 0.05;
+                double Dist(double x, double z) { double dd = 1e9; for (int i = 0; i < fp.Count; i++) { var a = fp[i]; var c = fp[(i + 1) % fp.Count]; dd = Math.Min(dd, Edit.Tiers.SegDist(x, z, a.x, a.z, c.x, c.z).d); } return dd; }
+                bool edge = false;
+                for (int i = 0; i < fp.Count && !edge; i++) edge = Near(fp[i], fp[(i + 1) % fp.Count]);
+                if (Generate.Geo.Pip(fp, A.x, A.z) || Generate.Geo.Pip(fp, B.x, B.z) || edge || Dist(A.x, A.z) < Generate.Dim.T_EXT || Dist(B.x, B.z) < Generate.Dim.T_EXT) return true;
+            }
+            return false;
+        }
     }
 }

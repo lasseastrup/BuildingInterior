@@ -771,9 +771,12 @@ namespace Unity.Collections
     public enum Allocator { Invalid = 0, None = 1, Temp = 2, TempJob = 3, Persistent = 4 }
     public sealed class ReadOnlyAttribute : System.Attribute { }
 
+    public enum NativeArrayOptions { UninitializedMemory = 0, ClearMemory = 1 }
+
     public struct NativeArray<T> : System.IDisposable where T : struct
     {
         public NativeArray(T[] array, Allocator allocator) { }
+        public NativeArray(int length, Allocator allocator, NativeArrayOptions options = NativeArrayOptions.ClearMemory) { }
         public T this[int index] { get => default; set { } }
         public int Length => 0;
         public void Dispose() { }

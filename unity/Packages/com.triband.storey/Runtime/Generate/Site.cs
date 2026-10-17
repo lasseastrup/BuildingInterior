@@ -22,7 +22,9 @@ namespace Triband.Storey.Generate
         // party walls' is one map for every building, tier and edge (Party.Ranges), kept for the site's life: a site is made
         // anew for every load and every edit (docs/PERFORMANCE.md §6.6)
         internal readonly ConcurrentDictionary<long, List<Party.Range>> partyMemo = new ConcurrentDictionary<long, List<Party.Range>>(4, 1024);
-        internal readonly ConcurrentDictionary<string, BridgeSpan?> bridgeMemo = new ConcurrentDictionary<string, BridgeSpan?>(StringComparer.Ordinal);
+        // each bridge's span, by the building it leaves and the bridge (objects: the key was a string made on every call, from
+        // the walk model's every sub-step, docs/PERFORMANCE.md §10.5)
+        internal readonly ConcurrentDictionary<(BuildingData from, BridgeData br), BridgeSpan?> bridgeMemo = new ConcurrentDictionary<(BuildingData, BridgeData), BridgeSpan?>();
         /// <summary>Each pitched roof's rise above its walls (<see cref="Roofs.Rise"/>), filled by the massing's build.</summary>
         internal readonly ConcurrentDictionary<string, double> riseMemo = new ConcurrentDictionary<string, double>(StringComparer.Ordinal);
         // each building's pitched roofs, the top one (k = its storeys) and its terraces', made once a site and only read after

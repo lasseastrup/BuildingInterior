@@ -31,6 +31,50 @@ namespace Triband.Storey.Tests
             Assert.True(n > 300);
         }
 
+        /// <summary>
+        /// The walk model and the occlusion core sum a building's floor bases going up (docs/PERFORMANCE.md §10.5): the next
+        /// storey's from the last's is <see cref="Derived.FloorBase"/>'s value to the bit, from below the ground to the roof,
+        /// and the storey at a height is the one the old search from the top found.
+        /// </summary>
+        [Fact]
+        public void FloorBasesSummedGoingUpAreFloorBases()
+        {
+            var docs = new[] { PrototypeJson.Read(Fixtures.Text("demo.json")).Document, PrototypeJson.Read(Fixtures.Text("variants.json")).Document };
+            var city = new StoreyDocument(); Edit.TestCity.Generate(city, 300, walkIn: true);
+            int n = 0;
+            foreach (var b in docs.SelectMany(d => d.buildings).Concat(city.buildings))
+            {
+                int N = b.floors.Count;
+                for (int k0 = -2; k0 <= 1; k0++)
+                {
+                    double y = Derived.FloorBase(b, k0);
+                    for (int k = k0; k <= N + 1; y = Derived.NextFloorBase(b, k, y), k++)
+                        Assert.Equal(System.BitConverter.DoubleToInt64Bits(Derived.FloorBase(b, k) + 0.0), System.BitConverter.DoubleToInt64Bits(y + 0.0));
+                }
+                int Old(double y) { for (int k = N; k > 0; k--) if (y >= Derived.FloorBase(b, k) - 0.9) return k; return 0; }
+                for (double y = b.elevation - 3; y <= Derived.RoofY(b) + 3; y += 0.37) Assert.Equal(Old(y), Play.PlayWorld.FloorAtY(b, y));
+                n++;
+            }
+            Assert.True(n > 300);
+        }
+
+        /// <summary>A core stops at a storey just when its list of stops has it (the walk model asks without making the list).</summary>
+        [Fact]
+        public void ACoreStopsWhereItsStopsSay()
+        {
+            var docs = new[] { PrototypeJson.Read(Fixtures.Text("demo.json")).Document, PrototypeJson.Read(Fixtures.Text("variants.json")).Document };
+            var city = new StoreyDocument(); Edit.TestCity.Generate(city, 300, walkIn: true);
+            int cores = 0;
+            foreach (var b in docs.SelectMany(d => d.buildings).Concat(city.buildings))
+                foreach (var s in b.shafts)
+                {
+                    var stops = Generate.Cores.Stops(b, s);
+                    for (int k = -2; k <= b.floors.Count + 2; k++) Assert.Equal(stops.Contains(k), Generate.Cores.StopsAt(b, s, k));
+                    cores++;
+                }
+            Assert.True(cores > 100, $"{cores} cores");
+        }
+
         static readonly Dictionary<string, object?> Corpus = (Dictionary<string, object?>)Json.Parse(Fixtures.Text("derived.json"))!;
         static double Tol => (double)((Dictionary<string, object?>)Corpus["tolerance"]!)["absolute"]!;
 
