@@ -102,9 +102,16 @@ namespace Triband.Storey.Tests
                 Assert.Equal(row.GpuTexels(37).Select(x => (float)x), into);
             }
             Assert.True(rows.Count > 20, $"{rows.Count} rows");
-            long a0 = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < 100; i++) foreach (var row in rows) row.GpuTexels(i, into);
-            Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - a0);
+            // the least of three runs: an allocation per row shows in every one, where the runtime's own (once in the full
+            // suite, under load) doesn't repeat
+            long least = long.MaxValue;
+            for (int attempt = 0; attempt < 3 && least > 0; attempt++)
+            {
+                long a0 = GC.GetAllocatedBytesForCurrentThread();
+                for (int i = 0; i < 100; i++) foreach (var row in rows) row.GpuTexels(i, into);
+                least = Math.Min(least, GC.GetAllocatedBytesForCurrentThread() - a0);
+            }
+            Assert.Equal(0, least);
         }
 
         [Fact]

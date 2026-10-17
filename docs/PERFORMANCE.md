@@ -793,6 +793,15 @@ Status: the references are editor-only (CHANGELOG). `mesh`, `lod1Mesh` and `Bake
 - **Transform writes.** `StoreyCharacter.Place` and `StoreyPlayCamera` set position and rotation separately; use `SetPositionAndRotation`.
 - **Not performance.** `StoreyPlayKit.cs:44` uses `GetComponent<StoreyPlayCamera>() ?? AddComponent…`, which Unity's fake-null objects defeat in the editor. `StoreySite` and `StoreyProps` both run at execution order 1000, so props can read last frame's occlusion; use 1001.
 
+Status: done, except the move to UI Toolkit or UGUI (CHANGELOG).
+- **Per frame, not per event.** `StoreyCharacter` works out the place and the lift car once a frame in `Update` (`Here`, `Lift`), and makes a lift's stops again only for another lift (`Stops`).
+- **A switch.** The HUD is a component of its own (`StoreyHud`), added by the character and switched with **Show Hud**. Off, it costs nothing: IMGUI calls `OnGUI` only on enabled components. The performance run pauses the character, HUD included.
+- **The silhouette.** The capsule's collider is destroyed at once, before the silhouette is cloned from it.
+- **Transform writes.** The character and the camera each write their transform once (`SetPositionAndRotation`).
+- **The play kit's camera component** is found with an explicit null test.
+- **The props** run at 1001 (§11.1).
+- **Not done.** The HUD stays IMGUI: UI Toolkit needs a panel settings asset and a theme the project makes in the editor, and UGUI a package the play kit doesn't depend on. Shown, it costs its few boxes and buttons per GUI event, and no queries.
+
 ## 12. Garbage and the managed heap
 
 ### 12.1 What a collection costs in Unity

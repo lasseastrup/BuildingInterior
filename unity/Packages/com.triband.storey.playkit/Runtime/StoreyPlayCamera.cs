@@ -38,8 +38,9 @@ namespace Triband.Storey.PlayKit
             Follow.Follow(p, dt);
             var (x, y, z) = Follow.Position();
             var target = o + new Vector3((float)Follow.tx, (float)Follow.ty, (float)Follow.tz);
-            transform.position = o + new Vector3((float)x, (float)y, (float)z);
-            transform.LookAt(target);
+            var at = o + new Vector3((float)x, (float)y, (float)z); var look = target - at;
+            // one transform write, where a position and then LookAt were two
+            transform.SetPositionAndRotation(at, look.sqrMagnitude > 1e-8f ? Quaternion.LookRotation(look) : transform.rotation);
             if (occlusion != null) occlusion.SetCameraTarget(target);
         }
     }

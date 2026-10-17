@@ -1,5 +1,5 @@
 #nullable enable
-using System.Linq;
+using System.Collections.Generic;
 using Triband.Storey.Play;
 using Triband.Storey.Unity;
 using UnityEngine;
@@ -10,8 +10,8 @@ namespace Triband.Storey.PlayKit
     /// The play kit's character (docs/PLAY.md, slice 5.4): walks the layout with the engine-free walk model
     /// (<see cref="Walker"/> on the occlusion system's <see cref="PlayWorld"/>), relative to the camera's facing, with no
     /// physics. Tells the occlusion system where it is. Shows the lift panel in a lift car, and which building and storey
-    /// it is on. Its body is a capsule unless it has renderers of its own, drawn a second time through walls when the
-    /// settings ask for the silhouette.
+    /// it is on (<see cref="StoreyHud"/>, while <see cref="showHud"/>). Its body is a capsule unless it has renderers of its
+    /// own, drawn a second time through walls when the settings ask for the silhouette.
     /// </summary>
     [AddComponentMenu("Storey/Play Kit/Storey Character")]
     public sealed class StoreyCharacter : MonoBehaviour
@@ -24,12 +24,23 @@ namespace Triband.Storey.PlayKit
         public Color silhouetteColour = new Color(1f, 0.49f, 0.2f, 0.85f);
         [Tooltip("A material with the Storey/Silhouette shader (so builds include it); found by name in the editor when empty.")]
         public Material? silhouette;
+        [Tooltip("Show where the character is, the lift panel in a lift car, and the joystick on a touch screen. Off for measurement runs: then nothing is drawn or asked for it.")]
+        public bool showHud = true;
 
         public readonly PlayerState State = new PlayerState();
         public readonly PlayInput Input = new PlayInput();
         Renderer[] silhouettes = new Renderer[0];
         bool spawned;
-        GUIStyle? label;
+        StoreyHud? hud;
+
+        /// <summary>The building and storey the character is on, worked out once a frame (null: outside).</summary>
+        public (BuildingData b, int floor)? Here { get; private set; }
+        /// <summary>The lift car it stands in and the storey, once a frame (null: none, or riding).</summary>
+        public (BuildingData b, CoreData s, int floor)? Lift { get; private set; }
+        /// <summary>The storeys the lift it stands in stops at, kept while it stays in that lift.</summary>
+        public IReadOnlyList<int> Stops => stops;
+        List<int> stops = new List<int>();
+        (BuildingData? b, CoreData? s) stopsFor;
 
         /// <summary>
         /// Put the character at a point (world space, the feet). The site builds full detail round it ahead of the rest
@@ -48,7 +59,6 @@ namespace Triband.Storey.PlayKit
 
         void Start()
         {
-            useGUILayout = false;   // the HUD draws with GUI, not GUILayout: skips the layout pass's garbage
             if (!spawned) Spawn(transform.position, transform.eulerAngles.y * Mathf.Deg2Rad);
             if (GetComponentInChildren<Renderer>() == null) Body();
         }
@@ -58,7 +68,8 @@ namespace Triband.Storey.PlayKit
         {
             var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             body.name = "Body";
-            Destroy(body.GetComponent<Collider>());
+            // at once: Destroy waits for the frame's end, and the silhouette cloned from it kept a collider moving every frame
+            DestroyImmediate(body.GetComponent<Collider>());
             body.transform.SetParent(transform, false);
             body.transform.localPosition = new Vector3(0, 0.9f, 0); body.transform.localScale = new Vector3(0.6f, 0.9f, 0.6f);
             var shader = silhouette != null ? silhouette.shader : Shader.Find("Storey/Silhouette");
@@ -79,7 +90,10 @@ namespace Triband.Storey.PlayKit
             var cam = viewCamera != null ? viewCamera : Camera.main;
             float dt = Mathf.Min(Time.deltaTime, 0.05f);
             Input.Read(dt);
-            if (world == null) return;   // the site has not been built yet
+            // the HUD: a component of its own, on while shown (docs/PERFORMANCE.md §11.4)
+            if (showHud && hud == null) { hud = gameObject.AddComponent<StoreyHud>(); hud.character = this; }
+            if (hud != null && hud.enabled != showHud) hud.enabled = showHud;
+            if (world == null) { Here = null; Lift = null; return; }   // the site has not been built yet
             // the occlusion moved to another district (StoreyOcclusion.followPlayer): the walk state is in the site's own
             // space, so it moves by the difference between the two sites' origins, and the character stays put
             var o = Origin;
@@ -91,58 +105,29 @@ namespace Triband.Storey.PlayKit
             Place();
             bool sil = occlusion != null && (occlusion.settings == null || occlusion.settings.silhouette);
             foreach (var r in silhouettes) if (r != null) r.enabled = sil;
+            // where it is and the lift it stands in, once a frame for the HUD, which asked on every GUI event; a lift's
+            // stops made again only for another lift
+            if (!showHud) { Here = null; Lift = null; return; }
+            Here = world.Locate(State.x, State.y, State.z);
+            Lift = State.ride == null ? world.LiftAt(State.x, State.y, State.z) : null;
+            if (Lift is var (lb, ls, _) && (!ReferenceEquals(lb, stopsFor.b) || !ReferenceEquals(ls, stopsFor.s)))
+            {
+                stops = Generate.Cores.Stops(lb, ls); stopsFor = (lb, ls);
+            }
         }
 
         void Place()
         {
-            transform.position = Origin + new Vector3((float)State.x, (float)State.y, (float)State.z);
-            transform.rotation = Quaternion.Euler(0, (float)State.face * Mathf.Rad2Deg, 0);
-            if (occlusion != null) occlusion.SetPlayer(transform.position);
+            var at = Origin + new Vector3((float)State.x, (float)State.y, (float)State.z);
+            transform.SetPositionAndRotation(at, Quaternion.Euler(0, (float)State.face * Mathf.Rad2Deg, 0));
+            if (occlusion != null) occlusion.SetPlayer(at);
         }
 
-        void OnGUI()
+        /// <summary>The lift it stands in called to a storey (the HUD's panel).</summary>
+        internal void CallLift(int storey)
         {
-            using var _t = StoreyTimings.Time("hud: the place and the lift panel");
             var world = occlusion != null ? occlusion.World : null;
-            label ??= new GUIStyle(GUI.skin.box) { fontSize = Mathf.Max(12, Screen.height / 50), alignment = TextAnchor.MiddleLeft };
-            float s = label.fontSize * 2.2f;
-            // where the character is
-            var loc = world?.Locate(State.x, State.y, State.z);
-            // the label made again only when the place changes (OnGUI runs several times a frame)
-            var at = loc == null ? (null, -1) : (loc.Value.b, loc.Value.floor);
-            if (whereText == null || at.Item1 != whereFor.Item1 || at.Item2 != whereFor.Item2)
-            {
-                whereFor = at;
-                whereText = loc == null ? "Outside" : $"{loc.Value.b.name} · {Floor(loc.Value.b, loc.Value.floor)}";
-            }
-            GUI.Box(new Rect(10, 10, s * 7, s), whereText, label);
-            // the lift panel, in a car
-            var lift = world?.LiftAt(State.x, State.y, State.z);
-            if (lift != null && State.ride == null)
-            {
-                var (b, sh, floor) = lift.Value; var levels = Generate.Cores.Stops(b, sh);
-                GUI.Box(new Rect(10, 20 + s, s * 1.4f + 10, (s + 4) * levels.Count + 10), "");
-                for (int i = levels.Count - 1, row = 0; i >= 0; i--, row++)
-                {
-                    int k = levels[i];
-                    GUI.enabled = k != floor;
-                    if (GUI.Button(new Rect(15, 25 + s + row * (s + 4), s * 1.4f, s), Short(b, k))) Walker.CallLift(world!, State, k);
-                }
-                GUI.enabled = true;
-            }
-            // the on-screen joystick (touch)
-            if (Application.isMobilePlatform || Input.joyActive)
-            {
-                var c = new Vector2(Input.joyCentre.x, Screen.height - Input.joyCentre.y); float r = Input.joyRadius;
-                GUI.Box(new Rect(c.x - r, c.y - r, 2 * r, 2 * r), "");
-                var t = c + new Vector2(Input.joyThumb.x, -Input.joyThumb.y);
-                GUI.Box(new Rect(t.x - r * 0.35f, t.y - r * 0.35f, r * 0.7f, r * 0.7f), "");
-            }
+            if (world != null && State.ride == null) Walker.CallLift(world, State, storey);
         }
-
-        static string Floor(BuildingData b, int k) => k == b.floors.Count ? "Roof" : k == 0 ? "Ground floor" : "Floor " + k;
-        static string Short(BuildingData b, int k) => k == b.floors.Count ? "R" : k == 0 ? "G" : k < Numbers.Length ? Numbers[k] : k.ToString();
-        static readonly string[] Numbers = Enumerable.Range(0, 100).Select(i => i.ToString()).ToArray();
-        string? whereText; (BuildingData?, int) whereFor;
     }
 }

@@ -49,6 +49,7 @@ Straight flights (`CoreType.Flight`) are not in the prototype. Their walk surfac
   - **Hold After Exit** (on): a building the player steps out of stays cut away (the floors above clipped, the walls between camera and player down) while it still stands between the camera and the player, by the same three rays as the buildings in the way. A camera trailing behind is no longer buried in it. It's let go as soon as the camera is clear of it, or the player walks into another building.
   - Only the buildings next to the one the player is in are checked for shared walls, so walking into the first building no longer builds every building's LOD0 for the walk model.
 - **The play kit:** add **Storey Play Kit** to any object (*Add Component ▸ Storey ▸ Play Kit*). It adds the occlusion system to the site if there is none, and makes the character and the camera. The character walks the walk model, with no physics.
+- **The HUD:** where the character is, the lift panel and the touch joystick. It is drawn by its own component (`StoreyHud`), which the character adds and switches with **Show Hud** (on by default). Turn it off for measurement runs: then nothing is drawn or asked for it. The character works out the place and the lift once a frame, and a lift's stops once per lift, where the HUD asked on every GUI event (docs/PERFORMANCE.md §11.4).
 
 **Controls.**
 - **Keyboard:** WASD or the arrows to walk, Shift to run, Q and E to turn the camera.

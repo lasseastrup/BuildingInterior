@@ -41,7 +41,9 @@ namespace Triband.Storey.PlayKit
             occ.player = Character.transform;
             Character.Spawn(transform.position, transform.eulerAngles.y * Mathf.Deg2Rad);
 
-            PlayCamera = cam.GetComponent<StoreyPlayCamera>() ?? cam.gameObject.AddComponent<StoreyPlayCamera>();
+            // not ?? : a missing component is a fake null in the editor, which ?? takes for an object
+            PlayCamera = cam.GetComponent<StoreyPlayCamera>();
+            if (PlayCamera == null) PlayCamera = cam.gameObject.AddComponent<StoreyPlayCamera>();
             PlayCamera.character = Character; PlayCamera.occlusion = occ;
         }
     }
