@@ -60,7 +60,7 @@ Effort: S under a day, M a few days, L a week or more. Impact as estimated in ea
 
 The roadmap (§15) orders everything else.
 
-Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), LOD0's rooms as their own renderers (§7.7), #8's priority for detail in view (§9.2), and #7: the shells closed, the ray test in the suite and back faces culled on steady draws by default (§7.1). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
+Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), LOD0's rooms as their own renderers (§7.7), #8's priority for detail in view and its priority classes (§9.2), #2 (§3.1), and #7: the shells closed, the ray test in the suite and back faces culled on steady draws by default (§7.1). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
 
 ## 1. Scope and method
 
@@ -136,6 +136,8 @@ In continuous play that is rare: a simulated 467-second run had none of 69 occlu
 - **Prefetch:** ask for LOD0 for buildings near the camera-to-player segment, and within a few metres of the player, before they are forced.
 
 Effort: M.
+
+Status: done (CHANGELOG). In Play mode a forced building shows the best LOD it has until its LOD0 is up. Its build goes to the head of the build threads' queue (a lane of its own, §9.2), a build of it already waiting is moved up, and the finished LOD0 is uploaded whatever the budget. The occluder modes need no LOD0: Cutout, Fade, Sink and Slice all draw from the building table's rows on whatever LOD is shown (Sink's squash is approximate on a massing's quads of several storeys, for the frames until LOD0 is up), and the cutaway skips walls of a building without one. Prefetch: the buildings within 5 to 8 m of the camera's line to the player, and of a point a spawn or teleport asks for (`StoreySite.PrefetchAround`), get their LOD0 built after the forced ones and those in view, and keep it past the residency cap while asked for; `StoreySite.DetailReadyAround` is what a transition waits for. The editor, and a site with no build threads, still build a forced LOD0 at once.
 
 ### 3.2 The upload budget
 
@@ -583,7 +585,7 @@ Recommendation:
 - Priority classes: forced and visible detail first, then the cells of a load, then parses and prefetch.
 - Builds in steps, a storey per step, as the prototype does (SPEC §6.5). A step's boundary is where a build checks for cancellation (layout changed, no longer wanted) or yields to a higher priority.
 
-Done, the first half for detail: `LodManager.Update` takes the camera's view (`LodView`, from `SiteRenderer.LodEye`) and asks for forced buildings' detail first, then for buildings in view, then for the rest, and builds no LOD0 for a building out of view, which shows its shell meanwhile. The renderer starts jobs in that order, so the threads' queue gets it too. A frame with the view makes no garbage (`FrameAllocTests`). Loads, parses and prefetch still share the one FIFO queue.
+Done, the first half for detail: `LodManager.Update` takes the camera's view (`LodView`, from `SiteRenderer.LodEye`) and asks for forced buildings' detail first, then for buildings in view, then for the rest, and builds no LOD0 for a building out of view, which shows its shell meanwhile. The renderer starts jobs in that order, so the threads' queue gets it too. A frame with the view makes no garbage (`FrameAllocTests`). The priority classes are in too (`BuildLane`): forced detail, then detail, then a layout's cells, then parses and prefetch, the first queued of the most urgent lane taken first (`BuildThreadsTests`). Builds in storey steps, with cancellation, are still to do.
 
 ### 9.3 Locks (low)
 

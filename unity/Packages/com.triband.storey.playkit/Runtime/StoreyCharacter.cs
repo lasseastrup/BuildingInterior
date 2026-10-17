@@ -31,12 +31,16 @@ namespace Triband.Storey.PlayKit
         bool spawned;
         GUIStyle? label;
 
-        /// <summary>Put the character at a point (world space, the feet).</summary>
+        /// <summary>
+        /// Put the character at a point (world space, the feet). The site builds full detail round it ahead of the rest
+        /// (<see cref="StoreySite.PrefetchAround"/>); a game teleporting behind a fade waits for <see cref="StoreySite.DetailReadyAround"/>.
+        /// </summary>
         public void Spawn(Vector3 feet, float yaw = 0)
         {
             var o = Origin;
             State.Spawn(feet.x - o.x, feet.y - o.y, feet.z - o.z); State.face = yaw;
             spawned = true; Place();
+            if (occlusion != null && occlusion.site != null) occlusion.site.PrefetchAround(feet);
         }
 
         Vector3 lastOrigin; bool hasOrigin;

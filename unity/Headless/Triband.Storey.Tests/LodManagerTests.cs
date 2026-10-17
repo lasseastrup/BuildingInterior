@@ -101,6 +101,46 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void AForcedBuildingShowsWhatItHasMeanwhile()
+        {
+            // the renderer no longer waits for a forced LOD0 in Play mode (docs/PERFORMANCE.md §3.1): it shows its shell, or
+            // its massing, until the LOD0 is up, and is asked for first, counted apart
+            var m = new LodManager();
+            var a = Box(m, 0, 3000, built: false); var b = Box(m, 1, 3000, built: false); m.SetBuilt(1, 1, true);
+            var f = m.Update(0, 1, 0, Pxm, 1, new[] { 0, 1 });
+            Assert.Equal((2, 1), (a.Shown, b.Shown));
+            Assert.Equal(2, f.Forced);
+            Assert.All(f.Build.Take(2), x => Assert.Equal((0, double.MaxValue), (x.lod, x.px)));
+            m.SetBuilt(0, 0, true);
+            m.Update(0, 1, 0, Pxm, 1, new[] { 0, 1 });
+            Assert.Equal(0, a.Shown);
+        }
+
+        [Fact]
+        public void APrefetchedBuildingGetsItsLod0AfterTheRestAndKeepsIt()
+        {
+            // along the camera's line to the player, round the player, round a spawn: LOD0 built ahead, after the forced and
+            // those in view, whatever the building shows; kept past the cap while prefetched (docs/PERFORMANCE.md §3.1)
+            var m = new LodManager(new LodSettings { MaxLod0 = 1 });
+            var near = Box(m, 0, 20, built: false); var far = Box(m, 1, 100, built: false); var forced = Box(m, 2, 3000, built: false);
+            var f = m.Update(0, 1, 0, Pxm, 1, new[] { 2 }, null, new[] { 1 });
+            Assert.Equal((1, 1, 1), (f.Forced, f.Seen - 1, f.Prefetched));   // seen: near's LOD0 and far's LOD1
+            Assert.Equal(new[] { (2, 0), (0, 0), (1, 1), (1, 0) }, f.Build.Select(b => (b.idx, b.lod)).ToArray());
+            Assert.Equal(2, far.Shown);   // what it shows doesn't change: LOD1 wanted, nothing built yet
+            // built: far keeps its LOD0 past the cap while prefetched though not shown; then not
+            foreach (var (i, lod, _) in f.Build) m.SetBuilt(i, lod, true);
+            m.Update(0, 1, 0, Pxm, 1, new[] { 2 }, null, new[] { 1 });
+            Assert.True(far.Has0); Assert.Equal(1, far.Shown);
+            m.Update(0, 1, 0, Pxm, 1, new[] { 2 });
+            Assert.False(far.Has0);
+            // one that wants LOD0 in view anyway is asked for once
+            Box(m, 3, 20, built: false);
+            var g = m.Update(0, 1, 0, Pxm, 1, null, null, new[] { 3 });
+            Assert.Single(g.Build, x => x.idx == 3 && x.lod == 0);
+            Assert.Equal(0, g.Prefetched);
+        }
+
+        [Fact]
         public void AChangeCrossFades()
         {
             var m = new LodManager(); var e = Box(m, 0, 1000);

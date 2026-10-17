@@ -57,6 +57,17 @@ namespace Triband.Storey.Unity
         /// </summary>
         public void SetCameraTarget(Vector3? worldTarget) => cameraTarget = worldTarget;
 
+        /// <summary>The player's feet and the camera this frame (world space), as the occlusion takes them; false without a camera.</summary>
+        internal bool PlayerAndCamera(out Vector3 playerFeet, out Vector3 camera)
+        {
+            var cam = viewCamera != null ? viewCamera : Camera.main;
+            playerFeet = camera = default;
+            if (cam == null) return false;
+            camera = cam.transform.position;
+            playerFeet = player != null ? player.position : hasFeet ? feet : camera;
+            return true;
+        }
+
         void OnEnable() { if (site != null) site.Occlusion = this; }
 
         readonly List<StoreySite> candidates = new List<StoreySite>();

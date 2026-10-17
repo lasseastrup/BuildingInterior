@@ -44,7 +44,7 @@ namespace Triband.Storey.Tests
             var world = new PlayWorld(new Site(d.buildings));
             var core = new OcclusionCore(world, new OcclusionSettings { mode = OccluderMode.Sink });
             var lods = new LodManager(); var view = new LodView();
-            int idx = 0; var forced = new HashSet<int>();
+            int idx = 0; var forced = new HashSet<int>(); var prefetch = new HashSet<int>(); var nearPlayer = new List<BuildingData>();
             foreach (var b in world.Site.Buildings)
             {
                 var fp = b.footprint; double x0 = fp.Min(q => q.x) + b.pos.x, x1 = fp.Max(q => q.x) + b.pos.x, z0 = fp.Min(q => q.z) + b.pos.z, z1 = fp.Max(q => q.z) + b.pos.z;
@@ -68,9 +68,11 @@ namespace Triband.Storey.Tests
                 core.Frame(p, pos, (cam.tx, cam.ty, cam.tz), Dt);
                 long a2 = GC.GetAllocatedBytesForCurrentThread();
                 forced.Clear(); foreach (var r in core.Active) forced.Add(world.Site.IndexOf(r.b));
+                // and those round the player prefetched, as the site asks (docs/PERFORMANCE.md §3.1)
+                prefetch.Clear(); world.NearInto(p.x, p.z, 8, nearPlayer); foreach (var b in nearPlayer) prefetch.Add(world.Site.IndexOf(b));
                 // the view the renderer passes (a phone held upright), so detail in view is asked for first
                 view.Set(pos.x, pos.y, pos.z, cam.tx - pos.x, cam.ty - pos.y, cam.tz - pos.z, 0, 1, 0, 60, 0.46, 0.1, 1500);
-                var fr = lods.Update(pos.x, pos.y, pos.z, 1200, Dt, forced, view);
+                var fr = lods.Update(pos.x, pos.y, pos.z, 1200, Dt, forced, view, prefetch);
                 // the renderer builds a few of what is asked each frame
                 int built = 0; foreach (var (bi, l, _) in fr.Build) { if (built++ >= 4) break; lods.SetBuilt(bi, l, true); }
                 long a3 = GC.GetAllocatedBytesForCurrentThread();

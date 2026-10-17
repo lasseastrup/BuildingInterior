@@ -70,7 +70,7 @@ namespace Triband.Storey.Lod
             while (started < cells.Count && started < next + ahead)
             {
                 var c = cells[started];
-                made[started++] = on.Run(() => Massings(site, c));
+                made[started++] = on.Run(() => Massings(site, c), BuildLane.Load);
             }
         }
 

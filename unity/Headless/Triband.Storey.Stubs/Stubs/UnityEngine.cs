@@ -60,7 +60,7 @@ namespace UnityEngine
     public sealed class ExecuteAlways : System.Attribute { }
 
 
-    public static class Time { public static float deltaTime => 0; public static float unscaledDeltaTime => 0; public static float realtimeSinceStartup => 0; public static double realtimeSinceStartupAsDouble => 0; public static int frameCount => 0; }
+    public static class Time { public static float deltaTime => 0; public static float unscaledDeltaTime => 0; public static float unscaledTime => 0; public static float realtimeSinceStartup => 0; public static double realtimeSinceStartupAsDouble => 0; public static int frameCount => 0; }
 
     public struct FrameTiming { public double cpuFrameTime, cpuMainThreadFrameTime, cpuRenderThreadFrameTime, cpuMainThreadPresentWaitTime, gpuFrameTime; }
 

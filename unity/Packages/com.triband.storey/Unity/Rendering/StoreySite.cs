@@ -92,6 +92,30 @@ namespace Triband.Storey.Unity
         /// </summary>
         public readonly HashSet<string> keepDetail = new HashSet<string>(StringComparer.Ordinal);
 
+        /// <summary>
+        /// Ask for full detail round a point the view is about to reach (a spawn, a teleport; world space): the buildings
+        /// within <paramref name="radius"/> metres of it get their LOD0 built ahead of the rest of the city, after the ones
+        /// the view can't do without (docs/PERFORMANCE.md §3.1), for <paramref name="seconds"/>. A spawn or teleport behind a
+        /// fade or a loading screen waits for <see cref="DetailReadyAround"/>; the play kit's character asks at every spawn.
+        /// </summary>
+        public void PrefetchAround(Vector3 world, float radius = 8, float seconds = 10) => prefetchAt.Add((world, radius, Time.unscaledTime + seconds));
+
+        /// <summary>
+        /// Every building within <paramref name="radius"/> metres of a point (world space) has its LOD0 built: full detail is
+        /// up there. True with the fixed LOD, which builds every building's at once.
+        /// </summary>
+        public bool DetailReadyAround(Vector3 world, float radius = 8)
+        {
+            if (site == null) return false;
+            if (!site.AutoLod) return true;
+            var o = transform.position; nearIds.Clear();
+            site.BuildingsNear(world.x - o.x, world.z - o.z, radius, nearIds);
+            foreach (var id in nearIds) if (!site.HasDetail(id)) return false;
+            return true;
+        }
+        readonly List<(Vector3 at, float radius, float until)> prefetchAt = new List<(Vector3, float, float)>();
+        readonly List<string> nearIds = new List<string>();
+
         /// <summary>The editor's camera (the Scene view's), set by the authoring package; the automatic LOD picks for it outside Play mode.</summary>
         public static Func<Camera?>? EditorCamera { get; set; }
 
@@ -305,6 +329,24 @@ namespace Triband.Storey.Unity
             {
                 if (core.View.active != null) f.Add(core.View.active.id);
                 for (int i = 0; i < core.Active.Count; i++) f.Add(core.Active[i].b.id);
+            }
+            // LOD0 wanted soon (docs/PERFORMANCE.md §3.1): along the camera's line to the player, where a building not in the
+            // way yet comes into it as the camera swings, and round the player, who can walk into one; and round a spawn or
+            // teleport asked for. Built after the forced ones and those in view
+            var pf = s.Prefetch; pf.Clear();
+            var o = transform.position;
+            if (core != null && Occlusion!.PlayerAndCamera(out var feet, out var camAt))
+            {
+                double px = feet.x - o.x, pz = feet.z - o.z, dx = camAt.x - feet.x, dz = camAt.z - feet.z;
+                int n = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(dx * dx + dz * dz) / 8));
+                for (int i = 0; i <= n; i++) s.BuildingsNear(px + dx * i / n, pz + dz * i / n, i == 0 ? 8 : 5, pf);
+            }
+            float now = Time.unscaledTime;
+            for (int i = prefetchAt.Count - 1; i >= 0; i--)
+            {
+                var (at, r, until) = prefetchAt[i];
+                if (now > until) { prefetchAt.RemoveAt(i); continue; }
+                s.BuildingsNear(at.x - o.x, at.z - o.z, r, pf);
             }
         }
     }

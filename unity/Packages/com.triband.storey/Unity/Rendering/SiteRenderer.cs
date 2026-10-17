@@ -227,7 +227,7 @@ namespace Triband.Storey.Unity
         readonly Dictionary<int, Built> byIdx = new Dictionary<int, Built>();
         readonly Dictionary<(int x, int z), Cell> cells = new Dictionary<(int, int), Cell>();
         readonly HashSet<(int x, int z)> dirtyCells = new HashSet<(int, int)>();
-        readonly HashSet<int> forcedIdx = new HashSet<int>();
+        readonly HashSet<int> forcedIdx = new HashSet<int>(), prefetchIdx = new HashSet<int>();
         readonly LodView lodView = new LodView();
         readonly Dictionary<string, int> carry = new Dictionary<string, int>(StringComparer.Ordinal);
         // detail being generated on worker threads: one at a time per building, uploaded when done
@@ -237,6 +237,7 @@ namespace Triband.Storey.Unity
         sealed class Job
         {
             public Built bt = null!; public Site site = null!; public string name = ""; public int which;
+            public BuildLane lane;
             public System.Threading.Tasks.Task<object> task = null!;
         }
         GameObject? cellRoot;
@@ -336,10 +337,34 @@ namespace Triband.Storey.Unity
         public LodEye? Eye { get; set; }
 
         /// <summary>
-        /// Buildings that always have LOD0 under the automatic LOD (being edited, walked in, in the way of the camera):
-        /// built at once when they need it, never shown as their massing. The caller fills it each frame.
+        /// Buildings that always want LOD0 under the automatic LOD (being edited, walked in, in the way of the camera): built
+        /// before any other, never shown as their massing. In Play mode one shows what it has until its LOD0 is up, which a
+        /// build thread makes ahead of everything else (docs/PERFORMANCE.md §3.1); in the editor, and with no build threads,
+        /// it is built at once. The caller fills it each frame.
         /// </summary>
         public readonly HashSet<string> Forced = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Buildings whose LOD0 is wanted soon (near the camera's line to the player, round the player, round a spawn or
+        /// teleport): built after the forced ones and those in view, whatever they show, and kept past the residency cap
+        /// while asked for. The caller fills it each frame.
+        /// </summary>
+        public readonly HashSet<string> Prefetch = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>The building's LOD0 is built (shown or not): what a spawn or teleport waits for behind its transition.</summary>
+        public bool HasDetail(string id) => built.TryGetValue(id, out var b) && (lods == null ? b.objs[0].Count > 0 : lods.Get(b.idx)?.Has0 == true);
+
+        /// <summary>The buildings whose box comes within <paramref name="radius"/> metres of a point (site space, x and z), into <paramref name="into"/>.</summary>
+        public void BuildingsNear(double x, double z, double radius, ICollection<string> into)
+        {
+            if (lods == null) return;
+            foreach (var bt in built.Values)
+            {
+                if (!(lods.Get(bt.idx) is LodManager.Entry e)) continue;
+                double dx = Math.Max(Math.Max(e.x0 - x, 0), x - e.x1), dz = Math.Max(Math.Max(e.z0 - z, 0), z - e.z1);
+                if (dx * dx + dz * dz <= radius * radius) into.Add(bt.id);
+            }
+        }
 
         /// <summary>The automatic LOD's numbers from the last frame.</summary>
         public LodStats Stats => stats;
@@ -836,15 +861,22 @@ namespace Triband.Storey.Unity
         /// </summary>
         int TakeJobs(System.Diagnostics.Stopwatch sw, int made)
         {
+            made = TakeJobs(sw, made, true);   // the forced ones, whatever the budget: they are wanted now
+            return TakeJobs(sw, made, false);
+        }
+
+        int TakeJobs(System.Diagnostics.Stopwatch sw, int made, bool forced)
+        {
             var l = lods!;
             for (int i = 0; i < jobs.Count; i++)
             {
-                var j = jobs[i]; if (!j.task.IsCompleted) continue;
+                var j = jobs[i]; if (!j.task.IsCompleted || (j.lane == BuildLane.Forced) != forced) continue;
                 bool current = ReferenceEquals(j.site, site) && built.TryGetValue(j.bt.id, out var cur) && ReferenceEquals(cur, j.bt);
                 bool ok = j.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && current;
                 var e = ok ? l.Get(j.bt.idx) : null;
-                if (e == null || (j.which == 0 ? e.Has0 : e.Has1) || e.Want > j.which) ok = false;
-                if (ok && made > 0 && sw.Elapsed.TotalMilliseconds > budget) continue;   // next frame
+                // a prefetched LOD0 is taken though the building doesn't want it by distance (yet)
+                if (e == null || (j.which == 0 ? e.Has0 : e.Has1) || (e.Want > j.which && j.lane != BuildLane.Background)) ok = false;
+                if (ok && !forced && made > 0 && sw.Elapsed.TotalMilliseconds > budget) continue;   // next frame
                 jobs.RemoveAt(i--); busy.Remove(j.bt.idx);
                 // a build of a layout edited under it may throw, and is dropped; one of the layout shown is a fault to report
                 if (j.task.IsFaulted) { var ex = j.task.Exception!; if (current) Debug.LogException(ex.InnerException ?? ex); }
@@ -902,10 +934,17 @@ namespace Triband.Storey.Unity
 
         // its own method: a lambda capturing the build loop's locals made its closure on every pass of the loop, job or not
         // (hundreds of buildings a frame wanting detail: about 14 KB of garbage a frame)
-        void StartJob(Built bt, BuildingData b, int which)
+        void StartJob(Built bt, BuildingData b, int which, BuildLane lane)
         {
             var s0 = site!; int ix = bt.idx; var mates = (blockStart, blockSize); bool collider = which == 0 && colliders && bt.collision == null;
-            jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, task = BuildThreads.Shared.Run(() => Generate(s0, b, ix, which, mates, collider)) });
+            jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, lane = lane, task = BuildThreads.Shared.Run(() => Generate(s0, b, ix, which, mates, collider), lane) });
+        }
+
+        /// <summary>A building's builds still waiting for a thread move to the forced lane: it is wanted at once now.</summary>
+        void Hurry(int idx)
+        {
+            foreach (var j in jobs)
+                if (j.bt.idx == idx && j.lane != BuildLane.Forced && BuildThreads.Shared.Promote(j.task, BuildLane.Forced)) j.lane = BuildLane.Forced;
         }
 
         void UpdateLods()
@@ -920,24 +959,30 @@ namespace Triband.Storey.Unity
             if (l.Settings.MaxColliders != colliderCap) { colliderCap = l.Settings.MaxColliders; TrimColliders(); }
             // the mesh chunks kept for reuse: one limit for every site (the quality asset's)
             Chunks.KeepBytes = l.Settings.KeepChunkBytes;
+            int threads = Threads;
+            // in Play mode a forced building shows what it has until a build thread, taking it before anything else, has
+            // its LOD0 (docs/PERFORMANCE.md §3.1): waiting for it here held the frame for the whole build, 75–135 ms for
+            // the largest towers on a desktop. In the editor (an edit wants its building's walls at once), and with no
+            // build threads, it is built now
+            bool atOnce = !Application.isPlaying || threads == 0;
             forcedIdx.Clear();
             foreach (var id in Forced)
             {
                 if (!built.TryGetValue(id, out var bt)) continue;
                 forcedIdx.Add(bt.idx);
                 var e = l.Get(bt.idx); var b = site?.ById(id);
-                if (e != null && !e.Has0 && b != null)
-                {
-                    // one already being generated is waited for, not built a second time
-                    long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-                    bool waited = TakeJobNow(bt, 0);
-                    if (!waited) BuildDetail(bt, b, 0);
-                    l.SetBuilt(bt.idx, 0, true); made++;
-                    if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 of {b.name} wanted at once: {StoreyDiagnostics.Ms(t0):0.0} ms, {(waited ? "a worker's, waited for" : "built on the main thread")}");
-                }
+                if (e == null || e.Has0 || b == null) continue;
+                if (!atOnce) { Hurry(bt.idx); continue; }
+                // one already being generated is waited for, not built a second time
+                long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                bool waited = TakeJobNow(bt, 0);
+                if (!waited) BuildDetail(bt, b, 0);
+                l.SetBuilt(bt.idx, 0, true); made++;
+                if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 of {b.name} wanted at once: {StoreyDiagnostics.Ms(t0):0.0} ms, {(waited ? "a worker's, waited for" : "built on the main thread")}");
             }
+            prefetchIdx.Clear();
+            foreach (var id in Prefetch) if (built.TryGetValue(id, out var pt) && !forcedIdx.Contains(pt.idx)) prefetchIdx.Add(pt.idx);
             if (load != null) TakeLoad(sw);   // a layout loading over frames: the cells ready, within the budget
-            int threads = Threads;
             if (jobs.Count > 0) made = TakeJobs(sw, made);
             if (Eye is LodEye eye)
             {
@@ -950,19 +995,21 @@ namespace Triband.Storey.Unity
                     seen = lodView;
                 }
                 using var _p = StoreyTimings.Time("site: LOD picked and applied");
-                var f = l.Update(eye.position.x - o.x, eye.position.y - o.y, eye.position.z - o.z, eye.pixelsPerMetre, dt, forcedIdx, seen);
+                var f = l.Update(eye.position.x - o.x, eye.position.y - o.y, eye.position.z - o.z, eye.pixelsPerMetre, dt, forcedIdx, seen, prefetchIdx);
                 foreach (var (idx, which) in f.Drop) if (byIdx.TryGetValue(idx, out var bt)) DropDetail(bt, which);
                 for (int bi = 0; bi < f.Build.Count; bi++)
                 {
                     var (idx, which, _) = f.Build[bi];
-                    if (busy.Contains(idx)) continue;   // being generated
-                    if (threads > 0 && jobs.Count >= threads) { queued += f.Build.Count - bi; break; }   // the rest wait for a thread
+                    bool force = bi < f.Forced, pre = !force && bi >= f.Forced + f.Seen && bi < f.Forced + f.Seen + f.Prefetched;
+                    if (busy.Contains(idx)) { if (force) Hurry(idx); continue; }   // being generated
+                    // the rest wait for a thread; a forced one goes ahead of them
+                    if (threads > 0 && !force && jobs.Count >= threads) { queued += f.Build.Count - bi; break; }
                     if (!byIdx.TryGetValue(idx, out var bt)) continue;
                     var b = site?.ById(bt.id); if (b == null) continue;
                     if (threads > 0)
                     {
                         // most pixels first, as many at once as there are threads; the upload comes in a later frame
-                        StartJob(bt, b, which); busy.Add(idx);
+                        StartJob(bt, b, which, force ? BuildLane.Forced : pre ? BuildLane.Background : BuildLane.Detail); busy.Add(idx);
                         continue;
                     }
                     if (made > 0 && sw.Elapsed.TotalMilliseconds > budget) { queued++; continue; }

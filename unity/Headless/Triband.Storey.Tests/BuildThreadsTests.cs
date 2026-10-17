@@ -75,6 +75,36 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void TheMostUrgentLaneGoesFirst()
+        {
+            // docs/PERFORMANCE.md §9.2: forced detail before detail, a load's cells, then parses and prefetch; first come first
+            // in a lane; a waiting build moved to a more urgent lane overtakes
+            var bt = new BuildThreads(1);
+            using var started = new ManualResetEventSlim(false);
+            using var hold = new ManualResetEventSlim(false);
+            try
+            {
+                var busy = bt.Run(() => { started.Set(); hold.Wait(); return 0; });   // the only thread, held
+                Assert.True(started.Wait(5000));
+                var order = new System.Collections.Concurrent.ConcurrentQueue<string>();
+                Task<int> Q(string name, BuildLane lane) => bt.Run(() => { order.Enqueue(name); return 0; }, lane);
+                var tasks = new[]
+                {
+                    Q("parse", BuildLane.Background), Q("cell 1", BuildLane.Load), Q("detail 1", BuildLane.Detail), Q("cell 2", BuildLane.Load),
+                    Q("forced", BuildLane.Forced), Q("detail 2", BuildLane.Detail), Q("prefetch", BuildLane.Background),
+                };
+                Assert.Equal((7, 2, 2), (bt.Queued, bt.QueuedIn(BuildLane.Load), bt.QueuedIn(BuildLane.Background)));
+                Assert.True(bt.Promote(tasks[6], BuildLane.Forced));       // the prefetched building is wanted now
+                Assert.False(bt.Promote(tasks[2], BuildLane.Load));        // not to a less urgent lane
+                hold.Set();
+                Done(tasks.Cast<Task>().Append(busy).ToArray());
+                Assert.Equal(new[] { "forced", "prefetch", "detail 1", "detail 2", "cell 1", "cell 2", "parse" }, order.ToArray());
+                Assert.False(bt.Promote(tasks[0], BuildLane.Forced));      // done: nothing to move
+            }
+            finally { hold.Set(); bt.Resize(0); }
+        }
+
+        [Fact]
         public void AFailureStaysInItsTaskAndNoThreadsRunOnTheCaller()
         {
             var bt = new BuildThreads(1);

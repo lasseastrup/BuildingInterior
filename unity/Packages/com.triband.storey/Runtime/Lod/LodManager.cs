@@ -143,6 +143,8 @@ namespace Triband.Storey.Lod
             public long Used0, Used1;
             public bool Visible(int lod) => Shown == lod || (T < 1 && From == lod);
             internal int idx;
+            /// <summary>The frame it was last prefetched: its LOD0 is kept past the cap that frame, as one shown is.</summary>
+            internal long prefetched = -1;
             internal Square? square;
         }
 
@@ -162,7 +164,10 @@ namespace Triband.Storey.Lod
         /// <summary>What a frame asks of the renderer. The manager's own, reused: valid until the next <see cref="Update"/>.</summary>
         public sealed class Frame
         {
-            /// <summary>LODs to build, most pixels first: (building, LOD, pixels per metre). Forced buildings first, then (given a view) those in view, then the rest.</summary>
+            /// <summary>
+            /// LODs to build, most pixels first: (building, LOD, pixels per metre). Forced buildings first, then (given a view)
+            /// those in view, then the LOD0s prefetched, then the rest. A forced one's pixels per metre is <see cref="double.MaxValue"/>.
+            /// </summary>
             public readonly List<(int idx, int lod, double px)> Build = new List<(int, int, double)>();
             /// <summary>LOD meshes to drop (the building keeps the others).</summary>
             public readonly List<(int idx, int lod)> Drop = new List<(int, int)>();
@@ -170,13 +175,15 @@ namespace Triband.Storey.Lod
             public readonly List<int> Changed = new List<int>();
             /// <summary>How many buildings show each LOD (index 3: not drawn).</summary>
             public readonly int[] Count = new int[4];
+            /// <summary>How many of <see cref="Build"/> come first for forced buildings, how many next for those in view, and how many next prefetched; the rest are out of view.</summary>
+            public int Forced, Seen, Prefetched;
 
-            internal void Clear() { Build.Clear(); Drop.Clear(); Changed.Clear(); Array.Clear(Count, 0, Count.Length); }
+            internal void Clear() { Build.Clear(); Drop.Clear(); Changed.Clear(); Array.Clear(Count, 0, Count.Length); Forced = Seen = Prefetched = 0; }
         }
 
         // reused every frame, so a frame makes no garbage (FrameAllocTests)
         readonly Frame frameOut = new Frame();
-        readonly List<(int, int, double)> forcedBuild = new List<(int, int, double)>(), unseenBuild = new List<(int, int, double)>();
+        readonly List<(int, int, double)> forcedBuild = new List<(int, int, double)>(), unseenBuild = new List<(int, int, double)>(), prefetchBuild = new List<(int, int, double)>();
         readonly List<(int idx, long used)> idle = new List<(int, long)>();
         // ties in building order, so the order never depends on how the buildings are kept
         sealed class MostPixels : IComparer<(int idx, int lod, double px)>
@@ -259,18 +266,23 @@ namespace Triband.Storey.Lod
         /// <summary>
         /// One frame: each building's LOD from the camera (site space), the cross-fades moved on by <paramref name="dt"/>,
         /// the LODs to build and the meshes to drop. <paramref name="forced"/> buildings (being edited, walked in, sliced)
-        /// always want LOD0; a forced one without it is in <see cref="Frame.Build"/> first. With a <paramref name="view"/>, the
-        /// buildings in it come next, and one out of it shows its shell where it would want an LOD0 it hasn't got.
+        /// always want LOD0; a forced one without it is in <see cref="Frame.Build"/> first, and shows the best it has
+        /// meanwhile. With a <paramref name="view"/>, the buildings in it come next, and one out of it shows its shell where it
+        /// would want an LOD0 it hasn't got. <paramref name="prefetch"/> buildings (along the camera's line to the player,
+        /// round the player, round a spawn or teleport: docs/PERFORMANCE.md §3.1) get their LOD0 built after those, in or out
+        /// of view and whatever LOD they show, and keep it past the cap as if shown.
         /// </summary>
-        public Frame Update(double cx, double cy, double cz, double pixelsPerMetre, double dt, ICollection<int>? forced = null, LodView? view = null)
+        public Frame Update(double cx, double cy, double cz, double pixelsPerMetre, double dt, ICollection<int>? forced = null, LodView? view = null, ICollection<int>? prefetch = null)
         {
             frame++;
             var f = frameOut; f.Clear(); var s = Settings;
             double pxm = pixelsPerMetre * s.Bias, H = s.Hysteresis;
-            forcedBuild.Clear(); unseenBuild.Clear();
-            // a forced building's square is looked at building by building (a HashSet's own enumerator: no garbage)
+            forcedBuild.Clear(); unseenBuild.Clear(); prefetchBuild.Clear();
+            // a forced or prefetched building's square is looked at building by building (a HashSet's own enumerator: no garbage)
             if (forced is HashSet<int> fs) { foreach (int i in fs) Force(i); }
             else if (forced != null) foreach (int i in forced) Force(i);
+            if (prefetch is HashSet<int> ps) { foreach (int i in ps) Force(i); }
+            else if (prefetch != null) foreach (int i in prefetch) Force(i);
             // passing over a square needs the finer LODs at more pixels, as they are unless the settings say otherwise
             bool ordered = s.PX[0] >= s.PX[1] && s.PX[1] >= s.PX[2] && H > -1;
             for (int q = 0; q < squares.Count; q++)
@@ -300,12 +312,18 @@ namespace Triband.Storey.Lod
                     // in view (or no view given): built first; out of it, last and never LOD0
                     bool seen = view == null || force || (show < 2 && !(e.Has0 && e.Has1) && view.Sees((e.x0 + e.x1) / 2, e.y1 / 2, (e.z0 + e.z1) / 2,
                         0.5 * Math.Sqrt((e.x1 - e.x0) * (e.x1 - e.x0) + e.y1 * e.y1 + (e.z1 - e.z0) * (e.z1 - e.z0))));
+                    bool asked0 = false;
                     if (show == 0 && !e.Has0)
                     {
-                        if (seen) { (force ? forcedBuild : f.Build).Add((idx, 0, force ? double.MaxValue : rel)); show = e.Has1 ? 1 : 2; }
+                        if (seen) { (force ? forcedBuild : f.Build).Add((idx, 0, force ? double.MaxValue : rel)); show = e.Has1 ? 1 : 2; asked0 = true; }
                         else show = 1;
                     }
                     if (show == 1 && !e.Has1) { (seen ? f.Build : unseenBuild).Add((idx, 1, rel)); show = 2; }
+                    if (!force && prefetch != null && prefetch.Contains(idx))
+                    {
+                        e.prefetched = frame;
+                        if (!e.Has0 && !asked0) prefetchBuild.Add((idx, 0, rel));
+                    }
                     bool changed = false;
                     if (show != e.Shown) { e.From = e.Shown; e.Shown = show; e.T = !s.FadeDetail && show < 2 && e.From < 2 ? 1 : 0; changed = true; }
                     if (e.T < 1) { e.T = Math.Min(1, e.T + dt / s.Fade); changed = true; }
@@ -319,7 +337,9 @@ namespace Triband.Storey.Lod
                 sq.settled = settled;
             }
             f.Build.Sort(mostPixels);
+            f.Seen = f.Build.Count; f.Forced = forcedBuild.Count; f.Prefetched = prefetchBuild.Count;
             f.Build.InsertRange(0, forcedBuild);
+            if (prefetchBuild.Count > 0) { prefetchBuild.Sort(mostPixels); f.Build.AddRange(prefetchBuild); }
             if (unseenBuild.Count > 0) { unseenBuild.Sort(mostPixels); f.Build.AddRange(unseenBuild); }
             Evict(f, 0, s.MaxLod0); Evict(f, 1, s.MaxLod1);
             return f;
@@ -378,13 +398,16 @@ namespace Triband.Storey.Lod
             }
         }
 
-        /// <summary>Past the cap, the meshes neither shown nor fading out go, least recently shown first; those shown stay.</summary>
+        /// <summary>
+        /// Past the cap, the meshes neither shown nor fading out go, least recently shown first; those shown stay, and a
+        /// LOD0 prefetched this frame (about to be shown).
+        /// </summary>
         void Evict(Frame f, int lod, int max)
         {
             var held = lod == 0 ? has0 : has1;
             int count = held.Count; if (count <= max) return;
             idle.Clear();
-            foreach (var e in held) if (!e.Visible(lod)) idle.Add((e.idx, lod == 0 ? e.Used0 : e.Used1));
+            foreach (var e in held) if (!e.Visible(lod) && !(lod == 0 && e.prefetched == frame)) idle.Add((e.idx, lod == 0 ? e.Used0 : e.Used1));
             idle.Sort(leastRecent);
             foreach (var (idx, _) in idle)
             {

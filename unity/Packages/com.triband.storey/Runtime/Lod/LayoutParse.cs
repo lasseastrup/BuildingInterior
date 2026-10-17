@@ -17,7 +17,7 @@ namespace Triband.Storey.Lod
         public LayoutParse(string text, BuildThreads? on = null)
         {
             Text = text;
-            task = (on ?? BuildThreads.Shared).Run(() => PrototypeJson.Read(text).Document);
+            task = (on ?? BuildThreads.Shared).Run(() => PrototypeJson.Read(text).Document, BuildLane.Background);
         }
 
         /// <summary>The text being parsed.</summary>

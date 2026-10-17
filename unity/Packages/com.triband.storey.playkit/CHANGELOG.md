@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- The character asks its site to build full detail round where it spawns (`StoreySite.PrefetchAround`): the building it stands in, and those round it, get their LOD0 ahead of the rest of the city. A teleport through `Spawn` does the same; a game behind a fade waits for `StoreySite.DetailReadyAround`.
 - The character keeps its place in the world when the occlusion moves to another district.
 
 ### Added
