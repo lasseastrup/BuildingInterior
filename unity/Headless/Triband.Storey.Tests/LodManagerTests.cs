@@ -276,5 +276,79 @@ namespace Triband.Storey.Tests
             s.WindowsPainted = 3; Assert.Equal(s.Lod0Distance(Pxm), s.PaintDistance(Pxm));
             s.WindowsPainted = 0; Assert.Equal(s.Lod0Distance(Pxm) * 0.1, s.PaintDistance(Pxm), 9);
         }
+
+        /// <summary>
+        /// A LOD0 that comes late, nearer than where its windows clear (out of view until the camera turned, or built after
+        /// the camera passed its distance), starts with them painted, as LOD1's were, and clears them over LateGlassFade
+        /// (docs/CITY.md §2). Its row carries the hold as its fade past 1; while it clears only its row is written.
+        /// </summary>
+        [Fact]
+        public void ALateLod0StartsWithItsWindowsPaintedAndClearsThem()
+        {
+            var m = new LodManager(new LodSettings { FadeDetail = false }); var e = Box(m, 0, 100);   // 10 px/m: LOD1
+            Step(m, 10);
+            Assert.Equal((1, 0f), (e.Shown, e.Hold));
+            // its LOD0 is first there with the camera 20 m from it, nearer than the 39 m its windows clear from (0.7 of 55.8)
+            m.Set(0, 20, -5, 30, 5, 10); m.SetBuilt(0, 0, true); m.SetBuilt(0, 1, true);
+            var f = Step(m, 0.01);
+            Assert.Equal((0, 1.0, 1f, 2f), (e.Shown, e.T, e.Hold, e.RowFade));   // switched at once, its windows held painted
+            Assert.Contains(0, f.Changed); Assert.Empty(f.Held);
+            // they clear over half a second: its row written each frame, nothing else
+            f = Step(m, 0.125);
+            Assert.Equal((0.75f, 1.75f), (e.Hold, e.RowFade));
+            Assert.Equal(new[] { 0 }, f.Held); Assert.Empty(f.Changed);
+            for (int i = 0; i < 3; i++) Step(m, 0.125);
+            Assert.Equal((0f, 1f), (e.Hold, e.RowFade));
+            f = Step(m, 0.125);
+            Assert.Empty(f.Held); Assert.Empty(f.Changed);   // cleared: nothing more to write
+        }
+
+        [Fact]
+        public void ALod0OnTimeIsPaintedByItsDistanceAlone()
+        {
+            var m = new LodManager(new LodSettings { FadeDetail = false }); var e = Box(m, 0, 100);
+            Step(m, 10);
+            m.Set(0, 50, -5, 60, 5, 10); m.SetBuilt(0, 0, true); m.SetBuilt(0, 1, true);   // 20 px/m: LOD0, beyond the 39 m
+            Step(m, 0.01);
+            Assert.Equal((0, 0f, 1f), (e.Shown, e.Hold, e.RowFade));
+            Assert.Empty(Step(m, 0.125).Held);
+        }
+
+        [Fact]
+        public void WithACrossFadeTheHoldWaitsForTheFade()
+        {
+            // the shader holds the glass painted while the row's fade is under 1, then by the part over 1
+            var m = new LodManager(); var e = Box(m, 0, 100);
+            Step(m, 10);
+            m.Set(0, 20, -5, 30, 5, 10); m.SetBuilt(0, 0, true); m.SetBuilt(0, 1, true);
+            Step(m, 0.125);
+            Assert.True(e.T > 0 && e.T < 1); Assert.Equal(1f, e.Hold); Assert.Equal((float)e.T, e.RowFade);
+            Step(m, 0.125); Step(m, 0.125);   // 0.35 s: the fade is done
+            Assert.Equal((1.0, 1f, 2f), (e.T, e.Hold, e.RowFade));
+            var f = Step(m, 0.125);
+            Assert.Equal(0.75f, e.Hold); Assert.Equal(new[] { 0 }, f.Held);
+        }
+
+        [Fact]
+        public void LeavingLod0EndsTheHoldAndSomeLod0sAreNeverHeld()
+        {
+            var m = new LodManager(new LodSettings { FadeDetail = false }); var e = Box(m, 0, 100);
+            Step(m, 10);
+            m.Set(0, 20, -5, 30, 5, 10); m.SetBuilt(0, 0, true); m.SetBuilt(0, 1, true);
+            Step(m, 0.01); Assert.Equal(1f, e.Hold);
+            m.Set(0, 100, -5, 110, 5, 10); m.SetBuilt(0, 0, true); m.SetBuilt(0, 1, true);   // back past LOD0's distance
+            Step(m, 0.01);
+            Assert.Equal((1, 0f, 1f), (e.Shown, e.Hold, e.RowFade));
+            // the camera inside its box (the glass seen from within): clear at once
+            m.Set(0, -5, -5, 5, 5, 10); m.SetBuilt(0, 0, true); m.SetBuilt(0, 1, true);
+            Step(m, 0.01);
+            Assert.Equal((0, 0f), (e.Shown, e.Hold));
+            // LateGlassFade 0: at once, as before
+            var off = new LodManager(new LodSettings { FadeDetail = false, LateGlassFade = 0 }); var o = Box(off, 0, 100);
+            Step(off, 10);
+            off.Set(0, 20, -5, 30, 5, 10); off.SetBuilt(0, 0, true); off.SetBuilt(0, 1, true);
+            Step(off, 0.01);
+            Assert.Equal((0, 0f, 1f), (o.Shown, o.Hold, o.RowFade));
+        }
     }
 }

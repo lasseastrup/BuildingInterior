@@ -59,6 +59,13 @@ namespace Triband.Storey.Lod
         /// on the walk-in test city's views). Their glass clears from <see cref="GlassClear"/> of it.
         /// </summary>
         public double WindowsPainted = 0.7;
+        /// <summary>
+        /// Seconds a LOD0 that comes late takes to clear its windows. One shown nearer than <see cref="PaintDistance"/>
+        /// (built after the camera passed its distance, or out of view until the camera turned) starts with them painted,
+        /// as LOD1's were, and they clear to what its distance shows over this long, once any cross-fade is done
+        /// (<see cref="LodManager.Entry.Hold"/>). 0: at once, as before.
+        /// </summary>
+        public double LateGlassFade = 0.5;
 
         /// <summary>The distance at which a building's nearest point takes LOD0 coming closer, for a camera's pixels per metre.</summary>
         public double Lod0Distance(double pixelsPerMetre) => pixelsPerMetre * Bias / (PX[0] * (1 + Hysteresis));
@@ -150,6 +157,16 @@ namespace Triband.Storey.Lod
             /// <summary>The LOD wanted by distance, the one shown, the one fading out, and how far the fade is (1 done).</summary>
             public int Want = 3, Shown = 3, From = 3;
             public double T = 1;
+            /// <summary>
+            /// A LOD0 that came late (<see cref="LodSettings.LateGlassFade"/>): how far its windows are still held painted, 1
+            /// down to 0, counted down once any cross-fade is done.
+            /// </summary>
+            public float Hold;
+            /// <summary>
+            /// The fade its table row carries: the cross-fade while under 1, then 1 + <see cref="Hold"/>. Every other reader
+            /// of the row takes 1 and over as done; LOD0's glass reads the part over as its hold.
+            /// </summary>
+            public float RowFade => T < 1 ? (float)T : 1 + Hold;
             /// <summary>Whether its LOD0 and LOD1 meshes are built (and still match its data).</summary>
             public bool Has0, Has1;
             /// <summary>The frame each was last drawn, for eviction.</summary>
@@ -186,12 +203,14 @@ namespace Triband.Storey.Lod
             public readonly List<(int idx, int lod)> Drop = new List<(int, int)>();
             /// <summary>Buildings whose shown LOD, fading LOD or fade changed (their table rows need writing).</summary>
             public readonly List<int> Changed = new List<int>();
+            /// <summary>Buildings whose windows' hold alone moved on (<see cref="Entry.Hold"/>): their rows need writing, nothing else.</summary>
+            public readonly List<int> Held = new List<int>(16);
             /// <summary>How many buildings show each LOD (index 3: not drawn).</summary>
             public readonly int[] Count = new int[4];
             /// <summary>How many of <see cref="Build"/> come first for forced buildings, how many next for those in view, and how many next prefetched; the rest are out of view.</summary>
             public int Forced, Seen, Prefetched;
 
-            internal void Clear() { Build.Clear(); Drop.Clear(); Changed.Clear(); Array.Clear(Count, 0, Count.Length); Forced = Seen = Prefetched = 0; }
+            internal void Clear() { Build.Clear(); Drop.Clear(); Changed.Clear(); Held.Clear(); Array.Clear(Count, 0, Count.Length); Forced = Seen = Prefetched = 0; }
         }
 
         // reused every frame, so a frame makes no garbage (FrameAllocTests)
@@ -290,6 +309,7 @@ namespace Triband.Storey.Lod
             frame++;
             var f = frameOut; f.Clear(); var s = Settings;
             double pxm = pixelsPerMetre * s.Bias, H = s.Hysteresis;
+            double paint = s.PaintDistance(pixelsPerMetre);   // a LOD0 shown nearer came late: its windows start painted
             forcedBuild.Clear(); unseenBuild.Clear(); prefetchBuild.Clear();
             // a forced or prefetched building's square is looked at building by building (a HashSet's own enumerator: no garbage)
             if (forced is HashSet<int> fs) { foreach (int i in fs) Force(i); }
@@ -338,8 +358,19 @@ namespace Triband.Storey.Lod
                         if (!e.Has0 && !asked0) prefetchBuild.Add((idx, 0, rel));
                     }
                     bool changed = false;
-                    if (show != e.Shown) { e.From = e.Shown; e.Shown = show; e.T = !s.FadeDetail && show < 2 && e.From < 2 ? 1 : 0; changed = true; }
+                    if (show != e.Shown)
+                    {
+                        e.From = e.Shown; e.Shown = show; e.T = !s.FadeDetail && show < 2 && e.From < 2 ? 1 : 0; changed = true;
+                        // a LOD0 nearer than where its windows clear came late: they start painted, as LOD1's were (not from
+                        // inside its box, where the glass is seen from within)
+                        e.Hold = show == 0 && d < paint && d > 1 && s.LateGlassFade > 0 ? 1 : 0;
+                    }
                     if (e.T < 1) { e.T = Math.Min(1, e.T + dt / s.Fade); changed = true; }
+                    else if (e.Hold > 0 && !changed)
+                    {
+                        e.Hold = s.LateGlassFade > 0 ? (float)Math.Max(0, e.Hold - dt / s.LateGlassFade) : 0;
+                        f.Held.Add(idx);
+                    }
                     if (changed) f.Changed.Add(idx);
                     if (e.Visible(0)) e.Used0 = frame;
                     if (e.Visible(1)) e.Used1 = frame;

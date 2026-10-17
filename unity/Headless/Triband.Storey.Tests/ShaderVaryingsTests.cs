@@ -51,6 +51,33 @@ namespace Triband.Storey.Tests
             }
         }
 
+        /// <summary>
+        /// A late LOD0's windows start painted and clear over a moment (LodManager.Entry.Hold, docs/CITY.md §2). The hold
+        /// rides in the building's row as its fade past 1, which every other read of the fade takes as done, and goes to the
+        /// glass's fragment stage in the fourth place of its occ output, which nothing else uses: no output more.
+        /// </summary>
+        [Fact]
+        public void ALateLod0sGlassHoldRidesInTheFadeAndASparePlace()
+        {
+            var occ = Text("Unity", "Shaders", "StoreyOcclusion.hlsl"); var lit = Text("Unity", "Shaders", "StoreyLit.hlsl");
+            Assert.Contains("v.hold = st.z < 1.0 ? 1.0 : saturate(st.z - 1.0);", occ);
+            Assert.Matches(new Regex(@"#ifdef STOREY_GLASS\s+OUT\.occ = float4\(v\.fade, v\.occ, origY, v\.hold\);\s+#else\s+OUT\.occ = float4\(v\.fade, v\.occ, origY, 0\);"), lit);
+            Assert.Matches(new Regex(@"#ifdef STOREY_GLASS\s+v\.hold = IN\.occ\.w;"), lit);
+            Assert.Matches(new Regex(@"float fill = max\(saturate\(.+\), v\.hold\);"), Text("Unity", "Shaders", "StoreyFragment.hlsl"));
+            // every read of a row's fade: compared with 1, the hold's, or the fade's own value under 1
+            foreach (var f in Directory.GetFiles(Path.Combine(UnityAsset.Package("com.triband.storey"), "Unity", "Shaders"), "*.hlsl"))
+            {
+                var src = Regex.Replace(File.ReadAllText(f), @"//[^\n]*", "");
+                Assert.DoesNotMatch(new Regex(@"_StoreyState\[[^;\n]*?\]\.z\b"), src);
+                foreach (var line in src.Split('\n').Where(l => l.Contains("st.z")))
+                {
+                    var rest = Regex.Replace(line, @"st\.z (<|>=) 1\.0|saturate\(st\.z - 1\.0\)", "");
+                    if (line.Contains("st.z >= 1.0")) rest = rest.Replace("(isDisp ? st.z : -1.0 - st.z)", "");   // read only under 1
+                    Assert.False(rest.Contains("st.z"), $"{Path.GetFileName(f)}: {line.Trim()}");
+                }
+            }
+        }
+
         [Fact]
         public void ColourPassOutputsAHalfHoldsAreHalves()
         {

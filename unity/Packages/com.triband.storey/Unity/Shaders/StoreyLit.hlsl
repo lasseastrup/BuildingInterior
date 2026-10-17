@@ -91,7 +91,7 @@ struct Varyings
 #else
     float4 misc       : TEXCOORD3;   // bid, lod, kind, wid
     float4 wall       : TEXCOORD2;
-    float4 occ        : TEXCOORD4;   // fade, occ slot, origY, unused
+    float4 occ        : TEXCOORD4;   // fade, occ slot, origY, the glass's hold (unused by the rest)
 #endif
     float3 worldPos   : TEXCOORD5;
 #ifdef STOREY_MASSING
@@ -166,7 +166,11 @@ Varyings StoreyVert(Attributes IN)
 #else
     OUT.misc = float4(v.bid, v.lod, kind, wid);
     OUT.wall = wall;
+#ifdef STOREY_GLASS
+    OUT.occ = float4(v.fade, v.occ, origY, v.hold);   // in the place the others leave unused: no output more
+#else
     OUT.occ = float4(v.fade, v.occ, origY, 0);
+#endif
 #endif
     OUT.worldPos = worldPos;
 #if defined(EVALUATE_SH_VERTEX) || defined(EVALUATE_SH_MIXED)
@@ -200,6 +204,9 @@ StoreyVarying StoreyUnpack(Varyings IN)
 #ifndef STOREY_STEADY
     v.kind = IN.misc.z; v.wid = IN.misc.w; v.wall = IN.wall;
     v.fade = IN.occ.x; v.occ = IN.occ.y; v.origY = IN.occ.z;
+#ifdef STOREY_GLASS
+    v.hold = IN.occ.w;
+#endif
 #endif
 #endif
     return v;

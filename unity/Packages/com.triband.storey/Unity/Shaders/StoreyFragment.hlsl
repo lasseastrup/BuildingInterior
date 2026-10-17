@@ -59,12 +59,13 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
 #elif !defined(STOREY_DEPTH)
     // LOD0's see-through glass: where LOD0 has just taken over it is LOD1's pane (the painted room, opaque), and it clears
     // to glass as the camera comes closer, so the LOD switch changes nothing in the windows and the real rooms behind
-    // them fade in with distance instead of appearing at once
+    // them fade in with distance instead of appearing at once. A LOD0 that came late, nearer than that, starts as LOD1's
+    // pane too and clears over a moment (v.hold, LodManager.Entry.Hold)
     if (_StoreyGlassFill.y > 0.0)
     {
         float2 wuv = IN.win.xy; float id = IN.win.w; float onPane = IN.win.z;
         float2 wdx = ddx(wuv), wdy = ddy(wuv);   // uniform branch: every pixel of the quad takes them
-        float fill = saturate((distance(_WorldSpaceCameraPos, s.positionWS) - _StoreyGlassFill.x) / max(_StoreyGlassFill.y - _StoreyGlassFill.x, 1e-3));
+        float fill = max(saturate((distance(_WorldSpaceCameraPos, s.positionWS) - _StoreyGlassFill.x) / max(_StoreyGlassFill.y - _StoreyGlassFill.x, 1e-3)), v.hold);
         if (fill > 0.0 && onPane > 0.5 && isFront)
         {
             // LOD1's pane: the painted room, or with the window effect off its dark glass (the opaque glass's shade)

@@ -922,7 +922,7 @@ namespace Triband.Storey.Unity
             c.members[bt.idx] = bt; bt.inCell = true; dirtyCells.Add(bt.cell);
             if (e.Visible(1)) { BuildDetail(bt, b, 1); lods.SetBuilt(bt.idx, 1, true); }
             if (e.Visible(0) || forced) { BuildDetail(bt, b, 0); lods.SetBuilt(bt.idx, 0, true); }
-            table.SetLod(bt.idx, e.Shown, e.From, (float)e.T);
+            table.SetLod(bt.idx, e.Shown, e.From, e.RowFade);
         }
 
         /// <summary>A massing's parameter rows written into the table: the table row of each of the massing's rows.</summary>
@@ -1471,10 +1471,12 @@ namespace Triband.Storey.Unity
                 if (jobs.Count > 0) CancelUnwanted(now);
                 foreach (int idx in f.Changed)
                 {
-                    var e = l.Get(idx)!; table.SetLod(idx, e.Shown, e.From, (float)e.T);
-                    if (e.T < 1) fading = true;
+                    var e = l.Get(idx)!; table.SetLod(idx, e.Shown, e.From, e.RowFade);
+                    if (e.T < 1 || e.Hold > 0) fading = true;
                     if (byIdx.TryGetValue(idx, out var cb)) { ShowDetail(cb); if (cb.inCell) shownCells.Add(cb.cell); }
                 }
+                // a late LOD0's windows clearing (LodManager.Entry.Hold): its row alone, nothing shown or hidden
+                foreach (int idx in f.Held) { var e = l.Get(idx)!; table.SetLod(idx, e.Shown, e.From, e.RowFade); fading = true; }
                 stats.lod0 = f.Count[0]; stats.lod1 = f.Count[1]; stats.lod2 = f.Count[2]; stats.culled = f.Count[3];
                 // the LOD0 geometry shown, and in the view (by each building's box, as the LOD manager sees it); and each LOD0
                 // with rooms, whether its nearest point is in the distance from which its windows are painted over (RoomsDraw),

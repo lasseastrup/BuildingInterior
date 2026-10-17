@@ -119,7 +119,7 @@ void StoreyPropFragment_float(float3 PositionWS, float3 BaseColor, out float3 Co
     float4 st = _StoreyState[StoreyRow(ib)];
     bool isDisp = st.x < 0.5, isFrom = st.z < 1.0 && st.y < 0.5;
     StoreyVarying v;
-    v.worldPos = PositionWS; v.wall = 0; v.kind = 0; v.wid = 0; v.bid = (float)ib; v.lod = 0;
+    v.worldPos = PositionWS; v.wall = 0; v.kind = 0; v.wid = 0; v.bid = (float)ib; v.lod = 0; v.hold = 0;
     v.fade = st.z >= 1.0 ? 3.0 : (isDisp ? st.z : -1.0 - st.z);
     v.occ = st.w - 1.0;
     v.origY = PositionWS.y;   // a gone storey's props are collapsed in the vertex stage; what is left is where it stands

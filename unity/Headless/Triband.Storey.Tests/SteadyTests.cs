@@ -29,6 +29,18 @@ namespace Triband.Storey.Tests
             Assert.False(Steady.Of(5, 1, 0, 5, 0, -1));                           // the player's building
             Assert.False(Steady.Of(5, 1, 0, 7, 0, -1, new[] { 2, 7 }));           // a party wall with the player's
             Assert.True(Steady.Of(5, 1, 0, 7, 0, -1, new[] { 2, 3 }));            // party walls with others only
+            Assert.True(Steady.Of(5, 1.75f, 0, -1, 0, -1));                       // a late LOD0's glass held (the fade past 1)
+        }
+
+        /// <summary>
+        /// A late LOD0's hold rides in its row's fade, past 1 (LodManager.Entry.RowFade): done, as 1 is, for the steady
+        /// answer, so the hold moving on marks nothing for the steady pass.
+        /// </summary>
+        [Fact]
+        public void TheFadePastOneIsDone()
+        {
+            Assert.True(Steady.Same(2f, 0, 1.75f, 0)); Assert.True(Steady.Same(1.25f, 0, 1f, 0)); Assert.True(Steady.Same(1f, 0, 2f, 0));
+            Assert.False(Steady.Same(0.5f, 0, 2f, 0));
         }
 
         /// <summary>

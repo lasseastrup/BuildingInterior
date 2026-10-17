@@ -21,7 +21,8 @@
 #ifndef STOREY_OCCLUSION_INCLUDED
 #define STOREY_OCCLUSION_INCLUDED
 
-// per building: displayed LOD, previous LOD, cross-fade 0..1, occluder slot + 1
+// per building: displayed LOD, previous LOD, cross-fade 0..1 (1 and over: done, and LOD0's glass reads the part over 1 as
+// its hold), occluder slot + 1
 StructuredBuffer<float4> _StoreyState;
 // per occluder slot, STOREY_OCC_W texels: (segments, dark, clip height, base height), then (floor line, scale, gone, slab gone) per storey
 StructuredBuffer<float4> _StoreyOcc;
@@ -72,6 +73,7 @@ struct StoreyVarying
     float fade;         // 3 = solid, 0..1 fading in, -1..-2 fading out
     float occ;          // occluder slot, or -1
     float origY;        // world y before the Sink displacement
+    float hold;         // LOD0's glass held painted, 1 to 0 (StoreyFragment): 1 while cross-fading, then the row's fade past 1
 };
 
 float StoreyBayer(float2 p)
@@ -136,6 +138,8 @@ bool StoreyVertex(float tag, float4 wall, float kind, float wid, float3 worldPos
 #endif
     v.fade = st.z >= 1.0 || (isDisp && isFrom) ? 3.0 : (isDisp ? st.z : -1.0 - st.z);
     v.occ = st.w - 1.0;
+    // a LOD0 that came late keeps LOD1's painted windows a moment (LodManager.Entry.Hold): the glass reads it
+    v.hold = st.z < 1.0 ? 1.0 : saturate(st.z - 1.0);
     return isDisp || isFrom;
 }
 
