@@ -922,68 +922,68 @@ Status: in the suite, all but the cutaway's (§10.1, with its fix). `BackFaceTes
 
 ## 15. Roadmap
 
-Ordered so that each step is measured by the one before it. Effort: S under a day, M a few days, L a week or more.
+Ordered so that each step is measured by the one before it. Effort: S under a day, M a few days, L a week or more. Status: what the repository has now (each section's own status says more); every timing in it is headless, and what is left for the device is named.
 
 ### Phase 1: measure, and remove the hitches
 
-| Item | § | Effort |
-|---|---|---|
-| Play Mode performance scene and counters; first iPhone 7, iPhone 14 and desktop runs; p99 thresholds per tier | 14 | M |
-| Profiler markers in `StoreyOcclusion`, `StoreyProps`, the play kit | 10.5 | S |
-| Forced LOD0 never blocks the main thread; prefetch along the camera–player line | 3.1 | M |
-| Uploads budgeted per mesh part; tier budgets; `Cells.Pack` on the build threads | 3.2 | S–M |
-| `Show`'s site index and load plan on the build thread; bounds and tier starts cached | 6.2 | S–M |
-| Walk shapes, roof heights and footprints built ahead on the build threads; the walk model and occlusion core kept per site | 10.2 | S–M |
-| Footprint objects persistent per slot, changed only on change | 10.3 | S |
-| iOS build threads at QoS utility; 1 against 2 threads measured on an iPhone 7; one global thread count | 9.1 | S–M |
-| Finish without a main-thread pass (rows resolved on the worker, wall base from the table); a LOD0's parts uploaded across frames | 8, 4.1 | M |
-| Artist window, door and detail kinds compacted once per kind, before artist content lands | 8.1 | S–M |
+| Item | § | Effort | Status |
+|---|---|---|---|
+| Play Mode performance scene and counters; first iPhone 7, iPhone 14 and desktop runs; p99 thresholds per tier | 14 | M | Built (Storey Performance Run); the device runs are to do |
+| Profiler markers in `StoreyOcclusion`, `StoreyProps`, the play kit | 10.5 | S | Done |
+| Forced LOD0 never blocks the main thread; prefetch along the camera–player line | 3.1 | M | Done |
+| Uploads budgeted per mesh part; tier budgets; `Cells.Pack` on the build threads | 3.2 | S–M | Done |
+| `Show`'s site index and load plan on the build thread; bounds and tier starts cached | 6.2 | S–M | Done; tier starts left as they are |
+| Walk shapes, roof heights and footprints built ahead on the build threads; the walk model and occlusion core kept per site | 10.2 | S–M | Done |
+| Footprint objects persistent per slot, changed only on change | 10.3 | S | Done |
+| iOS build threads at QoS utility; 1 against 2 threads measured on an iPhone 7; one global thread count | 9.1 | S–M | Done; 1 against 2 threads on the device to do |
+| Finish without a main-thread pass (rows resolved on the worker, wall base from the table); a LOD0's parts uploaded across frames | 8, 4.1 | M | Done |
+| Artist window, door and detail kinds compacted once per kind, before artist content lands | 8.1 | S–M | Done |
 
 ### Phase 2: the GPU on the minimum tier
 
-| Item | § | Effort |
-|---|---|---|
-| Discarding materials in the AlphaTest queue, steady copies in Geometry | 7.6 | S |
-| Shadow coordinate per pixel with cascades; SH per vertex; reflections and specular off for Opaque and Massing on the minimum tier | 7.3 | S |
-| Lean depth and shadow vertex stage; per-variant outputs; `half` interpolants | 7.2 | M |
-| Massing colours resolved per row on the CPU; shift and mask instead of integer division in palette lookups | 7.4 | S–M |
-| Close the shells' openings; back-face ray test in the suite; `Cull Back` on steady copies | 7.1 | M |
-| Interior as its own renderer (glass clear or active building only; shadows for the player's building only); LOD1 shadows through the massing | 7.7, 7.8 | M |
-| `GraphicsStateCollection` traced and warmed per tier and API; keyword stripping | 7.9 | M |
-| GRD with Forward+ against the SRP Batcher with Forward, measured on the iPhone 7; per-tier URP settings documented | 7.10 | S (once measured) |
+| Item | § | Effort | Status |
+|---|---|---|---|
+| Discarding materials in the AlphaTest queue, steady copies in Geometry | 7.6 | S | Done |
+| Shadow coordinate per pixel with cascades; SH per vertex; reflections and specular off for Opaque and Massing on the minimum tier | 7.3 | S | Done |
+| Lean depth and shadow vertex stage; per-variant outputs; `half` interpolants | 7.2 | M | Done |
+| Massing colours resolved per row on the CPU; shift and mask instead of integer division in palette lookups | 7.4 | S–M | Done |
+| Close the shells' openings; back-face ray test in the suite; `Cull Back` on steady copies | 7.1 | M | Done |
+| Interior as its own renderer (glass clear or active building only; shadows for the player's building only); LOD1 shadows through the massing | 7.7, 7.8 | M | Done |
+| `GraphicsStateCollection` traced and warmed per tier and API; keyword stripping | 7.9 | M | Done; tracing per tier on the device to do |
+| GRD with Forward+ against the SRP Batcher with Forward, measured on the iPhone 7; per-tier URP settings documented | 7.10 | S (once measured) | Documented (quality-tiers.md); the iPhone 7 measurement to do |
 
 ### Phase 3: bake the far city and the layout
 
-| Item | § | Effort |
-|---|---|---|
-| Interim: lazy parser paths, static key sets, enum dictionary, no throwaway defaults | 6.1 | S |
-| Interim: documents reference-counted and released on unload; `json` dropped in players | 6.5 | S |
-| Party-wall memo: nothing stored for edges without a neighbour; kept for the site's lifetime in one map | 6.6, 8.5 | S |
-| Main-thread load garbage: palette memo first, texels straight into the table, tables sized at load | 6.8 | S |
-| Import bakes the binary layout, cells, parameter rows and per-district edge context; runtime parses no JSON | 6.3, 6.4 | L |
-| Parsed model flattened (or replaced by the baked blob): shared empty lists, sparse floors, interned colours and styles | 6.7 | M |
-| Districts through Addressables, released by reference count | 6.5 | L |
+| Item | § | Effort | Status |
+|---|---|---|---|
+| Interim: lazy parser paths, static key sets, enum dictionary, no throwaway defaults | 6.1 | S | Done |
+| Interim: documents reference-counted and released on unload; `json` dropped in players | 6.5 | S | Done |
+| Party-wall memo: nothing stored for edges without a neighbour; kept for the site's lifetime in one map | 6.6, 8.5 | S | Done |
+| Main-thread load garbage: palette memo first, texels straight into the table, tables sized at load | 6.8 | S | Done |
+| Import bakes the binary layout, cells, parameter rows and per-district edge context; runtime parses no JSON | 6.3, 6.4 | L | Layout and edge context baked; cells and parameter rows not (they depend on the scene's neighbours and the live table) |
+| Parsed model flattened (or replaced by the baked blob): shared empty lists, sparse floors, interned colours and styles | 6.7 | M | Strings interned through the baked layout; the rest not (the model is public and edited in place) |
+| Districts through Addressables, released by reference count | 6.5 | L | Done |
 
 ### Phase 4: throughput and scale
 
-| Item | § | Effort |
-|---|---|---|
-| Build queue with priority classes; builds in storey steps with cancellation | 9.2 | M |
-| Fused `MeshPack` pass; inlined `ChunkList` indexer; split path without per-vertex gathers | 8.2 | S–M |
-| Builder fast paths for quads and boxes; per-face normal and colour; struct comparers | 8.3 | M |
-| Rectilinear wall-face triangulator | 8.4 | M |
-| Roof parts kept per site; integer gable keys; LOD1's openings once per storey | 8.5 | S–M |
-| Wall ids interned, created only when used | 8.6 | S–M |
-| Steady-garbage long tail; `StyleAt` memoised; collision unions memoised; float builder positions | 8.7 | S–M |
-| Burst kernels for packing, cell packing and welding; then quad and box expansion | 8.8 | M–L |
-| Cutaway filtered to the active storey ±1, array-based | 10.1 | M |
-| Lazy building roots; pooled LOD part objects; `hierarchyCapacity` | 3.4 | M |
-| `Mesh.AllocateWritableMeshData` written on the build threads | 4.1 | M |
-| Event-driven steady and cell-visibility updates | 3.3 | S |
-| Props: steady material swap, moving-only loop, swap-remove, per-site re-resolve | 11.1 | M |
-| Artist meshes editor-only at runtime | 11.2 | M |
-| Vertex compression (quantised positions, 16-bit ids), only if the minimum tier's memory binds | 4.2 | M |
-| Play kit HUD on UI Toolkit or UGUI, cached lift queries; silhouette collider | 11.4 | S–M |
+| Item | § | Effort | Status |
+|---|---|---|---|
+| Build queue with priority classes; builds in storey steps with cancellation | 9.2 | M | Done |
+| Fused `MeshPack` pass; inlined `ChunkList` indexer; split path without per-vertex gathers | 8.2 | S–M | Done; the split path still gathers |
+| Builder fast paths for quads and boxes; per-face normal and colour; struct comparers | 8.3 | M | Per-face normal and colour done; quad and box paths, struct comparers not |
+| Rectilinear wall-face triangulator | 8.4 | M | Not done: it changes every wall's triangles, for a device to check |
+| Roof parts kept per site; integer gable keys; LOD1's openings once per storey | 8.5 | S–M | Done |
+| Wall ids interned, created only when used | 8.6 | S–M | Not done: the cutaway's cost was cut by §10.1 instead |
+| Steady-garbage long tail; `StyleAt` memoised; collision unions memoised; float builder positions | 8.7 | S–M | Done |
+| Burst kernels for packing, cell packing and welding; then quad and box expansion | 8.8 | M–L | Packing done; cell packing, welding and quad and box expansion not |
+| Cutaway filtered to the active storey ±1, array-based | 10.1 | M | Done (a band of 8 m round the storey) |
+| Lazy building roots; pooled LOD part objects; `hierarchyCapacity` | 3.4 | M | Done |
+| `Mesh.AllocateWritableMeshData` written on the build threads | 4.1 | M | Done for worker builds; cells and main-thread builds copy as before |
+| Event-driven steady and cell-visibility updates | 3.3 | S | Done |
+| Props: steady material swap, moving-only loop, swap-remove, per-site re-resolve | 11.1 | M | Done (the steady copies need the graph's keyword) |
+| Artist meshes editor-only at runtime | 11.2 | M | Done |
+| Vertex compression (quantised positions, 16-bit ids), only if the minimum tier's memory binds | 4.2 | M | Decided against for now (§4.2) |
+| Play kit HUD on UI Toolkit or UGUI, cached lift queries; silhouette collider | 11.4 | S–M | Queries once a frame, a switch and the silhouette done; still IMGUI |
 
 ## Appendix A. Measurements made for this review
 
