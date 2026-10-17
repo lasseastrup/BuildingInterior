@@ -91,12 +91,21 @@ namespace Triband.Storey.Tests
                         Assert.True(Math.Abs(g - row[j]) <= 1e-4 * Math.Max(1, Math.Abs(row[j])), $"{at}: {r.b.name} row [{j}] = {g}, the prototype {row[j]}");
                     }
                 }
-                // the sliding walls
-                var wantWalls = fr.GetProperty("walls").EnumerateArray().ToDictionary(e => (e.GetProperty("id").GetString()!, e.GetProperty("i").GetInt32()), e => e.GetProperty("a").GetDouble());
-                Assert.True(wantWalls.Count == core.Walls.Count, $"{at}: {core.Walls.Count} walls sliding, the prototype {wantWalls.Count}; only here: {string.Join(" ", core.Walls.Keys.Except(wantWalls.Keys).Take(5))}; only there: {string.Join(" ", wantWalls.Keys.Except(core.Walls.Keys).Take(5))}");
+                // the sliding walls: those near the player's storey, which the cutaway works on (the prototype's on every
+                // storey; the shaders read the player's alone, docs/PERFORMANCE.md §10.1), the same as the prototype's
+                bool Near0((string id, int i) w)
+                {
+                    var bw = world.Site.ById(w.id); if (bw == null || core.View.active == null) return false;
+                    double yb = world.ShapeOf(bw).WallBase[w.i];
+                    return yb >= core.View.cutBase - OcclusionCore.CutBand / 2 && yb < core.View.cutTop + OcclusionCore.CutBand / 2;
+                }
+                var wantWalls = fr.GetProperty("walls").EnumerateArray().ToDictionary(e => (e.GetProperty("id").GetString()!, e.GetProperty("i").GetInt32()), e => e.GetProperty("a").GetDouble())
+                    .Where(kv => Near0(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
+                var gotWalls = core.Walls.Where(kv => Near0(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
+                Assert.True(wantWalls.Count == gotWalls.Count, $"{at}: {gotWalls.Count} walls sliding, the prototype {wantWalls.Count}; only here: {string.Join(" ", gotWalls.Keys.Except(wantWalls.Keys).Take(5))}; only there: {string.Join(" ", wantWalls.Keys.Except(gotWalls.Keys).Take(5))}");
                 foreach (var kv in wantWalls)
                 {
-                    Assert.True(core.Walls.TryGetValue(kv.Key, out var a), $"{at}: wall {kv.Key} should be sliding");
+                    Assert.True(gotWalls.TryGetValue(kv.Key, out var a), $"{at}: wall {kv.Key} should be sliding");
                     Near(kv.Value, a, $"{at}: wall {kv.Key}");
                 }
                 f++;

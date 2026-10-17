@@ -100,8 +100,19 @@ namespace Triband.Storey.Occlusion
         public OcclusionView View;
         /// <summary>The occluder rows, <see cref="Slots"/> × <see cref="RowTexels"/> × 4 floats, as the shader reads them.</summary>
         public readonly float[] Rows = new float[Slots * RowTexels * 4];
-        /// <summary>How far each wall has slid down (0..1), by building id and its index in LOD0's wall list; walls fully up are absent.</summary>
+        /// <summary>
+        /// How far each wall has slid down (0..1), by building id and its index in LOD0's wall list; walls fully up are
+        /// absent. Only walls near the player's storey slide (<see cref="CutBand"/>, docs/PERFORMANCE.md §10.1).
+        /// </summary>
         public readonly Dictionary<(string id, int wall), double> Walls = new Dictionary<(string, int), double>();
+
+        /// <summary>
+        /// How far above and below the player's storey a wall slides (metres, from the storey's floor and its ceiling's
+        /// top): the storeys next to it, so a flight of stairs finds the walls there already down, and a neighbour's taller
+        /// storey reaching into it. The shaders read a slide only on the player's storey; the cutaway worked on every storey
+        /// of the building, 97 % of its slides for nothing.
+        /// </summary>
+        public const double CutBand = 8;
         /// <summary>The camera's extra pitch while the player is hidden (camera assist).</summary>
         public double Assist;
 
@@ -117,8 +128,12 @@ namespace Triband.Storey.Occlusion
         readonly List<Occluder> hits = new List<Occluder>(), activeCopy = new List<Occluder>();
         readonly List<BuildingData> cand = new List<BuildingData>(), near = new List<BuildingData>();
         readonly HashSet<BuildingData> candSeen = new HashSet<BuildingData>();
-        readonly HashSet<(string, int)> wallsSeen = new HashSet<(string, int)>();
-        readonly List<(string, int)> wallKeys = new List<(string, int)>();
+        // each building's slides by wall, and the frame each wall was last looked at, where they were keyed by (id, wall) in
+        // maps (85 % of the cutaway's time was hashing those); and the walls down now
+        sealed class WallState { public double[] slide = Array.Empty<double>(); public int[] seen = Array.Empty<int>(); public bool sorted; }
+        readonly Dictionary<BuildingData, WallState> wallStates = new Dictionary<BuildingData, WallState>();
+        readonly List<(BuildingData b, int wall)> down = new List<(BuildingData, int)>();
+        int cutFrame;
         bool[] gone = new bool[8];
 
         /// <summary>What the segment test needs of a building, worked out once (its tiers' starts and ends, its roof's rise).</summary>
@@ -160,7 +175,7 @@ namespace Triband.Storey.Occlusion
         public void Clear()
         {
             foreach (var r in active) { r.a = 0; r.t = 0; if (r.slot >= 0) slots[r.slot] = null; r.slot = -1; }
-            active.Clear(); Walls.Clear(); hiddenFor = 0; Assist = 0; held = null;
+            active.Clear(); Walls.Clear(); wallStates.Clear(); down.Clear(); hiddenFor = 0; Assist = 0; held = null;
             View = new OcclusionView { clipY = 1e9 };
         }
 
@@ -251,34 +266,79 @@ namespace Triband.Storey.Occlusion
         void UpdateCutaway(double dt)
         {
             double step = dt / CutSlide;
-            var seen = wallsSeen; seen.Clear();
+            int frame = ++cutFrame;
             var act = View.active;
             if (View.cutOn && act != null)
             {
                 int ai = World.Site.IndexOf(act);
+                double y0 = View.cutBase - CutBand, y1 = View.cutTop + CutBand;
                 // only the buildings next to it can share a wall with it: the rest's shapes are never made for this
                 foreach (var b in World.Touching(act))
                 {
-                    var walls = World.ShapeOf(b).Walls;
-                    for (int i = 0; i < walls.Count; i++)
+                    var shape = World.ShapeOf(b); var walls = shape.Walls; var bases = shape.WallBase;
+                    var st = StateOf(b, shape);
+                    // the walls whose storey is in the band: a storey's walls follow the one below's (found by halves), or
+                    // looked at one by one where they don't
+                    int i = st.sorted ? FirstAt(bases, y0) : 0;
+                    for (; i < walls.Count; i++)
                     {
+                        double yb = bases[i];
+                        if (yb >= y1) { if (st.sorted) break; continue; }
+                        if (yb < y0) continue;
                         // the active building's walls, and the neighbours' party walls shared with it
                         if (b != act && (walls[i].K < 8 || (walls[i].K >> 3) - 1 != ai)) continue;
-                        var id = (b.id, i); seen.Add(id);
-                        Walls.TryGetValue(id, out double a);
+                        st.seen[i] = frame;
+                        double a = st.slide[i];
                         // a wall starts down only with the player clear of its line, and stays down until they cross back
                         bool up = WallBlocks(walls[i].W, View.cx, View.cz, View.fx, View.fz, a > 0 ? 0 : Settings.wallMargin);
                         if (!up && a == 0) continue;
-                        SetWall(id, Math.Max(0, Math.Min(1, a + (up ? step : -step))));
+                        SetWall(b, st, i, Math.Max(0, Math.Min(1, a + (up ? step : -step))));
                     }
                 }
             }
             // walls no longer cut slide back up
-            wallKeys.Clear(); foreach (var key in Walls.Keys) if (!seen.Contains(key)) wallKeys.Add(key);
-            foreach (var key in wallKeys) SetWall(key, Math.Max(0, Walls[key] - step));
+            for (int j = down.Count - 1; j >= 0; j--)
+            {
+                var (b, i) = down[j];
+                if (!wallStates.TryGetValue(b, out var st) || i >= st.slide.Length) { down.RemoveAt(j); continue; }
+                if (st.seen[i] == frame) continue;
+                SetWall(b, st, i, Math.Max(0, st.slide[i] - step));
+            }
         }
 
-        void SetWall((string, int) id, double v) { if (v > 0) Walls[id] = v; else Walls.Remove(id); }
+        // a building's slides, sized to its walls (afresh when its shape has another count)
+        WallState StateOf(BuildingData b, Lod0Shape shape)
+        {
+            int n = shape.Walls.Count;
+            if (wallStates.TryGetValue(b, out var st) && st.slide.Length == n) return st;
+            if (st != null) for (int i = 0; i < st.slide.Length; i++) if (st.slide[i] > 0) SetWall(b, st, i, 0);
+            st = wallStates[b] = new WallState { slide = new double[n], seen = new int[n], sorted = true };
+            var bases = shape.WallBase;
+            for (int i = 1; i < bases.Count; i++) if (bases[i] < bases[i - 1]) { st.sorted = false; break; }
+            return st;
+        }
+
+        // the first wall whose storey starts at or above y, in walls ordered by storey
+        static int FirstAt(List<double> bases, double y)
+        {
+            int lo = 0, hi = bases.Count;
+            while (lo < hi) { int m = (lo + hi) >> 1; if (bases[m] < y) lo = m + 1; else hi = m; }
+            return lo;
+        }
+
+        void SetWall(BuildingData b, WallState st, int i, double v)
+        {
+            double was = st.slide[i];
+            if (v > 0)
+            {
+                if (was == 0) down.Add((b, i));
+                st.slide[i] = v; Walls[(b.id, i)] = v;
+                return;
+            }
+            if (was == 0) return;
+            st.slide[i] = 0; Walls.Remove((b.id, i));
+            for (int j = down.Count - 1; j >= 0; j--) if (ReferenceEquals(down[j].b, b) && down[j].wall == i) { down.RemoveAt(j); break; }
+        }
 
         // ---- buildings in the way ----
 
