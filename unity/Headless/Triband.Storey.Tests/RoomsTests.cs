@@ -230,7 +230,7 @@ namespace Triband.Storey.Tests
             Assert.Contains("roomsHide = clear < 1 && !ge.orthographic;", renderer);
             Assert.Contains("double paint = l.Settings.Lod0Distance(eye.pixelsPerMetre)", renderer);
             Assert.Contains("bt.near = Math.Sqrt(dx * dx + dy * dy + dz * dz) < paint * (bt.near ? 1.1 : 1.05);", renderer);
-            Assert.Contains("Add(bt, 0, Part(\"LOD0 rooms\", i, d.rooms.Count), MeshUpload.Upload(d.rooms[i], Part(name + \" rooms\", i, d.rooms.Count), RowOf, bt.wallBase), opaque, false, rooms: true);", renderer);
+            Assert.Contains("Add(bt, 0, Part(\"LOD0 rooms\", r, nr), MeshUpload.Upload(d.rooms[r], Part(name + \" rooms\", r, nr), RowOf, bt.wallBase), opaque, false, rooms: true);", renderer);
         }
     }
 }

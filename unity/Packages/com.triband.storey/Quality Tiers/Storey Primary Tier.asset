@@ -22,7 +22,7 @@ MonoBehaviour:
   lod0Residency: 16
   lod1Residency: 260
   collidersKept: 64
-  buildBudgetMs: 6
+  buildBudgetMs: 2
   windowsClearAt: 0.6
   buildOnWorkerThreads: 1
   buildThreads: 0

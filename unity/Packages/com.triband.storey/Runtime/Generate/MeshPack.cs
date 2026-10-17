@@ -80,9 +80,14 @@ namespace Triband.Storey.Generate
             Cut = null; I16 = null; I32 = null;
         }
 
+        /// <summary>Its vertices' colour rows and wall ids are written (<see cref="Finish"/>).</summary>
+        public bool Finished => finished;
+
         /// <summary>
         /// Fill in what only the main thread knows: <paramref name="rows"/>, the colour row of each of <see cref="Styles"/>,
-        /// and <paramref name="wallBase"/>, the first global id of the building's walls (-1: none). Once, before the upload.
+        /// and <paramref name="wallBase"/>, the first global id of the building's walls (-1: none). Once, before the upload;
+        /// the rows and walls are found on the main thread, and the vertices written on any (a build thread's, §4.1 of
+        /// docs/PERFORMANCE.md).
         /// </summary>
         public void Finish(int[] rows, int wallBase)
         {

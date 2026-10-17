@@ -41,9 +41,10 @@ namespace Triband.Storey.Lod
         public int MaxColliders = 64;
         /// <summary>
         /// Milliseconds a frame may spend building LOD0 and LOD1 meshes, every site's together (each still builds one when any
-        /// is wanted). With worker threads, only the upload counts: the meshes are generated off the main thread.
+        /// is wanted). With worker threads, only the upload counts, part by part (one part a frame at least): the meshes are
+        /// generated, and their vertices finished, off the main thread. 2 for a 60 fps frame; the minimum tier's 30 has 4.
         /// </summary>
-        public double BudgetMs = 6;
+        public double BudgetMs = 2;
         /// <summary>
         /// LOD0's see-through windows show LOD1's painted pane where LOD0 takes over, and are clear glass within this share
         /// of that distance (blended between), so the switch changes nothing in the windows. 1: clear at once (no blend).

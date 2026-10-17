@@ -47,10 +47,12 @@ namespace Triband.Storey.Tests
             Assert.Equal(d.FarOcclusion, p["occlusionOnFarMaterials"] == "1");
             Assert.Equal("1", p["specularAndReflections"]);   // URP's full PBR, as a site without a quality asset lights
             Assert.Equal("1", p["cullBackFacesWhenSteady"]);   // the shells are closed for it (docs/PERFORMANCE.md §7.1, BackFaceTests)
-            // the minimum tier: full detail and shell switched at once, half the residency, 12 MB of chunks, no occlusion on
-            // far materials, no specular or reflections, and nothing else
-            Assert.Equal(new[] { "crossFadeFullDetail", "lod0Residency", "lod1Residency", "meshChunksKeptMB", "occlusionOnFarMaterials", "specularAndReflections" }, p.Keys.Where(k => p[k] != m[k]));
-            Assert.Equal(("0", "8", "130", "12", "0", "0"), (m["crossFadeFullDetail"], m["lod0Residency"], m["lod1Residency"], m["meshChunksKeptMB"], m["occlusionOnFarMaterials"], m["specularAndReflections"]));
+            // the minimum tier: full detail and shell switched at once, half the residency, the build budget of a 30 fps frame
+            // (docs/PERFORMANCE.md §3.2), 12 MB of chunks, no occlusion on far materials, no specular or reflections, and
+            // nothing else
+            Assert.Equal(new[] { "crossFadeFullDetail", "lod0Residency", "lod1Residency", "buildBudgetMs", "meshChunksKeptMB", "occlusionOnFarMaterials", "specularAndReflections" }, p.Keys.Where(k => p[k] != m[k]));
+            Assert.Equal(("0", "8", "130", "4", "12", "0", "0"), (m["crossFadeFullDetail"], m["lod0Residency"], m["lod1Residency"], m["buildBudgetMs"], m["meshChunksKeptMB"], m["occlusionOnFarMaterials"], m["specularAndReflections"]));
+            Assert.Equal(2, D(p["buildBudgetMs"]));   // a 60 fps frame's
         }
 
         [Fact]

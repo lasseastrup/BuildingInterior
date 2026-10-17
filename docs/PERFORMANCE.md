@@ -60,7 +60,7 @@ Effort: S under a day, M a few days, L a week or more. Impact as estimated in ea
 
 The roadmap (§15) orders everything else.
 
-Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), LOD0's rooms as their own renderers (§7.7), #8's priority for detail in view and its priority classes (§9.2), #2 (§3.1), and #7: the shells closed, the ray test in the suite and back faces culled on steady draws by default (§7.1). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
+Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), LOD0's rooms as their own renderers (§7.7), #8's priority for detail in view and its priority classes (§9.2), #2 (§3.1), #7: the shells closed, the ray test in the suite and back faces culled on steady draws by default (§7.1), #9 but the walk model's grid (§10.2, §10.3), #4's `Show` off the main thread (§6.2), and the uploads: budgeted per mesh part and per tier, with the vertices finished on the build threads (§3.2, §4.1). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
 
 ## 1. Scope and method
 
@@ -146,7 +146,7 @@ Detail is uploaded on the main thread "for up to 6 ms a frame, at least one when
 - Six milliseconds is 36 % of a 60 fps frame. AAA streaming budgets on the main thread are typically 1 to 2 ms at 60 fps; make the budget per tier, and count it per mesh part. Carry the remaining parts to the next frame and show the building when all have arrived.
 - `TakeLoad` (a load over frames) and `MergeCells` share the same clock; `Cells.Pack` runs on the main thread in `BuildCell` (`SiteRenderer.cs:901`). Moving the packing to the build threads (the row map is known once the rows are written) leaves only the upload.
 
-Status: `Cells.Pack` runs on the build threads in Play mode (CHANGELOG); a cell keeps its meshes until its new ones are uploaded, within the budget.
+Status: done (CHANGELOG). The budget is counted per mesh part. A worker's build is staged as it comes in (`SiteRenderer.Stage`): its walls are written into the table and its parts' colour rows found on the main thread, its vertices are finished on a build thread (§4.1), and then its parts are uploaded one at a time within the budget, the rest in later frames (`TakeStaged`). The LOD is marked built, and shown, when the last part is up. A forced building's parts go up at once, then those of the buildings in view, then the prefetched; the builds being made and those waiting for their upload together are at most twice the build threads (no new one starts meanwhile), and a build whose building is let go or no longer wanted before its first part gives its walls and chunks back. **Build Budget Ms** is per tier: 2 ms on the primary tier, 4 ms on the minimum tier, whose frames are 30 fps (was 6 ms on both). The load replay of the 3,000-building test city (appendix A.5's harness, two build threads at 60 fps) then takes 39 frames instead of 20, with every cell shown after 0.70–0.72 s instead of 0.39–0.51 s; no load frame goes past 3.3 ms, where the 90th percentile was 6.2–6.5 ms. `Cells.Pack` runs on the build threads in Play mode; a cell keeps its meshes until its new ones are uploaded, within the budget. What's left is the device: Unity's own share of an upload, and whether 2 ms holds the frame on the iPhone (the recorder's `build: LOD0 upload` timings).
 
 ### 3.3 Per-frame loops that could be event-driven (low to medium)
 
@@ -189,6 +189,8 @@ A detail build reaches the GPU like this (`MeshUpload.Upload`, `MeshUpload.cs:66
 3. `UploadMeshData(true)`: the GPU copy is made and the CPU copy released.
 
 The managed chunks are copied into the mesh's native data on the main thread, and that is copied again to the GPU. `Mesh.AllocateWritableMeshData` / `ApplyAndDisposeWritableMeshData` [R4] lets the build threads write the vertex and index data straight into native mesh data, leaving the main thread only the apply. CITY.md §8 already names this as the next step if the upload hitches. It also lets the colour rows be resolved before packing (the style-to-row mapping can be handed to the job), so step 1 leaves the main thread too.
+
+Status: step 1 leaves the main thread (CHANGELOG). The colour rows (a lookup per style) and the wall base (an allocation in the building table) are still found on the main thread, which owns the table. `PackedMesh.Finish` then writes them into every vertex on a build thread, in the build's own lane, and `MeshUpload.Upload` finishes only a mesh not yet finished. `MeshPackTests.AMeshFinishedOnABuildThreadIsTheSameBytes` checks the bytes against a finish on the calling thread. Steps 2 and 3 stay on the main thread, a part at a time within the budget (§3.2), until `AllocateWritableMeshData` (§15, phase 4).
 
 ### 4.2 Vertex formats
 
@@ -464,7 +466,7 @@ At the far end of LOD0's range (58 m at 1080p, 16 px/m), a 5 cm window-frame bar
 
 ## 8. Detail generation on the build threads
 
-A detail build is `Lod0.Build` (or `Lod1.Build`), then `MeshPack.Pack` and, for LOD0, `CollisionMesh.Build`, on a build thread; the main thread finishes and uploads it (§3.2, §4.1). The work is off the main thread, so its cost decides how quickly detail arrives, how many buildings the threads can keep up with, battery and heat on a phone, and the garbage every thread's collection pays for (§12). Measured on the test cities with the renderer's own sequence (.NET 8, steady state with the pools warm; profiles from an unbiased sampler; appendix A.7):
+A detail build is `Lod0.Build` (or `Lod1.Build`), then `MeshPack.Pack` and, for LOD0, `CollisionMesh.Build`, on a build thread; the main thread uploads it, a part at a time, once a build thread has finished its vertices (§3.2, §4.1). The work is off the main thread, so its cost decides how quickly detail arrives, how many buildings the threads can keep up with, battery and heat on a phone, and the garbage every thread's collection pays for (§12). Measured on the test cities with the renderer's own sequence (.NET 8, steady state with the pools warm; profiles from an unbiased sampler; appendix A.7):
 
 | Per building | Plain city | Walk-in city |
 |---|---|---|
@@ -898,6 +900,21 @@ Harness: the engine-free half of `Show`, `TakeLoad`, `Build`, `BuildCell` and `M
 | 2 @ 30 | 23–27 | 0.87–0.96 s | 18–21 ms | 3.4 / 6.1–7.3 ms | 101–133 ms |
 | 1 @ 60 | 62–65 | 1.12–1.27 s | 19–24 ms | 1.2 / 1.8–2.3 ms | 90–216 ms |
 | 1 @ 30 | 60–61 | 2.16–2.23 s | 20–28 ms | 1.2 / 2.2–2.4 ms | 205–251 ms |
+
+The same harness after §6.2 (the site index and plan on the build threads) and §3.2 (the budget per tier), two runs each:
+
+| Budget, build threads @ fps | Load frames | Every cell shown | Load frame p50 / p90 / max |
+|---|---|---|---|
+| 6 ms, 2 @ 60 (before) | 20 | 0.39–0.51 s | 2.3–3.9 / 6.2–6.5 / 6.3–10.9 ms |
+| 2 ms, 2 @ 60 (primary tier) | 39 | 0.70–0.72 s | 2.1 / 2.3–2.6 / 2.9–3.3 ms |
+| 3 ms, 2 @ 60 | 27–29 | 0.56–0.62 s | 2.3–3.1 / 3.1–3.3 / 3.4–3.7 ms |
+| 6 ms, 3 @ 60 (before) | 14–16 | 0.33–0.39 s | 6.0–6.1 / 6.2–6.3 / 7.7 ms; one run had a 109 ms frame |
+| 2 ms, 3 @ 60 | 30–34 | 0.55–0.62 s | 2.1 / 2.2–2.3 / 2.5–2.9 ms |
+| 6 ms, 2 @ 30 (before) | 20–22 | 0.80–0.89 s | 2.3–2.6 / 6.0–6.1 / 6.1–6.3 ms |
+| 4 ms, 2 @ 30 (minimum tier) | 24–25 | 0.86–1.05 s | 3.1–3.3 / 4.4–5.8 / 4.9–7.4 ms |
+| 2 ms, 2 @ 30 | 32–35 | 1.13–1.29 s | 2.0–2.1 / 2.3 / 4.3 ms; one run had a 96 ms frame |
+
+The two single slow frames are as long as the collections inside load frames measured below (82–106 ms); the harness didn't record their cause.
 
 | Measurement | Result |
 |---|---|

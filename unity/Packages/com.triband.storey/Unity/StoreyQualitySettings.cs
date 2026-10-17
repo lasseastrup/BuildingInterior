@@ -52,8 +52,8 @@ namespace Triband.Storey.Unity
         [Tooltip("How many buildings keep their collider. A collider comes with a building's LOD0 and stays when the LOD0 goes; past this many, those whose LOD0 went longest ago lose theirs, made again with their next LOD0. 0 keeps every one for the session.")]
         [Min(0)] public int collidersKept = 64;
 
-        [Tooltip("Milliseconds a frame may spend building LOD0 and LOD1 meshes, every site's together (each site still builds one when any is wanted).")]
-        [Range(0.5f, 33)] public float buildBudgetMs = 6f;
+        [Tooltip("Milliseconds a frame may spend on the main thread taking built meshes in (LOD0 and LOD1 parts uploaded, cells merged, a layout loading over frames), every site's together. Counted per mesh part: a frame takes one at least when any is ready, and the building the player is in, or one in the camera's way, takes all its parts at once. 2 for a 60 fps frame (the primary tier), 4 for the minimum tier's 30.")]
+        [Range(0.5f, 33)] public float buildBudgetMs = 2f;
 
         [Tooltip("LOD0's see-through windows start as LOD1's painted rooms where LOD0 takes over, so the switch doesn't change the windows, and clear to glass by this share of that distance (0.6: clear at 60% of it). 1: clear at once.")]
         [Range(0.1f, 1f)] public float windowsClearAt = 0.6f;

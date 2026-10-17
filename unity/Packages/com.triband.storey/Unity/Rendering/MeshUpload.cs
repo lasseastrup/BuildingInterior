@@ -65,9 +65,12 @@ namespace Triband.Storey.Unity
         /// </summary>
         public static Mesh Upload(PackedMesh pm, string name, Func<StyleRef, int> rowOf, int wallBase = -1)
         {
-            var rows = new int[pm.Styles.Length];
-            for (int s = 0; s < rows.Length; s++) rows[s] = rowOf(pm.Styles[s]);
-            pm.Finish(rows, wallBase);
+            if (!pm.Finished)
+            {
+                var rows = new int[pm.Styles.Length];
+                for (int s = 0; s < rows.Length; s++) rows[s] = rowOf(pm.Styles[s]);
+                pm.Finish(rows, wallBase);
+            }
             int nv = pm.Verts, ni = pm.Indices;
             var mesh = new Mesh { name = name, indexFormat = pm.I16 != null ? IndexFormat.UInt16 : IndexFormat.UInt32 };
             mesh.SetVertexBufferParams(nv, pm.Cut != null ? Lod0Layout : LeanLayout);

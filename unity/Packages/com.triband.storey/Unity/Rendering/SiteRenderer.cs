@@ -845,19 +845,23 @@ namespace Triband.Storey.Unity
         }
 
         /// <summary>
-        /// The main thread's half: the walls into the table, the meshes' colour rows and wall ids filled in, uploaded and
-        /// drawn. A shell building's LOD0 has no see-through glass: no mesh for it.
+        /// The main thread's half, all at once (the editor's forced buildings, a site without build threads): the walls into
+        /// the table, the meshes' colour rows and wall ids filled in, uploaded and drawn. A worker's build goes up in stages
+        /// instead (<see cref="Staged"/>). A shell building's LOD0 has no see-through glass: no mesh for it.
         /// </summary>
         void FinishDetail(Built bt, string name, int which, object made)
         {
             using var _t = StoreyTimings.Time(which == 0 ? "build: LOD0 upload" : "build: LOD1 upload", name);
             var d = (Detail)made;
-            if (which == 1)
-            {
-                // no shadow of its own: the building casts through its massing while at LOD1 (docs/PERFORMANCE.md §7.8)
-                for (int i = 0; i < d.opaque.Count; i++) Add(bt, 1, Part("LOD1", i, d.opaque.Count), MeshUpload.Upload(d.opaque[i], Part(name + " LOD1", i, d.opaque.Count), RowOf), opaque, false);
-                return;
-            }
+            BeginDetail(bt, which, d);
+            for (int k = 0, n = PartsOf(which, d); k < n; k++) UploadPart(bt, name, which, d, k);
+            EndDetail(bt, name, which, d);
+        }
+
+        /// <summary>LOD0's walls into the table (their ids go into its vertices) and its shape kept; nothing for LOD1.</summary>
+        void BeginDetail(Built bt, int which, Detail d)
+        {
+            if (which == 1) return;
             var shape = d.shape!; bt.shape = shape;
             bt.mates = d.opaque.Count > 0 ? d.opaque[0].Mates : Array.Empty<int>();
             bt.wallCount = shape.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
@@ -865,17 +869,156 @@ namespace Triband.Storey.Unity
             {
                 for (int i = 0; i < bt.wallCount; i++) table.SetWallData(bt.wallBase + i, MeshUpload.WallData(shape.Walls[i].W));
             }
-            for (int i = 0; i < d.opaque.Count; i++) Add(bt, 0, Part("LOD0", i, d.opaque.Count), MeshUpload.Upload(d.opaque[i], Part(name + " LOD0", i, d.opaque.Count), RowOf, bt.wallBase), opaque, true);
-            for (int i = 0; i < d.glass!.Count; i++) Add(bt, 0, Part("LOD0 glass", i, d.glass.Count), MeshUpload.Upload(d.glass[i], Part(name + " glass", i, d.glass.Count), RowOf, bt.wallBase), glass, false);
+        }
+
+        /// <summary>A build's meshes, in the order they go up: LOD0's opaque parts, its glass, its rooms; LOD1's parts.</summary>
+        static int PartsOf(int which, Detail d) => d.opaque.Count + (which == 0 ? d.glass!.Count + d.rooms!.Count : 0);
+
+        static PackedMesh PartAt(int which, Detail d, int k)
+        {
+            if (k < d.opaque.Count || which == 1) return d.opaque[k];
+            k -= d.opaque.Count;
+            return k < d.glass!.Count ? d.glass[k] : d.rooms![k - d.glass.Count];
+        }
+
+        /// <summary>The <paramref name="k"/>th of a build's meshes uploaded, with its renderer (off until the LOD is shown).</summary>
+        void UploadPart(Built bt, string name, int which, Detail d, int k)
+        {
+            int no = d.opaque.Count;
+            if (which == 1)
+            {
+                // no shadow of its own: the building casts through its massing while at LOD1 (docs/PERFORMANCE.md §7.8)
+                Add(bt, 1, Part("LOD1", k, no), MeshUpload.Upload(d.opaque[k], Part(name + " LOD1", k, no), RowOf), opaque, false);
+                return;
+            }
+            int ng = d.glass!.Count, nr = d.rooms!.Count;
+            if (k < no) { Add(bt, 0, Part("LOD0", k, no), MeshUpload.Upload(d.opaque[k], Part(name + " LOD0", k, no), RowOf, bt.wallBase), opaque, true); return; }
+            if (k < no + ng) { int g = k - no; Add(bt, 0, Part("LOD0 glass", g, ng), MeshUpload.Upload(d.glass[g], Part(name + " glass", g, ng), RowOf, bt.wallBase), glass, false); return; }
             // the rooms: their shadow only for the building the player is in (RoomsDraw)
-            if (bt.rooms.Count == 0 && d.rooms!.Count > 0) roomsKept++;
-            for (int i = 0; i < d.rooms!.Count; i++) Add(bt, 0, Part("LOD0 rooms", i, d.rooms.Count), MeshUpload.Upload(d.rooms[i], Part(name + " rooms", i, d.rooms.Count), RowOf, bt.wallBase), opaque, false, rooms: true);
-            long nv = 0, nr = 0; foreach (var p in d.opaque) nv += p.Verts; foreach (var p in d.glass) nv += p.Verts; foreach (var p in d.rooms) nr += p.Verts;
+            int r = k - no - ng;
+            if (bt.rooms.Count == 0) roomsKept++;
+            Add(bt, 0, Part("LOD0 rooms", r, nr), MeshUpload.Upload(d.rooms[r], Part(name + " rooms", r, nr), RowOf, bt.wallBase), opaque, false, rooms: true);
+        }
+
+        /// <summary>A build up: LOD0's numbers and its collider asked for.</summary>
+        void EndDetail(Built bt, string name, int which, Detail d)
+        {
+            if (which == 1) return;
+            long nv = 0, nr = 0; foreach (var p in d.opaque) nv += p.Verts; foreach (var p in d.glass!) nv += p.Verts; foreach (var p in d.rooms!) nr += p.Verts;
             bt.lod0Verts = nv; bt.roomsVerts = nr;
             if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 up: {name} ({bt.wallCount} walls at {bt.wallBase}, {d.opaque.Count} + {d.glass.Count} + {d.rooms.Count} meshes, {nv + nr:N0} vertices, {nr:N0} of them the rooms')");
             // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
             if (d.collision != null && bt.collision == null) bt.collisionMade = d.collision;
             if (lods != null && colliders && bt.collision == null) colliderPending.Add(bt.id);
+        }
+
+        /// <summary>
+        /// A worker's build on its way up (docs/PERFORMANCE.md §3.2, §4.1): its walls into the table and its parts' colour
+        /// rows looked up here, their vertices finished on a build thread, then the parts uploaded within the frame's budget,
+        /// counted per part (a forced building's at once). The LOD is built, and shown, once the last part is up.
+        /// </summary>
+        sealed class Staged
+        {
+            public Built bt = null!; public Site site = null!; public string name = ""; public int which; public BuildLane lane;
+            public Detail d = null!; public System.Threading.Tasks.Task<int> finishing = null!; public int next, parts;
+        }
+        readonly List<Staged> staged = new List<Staged>();
+
+        void Stage(Job j)
+        {
+            var d = (Detail)j.task.Result;
+            BeginDetail(j.bt, j.which, d);
+            int n = PartsOf(j.which, d), wallBase = j.which == 0 ? j.bt.wallBase : -1;
+            var rows = new int[n][];
+            for (int k = 0; k < n; k++)
+            {
+                var pm = PartAt(j.which, d, k); var r = rows[k] = new int[pm.Styles.Length];
+                for (int i = 0; i < r.Length; i++) r[i] = RowOf(pm.Styles[i]);
+            }
+            int which = j.which;
+            staged.Add(new Staged
+            {
+                bt = j.bt, site = j.site, name = j.name, which = which, lane = j.lane, d = d, parts = n,
+                finishing = BuildThreads.Shared.Run(() => { for (int k = 0; k < n; k++) PartAt(which, d, k).Finish(rows[k], wallBase); return n; }, j.lane),
+            });
+        }
+
+        /// <summary>
+        /// One lane's staged builds' parts uploaded: a forced building's all at once, the rest within the budget, one part a
+        /// frame at least. One whose building was built again or let go meanwhile is let go.
+        /// </summary>
+        int TakeStaged(System.Diagnostics.Stopwatch sw, int made, BuildLane lane)
+        {
+            var l = lods!; bool forced = lane == BuildLane.Forced;
+            for (int i = 0; i < staged.Count; i++)
+            {
+                var st = staged[i]; if (st.lane != lane) continue;
+                // its building still shown (an edit's Rebuild keeps the others, and indexes the layout again: a build of
+                // the old index is let go, as a worker's is), and, before its first part is up, still wanted
+                bool mine = built.TryGetValue(st.bt.id, out var cur) && ReferenceEquals(cur, st.bt);
+                var e = mine && ReferenceEquals(st.site, site) ? l.Get(st.bt.idx) : null;
+                bool wanted = e != null && (st.next > 0 || st.lane == BuildLane.Background || e.Want <= st.which);
+                if (!wanted || st.finishing.IsFaulted)
+                {
+                    if (st.finishing.IsFaulted && e != null) { var ex = st.finishing.Exception!; Debug.LogException(ex.InnerException ?? ex); }
+                    staged.RemoveAt(i--); busy.Remove(st.bt.idx); Unstage(st, mine);
+                    continue;
+                }
+                if (!st.finishing.IsCompleted || !(forced || made == 0 || sw.Elapsed.TotalMilliseconds <= budget)) continue;
+                using (StoreyTimings.Time(st.which == 0 ? "build: LOD0 upload" : "build: LOD1 upload", st.name))
+                    do { UploadPart(st.bt, st.name, st.which, st.d, st.next++); made++; }
+                    while (st.next < st.parts && (forced || sw.Elapsed.TotalMilliseconds <= budget));
+                if (st.next < st.parts) continue;   // the rest next frame
+                staged.RemoveAt(i--); busy.Remove(st.bt.idx);
+                EndDetail(st.bt, st.name, st.which, st.d);
+                l.SetBuilt(st.bt.idx, st.which, true);
+            }
+            return made;
+        }
+
+        /// <summary>
+        /// A staged build let go. A building still shown loses what the build had put up (its walls in the table, the parts
+        /// uploaded so far); one released has lost it with the rest of its meshes.
+        /// </summary>
+        void Unstage(Staged st, bool mine)
+        {
+            if (mine)
+            {
+                if (st.next > 0) DropDetail(st.bt, st.which);
+                else if (st.which == 0)
+                {
+                    var bt = st.bt;
+                    if (bt.wallBase >= 0) table.ReleaseWalls(bt.wallBase, bt.wallCount);
+                    bt.wallBase = -1; bt.wallCount = 0; bt.shape = null; bt.mates = Array.Empty<int>();
+                }
+            }
+            Abandon(st);
+        }
+
+        /// <summary>A staged build let go: the parts not uploaded give their chunks back, once their vertices are finished.</summary>
+        static void Abandon(Staged st)
+        {
+            int from = st.next;
+            void Release() { for (int k = from; k < st.parts; k++) PartAt(st.which, st.d, k).Release(); }
+            if (st.finishing.IsCompleted) Release();
+            else st.finishing.ContinueWith(_ => Release(), System.Threading.CancellationToken.None, System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously, System.Threading.Tasks.TaskScheduler.Default);
+        }
+
+        /// <summary>A building's staged build, finished and uploaded now (the editor wants it at once): false when it has none.</summary>
+        bool TakeStagedNow(Built bt, int which)
+        {
+            for (int i = 0; i < staged.Count; i++)
+            {
+                var st = staged[i]; if (st.bt != bt || st.which != which) continue;
+                using (StoreyTimings.Time(which == 0 ? "build: LOD0 waited for (a worker's)" : "build: LOD1 waited for (a worker's)", st.name))
+                    try { st.finishing.Wait(); } catch (AggregateException) { }
+                staged.RemoveAt(i); busy.Remove(bt.idx);
+                if (st.finishing.IsFaulted || !ReferenceEquals(st.site, site)) { Unstage(st, true); return false; }
+                while (st.next < st.parts) UploadPart(bt, st.name, which, st.d, st.next++);
+                EndDetail(bt, st.name, which, st.d);
+                return true;
+            }
+            return false;
         }
 
         /// <summary>A finished build that won't be uploaded after all: its packed arrays go back for the next build's.</summary>
@@ -909,34 +1052,32 @@ namespace Triband.Storey.Unity
         }
 
         /// <summary>
-        /// Detail finished on the worker threads, uploaded within the budget (the rest wait for the next frame). A result
-        /// for a layout or a building since rebuilt, or one no longer wanted, is thrown away.
+        /// Detail built on the worker threads, staged as it comes in (<see cref="Stage"/>) and uploaded part by part within the
+        /// budget (<see cref="TakeStaged"/>). A result for a layout or a building since rebuilt, or one no longer wanted, is
+        /// thrown away.
         /// </summary>
         int TakeJobs(System.Diagnostics.Stopwatch sw, int made)
-        {
-            made = TakeJobs(sw, made, true);   // the forced ones, whatever the budget: they are wanted now
-            return TakeJobs(sw, made, false);
-        }
-
-        int TakeJobs(System.Diagnostics.Stopwatch sw, int made, bool forced)
         {
             var l = lods!;
             for (int i = 0; i < jobs.Count; i++)
             {
-                var j = jobs[i]; if (!j.task.IsCompleted || (j.lane == BuildLane.Forced) != forced) continue;
+                var j = jobs[i]; if (!j.task.IsCompleted) continue;
                 bool current = ReferenceEquals(j.site, site) && built.TryGetValue(j.bt.id, out var cur) && ReferenceEquals(cur, j.bt);
                 bool ok = j.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && current;
                 var e = ok ? l.Get(j.bt.idx) : null;
                 // a prefetched LOD0 is taken though the building doesn't want it by distance (yet)
                 if (e == null || (j.which == 0 ? e.Has0 : e.Has1) || (e.Want > j.which && j.lane != BuildLane.Background)) ok = false;
-                if (ok && !forced && made > 0 && sw.Elapsed.TotalMilliseconds > budget) continue;   // next frame
-                jobs.RemoveAt(i--); busy.Remove(j.bt.idx);
+                jobs.RemoveAt(i--);
                 // a build of a layout edited under it may throw, and is dropped; one of the layout shown is a fault to report
                 if (j.task.IsFaulted) { var ex = j.task.Exception!; if (current) Debug.LogException(ex.InnerException ?? ex); }
-                if (!ok) { if (j.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion) Discard(j.task.Result); continue; }
-                FinishDetail(j.bt, j.name, j.which, j.task.Result); l.SetBuilt(j.bt.idx, j.which, true); made++;
+                if (!ok) { busy.Remove(j.bt.idx); if (j.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion) Discard(j.task.Result); continue; }
+                Stage(j);   // the building stays busy until its last part is up
             }
-            return made;
+            // the forced ones' parts whatever the budget, as they are wanted now; then the buildings in view's, then the
+            // prefetched
+            made = TakeStaged(sw, made, BuildLane.Forced);
+            made = TakeStaged(sw, made, BuildLane.Detail);
+            return TakeStaged(sw, made, BuildLane.Background);
         }
 
         /// <summary>A worker's build of a building's LOD0 or LOD1, waited for and uploaded now: false when there is none, or it failed.</summary>
@@ -998,6 +1139,8 @@ namespace Triband.Storey.Unity
         {
             foreach (var j in jobs)
                 if (j.bt.idx == idx && j.lane != BuildLane.Forced && BuildThreads.Shared.Promote(j.task, BuildLane.Forced)) j.lane = BuildLane.Forced;
+            foreach (var st in staged)
+                if (st.bt.idx == idx && st.lane != BuildLane.Forced) { BuildThreads.Shared.Promote(st.finishing, BuildLane.Forced); st.lane = BuildLane.Forced; }
         }
 
         void UpdateLods()
@@ -1028,7 +1171,7 @@ namespace Triband.Storey.Unity
                 if (!atOnce) { Hurry(bt.idx); continue; }
                 // one already being generated is waited for, not built a second time
                 long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-                bool waited = TakeJobNow(bt, 0);
+                bool waited = TakeStagedNow(bt, 0) || TakeJobNow(bt, 0);
                 if (!waited) BuildDetail(bt, b, 0);
                 l.SetBuilt(bt.idx, 0, true); made++;
                 if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 of {b.name} wanted at once: {StoreyDiagnostics.Ms(t0):0.0} ms, {(waited ? "a worker's, waited for" : "built on the main thread")}");
@@ -1036,7 +1179,7 @@ namespace Triband.Storey.Unity
             prefetchIdx.Clear();
             foreach (var id in Prefetch) if (built.TryGetValue(id, out var pt) && !forcedIdx.Contains(pt.idx)) prefetchIdx.Add(pt.idx);
             if (load != null) TakeLoad(sw);   // a layout loading over frames: the cells ready, within the budget
-            if (jobs.Count > 0) made = TakeJobs(sw, made);
+            if (jobs.Count > 0 || staged.Count > 0) made = TakeJobs(sw, made);
             if (Eye is LodEye eye)
             {
                 var o = parent.position;   // the layout is in the site's space: unrotated, unscaled
@@ -1055,8 +1198,9 @@ namespace Triband.Storey.Unity
                     var (idx, which, _) = f.Build[bi];
                     bool force = bi < f.Forced, pre = !force && bi >= f.Forced + f.Seen && bi < f.Forced + f.Seen + f.Prefetched;
                     if (busy.Contains(idx)) { if (force) Hurry(idx); continue; }   // being generated
-                    // the rest wait for a thread; a forced one goes ahead of them
-                    if (threads > 0 && !force && jobs.Count >= threads) { queued += f.Build.Count - bi; break; }
+                    // the rest wait for a thread, with at most as many again built and waiting for their upload (which a
+                    // frame's budget may not keep up with); a forced one goes ahead of them
+                    if (threads > 0 && !force && (jobs.Count >= threads || jobs.Count + staged.Count >= 2 * threads)) { queued += f.Build.Count - bi; break; }
                     if (!byIdx.TryGetValue(idx, out var bt)) continue;
                     var b = site?.ById(bt.id); if (b == null) continue;
                     if (threads > 0)
@@ -1117,7 +1261,7 @@ namespace Triband.Storey.Unity
                 pieces += c.renderers.Count;
             }
             var (r0, r1) = l.Resident();
-            lodBusy = fading || queued > 0 || jobs.Count > 0 || load != null || cellJobs.Count > 0;
+            lodBusy = fading || queued > 0 || jobs.Count > 0 || staged.Count > 0 || load != null || cellJobs.Count > 0;
             stats.loading = load != null ? load.Count - load.Taken : 0;
             stats.buildings = built.Count; stats.resident0 = r0; stats.resident1 = r1;
             stats.cells = cells.Count; stats.cellMeshes = pieces; stats.cellsShown = shown;
@@ -1458,6 +1602,8 @@ namespace Triband.Storey.Unity
                 j.task.ContinueWith(t => { if (t.Status == System.Threading.Tasks.TaskStatus.RanToCompletion) Discard(t.Result); },
                     System.Threading.CancellationToken.None, System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously, System.Threading.Tasks.TaskScheduler.Default);
             jobs.Clear(); busy.Clear();
+            foreach (var st in staged) Abandon(st);
+            staged.Clear();
             load = null;
             book?.Clear();
             shownLod = -1;

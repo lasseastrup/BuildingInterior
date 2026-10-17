@@ -114,6 +114,38 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void AMeshFinishedOnABuildThreadIsTheSameBytes()
+        {
+            // the renderer stages a worker's build (docs/PERFORMANCE.md §3.2, §4.1): the colour rows and walls found on the
+            // main thread, the vertices written on a build thread, and the upload finishing nothing again
+            var site = City(200, true); var threads = new BuildThreads(2); int parts = 0;
+            try
+            {
+                foreach (var b in site.Buildings.Where((x, i) => i % 25 == 0))
+                    foreach (var (what, m, windows) in Meshes(site, b))
+                    {
+                        m.Weld();
+                        var here = MeshPack.Pack(m, windows, (100, 400), 20000); var there = MeshPack.Pack(m, windows, (100, 400), 20000);
+                        var rows = there.Select(p => p.Styles.Select(RowOf).ToArray()).ToArray();
+                        Assert.All(there, p => Assert.False(p.Finished));
+                        threads.Run(() => { for (int k = 0; k < there.Count; k++) there[k].Finish(rows[k], 3000); return there.Count; }, BuildLane.Detail).Wait();
+                        for (int k = 0; k < here.Count; k++)
+                        {
+                            here[k].Finish(here[k].Styles.Select(RowOf).ToArray(), 3000);
+                            Assert.True(there[k].Finished);
+                            Assert.True(here[k].V.Take(here[k].Verts).SequenceEqual(there[k].V.Take(there[k].Verts)), $"{what} ({k + 1}): the vertices differ");
+                            Assert.True(here[k].Cut == null ? there[k].Cut == null : here[k].Cut!.Take(here[k].Verts).SequenceEqual(there[k].Cut!.Take(there[k].Verts)), $"{what} ({k + 1}): the cutaway stream differs");
+                            Assert.Throws<InvalidOperationException>(() => there[k].Finish(rows[k], 3000));
+                            parts++;
+                        }
+                        foreach (var p in here.Concat(there)) p.Release();
+                    }
+            }
+            finally { threads.Resize(0); }
+            output.WriteLine($"{parts} parts finished on a build thread: the same bytes");
+        }
+
+        [Fact]
         public void HalfIsTheGpusHalf()
         {
             // bit for bit .NET's own conversion (round to nearest, ties to even): edges, every exponent, ties, and a sweep

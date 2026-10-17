@@ -61,5 +61,28 @@ namespace Triband.Storey.Tests
             log.WriteLine($"triangles repeating a vertex: {before} before welding, {after} after, in {meshes} meshes");
             Assert.Equal(0, after);
         }
+
+        [Fact]
+        public void AWorkersBuildGoesUpAMeshAtATimeOnceAThreadHasFinishedIt()
+        {
+            // docs/PERFORMANCE.md §3.2, §4.1: SiteRenderer stages a worker's build as it comes in, has a build thread write
+            // its vertices' rows and wall ids (MeshPackTests: the same bytes), then uploads its meshes one at a time within
+            // the budget, the forced buildings' first and whatever the budget, those in view next, the prefetched last; the
+            // LOD is built once its last mesh is up. The upload doesn't finish a mesh twice
+            string Text(params string[] path) => System.IO.File.ReadAllText(UnityAsset.Package("com.triband.storey", path));
+            var renderer = Text("Unity", "Rendering", "SiteRenderer.cs");
+            var take = renderer.Substring(renderer.IndexOf("int TakeJobs(System.Diagnostics.Stopwatch sw, int made)", System.StringComparison.Ordinal));
+            take = take.Substring(0, take.IndexOf("bool TakeJobNow(", System.StringComparison.Ordinal));
+            Assert.Contains("Stage(j);", take);
+            Assert.DoesNotContain("FinishDetail(", take);
+            int forced = take.IndexOf("TakeStaged(sw, made, BuildLane.Forced)", System.StringComparison.Ordinal), detail = take.IndexOf("TakeStaged(sw, made, BuildLane.Detail)", System.StringComparison.Ordinal), pre = take.IndexOf("TakeStaged(sw, made, BuildLane.Background)", System.StringComparison.Ordinal);
+            Assert.True(forced > 0 && detail > forced && pre > detail, "the lanes' uploads in order");
+            Assert.Contains("BuildThreads.Shared.Run(() => { for (int k = 0; k < n; k++) PartAt(which, d, k).Finish(rows[k], wallBase); return n; }, j.lane)", renderer);
+            Assert.Contains("do { UploadPart(st.bt, st.name, st.which, st.d, st.next++); made++; }", renderer);
+            Assert.Contains("while (st.next < st.parts && (forced || sw.Elapsed.TotalMilliseconds <= budget));", renderer);
+            int rest = renderer.IndexOf("if (st.next < st.parts) continue;", System.StringComparison.Ordinal), built = renderer.IndexOf("l.SetBuilt(st.bt.idx, st.which, true);", System.StringComparison.Ordinal);
+            Assert.True(rest > 0 && built > rest, "built once the last mesh is up");
+            Assert.Contains("if (!pm.Finished)", Text("Unity", "Rendering", "MeshUpload.cs"));
+        }
     }
 }
