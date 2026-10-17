@@ -102,19 +102,18 @@ namespace Triband.Storey.Generate
             if (finished) throw new InvalidOperationException("a packed mesh is finished once");
             if (rows.Length != Styles.Length) throw new ArgumentException($"{rows.Length} rows for {Styles.Length} styles", nameof(rows));
             finished = true;
-            var lo = new byte[rows.Length]; var hi = new byte[rows.Length];
+            var lo = new byte[Math.Max(1, rows.Length)]; var hi = new byte[lo.Length];
             for (int s = 0; s < rows.Length; s++) { var (r, g, _, _) = ColorRows.EncodeVertex(rows[s], ColorSlot.Wall, 1); lo[s] = r; hi[s] = g; }
             int n = Verts;
-            for (int k = 0, at = 0; at < n; k++, at += Chunks.Size)
+            unsafe
             {
-                var v = V.Chunk(k); int m = Math.Min(Chunks.Size, n - at);
-                for (int i = 0; i < m; i++) { int s = v[i].r | v[i].g << 8; v[i].r = lo[s]; v[i].g = hi[s]; }
-            }
-            if (Cut == null) return;
-            for (int k = 0, at = 0; at < n; k++, at += Chunks.Size)
-            {
-                var c = Cut.Chunk(k); int m = Math.Min(Chunks.Size, n - at);
-                for (int i = 0; i < m; i++) { float wi = c[i].wid; c[i].wid = wi > 0 && wallBase >= 0 ? wallBase + wi - 1 : 0; }
+                fixed (byte* l = lo) fixed (byte* h = hi)
+                    for (int k = 0, at = 0; at < n; k++, at += Chunks.Size)
+                    {
+                        int m = Math.Min(Chunks.Size, n - at);
+                        fixed (Vertex* v = V.Chunk(k)) fixed (Cutaway* c = Cut != null ? Cut.Chunk(k) : null)
+                            PackKernels.Finish(v, c, m, l, h, wallBase);   // a style number past the rows can't be: each names one of Styles
+                    }
             }
         }
     }
@@ -330,7 +329,7 @@ namespace Triband.Storey.Generate
         /// vertex's style named, written, its party-wall neighbour found and its place in the bounds taken as it goes; each
         /// index checked as it is copied. Four passes and the bounds' fifth before; the same mesh.
         /// </summary>
-        static PackedMesh Whole(MeshBuilder gb, Packer pk, int nv, int ni)
+        static PackedMesh WholeFused(MeshBuilder gb, Packer pk, int nv, int ni)
         {
             var v = new ChunkList<PackedMesh.Vertex>(); v.Resize(nv);
             var cut = gb.Lean ? null : new ChunkList<PackedMesh.Cutaway>(); cut?.Resize(nv);
@@ -376,6 +375,68 @@ namespace Triband.Storey.Generate
             return new PackedMesh(v, cut, i16, i32, ni, pk.Styles.ToArray(), x0, y0, z0, x1, y1, z1) { Mates = found.Count > 0 ? found.ToArray() : Array.Empty<int>() };
         }
 
+        static PackedMesh Whole(MeshBuilder gb, Packer pk, int nv, int ni) => PackKernels.Compiled ? WholeByKernels(gb, pk, nv, ni) : WholeFused(gb, pk, nv, ni);
+
+        /// <summary>
+        /// <see cref="Whole"/> by the kernels (<see cref="PackKernels"/>), where Burst has compiled them: the styles named in
+        /// a pass, the vertices and the cutaway stream a chunk at a time, the panes' places written after. The same mesh.
+        /// </summary>
+        static unsafe PackedMesh WholeByKernels(MeshBuilder gb, Packer pk, int nv, int ni)
+        {
+            var v = new ChunkList<PackedMesh.Vertex>(); v.Resize(nv);
+            var cut = gb.Lean ? null : new ChunkList<PackedMesh.Cutaway>(); cut?.Resize(nv);
+            // the styles numbered in the order the vertices first name them, as before; then the vertices and the cutaway
+            // stream a chunk at a time by the kernels (Burst's in Unity, docs/PERFORMANCE.md §8.8)
+            for (int c = 0, at = 0; at < nv; c++, at += Chunks.Size)
+            {
+                var C = gb.C.Index.Chunk(c); int m = Math.Min(Chunks.Size, nv - at);
+                for (int j = 0; j < m; j++) pk.Name(C[j]);
+            }
+            if (pk.Styles.Count > 65536) throw new InvalidOperationException($"{pk.Styles.Count} styles in one mesh");
+            var bounds = stackalloc float[6] { float.MaxValue, float.MaxValue, float.MaxValue, float.MinValue, float.MinValue, float.MinValue };
+            var found = pk.Found; var (mateStart, mateCount) = pk.Mates is (int ms, int mc) ? (ms, mc) : (0, -1);
+            fixed (PackKernels.Colour* colours = pk.colours)
+            fixed (PackKernels.Normal* normals = pk.normals)
+                for (int c = 0, at = 0; at < nv; c++, at += Chunks.Size)
+                {
+                    int m = Math.Min(Chunks.Size, nv - at);
+                    fixed (P3* P = gb.P.Chunk(c)) fixed (int* N = gb.N.Index.Chunk(c)) fixed (int* C = gb.C.Index.Chunk(c)) fixed (PackedMesh.Vertex* V = v.Chunk(c))
+                        PackKernels.Vertices(P, N, C, colours, normals, pk.Tag, V, m, bounds);
+                    if (cut == null) continue;
+                    var U = cut.Chunk(c);
+                    fixed (int* K = gb.K.Chunk(c)) fixed (int* W = gb.WI.Chunk(c)) fixed (PackedMesh.Cutaway* Up = U)
+                        PackKernels.Cutaways(K, W, Up, m, mateStart, mateCount);
+                    for (int j = 0; j < m; j++) { int k = (int)U[j].kind; if (k >= 8) { int n = (k >> 3) - 1; if (!found.Contains(n)) found.Add(n); } }
+                }
+            // a pane's place on it, for the glass's vertices that have one
+            if (pk.Windows)
+                foreach (var kv in gb.PaneUV)
+                {
+                    int i = kv.Key; if ((uint)i >= (uint)nv || pk.colours[gb.C.Index[i]].glass == 0) continue;
+                    var (pa, pw, pb) = ColorRows.EncodePane(kv.Value.u, kv.Value.v, kv.Value.id);
+                    ref var q = ref v[i]; q.a = pa; q.nw = pw; q.b = pb;
+                }
+            float x0 = bounds[0], y0 = bounds[1], z0 = bounds[2], x1 = bounds[3], y1 = bounds[4], z1 = bounds[5];
+            var I = gb.I;
+            ChunkList<ushort>? i16 = null; int[]? i32 = null;
+            if (nv <= MaxVerts)
+            {
+                i16 = new ChunkList<ushort>(); i16.Resize(ni);
+                for (int c = 0, at = 0; at < ni; c++, at += Chunks.Size)
+                {
+                    int m = Math.Min(Chunks.Size, ni - at), bad;
+                    fixed (int* src = I.Chunk(c)) fixed (ushort* dst = i16.Chunk(c)) bad = PackKernels.Indices16(src, dst, m, nv);
+                    if (bad >= 0) BadIndex(I[at + bad], nv);
+                }
+            }
+            else
+            {
+                i32 = I.ToArray();
+                foreach (int x in i32) if ((uint)x >= (uint)nv) BadIndex(x, nv);
+            }
+            return new PackedMesh(v, cut, i16, i32, ni, pk.Styles.ToArray(), x0, y0, z0, x1, y1, z1) { Mates = found.Count > 0 ? found.ToArray() : Array.Empty<int>() };
+        }
+
         // what packing a mesh works with, lent out for each (its lists' chunks go back after each mesh)
         static readonly Lender<Packer> packers = new Lender<Packer>(8);
 
@@ -388,10 +449,10 @@ namespace Triband.Storey.Generate
             public readonly List<(int start, int end)> Spans = new List<(int, int)>();
             // per entry of the builder's tables: a colour's style number (-1 until a vertex names it), slot and tone bytes, and
             // whether it is a pane's; a normal's packed bytes
-            struct Colour { public int style; public byte b, a; public bool glass; }
-            struct Normal { public sbyte x, y, z; }
-            Colour[] colours = new Colour[64];
-            Normal[] normals = new Normal[64];
+            internal PackKernels.Colour[] colours = new PackKernels.Colour[64];
+            internal PackKernels.Normal[] normals = new PackKernels.Normal[64];
+            internal float Tag => tag;
+            internal bool Windows => windows;
             MeshBuilder gb = null!;
             bool windows;
             float tag;
@@ -411,14 +472,14 @@ namespace Triband.Storey.Generate
             public void Entries()
             {
                 var cv = gb.C.Values; var nvs = gb.N.Values;
-                if (colours.Length < cv.Count) colours = new Colour[Math.Max(cv.Count, colours.Length * 2)];
-                if (normals.Length < nvs.Count) normals = new Normal[Math.Max(nvs.Count, normals.Length * 2)];
+                if (colours.Length < cv.Count) colours = new PackKernels.Colour[Math.Max(cv.Count, colours.Length * 2)];
+                if (normals.Length < nvs.Count) normals = new PackKernels.Normal[Math.Max(nvs.Count, normals.Length * 2)];
                 for (int e = 0; e < cv.Count; e++)
                 {
                     var s = cv[e]; var (_, _, cb, ca) = ColorRows.EncodeVertex(0, s.slot, s.tone);   // the slot and tone, checked
-                    colours[e] = new Colour { style = -1, b = cb, a = ca, glass = s.slot == ColorSlot.Glass };
+                    colours[e] = new PackKernels.Colour { style = -1, b = cb, a = ca, glass = s.slot == ColorSlot.Glass ? (byte)1 : (byte)0 };
                 }
-                for (int e = 0; e < nvs.Count; e++) { var n = nvs[e]; normals[e] = new Normal { x = S8(n.x), y = S8(n.y), z = S8(n.z) }; }
+                for (int e = 0; e < nvs.Count; e++) { var n = nvs[e]; normals[e] = new PackKernels.Normal { x = S8(n.x), y = S8(n.y), z = S8(n.z) }; }
             }
 
             /// <summary>A vertex names colour entry <paramref name="e"/>: its style is numbered if this is the first to.</summary>
@@ -435,6 +496,7 @@ namespace Triband.Storey.Generate
 
             /// <summary>A vertex's cutaway kind as packed: a party wall's neighbour moved into the table's block.</summary>
             public int Kind(int k) => mates is (int ms, int mc) ? MateIndex.Shift(k, ms, mc) : k;
+            internal (int start, int count)? Mates => mates;
 
             /// <summary>
             /// Vertex <paramref name="i"/> (at <paramref name="p"/>, its normal and colour entries <paramref name="ne"/> and
@@ -448,7 +510,7 @@ namespace Triband.Storey.Generate
                 v.x = (float)p.x; v.y = (float)p.y; v.z = (float)p.z;
                 v.nx = n.x; v.ny = n.y; v.nz = n.z;
                 v.r = (byte)(si & 255); v.g = (byte)(si >> 8); v.b = c.b; v.a = c.a; v.tag = tag;
-                if (windows && c.glass && gb.PaneUV.TryGetValue(i, out var uv)) { var (pa, pw, pb) = ColorRows.EncodePane(uv.u, uv.v, uv.id); v.a = pa; v.nw = pw; v.b = pb; }
+                if (windows && c.glass != 0 && gb.PaneUV.TryGetValue(i, out var uv)) { var (pa, pw, pb) = ColorRows.EncodePane(uv.u, uv.v, uv.id); v.a = pa; v.nw = pw; v.b = pb; }
             }
         }
     }

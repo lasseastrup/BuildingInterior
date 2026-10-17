@@ -2,6 +2,7 @@
   "name": "Triband.Storey",
   "rootNamespace": "Triband.Storey",
   "references": [],
+  "allowUnsafeCode": true,
   "autoReferenced": true,
   "noEngineReferences": true
 }

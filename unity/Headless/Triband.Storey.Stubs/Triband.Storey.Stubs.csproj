@@ -21,6 +21,8 @@
     <AssemblyName>Triband.Storey.Stubs</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <IsPackable>false</IsPackable>
+    <!-- the packer's kernels work on pointers (Runtime/Generate/PackKernels.cs), as the Runtime assembly definition allows -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!--
       No project-wide nullable setting. Every package source opens with `#nullable enable`
       (a layout rule enforces it), which leaves the stub files oblivious on purpose: they

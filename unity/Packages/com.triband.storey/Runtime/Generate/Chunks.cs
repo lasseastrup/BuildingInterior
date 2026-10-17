@@ -121,8 +121,11 @@ namespace Triband.Storey.Generate
         public ref T this[int i]
         {
             // inlined, with the throw apart: a throw with its message in the getter (string.Format and boxing) kept the
-            // compiler from inlining it, and packing reads every vertex through it (docs/PERFORMANCE.md §8.2)
+            // compiler from inlining it, and packing reads every vertex through it (docs/PERFORMANCE.md §8.2). IL2CPP's own
+            // checks besides add nothing: the range is checked here, and every chunk below count is there (§8.8)
             [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+            [global::Unity.IL2CPP.CompilerServices.Il2CppSetOption(global::Unity.IL2CPP.CompilerServices.Option.ArrayBoundsChecks, false)]
+            [global::Unity.IL2CPP.CompilerServices.Il2CppSetOption(global::Unity.IL2CPP.CompilerServices.Option.NullChecks, false)]
             get
             {
                 if ((uint)i >= (uint)count) OutOfRange(i, count);
@@ -135,6 +138,8 @@ namespace Triband.Storey.Generate
 
         T IReadOnlyList<T>.this[int i] => this[i];
 
+        [global::Unity.IL2CPP.CompilerServices.Il2CppSetOption(global::Unity.IL2CPP.CompilerServices.Option.ArrayBoundsChecks, false)]
+        [global::Unity.IL2CPP.CompilerServices.Il2CppSetOption(global::Unity.IL2CPP.CompilerServices.Option.NullChecks, false)]
         public void Add(T item)
         {
             int o = count & Chunks.Mask;

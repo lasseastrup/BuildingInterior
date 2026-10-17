@@ -841,3 +841,23 @@ namespace UnityEngine.Experimental.Rendering
         public int variantCount => 0;
     }
 }
+
+namespace Unity.Burst
+{
+    public enum FloatMode { Default = 0, Strict = 1, Deterministic = 2, Fast = 3 }
+    public enum FloatPrecision { Standard = 0, High = 1, Medium = 2, Low = 3 }
+
+    [System.AttributeUsage(System.AttributeTargets.Class | System.AttributeTargets.Struct | System.AttributeTargets.Method | System.AttributeTargets.Assembly)]
+    public class BurstCompileAttribute : System.Attribute
+    {
+        public FloatMode FloatMode { get; set; }
+        public FloatPrecision FloatPrecision { get; set; }
+        public bool CompileSynchronously { get; set; }
+        public bool DisableSafetyChecks { get; set; }
+    }
+
+    public static class BurstCompiler
+    {
+        public static bool IsEnabled => false;
+    }
+}
