@@ -31,6 +31,7 @@ namespace UnityEditor
         public static string GUIDToAssetPath(string guid) => "";
         public static string AssetPathToGUID(string path) => "";
         public static T LoadAssetAtPath<T>(string assetPath) where T : Object => null;
+        public static string[] GetDependencies(string[] pathNames, bool recursive) => System.Array.Empty<string>();
         public static void CreateAsset(Object asset, string path) { }
         public static void SaveAssets() { }
         public static void SaveAssetIfDirty(Object obj) { }
@@ -391,4 +392,23 @@ namespace UnityEditorInternal
     {
         public static void RepaintAllViews() { }
     }
+}
+
+namespace UnityEditor.Build.Reporting
+{
+    public sealed class BuildReport { }
+}
+
+namespace UnityEditor.Build
+{
+    public interface IOrderedCallback { int callbackOrder { get; } }
+    public interface IPreprocessShaders : IOrderedCallback { void OnProcessShader(UnityEngine.Shader shader, UnityEditor.Rendering.ShaderSnippetData snippet, System.Collections.Generic.IList<UnityEditor.Rendering.ShaderCompilerData> data); }
+    public interface IPreprocessBuildWithReport : IOrderedCallback { void OnPreprocessBuild(UnityEditor.Build.Reporting.BuildReport report); }
+    public interface IPostprocessBuildWithReport : IOrderedCallback { void OnPostprocessBuild(UnityEditor.Build.Reporting.BuildReport report); }
+}
+
+namespace UnityEditor.Rendering
+{
+    public struct ShaderSnippetData { public string passName => ""; }
+    public struct ShaderCompilerData { public UnityEngine.Rendering.ShaderKeywordSet shaderKeywordSet; }
 }

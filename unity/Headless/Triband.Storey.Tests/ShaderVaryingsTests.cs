@@ -34,6 +34,24 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void TheBuildsStrippingKnowsEveryStoreyShader()
+        {
+            // StoreyShaderStripping (the authoring package) acts on Storey's shaders by name, and leaves out the minimum tier's
+            // lighting keyword alone, the one the site sets (docs/PERFORMANCE.md §7.9)
+            var strip = File.ReadAllText(UnityAsset.Package("com.triband.storey.authoring", "Editor", "StoreyShaderStripping.cs"));
+            Assert.Contains("new ShaderKeyword(StoreyGlobals.SimpleLightingKeyword)", strip);
+            Assert.Single(Regex.Matches(strip, @"data\.RemoveAt\("));
+            var prefixes = Regex.Matches(strip, @"shader\.name\.StartsWith\(""([^""]+)""").Select(m => m.Groups[1].Value).ToArray();
+            Assert.Equal(new[] { "Storey/", "Flamingo/Storey/" }, prefixes);
+            var package = UnityAsset.Package("com.triband.storey");
+            foreach (var f in Directory.GetFiles(Path.Combine(package, "Unity", "Shaders"), "*.shader").Concat(Directory.GetFiles(Path.Combine(package, "Samples~", "ColorPaletteLit"), "*.shader")))
+            {
+                var name = Regex.Match(File.ReadAllText(f), @"Shader\s+""([^""]+)""").Groups[1].Value;
+                Assert.True(prefixes.Any(p => name.StartsWith(p, System.StringComparison.Ordinal)), $"{Path.GetFileName(f)}: \"{name}\" isn't one the build's stripping knows");
+            }
+        }
+
+        [Fact]
         public void ColourPassOutputsAHalfHoldsAreHalves()
         {
             // a direction, a colour, a place on a pane and a window's number (up to 255) in halves; positions, the facade's

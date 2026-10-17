@@ -515,6 +515,7 @@ namespace UnityEngine
         public static int systemMemorySize => 0;
         public static bool supportsAsyncGPUReadback => false;
         public static bool supportsMemorylessTextures => false;
+        public static UnityEngine.Rendering.GraphicsDeviceType graphicsDeviceType => default;
     }
 
     public enum DeviceType { Unknown, Handheld, Console, Desktop }
@@ -522,6 +523,9 @@ namespace UnityEngine
 
 namespace UnityEngine.Rendering
 {
+    public enum GraphicsDeviceType { OpenGLES3 = 11, Metal = 16, Direct3D11 = 2, Direct3D12 = 18, Vulkan = 21 }
+    public readonly struct ShaderKeyword { public ShaderKeyword(string keywordName) { } public string name => ""; }
+    public struct ShaderKeywordSet { public bool IsEnabled(ShaderKeyword keyword) => false; }
     public enum IndexFormat { UInt16 = 0, UInt32 = 1 }
     public enum VertexAttribute { Position, Normal, Tangent, Color, TexCoord0, TexCoord1, TexCoord2, TexCoord3, TexCoord4, TexCoord5, TexCoord6, TexCoord7, BlendWeight, BlendIndices }
     public enum VertexAttributeFormat { Float32, Float16, UNorm8, SNorm8, UNorm16, SNorm16, UInt8, SInt8, UInt16, SInt16, UInt32, SInt32 }
@@ -800,5 +804,30 @@ namespace UnityEngine.Rendering
     {
         public static event System.Action<ScriptableRenderContext, System.Collections.Generic.List<UnityEngine.Camera>> beginContextRendering { add { } remove { } }
         public static event System.Action<ScriptableRenderContext, System.Collections.Generic.List<UnityEngine.Camera>> endContextRendering { add { } remove { } }
+    }
+}
+
+namespace UnityEngine.Experimental.Rendering
+{
+    // Unity 6000.0 to 6000.4 (UnityEngine.Rendering from 6000.5): the members Storey Shader Warm-Up uses
+    public sealed class GraphicsStateCollection : UnityEngine.Object
+    {
+        public GraphicsStateCollection() { }
+        public GraphicsStateCollection(string filePath) { }
+        public bool BeginTrace() => false;
+        public void EndTrace() { }
+        public bool isTracing => false;
+        public UnityEngine.Rendering.GraphicsDeviceType graphicsDeviceType { get => default; set { } }
+        public UnityEngine.RuntimePlatform runtimePlatform { get => default; set { } }
+        public string qualityLevelName { get => ""; set { } }
+        public bool LoadFromFile(string filePath) => false;
+        public bool SaveToFile(string filePath) => false;
+        public bool SendToEditor(string fileName) => false;
+        public Unity.Jobs.JobHandle WarmUp(Unity.Jobs.JobHandle dependency = default) => default;
+        public Unity.Jobs.JobHandle WarmUpProgressively(int count, Unity.Jobs.JobHandle dependency = default) => default;
+        public int totalGraphicsStateCount => 0;
+        public int completedWarmupCount => 0;
+        public bool isWarmedUp => true;
+        public int variantCount => 0;
     }
 }

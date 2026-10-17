@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- A build step for Storey's shaders (`StoreyShaderStripping`, docs/PERFORMANCE.md §7.9). It leaves out the minimum tier's lighting variants (`STOREY_SIMPLE_LIGHTING`) when no quality asset the build can use turns Specular And Reflections off: one a scene in the build depends on, or any in the project's `Assets` folder. That halves the opaque and massing colour passes' variants in such a build. The scripting define `STOREY_KEEP_ALL_SHADER_VARIANTS` keeps them. After a build, the Console has a line for each of Storey's shaders: its variants compiled, and how many were left out.
 - Facade details as assets (docs/EDITOR.md §6.12). The Facade tab's **Place on walls** lists every Facade Detail asset: the package's five (AC unit, Vent, Dish, Fire escape, Awning), then the project's. They were five buttons written into the code. **Details by rule** has a slider for each of the project's details with a rule.
   - A Facade Detail's inspector says where it goes and what places it, in words. Setting a mesh names its parts from the model's materials and takes its size from the mesh.
   - It warns of a pivot that looks off, a mesh behind the wall's face, a heavy mesh without a LOD1 mesh, and flat ends on a mesh fitted up the wall.
