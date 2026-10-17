@@ -38,28 +38,32 @@ namespace Triband.Storey
             var r = new ReadResult();
             var c = new Ctx(r.Unknown);
             var d = r.Document;
+            var w = new Where();
 
-            d.v = c.Int(root, "v", DocumentVersion, "");
+            d.v = c.Int(root, "v", DocumentVersion, w);
             if (d.v != DocumentVersion)
                 throw new FormatException($"layout version {d.v} is not supported (this reader knows {DocumentVersion})");
-            d.seq = c.Int(root, "seq", 0, "");
-            d.spawn = c.Point(root, "spawn", "");
+            d.seq = c.Int(root, "seq", 0, w);
+            d.spawn = c.Point(root, "spawn", w);
             int i = 0;
-            foreach (var item in c.Array(root, "buildings", ""))
-                d.buildings.Add(Building(c, c.Obj(item, $"buildings[{i}]"), $"buildings[{i++}]"));
+            foreach (var item in c.Array(root, "buildings", w))
+            {
+                var at = w.In("buildings", i++);
+                d.buildings.Add(Building(c, c.Obj(item, at), at));
+            }
             if (root.TryGetValue("palette", out var pal) && pal != null)
             {
-                foreach (var kv in c.Obj(pal, "palette"))
+                foreach (var kv in c.Obj(pal, w.In("palette")))
                 {
-                    string at = "palette." + kv.Key;
+                    var at = w.In("palette").In(kv.Key);
                     if (!ColorRef.IsPaletteId(kv.Key)) throw new FormatException($"{at}: a palette block is keyed by palette ids");
                     var e = c.Obj(kv.Value, at);
                     d.palette[kv.Key] = new PaletteEntry(c.Str(e, "name", "", at), c.Color(e, "hex", "", at));
                     if (!ColorRef.IsHex(d.palette[kv.Key].hex)) throw new FormatException($"{at}.hex: a palette entry's colour is a #RRGGBB colour");
-                    c.Check(e, at, "name", "hex");
+                    c.Check(e, at, Keys.PaletteEntry);
                 }
             }
-            c.Check(root, "", "v", "seq", "spawn", "buildings", "palette");
+            c.Check(root, w, Keys.Root);
             return r;
         }
 
@@ -67,7 +71,7 @@ namespace Triband.Storey
         public static FacadeStyle ReadStyle(string json, List<string>? unknown = null)
         {
             var root = Json.Parse(json) as Dictionary<string, object?> ?? throw new FormatException("a style is a JSON object");
-            return Style(new Ctx(unknown ?? new List<string>()), root, "style");
+            return Style(new Ctx(unknown ?? new List<string>()), root, new Where().In("style"), new FacadeStyle());
         }
 
         public static string WriteStyle(FacadeStyle s) => Json.Write(Style(s));
@@ -77,76 +81,81 @@ namespace Triband.Storey
         {
             var root = Json.Parse(json) as Dictionary<string, object?>
                        ?? throw new FormatException("a building is a JSON object");
-            return Building(new Ctx(unknown ?? new List<string>()), root, "");
+            return Building(new Ctx(unknown ?? new List<string>()), root, new Where());
         }
 
-        static BuildingData Building(Ctx c, Dictionary<string, object?> o, string path)
+        // the model's own lists and default style are filled where they are, not replaced (docs/PERFORMANCE.md §6.1): a
+        // replaced one was garbage the moment it was made
+        static BuildingData Building(Ctx c, Dictionary<string, object?> o, Where w)
         {
             var b = new BuildingData
             {
-                id = c.Str(o, "id", "", path),
-                name = c.Str(o, "name", "", path),
-                pos = c.Point(o, "pos", path),
-                elevation = c.Num(o, "elevation", 0, path),
-                footprint = c.Points(o, "footprint", path),
-                groundHeight = c.Num(o, "groundHeight", 3.6, path),
-                floorHeight = c.Num(o, "floorHeight", 3.0, path),
-                interior = c.Bool(o, "interior", true, path),
-                gen = c.Bool(o, "gen", false, path),
-                blank = c.Ints(o, "blank", path),
+                id = c.Str(o, "id", "", w),
+                name = c.Str(o, "name", "", w),
+                pos = c.Point(o, "pos", w),
+                elevation = c.Num(o, "elevation", 0, w),
+                groundHeight = c.Num(o, "groundHeight", 3.6, w),
+                floorHeight = c.Num(o, "floorHeight", 3.0, w),
+                interior = c.Bool(o, "interior", true, w),
+                gen = c.Bool(o, "gen", false, w),
             };
-            if (o.TryGetValue("style", out var st) && st != null) b.style = Style(c, c.Obj(st, path + ".style"), path + ".style");
+            c.Points(o, "footprint", w, b.footprint);
+            c.Ints(o, "blank", w, b.blank);
+            if (o.TryGetValue("style", out var st) && st != null) Style(c, c.Obj(st, w.In("style")), w.In("style"), b.style);
             int i = 0;
-            foreach (var f in c.Array(o, "floors", path)) b.floors.Add(Floor(c, c.Obj(f, $"{path}.floors[{i}]"), $"{path}.floors[{i++}]"));
+            foreach (var f in c.Array(o, "floors", w)) { var at = w.In("floors", i++); b.floors.Add(Floor(c, c.Obj(f, at), at)); }
             i = 0;
-            foreach (var s in c.Array(o, "shafts", path)) b.shafts.Add(Core(c, c.Obj(s, $"{path}.shafts[{i}]"), $"{path}.shafts[{i++}]"));
+            foreach (var s in c.Array(o, "shafts", w)) { var at = w.In("shafts", i++); b.shafts.Add(Core(c, c.Obj(s, at), at)); }
             i = 0;
-            foreach (var e in c.Array(o, "entrances", path))
+            foreach (var e in c.Array(o, "entrances", w))
             {
-                var eo = c.Obj(e, $"{path}.entrances[{i}]"); var ep = $"{path}.entrances[{i++}]";
+                var ep = w.In("entrances", i++); var eo = c.Obj(e, ep);
                 b.entrances.Add(new EntranceData { edge = c.Int(eo, "edge", 0, ep), t = c.Num(eo, "t", 0.5, ep), k = c.Int(eo, "k", 0, ep) });
-                c.Check(eo, ep, "edge", "t", "k");
+                c.Check(eo, ep, Keys.Entrance);
             }
             i = 0;
-            foreach (var dd in c.Array(o, "details", path))
+            foreach (var dd in c.Array(o, "details", w))
             {
-                var dob = c.Obj(dd, $"{path}.details[{i}]"); var dp = $"{path}.details[{i++}]";
+                var dp = w.In("details", i++); var dob = c.Obj(dd, dp);
                 b.details.Add(new DetailData
                 {
                     kind = Kind(c.Str(dob, "kind", "", dp)),
                     k = c.Int(dob, "k", 0, dp), edge = c.Int(dob, "edge", 0, dp), t = c.Num(dob, "t", 0.5, dp), y = c.Opt(dob, "y", dp),
                 });
-                c.Check(dob, dp, "kind", "k", "edge", "t", "y");
+                c.Check(dob, dp, Keys.Detail);
             }
             i = 0;
-            foreach (var vv in c.Array(o, "voids", path))
+            foreach (var vv in c.Array(o, "voids", w))
             {
-                var vo = c.Obj(vv, $"{path}.voids[{i}]"); var vp = $"{path}.voids[{i++}]";
-                b.voids.Add(new VoidData { id = c.Str(vo, "id", "", vp), kind = c.Enum<VoidKind>(vo, "kind", VoidKind.Courtyard, vp), shape = c.Points(vo, "shape", vp), bottom = c.Int(vo, "bottom", 0, vp) });
-                c.Check(vo, vp, "id", "kind", "shape", "bottom");
+                var vp = w.In("voids", i++); var vo = c.Obj(vv, vp);
+                var v = new VoidData { id = c.Str(vo, "id", "", vp), kind = c.Enum<VoidKind>(vo, "kind", VoidKind.Courtyard, vp), bottom = c.Int(vo, "bottom", 0, vp) };
+                c.Points(vo, "shape", vp, v.shape);
+                b.voids.Add(v);
+                c.Check(vo, vp, Keys.Void);
             }
             i = 0;
-            foreach (var bb in c.Array(o, "bridges", path))
+            foreach (var bb in c.Array(o, "bridges", w))
             {
-                var bo = c.Obj(bb, $"{path}.bridges[{i}]"); var bp = $"{path}.bridges[{i++}]";
+                var bp = w.In("bridges", i++); var bo = c.Obj(bb, bp);
                 b.bridges.Add(new BridgeData { id = c.Str(bo, "id", "", bp), to = c.Str(bo, "to", "", bp), k = c.Int(bo, "k", 1, bp), at = c.Point(bo, "at", bp), toK = c.Int(bo, "toK", 1, bp), width = c.Num(bo, "width", 2.4, bp), open = c.Bool(bo, "open", false, bp) });
-                c.Check(bo, bp, "id", "to", "k", "at", "toK", "width", "open");
+                c.Check(bo, bp, Keys.Bridge);
             }
-            b.corners = Corners(c, o, path);
-            c.Check(o, path, "id", "name", "pos", "elevation", "footprint", "floors", "shafts", "entrances", "details", "blank", "groundHeight", "floorHeight", "interior", "style", "gen", "voids", "bridges", "corners");
+            Corners(c, o, w, b.corners);
+            c.Check(o, w, Keys.Building);
             return b;
         }
 
-        static List<CornerData> Corners(Ctx c, Dictionary<string, object?> o, string path)
+        static void Corners(Ctx c, Dictionary<string, object?> o, Where w, List<CornerData> into)
         {
-            var l = new List<CornerData>(); int i = 0;
-            foreach (var cc in c.Array(o, "corners", path))
+            int i = 0;
+            foreach (var cc in c.Array(o, "corners", w))
             {
-                var co = c.Obj(cc, $"{path}.corners[{i}]"); var cp = $"{path}.corners[{i++}]";
-                l.Add(new CornerData { at = c.Point(co, "at", cp), shape = c.Enum<CornerShape>(co, "shape", CornerShape.Chamfer, cp), size = c.Num(co, "size", 2, cp), door = c.Bool(co, "door", false, cp), pts = c.Points(co, "pts", cp) });
-                c.Check(co, cp, "at", "shape", "size", "door", "pts");
+                var cp = w.In("corners", i++); var co = c.Obj(cc, cp);
+                var corner = new CornerData { at = c.Point(co, "at", cp), shape = c.Enum<CornerShape>(co, "shape", CornerShape.Chamfer, cp), size = c.Num(co, "size", 2, cp), door = c.Bool(co, "door", false, cp) };
+                c.Points(co, "pts", cp, corner.pts);
+                into.Add(corner);
+                c.Check(co, cp, Keys.Corner);
             }
-            return l;
         }
 
         static object? Corners(List<CornerData> l)
@@ -161,116 +170,130 @@ namespace Triband.Storey
             return o;
         }
 
-        static FloorData Floor(Ctx c, Dictionary<string, object?> o, string path)
+        static FloorData Floor(Ctx c, Dictionary<string, object?> o, Where w)
         {
             var f = new FloorData
             {
-                h = c.Opt(o, "h", path),
-                shape = c.Points(o, "shape", path),
-                blank = c.Ints(o, "blank", path),
-                filled = c.Bool(o, "filled", false, path),
+                h = c.Opt(o, "h", w),
+                filled = c.Bool(o, "filled", false, w),
             };
+            c.Points(o, "shape", w, f.shape);
+            c.Ints(o, "blank", w, f.blank);
             int i = 0;
-            foreach (var w in c.Array(o, "walls", path))
+            foreach (var wv in c.Array(o, "walls", w))
             {
-                var wo = c.Obj(w, $"{path}.walls[{i}]"); var wp = $"{path}.walls[{i++}]";
+                var wp = w.In("walls", i++); var wo = c.Obj(wv, wp);
                 var wall = new WallData { a = c.Point(wo, "a", wp), b = c.Point(wo, "b", wp) };
                 int j = 0;
                 foreach (var d in c.Array(wo, "doors", wp))
                 {
-                    var dobj = c.Obj(d, $"{wp}.doors[{j}]");
-                    wall.doors.Add(new DoorData { t = c.Num(dobj, "t", 0.5, $"{wp}.doors[{j}]") });
-                    c.Check(dobj, $"{wp}.doors[{j++}]", "t");
+                    var dp = wp.In("doors", j++); var dobj = c.Obj(d, dp);
+                    wall.doors.Add(new DoorData { t = c.Num(dobj, "t", 0.5, dp) });
+                    c.Check(dobj, dp, Keys.Door);
                 }
-                c.Check(wo, wp, "a", "b", "doors");
+                c.Check(wo, wp, Keys.Wall);
                 f.walls.Add(wall);
             }
-            if (o.TryGetValue("style", out var st) && st != null) f.style = Style(c, c.Obj(st, path + ".style"), path + ".style");
+            if (o.TryGetValue("style", out var st) && st != null) f.style = Style(c, c.Obj(st, w.In("style")), w.In("style"), new FacadeStyle());
             if (o.TryGetValue("terraceRoof", out var tr) && tr != null)
             {
-                var to = c.Obj(tr, path + ".terraceRoof");
-                f.terraceRoof = new TerraceRoofData { pitch = c.Num(to, "pitch", 30, path + ".terraceRoof") };
-                c.Check(to, path + ".terraceRoof", "pitch");
+                var tp = w.In("terraceRoof"); var to = c.Obj(tr, tp);
+                f.terraceRoof = new TerraceRoofData { pitch = c.Num(to, "pitch", 30, tp) };
+                c.Check(to, tp, Keys.Terrace);
             }
             // "props" is a leftover key some test layouts carry; the prototype never reads it.
-            f.corners = Corners(c, o, path);
-            c.Check(o, path, "walls", "h", "shape", "blank", "style", "terraceRoof", "props", "filled", "corners");
+            Corners(c, o, w, f.corners);
+            c.Check(o, w, Keys.Floor);
             return f;
         }
 
-        static CoreData Core(Ctx c, Dictionary<string, object?> o, string path)
+        static CoreData Core(Ctx c, Dictionary<string, object?> o, Where w)
         {
             var s = new CoreData
             {
-                id = c.Str(o, "id", "", path),
-                type = c.Enum<CoreType>(o, "type", CoreType.Stairs, path),
-                x = c.Num(o, "x", 0, path), z = c.Num(o, "z", 0, path), rot = c.Num(o, "rot", 0, path),
-                bottom = c.Int(o, "bottom", 0, path), top = c.Int(o, "top", -1, path),
-                roof = c.Bool(o, "roof", false, path),
+                id = c.Str(o, "id", "", w),
+                type = c.Enum<CoreType>(o, "type", CoreType.Stairs, w),
+                x = c.Num(o, "x", 0, w), z = c.Num(o, "z", 0, w), rot = c.Num(o, "rot", 0, w),
+                bottom = c.Int(o, "bottom", 0, w), top = c.Int(o, "top", -1, w),
+                roof = c.Bool(o, "roof", false, w),
             };
-            c.Check(o, path, "id", "type", "x", "z", "rot", "bottom", "top", "roof");
+            c.Check(o, w, Keys.Core);
             return s;
         }
 
-        static FacadeStyle Style(Ctx c, Dictionary<string, object?> o, string path)
+        // into a style made with its defaults (a building's own, which it has from the start, or a new one): every field
+        // read is set, the rest keep the defaults
+        static FacadeStyle Style(Ctx c, Dictionary<string, object?> o, Where path, FacadeStyle s)
         {
-            var s = new FacadeStyle
-            {
-                preset = o.TryGetValue("preset", out var p) && p is string ps ? ps : null,
-                label = c.Str(o, "label", "", path),
-                wall = c.Color(o, "wall", "#9A4B38", path), trim = c.Color(o, "trim", "#ECE5D8", path),
-                interior = c.Color(o, "interior", "#EFECE5", path), floor = c.Color(o, "floor", "#B88D62", path),
-                roof = c.Color(o, "roof", "#6E716B", path), core = c.Color(o, "core", "#C9C4BB", path), glass = c.Color(o, "glass", "#8DB3C8", path),
-                door = c.OptColor(o, "door", path),
-                rail = c.OptColor(o, "rail", path),
-                metal = c.OptColor(o, "metal", path),
-                ceiling = c.OptColor(o, "ceiling", path),
-                liftInterior = c.OptColor(o, "liftInterior", path),
-                liftButton = c.OptColor(o, "liftButton", path),
-                detailMetal = c.OptColor(o, "detailMetal", path),
-                grille = c.OptColor(o, "grille", path),
-                detailDark = c.OptColor(o, "detailDark", path),
-                dish = c.OptColor(o, "dish", path),
-                frame = c.OptColor(o, "frame", path),
-                foundationColor = c.OptColor(o, "foundationColor", path),
-                plinth = c.OptColor(o, "plinth", path),
-                windows = c.Enum<WindowType>(o, "windows", WindowType.Punched, path),
-                winW = c.Num(o, "winW", 1.2, path), bay = c.Num(o, "bay", 2.6, path),
-                ground = c.Enum<GroundType>(o, "ground", GroundType.Storefront, path),
-                bands = c.Bool(o, "bands", true, path), parapet = c.Bool(o, "parapet", true, path),
-                roofType = c.Enum<RoofType>(o, "roofType", RoofType.Flat, path),
-                pitch = c.Opt(o, "pitch", path), eave = c.Opt(o, "eave", path),
-                mansard = c.Opt(o, "mansard", path), dormers = c.Opt(o, "dormers", path),
-                head = c.Enum<HeadType>(o, "head", HeadType.Flat, path), frames = c.Bool(o, "frames", false, path),
-                sills = c.Bool(o, "sills", true, path), heads = c.Bool(o, "heads", true, path),
-                bandH = c.Opt(o, "bandH", path), bandDepth = c.Opt(o, "bandDepth", path), bandWall = c.Bool(o, "bandWall", false, path),
-                doorType = c.Enum<DoorType>(o, "doorType", DoorType.Canopy, path), plinthH = c.Opt(o, "plinthH", path),
-                foundation = c.Opt(o, "foundation", path), foundationH = c.Opt(o, "foundationH", path), foundationOut = c.Opt(o, "foundationOut", path), bricks = c.Opt(o, "bricks", path),
-                windowKind = c.OptStr(o, "windowKind", path), doorKind = c.OptStr(o, "doorKind", path),
-            };
+            s.preset = o.TryGetValue("preset", out var p) && p is string ps ? ps : null;
+            s.label = c.Str(o, "label", "", path);
+            s.wall = c.Color(o, "wall", "#9A4B38", path);
+            s.trim = c.Color(o, "trim", "#ECE5D8", path);
+            s.interior = c.Color(o, "interior", "#EFECE5", path);
+            s.floor = c.Color(o, "floor", "#B88D62", path);
+            s.roof = c.Color(o, "roof", "#6E716B", path);
+            s.core = c.Color(o, "core", "#C9C4BB", path);
+            s.glass = c.Color(o, "glass", "#8DB3C8", path);
+            s.door = c.OptColor(o, "door", path);
+            s.rail = c.OptColor(o, "rail", path);
+            s.metal = c.OptColor(o, "metal", path);
+            s.ceiling = c.OptColor(o, "ceiling", path);
+            s.liftInterior = c.OptColor(o, "liftInterior", path);
+            s.liftButton = c.OptColor(o, "liftButton", path);
+            s.detailMetal = c.OptColor(o, "detailMetal", path);
+            s.grille = c.OptColor(o, "grille", path);
+            s.detailDark = c.OptColor(o, "detailDark", path);
+            s.dish = c.OptColor(o, "dish", path);
+            s.frame = c.OptColor(o, "frame", path);
+            s.foundationColor = c.OptColor(o, "foundationColor", path);
+            s.plinth = c.OptColor(o, "plinth", path);
+            s.windows = c.Enum<WindowType>(o, "windows", WindowType.Punched, path);
+            s.winW = c.Num(o, "winW", 1.2, path);
+            s.bay = c.Num(o, "bay", 2.6, path);
+            s.ground = c.Enum<GroundType>(o, "ground", GroundType.Storefront, path);
+            s.bands = c.Bool(o, "bands", true, path);
+            s.parapet = c.Bool(o, "parapet", true, path);
+            s.roofType = c.Enum<RoofType>(o, "roofType", RoofType.Flat, path);
+            s.pitch = c.Opt(o, "pitch", path);
+            s.eave = c.Opt(o, "eave", path);
+            s.mansard = c.Opt(o, "mansard", path);
+            s.dormers = c.Opt(o, "dormers", path);
+            s.head = c.Enum<HeadType>(o, "head", HeadType.Flat, path);
+            s.frames = c.Bool(o, "frames", false, path);
+            s.sills = c.Bool(o, "sills", true, path);
+            s.heads = c.Bool(o, "heads", true, path);
+            s.bandH = c.Opt(o, "bandH", path);
+            s.bandDepth = c.Opt(o, "bandDepth", path);
+            s.bandWall = c.Bool(o, "bandWall", false, path);
+            s.doorType = c.Enum<DoorType>(o, "doorType", DoorType.Canopy, path);
+            s.plinthH = c.Opt(o, "plinthH", path);
+            s.foundation = c.Opt(o, "foundation", path);
+            s.foundationH = c.Opt(o, "foundationH", path);
+            s.foundationOut = c.Opt(o, "foundationOut", path);
+            s.bricks = c.Opt(o, "bricks", path);
+            s.windowKind = c.OptStr(o, "windowKind", path);
+            s.doorKind = c.OptStr(o, "doorKind", path);
             if (o.TryGetValue("panes", out var pn) && pn != null)
             {
-                var pl = pn as List<object?> ?? throw new FormatException(path + ".panes: expected [columns, rows]");
-                if (pl.Count != 2) throw new FormatException(path + ".panes: expected [columns, rows]");
+                var pl = pn as List<object?> ?? throw new FormatException(path.At("panes") + ": expected [columns, rows]");
+                if (pl.Count != 2) throw new FormatException(path.At("panes") + ": expected [columns, rows]");
                 s.paneCols = Math.Max(1, (int)Convert.ToDouble(pl[0], System.Globalization.CultureInfo.InvariantCulture)); s.paneRows = Math.Max(1, (int)Convert.ToDouble(pl[1], System.Globalization.CultureInfo.InvariantCulture));
             }
             if (o.TryGetValue("details", out var dr) && dr != null)
             {
-                var dob = c.Obj(dr, path + ".details");
-                s.details = new DetailRules { ac = c.Opt(dob, "ac", path + ".details"), vents = c.Opt(dob, "vents", path + ".details") };
+                var dp = path.In("details"); var dob = c.Obj(dr, dp);
+                s.details = new DetailRules { ac = c.Opt(dob, "ac", dp), vents = c.Opt(dob, "vents", dp) };
                 // the artist's kinds, by their ids (32 hex digits)
-                var known = new List<string> { "ac", "vents" };
+                string[] known = Keys.DetailRules;
                 foreach (var key in dob.Keys)
-                    if (Generate.DetailKinds.IsAssetId(key) && c.Opt(dob, key, path + ".details") is double pct)
+                    if (Generate.DetailKinds.IsAssetId(key) && c.Opt(dob, key, dp) is double pct)
                     {
                         (s.details.kinds ??= new SortedDictionary<string, double>(StringComparer.Ordinal))[key] = pct;
-                        known.Add(key);
+                        System.Array.Resize(ref known, known.Length + 1); known[known.Length - 1] = key;   // a copy: the shared set stays
                     }
-                c.Check(dob, path + ".details", known.ToArray());
+                c.Check(dob, dp, known);
             }
-            c.Check(o, path, "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "details",
-                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "doorType", "plinthH", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind",
-                "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth");
+            c.Check(o, path, Keys.Style);
             return s;
         }
 
@@ -436,115 +459,201 @@ namespace Triband.Storey
 
         // ---- reading helpers --------------------------------------------------------------
 
+        /// <summary>
+        /// Where an element is in the layout, made into text only when an error or an unknown key is reported
+        /// (docs/PERFORMANCE.md §6.1): up to six steps from the root, each a key and, into an array, its index. A struct,
+        /// passed down by value: each element made its path as text before, about 15 MB of strings for a 3,000-building
+        /// layout, read once by nothing.
+        /// </summary>
+        struct Where
+        {
+            string? k0, k1, k2, k3, k4, k5; int i0, i1, i2, i3, i4, i5, n;
+
+            /// <summary>One step further: <paramref name="key"/>, and its <paramref name="index"/> in an array (-1: none).</summary>
+            public Where In(string key, int index = -1)
+            {
+                var w = this;
+                switch (w.n)
+                {
+                    case 0: w.k0 = key; w.i0 = index; break;
+                    case 1: w.k1 = key; w.i1 = index; break;
+                    case 2: w.k2 = key; w.i2 = index; break;
+                    case 3: w.k3 = key; w.i3 = index; break;
+                    case 4: w.k4 = key; w.i4 = index; break;
+                    case 5: w.k5 = key; w.i5 = index; break;
+                    default: return w;   // deeper than a layout goes: the path stops there
+                }
+                w.n++;
+                return w;
+            }
+
+            /// <summary>A key of the element here, as text: <c>buildings[3].floors[1].h</c>.</summary>
+            public string At(string key) => In(key).ToString();
+
+            public override string ToString()
+            {
+                var b = new System.Text.StringBuilder();
+                for (int s = 0; s < n; s++)
+                {
+                    var (k, i) = s switch { 0 => (k0, i0), 1 => (k1, i1), 2 => (k2, i2), 3 => (k3, i3), 4 => (k4, i4), _ => (k5, i5) };
+                    if (b.Length > 0) b.Append('.');
+                    b.Append(k);
+                    if (i >= 0) b.Append('[').Append(i.ToString(CultureInfo.InvariantCulture)).Append(']');
+                }
+                return b.ToString();
+            }
+        }
+
+        /// <summary>The keys each kind of object may have, once, where each check made its list anew (3.9 MB a large layout).</summary>
+        static class Keys
+        {
+            public static readonly string[] Root = { "v", "seq", "spawn", "buildings", "palette" };
+            public static readonly string[] PaletteEntry = { "name", "hex" };
+            public static readonly string[] Building = { "id", "name", "pos", "elevation", "footprint", "floors", "shafts", "entrances", "details", "blank", "groundHeight", "floorHeight", "interior", "style", "gen", "voids", "bridges", "corners" };
+            public static readonly string[] Entrance = { "edge", "t", "k" };
+            public static readonly string[] Detail = { "kind", "k", "edge", "t", "y" };
+            public static readonly string[] Void = { "id", "kind", "shape", "bottom" };
+            public static readonly string[] Bridge = { "id", "to", "k", "at", "toK", "width", "open" };
+            public static readonly string[] Corner = { "at", "shape", "size", "door", "pts" };
+            public static readonly string[] Floor = { "walls", "h", "shape", "blank", "style", "terraceRoof", "props", "filled", "corners" };
+            public static readonly string[] Wall = { "a", "b", "doors" };
+            public static readonly string[] Door = { "t" };
+            public static readonly string[] Terrace = { "pitch" };
+            public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof" };
+            public static readonly string[] DetailRules = { "ac", "vents" };
+            public static readonly string[] Point = { "x", "z" };
+            public static readonly string[] Style =
+            {
+                "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "details",
+                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "doorType", "plinthH", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind",
+                "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth",
+            };
+        }
+
+        /// <summary>An enum's names, any case, looked up without the allocation <c>Enum.TryParse</c> makes on a device (§12.2).</summary>
+        static class EnumNames<T> where T : struct, Enum
+        {
+            public static readonly Dictionary<string, T> ByName = Make();
+
+            static Dictionary<string, T> Make()
+            {
+                var d = new Dictionary<string, T>(StringComparer.OrdinalIgnoreCase);
+                foreach (T v in System.Enum.GetValues(typeof(T))) d[v.ToString()] = v;
+                return d;
+            }
+        }
+
         sealed class Ctx
         {
             readonly List<string> unknown;
             public Ctx(List<string> unknown) { this.unknown = unknown; }
 
-            static string At(string path, string key) => path.Length == 0 ? key : path + "." + key;
+            public Dictionary<string, object?> Obj(object? v, Where w) =>
+                v as Dictionary<string, object?> ?? throw new FormatException($"{w}: expected an object");
 
-            public Dictionary<string, object?> Obj(object? v, string path) =>
-                v as Dictionary<string, object?> ?? throw new FormatException($"{path}: expected an object");
+            static readonly List<object?> none = new List<object?>();
 
-            public List<object?> Array(Dictionary<string, object?> o, string key, string path)
+            /// <summary>An array's items; an absent one has none (a shared empty list: nothing may add to it).</summary>
+            public List<object?> Array(Dictionary<string, object?> o, string key, Where w)
             {
-                if (!o.TryGetValue(key, out var v) || v == null) return new List<object?>();
-                return v as List<object?> ?? throw new FormatException($"{At(path, key)}: expected an array");
+                if (!o.TryGetValue(key, out var v) || v == null) return none;
+                return v as List<object?> ?? throw new FormatException($"{w.At(key)}: expected an array");
             }
 
-            public double Num(Dictionary<string, object?> o, string key, double dflt, string path)
+            public double Num(Dictionary<string, object?> o, string key, double dflt, Where w)
             {
                 if (!o.TryGetValue(key, out var v) || v == null) return dflt;
-                return v is double d ? d : throw new FormatException($"{At(path, key)}: expected a number");
+                return v is double d ? d : throw new FormatException($"{w.At(key)}: expected a number");
             }
 
             /// <summary>A number that may be absent, where absence means something zero does not.</summary>
-            public double? Opt(Dictionary<string, object?> o, string key, string path)
+            public double? Opt(Dictionary<string, object?> o, string key, Where w)
             {
                 if (!o.TryGetValue(key, out var v) || v == null) return null;
-                return v is double d ? d : throw new FormatException($"{At(path, key)}: expected a number");
+                return v is double d ? d : throw new FormatException($"{w.At(key)}: expected a number");
             }
 
-            public int Int(Dictionary<string, object?> o, string key, int dflt, string path)
+            public int Int(Dictionary<string, object?> o, string key, int dflt, Where w)
             {
-                double d = Num(o, key, dflt, path);
-                if (d != Math.Floor(d)) throw new FormatException($"{At(path, key)}: expected an integer");
+                double d = Num(o, key, dflt, w);
+                if (d != Math.Floor(d)) throw new FormatException($"{w.At(key)}: expected an integer");
                 return (int)d;
             }
 
-            public bool Bool(Dictionary<string, object?> o, string key, bool dflt, string path)
+            public bool Bool(Dictionary<string, object?> o, string key, bool dflt, Where w)
             {
                 if (!o.TryGetValue(key, out var v) || v == null) return dflt;
-                return v is bool b ? b : throw new FormatException($"{At(path, key)}: expected a boolean");
+                return v is bool b ? b : throw new FormatException($"{w.At(key)}: expected a boolean");
             }
 
-            public string Str(Dictionary<string, object?> o, string key, string dflt, string path)
+            public string Str(Dictionary<string, object?> o, string key, string dflt, Where w)
             {
                 if (!o.TryGetValue(key, out var v) || v == null) return dflt;
-                return v is string s ? s : throw new FormatException($"{At(path, key)}: expected a string");
+                return v is string s ? s : throw new FormatException($"{w.At(key)}: expected a string");
             }
 
-            public string? OptStr(Dictionary<string, object?> o, string key, string path)
+            public string? OptStr(Dictionary<string, object?> o, string key, Where w)
             {
-                string v = Str(o, key, "", path);
+                string v = Str(o, key, "", w);
                 return v.Length > 0 ? v : null;
             }
 
             /// <summary>A colour reference: a CSS literal or a palette id (docs/COLOURS.md §3.1).</summary>
-            public string Color(Dictionary<string, object?> o, string key, string dflt, string path)
+            public string Color(Dictionary<string, object?> o, string key, string dflt, Where w)
             {
-                string s = Str(o, key, dflt, path);
-                if (!ColorRef.IsHex(s) && !ColorRef.IsPaletteId(s)) throw new FormatException($"{At(path, key)}: '{s}' is neither a #RRGGBB colour nor a palette id");
+                string s = Str(o, key, dflt, w);
+                if (!ColorRef.IsHex(s) && !ColorRef.IsPaletteId(s)) throw new FormatException($"{w.At(key)}: '{s}' is neither a #RRGGBB colour nor a palette id");
                 return s;
             }
 
             /// <summary>An optional colour reference; absent means the project default.</summary>
-            public string? OptColor(Dictionary<string, object?> o, string key, string path) =>
-                o.TryGetValue(key, out var v) && v != null ? Color(o, key, "", path) : null;
+            public string? OptColor(Dictionary<string, object?> o, string key, Where w) =>
+                o.TryGetValue(key, out var v) && v != null ? Color(o, key, "", w) : null;
 
-            public T Enum<T>(Dictionary<string, object?> o, string key, T dflt, string path) where T : struct
+            public T Enum<T>(Dictionary<string, object?> o, string key, T dflt, Where w) where T : struct, Enum
             {
-                string s = Str(o, key, "", path);
+                string s = Str(o, key, "", w);
                 if (s.Length == 0) return dflt;
-                if (System.Enum.TryParse<T>(s, true, out var e)) return e;
-                throw new FormatException($"{At(path, key)}: '{s}' is not a {typeof(T).Name}");
+                if (EnumNames<T>.ByName.TryGetValue(s, out var e)) return e;
+                if (System.Enum.TryParse<T>(s, true, out e)) return e;   // a number, as Enum.TryParse takes one
+                throw new FormatException($"{w.At(key)}: '{s}' is not a {typeof(T).Name}");
             }
 
-            public Vec2 Point(Dictionary<string, object?> o, string key, string path)
+            public Vec2 Point(Dictionary<string, object?> o, string key, Where w)
             {
                 if (!o.TryGetValue(key, out var v) || v == null) return default;
-                var p = Obj(v, At(path, key));
-                var r = new Vec2(Num(p, "x", 0, At(path, key)), Num(p, "z", 0, At(path, key)));
-                Check(p, At(path, key), "x", "z");
+                var at = w.In(key); var p = Obj(v, at);
+                var r = new Vec2(Num(p, "x", 0, at), Num(p, "z", 0, at));
+                Check(p, at, Keys.Point);
                 return r;
             }
 
-            public List<Vec2> Points(Dictionary<string, object?> o, string key, string path)
+            /// <summary>An array of points, into the model's own list.</summary>
+            public void Points(Dictionary<string, object?> o, string key, Where w, List<Vec2> into)
             {
-                var l = new List<Vec2>();
+                var items = Array(o, key, w);
+                if (into.Capacity < into.Count + items.Count) into.Capacity = into.Count + items.Count;
                 int i = 0;
-                foreach (var v in Array(o, key, path))
+                foreach (var v in items)
                 {
-                    var p = Obj(v, $"{At(path, key)}[{i}]");
-                    l.Add(new Vec2(Num(p, "x", 0, $"{At(path, key)}[{i}]"), Num(p, "z", 0, $"{At(path, key)}[{i}]")));
-                    Check(p, $"{At(path, key)}[{i++}]", "x", "z");
+                    var at = w.In(key, i++); var p = Obj(v, at);
+                    into.Add(new Vec2(Num(p, "x", 0, at), Num(p, "z", 0, at)));
+                    Check(p, at, Keys.Point);
                 }
-                return l;
             }
 
-            public List<int> Ints(Dictionary<string, object?> o, string key, string path)
+            /// <summary>An array of integers, into the model's own list.</summary>
+            public void Ints(Dictionary<string, object?> o, string key, Where w, List<int> into)
             {
-                var l = new List<int>();
-                foreach (var v in Array(o, key, path))
-                    l.Add(v is double d && d == Math.Floor(d) ? (int)d : throw new FormatException($"{At(path, key)}: expected integers"));
-                return l;
+                foreach (var v in Array(o, key, w))
+                    into.Add(v is double d && d == Math.Floor(d) ? (int)d : throw new FormatException($"{w.At(key)}: expected integers"));
             }
 
             /// <summary>Record every key of <paramref name="o"/> that the model has no field for.</summary>
-            public void Check(Dictionary<string, object?> o, string path, params string[] known)
+            public void Check(Dictionary<string, object?> o, Where w, string[] known)
             {
                 foreach (var key in o.Keys)
-                    if (System.Array.IndexOf(known, key) < 0) unknown.Add(At(path, key));
+                    if (System.Array.IndexOf(known, key) < 0) unknown.Add(w.At(key));
             }
         }
     }

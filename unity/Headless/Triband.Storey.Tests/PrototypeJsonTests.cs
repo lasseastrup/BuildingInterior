@@ -91,6 +91,40 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void DeepPathsAreAsBeforeThoughMadeOnlyWhenReported()
+        {
+            // docs/PERFORMANCE.md §6.1: a path is made into text only for an unknown key or an error, the same text as when
+            // every element made its own
+            var r = PrototypeJson.Read("{\"v\":2,\"palette\":{\"0123456789abcdef0123456789abcdef\":{\"name\":\"a\",\"hex\":\"#112233\",\"x\":1}},\"buildings\":[{\"id\":\"a\"},{\"id\":\"b\",\"footprint\":[{\"x\":0,\"z\":0,\"y\":1}]," +
+                "\"floors\":[{\"walls\":[]},{\"walls\":[{\"a\":{\"x\":0,\"z\":0},\"b\":{\"x\":1,\"z\":0,\"w\":2},\"doors\":[{\"t\":0.5,\"q\":1}]}],\"style\":{\"wall\":\"#112233\",\"zz\":1,\"details\":{\"ac\":2,\"nope\":1}}}]}]}");
+            Assert.Equal(new[] { "buildings[1].floors[1].style.details.nope", "buildings[1].floors[1].style.zz", "buildings[1].floors[1].walls[0].b.w", "buildings[1].floors[1].walls[0].doors[0].q", "buildings[1].footprint[0].y", "palette.0123456789abcdef0123456789abcdef.x" },
+                r.Unknown.OrderBy(x => x, System.StringComparer.Ordinal));
+            var e = Assert.Throws<System.FormatException>(() => PrototypeJson.Read("{\"v\":2,\"buildings\":[{\"id\":\"a\"},{\"floors\":[{\"walls\":[{\"doors\":[{\"t\":\"x\"}]}]}]}]}"));
+            Assert.Equal("buildings[1].floors[0].walls[0].doors[0].t: expected a number", e.Message);
+            e = Assert.Throws<System.FormatException>(() => PrototypeJson.Read("{\"v\":2,\"buildings\":[{\"footprint\":[{\"x\":0,\"z\":0},{\"x\":true}]}]}"));
+            Assert.Equal("buildings[0].footprint[1].x: expected a number", e.Message);
+            e = Assert.Throws<System.FormatException>(() => PrototypeJson.Read("{\"v\":2,\"buildings\":[{\"style\":{\"roofType\":\"dome\"}}]}"));
+            Assert.Equal("buildings[0].style.roofType: 'dome' is not a RoofType", e.Message);
+            // an enum's names in any case, and a number as Enum.TryParse took one
+            Assert.Equal(RoofType.Gable, PrototypeJson.ReadBuilding("{\"style\":{\"roofType\":\"GABLE\"}}").style.roofType);
+            Assert.Equal((RoofType)1, PrototypeJson.ReadBuilding("{\"style\":{\"roofType\":\"1\"}}").style.roofType);
+        }
+
+        [Fact]
+        public void ReadingMakesLittleBesidesTheJsonTreeAndTheModel()
+        {
+            // docs/PERFORMANCE.md §6.1: no path text per element, no key list per object, no list or style made only to be
+            // replaced, no Enum.TryParse. The 300-building test city: 4.6 MB in all, 3.2 MB of it the JSON tree (Json.Parse),
+            // where the reading made 4.6 MB besides the tree
+            var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document; Edit.TestCity.Generate(d, 300);
+            var text = PrototypeJson.Write(d);
+            for (int i = 0; i < 2; i++) PrototypeJson.Read(text);   // warm
+            long a0 = System.GC.GetAllocatedBytesForCurrentThread(); Json.Parse(text); long tree = System.GC.GetAllocatedBytesForCurrentThread() - a0;
+            a0 = System.GC.GetAllocatedBytesForCurrentThread(); PrototypeJson.Read(text); long all = System.GC.GetAllocatedBytesForCurrentThread() - a0;
+            Assert.True(all - tree < 2 << 20, $"{(all - tree) / 1048576.0:0.0} MB besides the {tree / 1048576.0:0.0} MB tree");
+        }
+
+        [Fact]
         public void MissingKeysTakeThePrototypesDefaults()
         {
             var b = PrototypeJson.ReadBuilding("{\"id\":\"a\"}");

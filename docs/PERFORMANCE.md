@@ -249,6 +249,8 @@ Recommendation, cheapest first:
 2. **A pull reader (M)** that fills the model straight from the text, with no DOM, numbers parsed from spans and keys matched without substrings. That removes the DOM's 25.6 MB of garbage and 21 MB of peak.
 3. **No parse at runtime (L)**, §6.4.
 
+Status: 1 is done (CHANGELOG). A path is a small struct passed down (`PrototypeJson.Where`), made into text only for an unknown key or an error, the same text as before. Each kind of object's keys are one static array. An enum is read through a static dictionary of its names (`Enum.TryParse` stays only for a number). The model's own lists and a building's default style are filled where they are, not replaced. Reading the 3,000-building test city makes 34.5 MB, where it made 57.8: 25.6 MB of it is the JSON tree (option 2's) and 8.8 MB the model itself, where the conversion made 32.1 MB. It takes 133–163 ms, where it took 210–237 (headless). `PrototypeJsonTests` pins the paths' text and a garbage bound (2 MB besides the tree for 300 buildings).
+
 ### 6.2 `Show` holds a frame (medium)
 
 CITY.md §2 says a streamed load "never holds a frame". The parse is off the main thread, but `Show` then does three things synchronously on the main thread:
