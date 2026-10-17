@@ -55,11 +55,11 @@ namespace Triband.Storey.Unity
         [Tooltip("Milliseconds a frame may spend on the main thread taking built meshes in (LOD0 and LOD1 parts uploaded, cells merged, a layout loading over frames), every site's together. Counted per mesh part: a frame takes one at least when any is ready, and the building the player is in, or one in the camera's way, takes all its parts at once. 2 for a 60 fps frame (the primary tier), 4 for the minimum tier's 30.")]
         [Range(0.5f, 33)] public float buildBudgetMs = 2f;
 
-        [Tooltip("LOD0's see-through windows start as LOD1's painted rooms where LOD0 takes over, so the switch doesn't change the windows, and clear to glass by this share of that distance (0.6: clear at 60% of it). 1: clear at once.")]
+        [Tooltip("LOD0's see-through windows show LOD1's painted rooms from Windows Painted From out, so the switch doesn't change the windows, and clear to glass by this share of that distance (0.6: clear at 60% of it). 1: clear at once.")]
         [Range(0.1f, 1f)] public float windowsClearAt = 0.6f;
 
-        [Tooltip("Where LOD0's windows are painted over, as a share of the LOD0 distance: 1, where LOD0 takes over (as LOD1's painted rooms); less, closer in, so fewer buildings draw their rooms behind the glass (4-10% fewer LOD0 triangles at 0.5 on the walk-in test city). Windows Clear At is a share of this.")]
-        [Range(0.3f, 1f)] public float windowsPaintedFrom = 1f;
+        [Tooltip("Where LOD0's windows start to clear, as a share of the LOD0 distance; beyond it they are painted, as LOD1's are. 0.7 leaves room for a LOD0 that comes late (built after the camera passed its distance, or out of view until the camera turned): it still has painted windows when it appears, and they clear as the camera comes closer. 1 starts at the switch itself. Less also leaves more buildings' rooms undrawn (4-10% fewer LOD0 triangles at 0.5 on the walk-in test city). Windows Clear At is a share of this.")]
+        [Range(0.3f, 1f)] public float windowsPaintedFrom = 0.7f;
 
         [Tooltip("Generate LOD0 and LOD1 on Storey's own build threads; only the upload is on the main thread. Off builds on the main thread (WebGL always does).")]
         public bool buildOnWorkerThreads = true;

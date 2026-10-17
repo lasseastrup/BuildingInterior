@@ -46,17 +46,19 @@ namespace Triband.Storey.Lod
         /// </summary>
         public double BudgetMs = 2;
         /// <summary>
-        /// LOD0's see-through windows show LOD1's painted pane where LOD0 takes over, and are clear glass within this share
-        /// of that distance (blended between), so the switch changes nothing in the windows. 1: clear at once (no blend).
+        /// LOD0's see-through windows show LOD1's painted pane from <see cref="PaintDistance"/> out, so the switch changes
+        /// nothing in the windows, and are clear glass within this share of it (blended between). 1: clear at once (no blend).
         /// </summary>
         public double GlassClear = 0.6;
         /// <summary>
-        /// Where LOD0's windows are painted over, as a share of the LOD0 distance (<see cref="PaintDistance"/>): 1, where
-        /// LOD0 takes over, as LOD1's panes are; less, closer in, so fewer buildings draw their rooms (4–10 % fewer LOD0
-        /// colour-pass triangles at 0.5 on the walk-in test city's views). Their glass clears from <see cref="GlassClear"/>
-        /// of that.
+        /// Where LOD0's windows start to clear, as a share of the LOD0 distance (<see cref="PaintDistance"/>); beyond it
+        /// they are painted, as LOD1's are. 0.7 leaves room for a LOD0 that comes late (built after the camera passed its
+        /// distance, or out of view until the camera turned): it still shows the painted windows when it appears, and they
+        /// clear as the camera comes closer. At 1, where LOD0 takes over, such a LOD0's windows were see-through or nearly
+        /// as it appeared. Less also leaves more buildings' rooms undrawn (4–10 % fewer LOD0 colour-pass triangles at 0.5
+        /// on the walk-in test city's views). Their glass clears from <see cref="GlassClear"/> of it.
         /// </summary>
-        public double WindowsPainted = 1;
+        public double WindowsPainted = 0.7;
 
         /// <summary>The distance at which a building's nearest point takes LOD0 coming closer, for a camera's pixels per metre.</summary>
         public double Lod0Distance(double pixelsPerMetre) => pixelsPerMetre * Bias / (PX[0] * (1 + Hysteresis));

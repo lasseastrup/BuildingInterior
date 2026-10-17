@@ -263,14 +263,15 @@ namespace Triband.Storey.Tests
         }
 
         /// <summary>
-        /// LOD0's windows are painted over from a share of the LOD0 distance (docs/CITY.md §2): all of it by default, as
-        /// LOD1's panes are where LOD0 takes over; a share between a tenth and 1 otherwise.
+        /// LOD0's windows are painted over from a share of the LOD0 distance (docs/CITY.md §2): 0.7 by default, so a LOD0
+        /// that comes late still has painted windows when it appears; all of it at 1, a share between a tenth and 1 otherwise.
         /// </summary>
         [Fact]
         public void WindowsArePaintedFromAShareOfTheLod0Distance()
         {
             var s = new LodSettings();
-            Assert.Equal(s.Lod0Distance(Pxm), s.PaintDistance(Pxm));
+            Assert.Equal(s.Lod0Distance(Pxm) * 0.7, s.PaintDistance(Pxm), 9);
+            s.WindowsPainted = 1; Assert.Equal(s.Lod0Distance(Pxm), s.PaintDistance(Pxm));
             s.WindowsPainted = 0.5; Assert.Equal(s.Lod0Distance(Pxm) * 0.5, s.PaintDistance(Pxm), 9);
             s.WindowsPainted = 3; Assert.Equal(s.Lod0Distance(Pxm), s.PaintDistance(Pxm));
             s.WindowsPainted = 0; Assert.Equal(s.Lod0Distance(Pxm) * 0.1, s.PaintDistance(Pxm), 9);
