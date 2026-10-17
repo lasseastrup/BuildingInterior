@@ -75,10 +75,16 @@ struct Varyings
     float  bid        : TEXCOORD3;   // building index
 #endif
 #else
-    float3 normalWS   : TEXCOORD0;
+    // half where 16 bits hold it (a direction, a colour, a place on a pane, a window's number up to 255): Apple's GPUs
+    // store half outputs in half the space between the stages (docs/PERFORMANCE.md §7.2). Positions, the facade's metres
+    // and building indices (up to 8,192, past a half's 2,048 exact integers) stay float
+    half3 normalWS    : TEXCOORD0;
 #ifndef STOREY_MASSING
-    float4 color      : TEXCOORD1;
-    float4 win        : TEXCOORD9;   // a window pane: u, v across and up it, 1 on a pane, its number (LOD0/LOD1)
+    half4 color       : TEXCOORD1;
+    half4 win         : TEXCOORD9;   // a window pane: u, v across and up it, 1 on a pane, its number (LOD0/LOD1)
+#endif
+#if defined(EVALUATE_SH_VERTEX) || defined(EVALUATE_SH_MIXED)
+    half3 vertexSH    : TEXCOORD10;  // the ambient probe, or its L2 part, per vertex: every face is flat, so exact (§7.3)
 #endif
 #ifdef STOREY_STEADY
     float2 misc       : TEXCOORD3;   // bid, lod
@@ -163,6 +169,9 @@ Varyings StoreyVert(Attributes IN)
     OUT.occ = float4(v.fade, v.occ, origY, 0);
 #endif
     OUT.worldPos = worldPos;
+#if defined(EVALUATE_SH_VERTEX) || defined(EVALUATE_SH_MIXED)
+    OUT.vertexSH = SampleSHVertex(half3(normalWS));
+#endif
 #ifdef STOREY_MASSING
     OUT.fac = IN.wall;
     OUT.fac2 = float4(IN.kind, IN.wid, 0);
@@ -217,10 +226,12 @@ struct StoreySurface
     float4 shadowCoord;   // the main light's, as URP's Lit takes it: from the vertex, or the pixel's with cascades
     float4 positionCS;    // SV_Position: pixel coordinates in xy
     bool   isFront;
+    float3 vertexSH;      // the ambient probe from the vertex as URP's SH Evaluation Mode splits it (SampleSHPixel); 0 per pixel
 };
 
 #ifndef STOREY_CUSTOM_LIGHTING
-// URP's PBR with the material's fixed smoothness and metallic and spherical-harmonics ambient.
+// URP's PBR with the material's fixed smoothness and metallic and spherical-harmonics ambient, evaluated where the
+// pipeline asset's SH Evaluation Mode says (per vertex on mobile by default), as URP's Lit does.
 float4 StoreyLighting(StoreySurface s)
 {
     InputData inputData = (InputData)0;
@@ -229,7 +240,7 @@ float4 StoreyLighting(StoreySurface s)
     inputData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(s.positionWS);
     inputData.shadowCoord = s.shadowCoord;
     inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(s.positionCS);
-    inputData.bakedGI = SampleSH(s.normalWS);
+    inputData.bakedGI = SampleSHPixel(half3(s.vertexSH), half3(s.normalWS));
 
     SurfaceData surfaceData = (SurfaceData)0;
     surfaceData.albedo = s.albedo;

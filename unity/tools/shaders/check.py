@@ -7,7 +7,8 @@ headless suite can't compile them and a mistake in Storey's own HLSL used to sur
 pink buildings in the editor. This compiles every pass of every .shader file without
 keywords, with each of Storey's own keywords the pass declares (STOREY_STEADY,
 STOREY_SIMPLE_LIGHTING) and all of them together, and with each main-light shadow keyword
-it declares (Storey picks its shadow coordinate by them), with the Slang compiler against
+and each SH evaluation keyword it declares (Storey picks its shadow coordinate, and where
+the ambient probe is evaluated, by them), with the Slang compiler against
 stubs/: small stand-ins for the URP functions and macros the shaders call, with URP's
 signatures. It catches what Storey's code gets wrong (a field a variant's Varyings doesn't
 have, a misspelt name, a type mismatch); URP itself, the #pragma keywords' other
@@ -62,10 +63,12 @@ def main(dirs):
                 for p, prog in enumerate(blocks(text, "HLSLPROGRAM", "ENDHLSL")):
                     vert = re.search(r"#pragma\s+vertex\s+(\w+)", prog).group(1)
                     frag = re.search(r"#pragma\s+fragment\s+(\w+)", prog).group(1)
-                    # Storey's own keywords, each alone and all together, and each main-light shadow keyword the pass
-                    # declares: Storey's code branches on what URP makes of those (the shadow coordinate)
+                    # Storey's own keywords, each alone and all together, and each main-light shadow keyword and SH
+                    # evaluation keyword the pass declares: Storey's code branches on what URP makes of those (the shadow
+                    # coordinate, where the ambient probe is evaluated)
                     own = re.findall(r"#pragma\s+multi_compile\w*\s+_\s+(STOREY_\w+)", prog)
-                    shadows = [k for k in ("_MAIN_LIGHT_SHADOWS", "_MAIN_LIGHT_SHADOWS_CASCADE", "_MAIN_LIGHT_SHADOWS_SCREEN")
+                    shadows = [k for k in ("_MAIN_LIGHT_SHADOWS", "_MAIN_LIGHT_SHADOWS_CASCADE", "_MAIN_LIGHT_SHADOWS_SCREEN",
+                                           "EVALUATE_SH_MIXED", "EVALUATE_SH_VERTEX")
                                if re.search(r"#pragma\s+multi_compile\w*\s+_\s[^\n]*\b" + k + r"\b", prog)]
                     body = re.sub(r"#pragma[^\n]*", "", prog)
                     for keys in [[]] + [[k] for k in own] + ([own] if len(own) > 1 else []) + [[k] for k in shadows]:

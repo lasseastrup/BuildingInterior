@@ -16,6 +16,27 @@ struct SurfaceData { float3 albedo; float3 specular; float metallic; float smoot
 cbuffer UnityLighting { float4 _MainLightPosition; float4 _MainLightColor; float4x4 _MainLightWorldToShadow; float4 unity_SHAr; };
 Light GetMainLight() { Light l = (Light)0; l.direction = _MainLightPosition.xyz; l.color = _MainLightColor.rgb; l.distanceAttenuation = 1; l.shadowAttenuation = 1; return l; }
 float3 SampleSH(float3 n) { return unity_SHAr.xyz * n; }
+// URP's split of the ambient probe between the stages (GlobalIllumination.hlsl): its SH Evaluation Mode's keywords
+half3 SampleSHVertex(half3 normalWS)
+{
+#if defined(EVALUATE_SH_VERTEX)
+    return half3(SampleSH(normalWS));
+#elif defined(EVALUATE_SH_MIXED)
+    return half3(unity_SHAr.xyz * normalWS);
+#else
+    return half3(0, 0, 0);
+#endif
+}
+half3 SampleSHPixel(half3 L2Term, half3 normalWS)
+{
+#if defined(EVALUATE_SH_VERTEX)
+    return L2Term;
+#elif defined(EVALUATE_SH_MIXED)
+    return max(half3(0, 0, 0), L2Term + half3(unity_SHAr.xyz * normalWS));
+#else
+    return half3(SampleSH(normalWS));
+#endif
+}
 float4 TransformWorldToShadowCoord(float3 p) { return mul(_MainLightWorldToShadow, float4(p, 1)); }
 float4 GetShadowCoord(VertexPositionInputs v) { return TransformWorldToShadowCoord(v.positionWS); }
 float3 ApplyShadowBias(float3 p, float3 n, float3 l) { return p + n * 0.01 + l * 0.01; }

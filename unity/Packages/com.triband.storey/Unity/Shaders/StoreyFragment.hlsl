@@ -34,6 +34,11 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
 #endif
     s.positionCS = IN.positionCS;
     s.isFront = isFront;
+#if defined(EVALUATE_SH_VERTEX) || defined(EVALUATE_SH_MIXED)
+    s.vertexSH = IN.vertexSH;
+#else
+    s.vertexSH = float3(0, 0, 0);
+#endif
 
     float4 color = StoreyLighting(s);
 #if !defined(STOREY_GLASS)

@@ -32,6 +32,7 @@ Shader "Storey/Massing"
             #pragma vertex StoreyVert
             #pragma fragment StoreyFrag
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+            #pragma multi_compile _ EVALUATE_SH_MIXED EVALUATE_SH_VERTEX   // URP's SH Evaluation Mode: the ambient probe per vertex on mobile (docs/PERFORMANCE.md §7.3)
             #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
             #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
             #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
