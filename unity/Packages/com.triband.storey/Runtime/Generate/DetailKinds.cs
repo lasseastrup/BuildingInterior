@@ -19,6 +19,8 @@ namespace Triband.Storey.Generate
         {
             public ColorSlot slot;
             public int[] tris = Array.Empty<int>();
+            // made ready once (docs/PERFORMANCE.md §8.1): when the kind is registered, or first placed
+            internal KindPart? ready;
         }
 
         public sealed class Mesh
@@ -96,8 +98,16 @@ namespace Triband.Storey.Generate
             return IsBuiltIn(lower) ? lower : kind;
         }
 
-        /// <summary>Make an artist's kind available (a Facade Detail asset does, and sites do for the ones they use).</summary>
-        public static void Register(DetailKind k) { if (k.id.Length == 0 || IsBuiltIn(k.id)) return; all[k.id] = k; Version++; }
+        /// <summary>
+        /// Make an artist's kind available, its parts made ready for placing (a Facade Detail asset does, and sites do for the
+        /// ones they use). A kind whose mesh changes is registered again.
+        /// </summary>
+        public static void Register(DetailKind k)
+        {
+            if (k.id.Length == 0 || IsBuiltIn(k.id)) return;
+            foreach (var m in new[] { k.lod0, k.lod1 }) if (m != null) foreach (var part in m.parts) KindPart.Of(m.P, m.N, part.tris, ref part.ready);
+            all[k.id] = k; Version++;
+        }
         public static void Remove(string id) { if (!IsBuiltIn(id) && all.TryRemove(id, out _)) Version++; }
         public static DetailKind? Get(string? id) => id != null && all.TryGetValue(id, out var k) ? k : null;
         public static IEnumerable<DetailKind> All => all.Values;
@@ -110,22 +120,11 @@ namespace Triband.Storey.Generate
         public static void Place(MeshBuilder op, Frame F, DetailKind.Mesh m, double u, double y0, double sx, double sy, Palette C)
         {
             if (op.ShapeOnly || m.P.Length == 0) return;
-            double T = Dim.T_EXT;
-            // the mesh's x runs along cross(up, outward), whichever way the wall's frame runs, so its front faces stay front
-            double flip = F.u.x * F.w.z - F.u.z * F.w.x < 0 ? -1 : 1;
-            var pts = new P3[m.P.Length]; var nrm = new P3[m.P.Length];
-            for (int i = 0; i < m.P.Length; i++)
+            var at = new KindPlace(F, u, y0, sx, sy);
+            foreach (var whole in m.parts)
             {
-                var p = m.P[i];
-                pts[i] = F.At(u + flip * p.x * sx, y0 + p.y * sy, T + p.z);
-                var n = i < m.N.Length ? m.N[i] : new P3(0, 0, 1);
-                double nx = n.x / sx, ny = n.y / sy, nz = n.z;   // a normal under a stretch: by the inverse scale
-                nrm[i] = new P3(F.u.x * flip * nx + F.w.x * nz, ny, F.u.z * flip * nx + F.w.z * nz).Normalized;
-            }
-            foreach (var part in m.parts)
-            {
-                var (pp, pn, pt) = OpeningKinds.Compact(pts, nrm, part.tris);
-                if (pt.Length > 0) op.Mesh(pp, pn, pt, new Swatch(C.style, part.slot));
+                var part = KindPart.Of(m.P, m.N, whole.tris, ref whole.ready);
+                if (part.Tris > 0) part.Put(op, at, new Swatch(C.style, whole.slot));
             }
         }
     }

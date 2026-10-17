@@ -18,6 +18,8 @@ namespace Triband.Storey.Generate
             /// <summary>A door's leaf (the door itself): left out where the doorway stays open, on a walk-in storey.</summary>
             public bool leaf;
             public int[] tris = Array.Empty<int>();
+            // made ready once (docs/PERFORMANCE.md §8.1): when the kind is registered, or first placed
+            internal KindPart? ready;
         }
 
         public sealed class Mesh
@@ -49,7 +51,13 @@ namespace Triband.Storey.Generate
         /// <summary>Goes up with every change, so sites know to build again.</summary>
         public static int Version { get; private set; }
 
-        public static void Register(OpeningKind k) { if (k.id.Length == 0) return; all[k.id] = k; Version++; }
+        /// <summary>Make a kind available, its parts made ready for placing (a Storey Opening asset does). A kind whose mesh changes is registered again.</summary>
+        public static void Register(OpeningKind k)
+        {
+            if (k.id.Length == 0) return;
+            foreach (var m in new[] { k.lod0, k.lod1 }) if (m != null) foreach (var part in m.parts) KindPart.Of(m.P, m.N, part.tris, ref part.ready);
+            all[k.id] = k; Version++;
+        }
         public static void Remove(string id) { if (all.TryRemove(id, out _)) Version++; }
         public static OpeningKind? Get(string? id) => id != null && all.TryGetValue(id, out var k) ? k : null;
         public static IEnumerable<OpeningKind> All => all.Values;
@@ -69,57 +77,27 @@ namespace Triband.Storey.Generate
         public static void Place(MeshBuilder op, MeshBuilder? gl, Frame F, OpeningKind k, OpeningKind.Mesh m, double u0, double u1, double y0, double y1, Palette C, bool shell)
         {
             double sx = k.stretch ? (u1 - u0) / Math.Max(1e-3, k.w) : 1, sy = k.stretch ? (y1 - y0) / Math.Max(1e-3, k.h) : 1;
-            double um = (u0 + u1) / 2, T = Dim.T_EXT;
-            // the mesh's x runs along cross(up, outward), whichever way the wall's frame runs
-            double flip = F.u.x * F.w.z - F.u.z * F.w.x < 0 ? -1 : 1;
-            var pts = new P3[m.P.Length]; var nrm = new P3[m.N.Length];
-            for (int i = 0; i < m.P.Length; i++)
-            {
-                var p = m.P[i];
-                pts[i] = F.At(um + flip * p.x * sx, y0 + p.y * sy, T + p.z);
-                var n = i < m.N.Length ? m.N[i] : new P3(0, 0, 1);
-                double nx = n.x / sx, ny = n.y / sy, nz = n.z;   // a normal under a stretch: by the inverse scale
-                var w = new P3(F.u.x * flip * nx + F.w.x * nz, ny, F.u.z * flip * nx + F.w.z * nz);
-                nrm[i] = w.Normalized;
-            }
+            var at = new KindPlace(F, (u0 + u1) / 2, y0, sx, sy);
             foreach (var whole in m.parts)
             {
                 if (whole.leaf && !shell) continue;
-                var (pp, pn, pt) = Compact(pts, nrm, whole.tris);
-                var part = new OpeningKind.Part { slot = whole.slot, leaf = whole.leaf, tris = pt };
-                if (part.slot == ColorSlot.Glass)
+                var part = KindPart.Of(m.P, m.N, whole.tris, ref whole.ready);
+                if (whole.slot == ColorSlot.Glass)
                 {
                     if (shell || gl == null)
                     {
-                        int first = op.Mesh(pp, pn, part.tris, C.glassDark);
+                        int first = part.Put(op, at, C.glassDark);
                         if (!k.door) Facade.PaneUV(op, first, F, u0, u1, y0, y1);
                     }
                     else
                     {
-                        gl.Mesh(pp, pn, part.tris, C.glass); op.SeeThrough++;   // clear at any distance
-                        var back = new int[part.tris.Length];
-                        for (int t = 0; t < back.Length; t += 3) { back[t] = part.tris[t]; back[t + 1] = part.tris[t + 2]; back[t + 2] = part.tris[t + 1]; }
-                        var inv = new P3[pn.Length]; for (int i = 0; i < pn.Length; i++) inv[i] = pn[i] * -1;
-                        gl.Mesh(pp, inv, back, C.glass);
+                        part.Put(gl, at, C.glass); op.SeeThrough++;   // clear at any distance
+                        part.Put(gl, at, C.glass, inside: true);
                     }
                     continue;
                 }
-                op.Mesh(pp, pn, part.tris, new Swatch(C.style, part.slot));
+                part.Put(op, at, new Swatch(C.style, whole.slot));
             }
-        }
-
-        /// <summary>The points a part's triangles use, and its triangles into them (facade details' parts too).</summary>
-        internal static (P3[] p, P3[] n, int[] t) Compact(P3[] pts, P3[] nrm, int[] tris)
-        {
-            var map = new Dictionary<int, int>(); var p = new List<P3>(); var n = new List<P3>(); var t = new int[tris.Length];
-            for (int i = 0; i < tris.Length; i++)
-            {
-                int v = tris[i];
-                if (v < 0 || v >= pts.Length) { t[i] = 0; continue; }
-                if (!map.TryGetValue(v, out int j)) { map[v] = j = p.Count; p.Add(pts[v]); n.Add(nrm[v]); }
-                t[i] = j;
-            }
-            return (p.ToArray(), n.ToArray(), t);
         }
     }
 }

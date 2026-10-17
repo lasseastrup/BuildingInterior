@@ -270,7 +270,8 @@ namespace Triband.Storey.Generate
             return this;
         }
 
-        void V(P3 q, P3 nr, Swatch c)
+        /// <summary>A vertex, in the cutaway context set (<see cref="Ctx"/>).</summary>
+        internal void V(P3 q, P3 nr, Swatch c)
         {
             P.Add(q); N.Add(nr); C.Add(c);
             if (!Lean) { K.Add(curK); WI.Add(curI); }

@@ -116,6 +116,24 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void ATriangleNamingAPointTheMeshHasntIsLeftOut()
+        {
+            // an artist's triangle with an index past the mesh's points, or a part ending in a partial triangle, is left out
+            // whole; the rest go in. Such a triangle was kept, pointing at the next part's first vertex or past the mesh
+            var k = Kind("t-bad", false);
+            k.lod0.parts[0].tris = k.lod0.parts[0].tris.Concat(new[] { 0, 1, 99, 2, 3 }).ToArray();
+            OpeningKinds.Register(k);
+            var (b, s) = Block(true, st => st.windowKind = "t-bad");
+            var r = Lod0.Build(s, b);
+            foreach (var m in new[] { r.Op, r.Glass })
+            {
+                Assert.Equal(0, m.I.Count % 3);
+                Assert.All(m.I, i => Assert.InRange(i, 0, m.Verts - 1));
+            }
+            Assert.True(Count(r.Op, ColorSlot.Frame) > 0 && Count(r.Op, ColorSlot.Frame) % 4 == 0, "each frame strip's four corners, and nothing of the bad triangles");
+        }
+
+        [Fact]
         public void TheStyleKeepsItsKinds()
         {
             var st = Styles.Preset("brick").Clone(); st.windowKind = "abc"; st.doorKind = "def";
@@ -123,6 +141,74 @@ namespace Triband.Storey.Tests
             Assert.Equal("abc", back.windowKind); Assert.Equal("def", back.doorKind);
             var none = PrototypeJson.ReadStyle(PrototypeJson.WriteStyle(Styles.Preset("brick")));
             Assert.Null(none.windowKind);
+        }
+    }
+
+    /// <summary>
+    /// What an artist's window costs a build (docs/PERFORMANCE.md §8.1), counted on this thread: on its own, as no other test
+    /// may take the chunks the builds give back meanwhile. Its kind's id is its own, so the registry needs no other guard.
+    /// </summary>
+    [Collection(TimingCollection.Name)]
+    public class OpeningKindGarbageTests
+    {
+        readonly Xunit.Abstractions.ITestOutputHelper output;
+        public OpeningKindGarbageTests(Xunit.Abstractions.ITestOutputHelper o) { output = o; }
+
+        /// <summary>A 100-vertex window in two parts: a frame of 19 small quads round a pane of 6.</summary>
+        static OpeningKind Kind100(string id)
+        {
+            var m = new OpeningKind.Mesh(); var P = new List<P3>(); var N = new List<P3>(); var f = new P3(0, 0, 1);
+            int[] Quads(int n, double x0, double y0, double w, double h, double z)
+            {
+                var t = new List<int>();
+                for (int i = 0; i < n; i++)
+                {
+                    double x = x0 + w * i / n, x1 = x0 + w * (i + 1) / n; int s = P.Count;
+                    P.AddRange(new[] { new P3(x, y0, z), new P3(x, y0 + h, z), new P3(x1, y0 + h, z), new P3(x1, y0, z) }); N.AddRange(new[] { f, f, f, f });
+                    t.AddRange(new[] { s, s + 1, s + 2, s, s + 2, s + 3 });
+                }
+                return t.ToArray();
+            }
+            var frame = Quads(19, -0.5, 1.4, 1, 0.1, 0.03); var pane = Quads(6, -0.5, 0, 1, 1.4, -0.05);
+            m.P = P.ToArray(); m.N = N.ToArray();
+            m.parts.Add(new OpeningKind.Part { slot = ColorSlot.Frame, tris = frame });
+            m.parts.Add(new OpeningKind.Part { slot = ColorSlot.Glass, tris = pane });
+            return new OpeningKind { id = id, name = id, w = 1, h = 1.5, lod0 = m, lod1 = m };
+        }
+
+        [Fact]
+        public void AnArtistsWindowMakesNoGarbageWherePlaced()
+        {
+            // docs/PERFORMANCE.md §8.1: a kind's parts are made ready once, and each placement goes straight into the builder.
+            // Placing one made two arrays of its points, and for each part a map, two lists and their copies (walk-in
+            // glass two more): 7.2 MB a plain LOD0 build with a 100-vertex window
+            OpeningKinds.Register(Kind100("t-win100"));
+            foreach (bool walkIn in new[] { false, true })
+            {
+                var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document; TestCity.Generate(d, 120, walkIn);
+                var site = new Site(d.buildings); var some = d.buildings.Where((x, i) => i % 4 == 0).ToList();
+                (double ms, long bytes) Run(bool artist, int lod)
+                {
+                    foreach (var b in some) b.style.windowKind = artist ? "t-win100" : null;
+                    long bytes = 0; var sw = new System.Diagnostics.Stopwatch();
+                    for (int pass = 0; pass < 2; pass++)   // the first warms the pools
+                        foreach (var b in some)
+                        {
+                            long a = GC.GetAllocatedBytesForCurrentThread(); if (pass == 1) sw.Start();
+                            if (lod == 0) { var r = Lod0.Build(site, b); if (pass == 1) sw.Stop(); r.Op.Recycle(); r.Glass.Recycle(); }
+                            else { var m = Lod1.Build(site, b); if (pass == 1) sw.Stop(); m.Recycle(); }
+                            if (pass == 1) bytes += GC.GetAllocatedBytesForCurrentThread() - a;
+                        }
+                    return (sw.Elapsed.TotalMilliseconds / some.Count, bytes / some.Count);
+                }
+                foreach (int lod in new[] { 0, 1 })
+                {
+                    var plain = Run(false, lod); var artist = Run(true, lod);
+                    output.WriteLine($"{(walkIn ? "walk-in" : "plain")} LOD{lod}, a build: the generator's windows {plain.ms:0.0} ms, {plain.bytes / 1024.0:N0} KB; an artist's 100-vertex window {artist.ms:0.0} ms, {artist.bytes / 1024.0:N0} KB");
+                    Assert.True(artist.bytes < plain.bytes * 1.5 + 64 * 1024, $"{(walkIn ? "walk-in" : "plain")} LOD{lod}: {artist.bytes:N0} bytes a build with the artist's window, {plain.bytes:N0} with the generator's");
+                }
+                foreach (var b in some) b.style.windowKind = null;
+            }
         }
     }
 }

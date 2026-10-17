@@ -60,7 +60,7 @@ Effort: S under a day, M a few days, L a week or more. Impact as estimated in ea
 
 The roadmap (§15) orders everything else.
 
-Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), LOD0's rooms as their own renderers (§7.7), #8's priority for detail in view and its priority classes (§9.2), #2 (§3.1), #7: the shells closed, the ray test in the suite and back faces culled on steady draws by default (§7.1), #9 but the walk model's grid (§10.2, §10.3), #4's `Show` off the main thread (§6.2), the uploads: budgeted per mesh part and per tier, with the vertices finished on the build threads (§3.2, §4.1), and #8's iOS threads: utility quality of service and one count for every site, with the recorder's switches to measure them (§9.1). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
+Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), LOD0's rooms as their own renderers (§7.7), #8's priority for detail in view and its priority classes (§9.2), #2 (§3.1), #7: the shells closed, the ray test in the suite and back faces culled on steady draws by default (§7.1), #9 but the walk model's grid (§10.2, §10.3), #4's `Show` off the main thread (§6.2), the uploads: budgeted per mesh part and per tier, with the vertices finished on the build threads (§3.2, §4.1), #8's iOS threads: utility quality of service and one count for every site, with the recorder's switches to measure them (§9.1), and #11 (§8.1). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
 
 ## 1. Scope and method
 
@@ -495,6 +495,8 @@ With a 100-vertex, two-part window kind registered for every building (measured)
 The shipped detail assets carry no meshes, so none of this is live yet. It becomes the largest garbage source in the package the day a project adds artist windows (EDITOR.md sections 6.9 and 6.12).
 
 Fix (S–M): compact each part once per kind, at `Register`, including the reversed and inverted copies, and transform straight into the builder through an array or span overload of `MeshBuilder.Mesh`.
+
+Status: done (CHANGELOG). Each part is made ready once (`KindPart`): when its kind is registered, or when first placed if its arrays changed since. It holds its points and normals, its triangles into them, and those wound the other way for walk-in glass. A placement transforms it straight into the builder (`KindPart.Put`, `KindPlace`), with nothing allocated. On the test cities with a 100-vertex, two-part window kind on a quarter of the buildings (`OpeningKindGarbageTests.AnArtistsWindowMakesNoGarbageWherePlaced`), a build allocates what one with the generator's windows does: plain LOD0 168 KB (was 21.0 MB; the generator's 165 KB), plain LOD1 104 KB (was 20.9 MB), walk-in LOD0 502 KB (was 21.9 MB; the generator's 317 KB), walk-in LOD1 160 KB (was 21.0 MB). The meshes are byte for byte the same, windows, doors and details (402 meshes, 16.5 million vertices compared). A triangle naming a point the mesh hasn't is now left out whole, where it pointed at another part's vertex or past the mesh.
 
 ### 8.2 Packing costs 40–75 % of generating (medium, effort S for most of it)
 
