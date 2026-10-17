@@ -72,6 +72,25 @@ namespace Triband.Storey.Tests
             Assert.True(best < 600, $"{best:0} ms");
         }
 
+        /// <summary>
+        /// The same layout baked at import, as the runtime reads it (docs/PERFORMANCE.md §6.4): no JSON tree, each distinct
+        /// string once. 3.9–4.5 ms and 7.8 MB, the model alone (headless).
+        /// </summary>
+        [Fact]
+        public void ReadingTheCitysBakedLayoutFitsItsBudget()
+        {
+            var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document; TestCity.Generate(d, 3000);
+            var bytes = BakedLayout.Bake(PrototypeJson.Read(PrototypeJson.Write(d)).Document);
+            var baked = BakedLayout.Of(bytes)!; baked.Document();   // warm up
+            long a0 = GC.GetAllocatedBytesForCurrentThread(); BakedLayout.Of(bytes)!.Document(); long made = GC.GetAllocatedBytesForCurrentThread() - a0;
+            double best = double.MaxValue;
+            for (int i = 0; i < 3; i++) { var sw = Stopwatch.StartNew(); BakedLayout.Of(bytes)!.Document(); best = Math.Min(best, sw.Elapsed.TotalMilliseconds); }
+            log.WriteLine($"{d.buildings.Count} buildings baked in {bytes.Length / 1048576.0:0.00} MB: read in {best:0.0} ms, {made / 1048576.0:0.0} MB allocated");
+            Assert.True(made < 9L << 20, $"{made / 1048576.0:0.0} MB: the model and nothing more");
+            Assert.True(best < 60, $"{best:0.0} ms");
+            Assert.True(bytes.Length < 1L << 20, $"{bytes.Length / 1048576.0:0.00} MB");
+        }
+
         sealed class Rows : IColorRowSink
         {
             int next;

@@ -16,12 +16,22 @@ namespace Triband.Storey.Lod
         /// <param name="on">The threads it is parsed on: <see cref="BuildThreads.Shared"/> unless given.</param>
         public LayoutParse(string text, BuildThreads? on = null)
         {
-            Text = text;
+            Text = text; Source = text;
             task = (on ?? BuildThreads.Shared).Run(() => PrototypeJson.Read(text).Document, BuildLane.Background);
         }
 
-        /// <summary>The text being parsed.</summary>
+        /// <summary>A baked layout read on a build thread (docs/PERFORMANCE.md §6.4): a fifteenth of the text's time.</summary>
+        public LayoutParse(BakedLayout baked, BuildThreads? on = null)
+        {
+            Text = ""; Source = baked;
+            task = (on ?? BuildThreads.Shared).Run(() => baked.Document(), BuildLane.Background);
+        }
+
+        /// <summary>The text being parsed; empty for a baked layout.</summary>
         public string Text { get; }
+
+        /// <summary>What is read: the text, or the <see cref="BakedLayout"/>.</summary>
+        public object Source { get; }
 
         /// <summary>The layout once it is parsed, otherwise null. A parse that failed throws its exception here.</summary>
         public StoreyDocument? Document => task.IsCompleted ? task.GetAwaiter().GetResult() : null;

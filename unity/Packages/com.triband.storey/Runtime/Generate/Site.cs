@@ -70,6 +70,16 @@ namespace Triband.Storey.Generate
         /// those within <paramref name="reach"/> metres of an own building are kept. Nothing of them is drawn.
         /// </summary>
         public static Site WithContext(List<BuildingData> own, string district, IEnumerable<(List<BuildingData> buildings, string district, double dx, double dz)> neighbours, double reach = 2)
+            => WithContext(own, district, neighbours, null, reach);
+
+        /// <summary>
+        /// <see cref="WithContext(List{BuildingData}, string, IEnumerable{ValueTuple{List{BuildingData}, string, double, double}}, double)"/>,
+        /// with neighbouring districts' baked layouts besides (<paramref name="baked"/>): only their buildings within reach
+        /// are read from the bytes, by the bounds the layout keeps for each, where a neighbour's layout was parsed whole for
+        /// a few buildings along the edge (docs/PERFORMANCE.md §6.3). The same site either way.
+        /// </summary>
+        public static Site WithContext(List<BuildingData> own, string district, IEnumerable<(List<BuildingData> buildings, string district, double dx, double dz)> neighbours,
+            IEnumerable<(BakedLayout layout, string district, double dx, double dz)>? baked, double reach = 2)
         {
             var all = new List<BuildingData>(own);
             var keys = new Dictionary<BuildingData, string>();
@@ -99,19 +109,33 @@ namespace Triband.Storey.Generate
                     }
                 return false;
             }
+            // a neighbour's building as context: a copy of its own, moved into this site's space, never drawn
+            void Add(BuildingData c, string nd, double dx, double dz)
+            {
+                string id = c.id;
+                c.id = "@" + nd + "/" + id; c.pos = new Vec2(c.pos.x + dx, c.pos.z + dz); c.bridges.Clear();
+                keys[c] = nd + "/" + id;
+                all.Add(c);
+            }
             foreach (var (buildings, nd, dx, dz) in neighbours)
             {
                 if (nd == district) continue;
                 foreach (var nb in buildings)
                 {
-                    var bb = BoundsOf(nb); double x0 = bb.x0 + dx, z0 = bb.z0 + dz, x1 = bb.x1 + dx, z1 = bb.z1 + dz;
-                    if (!Near(x0, z0, x1, z1)) continue;
-                    var c = PrototypeJson.ReadBuilding(PrototypeJson.Write(nb));
-                    c.id = "@" + nd + "/" + nb.id; c.pos = new Vec2(nb.pos.x + dx, nb.pos.z + dz); c.bridges.Clear();
-                    keys[c] = nd + "/" + nb.id;
-                    all.Add(c);
+                    var bb = BoundsOf(nb);
+                    if (Near(bb.x0 + dx, bb.z0 + dz, bb.x1 + dx, bb.z1 + dz)) Add(PrototypeJson.ReadBuilding(PrototypeJson.Write(nb)), nd, dx, dz);
                 }
             }
+            if (baked != null)
+                foreach (var (layout, nd, dx, dz) in baked)
+                {
+                    if (nd == district) continue;
+                    for (int i = 0; i < layout.Count; i++)
+                    {
+                        var bb = layout.BoundsOf(i);
+                        if (Near(bb.x0 + dx, bb.z0 + dz, bb.x1 + dx, bb.z1 + dz)) Add(layout.Building(i), nd, dx, dz);   // a new one: no copy to make
+                    }
+                }
             var site = new Site(all, keys) { Own = own.Count };
             return site;
         }

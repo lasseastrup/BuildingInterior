@@ -93,6 +93,40 @@ namespace Triband.Storey.Tests
             Assert.Equal(want, site.Buildings.Skip(own.Count).Select(b => b.id));
         }
 
+        /// <summary>
+        /// A neighbour's baked layout gives the site its parsed layout gives (docs/PERFORMANCE.md §6.3): the same buildings
+        /// along the edge, read alone from the bytes, with the same ids, places and owners, and the same massings.
+        /// </summary>
+        [Theory]
+        [InlineData(2.0, 0.0, 0.0)]
+        [InlineData(15.0, 3.5, -2.0)]
+        public void ABakedNeighbourGivesTheSameEdge(double reach, double dx, double dz)
+        {
+            var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document; TestCity.Generate(d, 1000);
+            var box = d.buildings.ToDictionary(b => b, Site.BoundsOf);
+            double mid = d.buildings.Average(b => box[b].x0 + box[b].x1) / 2;
+            var own = d.buildings.Where(b => box[b].x0 + box[b].x1 < 2 * mid).ToList(); var other = d.buildings.Except(own).ToList();
+            var otherDoc = PrototypeJson.Read(PrototypeJson.Write(new StoreyDocument { buildings = other })).Document;   // as its asset reads it
+            var baked = BakedLayout.Of(BakedLayout.Bake(otherDoc))!;
+            var parsed = Site.WithContext(own, "West", new[] { (otherDoc.buildings, "East", dx, dz) }, reach);
+            var read = Site.WithContext(own, "West", System.Array.Empty<(List<BuildingData>, string, double, double)>(), new[] { (baked, "East", dx, dz) }, reach);
+            Assert.True(parsed.Buildings.Count > own.Count, "the edge has buildings");
+            Assert.Equal(parsed.Buildings.Count, read.Buildings.Count);
+            for (int i = 0; i < parsed.Buildings.Count; i++)
+            {
+                Assert.Equal(PrototypeJson.Write(parsed.Buildings[i]), PrototypeJson.Write(read.Buildings[i]));
+                Assert.Equal(parsed.OwnerKey(parsed.Buildings[i]), read.OwnerKey(read.Buildings[i]));
+            }
+            // the own buildings near the edge build the same massings, party walls and all
+            int near = 0;
+            foreach (var b in own.Where(b => box[b].x1 > mid - 30))
+            {
+                var m0 = Lod2.Build(parsed, b); var m1 = Lod2.Build(read, b); near++;
+                Assert.True(m0.P.SequenceEqual(m1.P) && m0.I.SequenceEqual(m1.I), $"{b.name}: its massing differs");
+            }
+            Assert.True(near > 5, $"{near} buildings near the edge");
+        }
+
         static readonly List<Districts.Area> Row = new List<Districts.Area>
         {
             new Districts.Area(0, 0, 100, 100), new Districts.Area(400, 0, 500, 100), new Districts.Area(800, 0, 900, 100),

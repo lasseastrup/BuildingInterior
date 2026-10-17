@@ -88,6 +88,7 @@ namespace UnityEngine
     {
         public static RuntimePlatform platform => RuntimePlatform.LinuxEditor;
         public static bool isPlaying => false;
+        public static bool isEditor => true;
         public static bool isMobilePlatform => false;
         public static int targetFrameRate { get => -1; set { } }
         public static event System.Action quitting { add { } remove { } }

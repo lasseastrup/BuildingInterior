@@ -275,6 +275,8 @@ With four 300-building neighbours, a first visit is five parses: about 41 MB of 
 
 Recommendation (M): bake a per-district edge index at import, as Plan §9 already calls for. It holds the neighbour buildings within reach, moved by their offsets, with their owner keys. A site then never parses a neighbour's layout, and the copy becomes a struct copy.
 
+Status: done another way (CHANGELOG). A layout's offsets from its neighbours belong to the scene, not to the layout, so the importer can't know which buildings are along an edge. Instead each layout is baked with a directory of its buildings' bounds (§6.4), and a site reads a baked neighbour's buildings within reach alone, each a new object, so nothing is copied (`Site.WithContext`'s baked overload, `SiteRenderer.BakedNeighbours`). The neighbour isn't parsed, and the site doesn't hold its parse. For the 751-building district with 2,256 around it (headless): 1.8–7.9 ms and 0.6 MB allocated for the context, where parsing the three neighbours and taking the context took 60 ms or more and allocated 26.1 MB, and kept 6.4 MB of their documents. `DistrictsTests.ABakedNeighbourGivesTheSameEdge` checks the same site and the same massings either way.
+
 ### 6.4 The far city is generated at every load (high; the plan's own decision)
 
 Every load builds all 3,000 massings (422 ms of build-thread time, 71 MB of garbage), merges and uploads 307 cells, and writes about 9,000 parameter rows. CITY.md §8 lists "cells baked at import" as not done. Baking at import:
@@ -286,6 +288,18 @@ Every load builds all 3,000 massings (422 ms of build-thread time, 71 MB of garb
 That turns a load into a few milliseconds of main-thread copies with almost no garbage (estimated; appendix A.5). JSON stays the authoring and interchange format, so the importer and the headless tests keep their single source of truth.
 
 A baked, persistent far-cell layer for the whole city (about 3.3 KB of GPU per building) would also keep unloaded districts visible past the load radius. Today nothing is drawn there.
+
+Status: the layout is baked (CHANGELOG); the cells, rows and bounds are not. The importer bakes the parsed layout into a compact binary on the asset (`BakedLayout`, `StoreyDocumentAsset.Baked`): every field of the model, each distinct string and style once, and a directory of the buildings with their bounds. `Document` and the build threads' read (`LayoutParse`) read it in place of the text. In a player the text goes as the asset loads (`Json` is empty there). Headless:
+
+| | Text | Baked |
+|---|---|---|
+| 3,007 buildings: size | 1.94 M characters (3.87 MB as a string) | 0.75 MB |
+| read | 56–65 ms, 34.5 MB allocated | 3.9–4.5 ms, 7.8 MB allocated (the model) |
+| the model it gives | 8.84 MB | 7.74 MB |
+| 1,007 walk-in buildings: read | 32–34 ms, 16.2 MB | 3.2–3.4 ms, 3.5 MB |
+| 307 buildings: read | 6.1–6.6 ms, 4.6 MB | 0.5–0.6 ms, 1.2 MB |
+
+The format follows the model field for field, versioned with the importer's version (a new format imports every layout again). `BakedLayoutTests` reads back every fixture and both test cities field for field, fills every field of the model at random and reads it back, and pins the model's shape: a field added fails it until the format and its version are updated. The cells are not baked: a cell's massings depend on its neighbouring districts, which belong to the scene, and its vertices carry the building table's rows and indices, which are only known as the site loads. The load already stays within the frame's budget (§3.2); what baking them would save is the build threads' 0.4 s and the massings' garbage on them, for 9.8 MB of meshes on disk and the importer generating every massing. Worth it once a device run shows the load's garbage collections in its frames.
 
 ### 6.5 Nothing is released when a district unloads (high for long sessions)
 
@@ -320,6 +334,8 @@ The 8.9 MB document is about 178,000 objects:
 - 21,049 colour strings with 36 distinct values.
 
 Every Boehm collection walks all of it (§12.1). Null or shared empty lists, floors as a count plus sparse overrides, and interning colours and styles while reading bring it to an estimated 2.5–3 MB with about 150,000 fewer objects. The baked blob of §6.4 makes the runtime copy unnecessary. Effort M, because the editor's operations mutate these lists.
+
+Status: the strings are interned (CHANGELOG): the baked layout's reader makes each distinct string once, so the 21,049 colour strings are 36, and the model is 7.74 MB where it was 8.84. The rest is not done. The model is public and changeable: the editor's operations change its lists and styles in place, and so can a project's code, so lists or styles shared between buildings would change together, and floors as sparse overrides change the model's API for every reader. That wants a read-only runtime model beside the editable one, larger than this item.
 
 ### 6.8 Main-thread garbage per load (medium, effort S)
 

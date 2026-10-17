@@ -343,17 +343,24 @@ namespace Triband.Storey.Unity
         /// </summary>
         public string District { get; set; } = "";
         public List<(List<BuildingData> buildings, string district, double dx, double dz)> Neighbours { get; } = new List<(List<BuildingData>, string, double, double)>();
+        /// <summary>
+        /// Neighbouring districts' baked layouts, as <see cref="Neighbours"/>: only their buildings along the edge are read
+        /// (docs/PERFORMANCE.md §6.3), where a neighbour's layout was parsed whole for them.
+        /// </summary>
+        public List<(BakedLayout layout, string district, double dx, double dz)> BakedNeighbours { get; } = new List<(BakedLayout, string, double, double)>();
 
-        Site NewSite(StoreyDocument doc) => MakeSite(doc, District, Neighbours);
+        Site NewSite(StoreyDocument doc) => MakeSite(doc, District, Neighbours, BakedNeighbours);
 
-        static Site MakeSite(StoreyDocument doc, string district, List<(List<BuildingData> buildings, string district, double dx, double dz)> neighbours) =>
-            neighbours.Count == 0 ? new Site(doc.buildings) : Site.WithContext(doc.buildings, district, neighbours);
+        static Site MakeSite(StoreyDocument doc, string district, List<(List<BuildingData> buildings, string district, double dx, double dz)> neighbours,
+            List<(BakedLayout layout, string district, double dx, double dz)> baked) =>
+            neighbours.Count == 0 && baked.Count == 0 ? new Site(doc.buildings) : Site.WithContext(doc.buildings, district, neighbours, baked);
 
         // a layout's site index and load plan, made on a build thread ahead of Show (docs/PERFORMANCE.md §6.2)
         sealed class Prepared
         {
             public StoreyDocument doc = null!; public string district = "";
             public List<(List<BuildingData> buildings, string district, double dx, double dz)> neighbours = null!;
+            public List<(BakedLayout layout, string district, double dx, double dz)> baked = null!;
             public System.Threading.Tasks.Task<(Site site, List<BuildingData[]> plan)> task = null!;
         }
         Prepared? prepared;
@@ -370,20 +377,22 @@ namespace Triband.Storey.Unity
             if (lods == null) return true;
             if (prepared != null && ReferenceEquals(prepared.doc, doc) && SameNeighbours(prepared)) return prepared.task.IsCompleted;
             var neighbours = new List<(List<BuildingData>, string, double, double)>(Neighbours); string district = District;   // copies: a build thread reads them
+            var baked = new List<(BakedLayout, string, double, double)>(BakedNeighbours);
             var o = parent.position;
             (double, double)? from = Eye is LodEye eye ? (eye.position.x - o.x, eye.position.z - o.z) : ((double, double)?)null;
             prepared = new Prepared
             {
-                doc = doc, district = district, neighbours = neighbours,
-                task = BuildThreads.Shared.Run(() => { var made = MakeSite(doc, district, neighbours); return (made, LayoutLoad.Plan(made, doc.buildings, from)); }, BuildLane.Load),
+                doc = doc, district = district, neighbours = neighbours, baked = baked,
+                task = BuildThreads.Shared.Run(() => { var made = MakeSite(doc, district, neighbours, baked); return (made, LayoutLoad.Plan(made, doc.buildings, from)); }, BuildLane.Load),
             };
             return prepared.task.IsCompleted;
         }
 
         bool SameNeighbours(Prepared p)
         {
-            if (p.district != District || p.neighbours.Count != Neighbours.Count) return false;
+            if (p.district != District || p.neighbours.Count != Neighbours.Count || p.baked.Count != BakedNeighbours.Count) return false;
             for (int i = 0; i < Neighbours.Count; i++) if (!p.neighbours[i].Equals(Neighbours[i])) return false;
+            for (int i = 0; i < BakedNeighbours.Count; i++) if (!p.baked[i].Equals(BakedNeighbours[i])) return false;
             return true;
         }
 

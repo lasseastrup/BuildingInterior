@@ -13,11 +13,15 @@ namespace Triband.Storey.Unity
     /// default one), and the model must stay engine-free to be testable headlessly, so the
     /// text is the serialized form and <see cref="Document"/> is a cache. The summary is
     /// computed at import for the inspector.
+    /// <para>The importer bakes the parsed layout too (<see cref="Baked"/>, docs/PERFORMANCE.md §6.4), which is what
+    /// <see cref="Document"/> reads when it is there: the 3,000-building test city in 4 ms where its text took 56–65 ms,
+    /// with no garbage but the model (headless). In a player the text goes when the asset loads, and <see cref="Json"/> is
+    /// empty there: nothing reads it.</para>
     /// <para>In Play mode the sites using a layout say so (<see cref="Use"/>, <see cref="Release"/>): with none, the parse
     /// is let go once the layout falls off the last few no site uses (<see cref="KeepUnused"/>), and parsed again when
     /// asked for. A district's scene unloaded doesn't unload its assets, so every district visited kept its parse for the
-    /// session (docs/PERFORMANCE.md §6.5). The text stays: a district's scene loaded again finds this same object, and a
-    /// player can't read the text back from disk.</para>
+    /// session (docs/PERFORMANCE.md §6.5). What it is read from stays, the baked bytes (or the text, with none): a
+    /// district's scene loaded again finds this same object, and a player can't read the file back from disk.</para>
     /// </remarks>
     public sealed class StoreyDocumentAsset : ScriptableObject
     {
@@ -29,9 +33,36 @@ namespace Triband.Storey.Unity
         [SerializeField] internal int coreCount;
         [SerializeField] internal int detailCount;
         [SerializeField] internal string[] unknownKeys = System.Array.Empty<string>();
+        [SerializeField, HideInInspector] internal byte[] baked = System.Array.Empty<byte>();
 
         StoreyDocument? cached;
         Lod.LayoutParse? parse;
+        BakedLayout? bakedLayout; byte[]? bakedFrom;
+
+        /// <summary>
+        /// The layout as the importer baked it, or null when the asset has none: imported by an older Storey, or baked in
+        /// another format, which Unity imports again. A neighbouring district's is read for the buildings along the edge
+        /// alone (docs/PERFORMANCE.md §6.3).
+        /// </summary>
+        public BakedLayout? Baked
+        {
+            get
+            {
+                if (!ReferenceEquals(bakedFrom, baked)) { bakedLayout = BakedLayout.Of(baked); bakedFrom = baked; }
+                return bakedLayout;
+            }
+        }
+
+        // in a player a baked layout is read from its bytes: the text, two bytes a character for as long as the asset is
+        // loaded, goes as it loads. The editor keeps it: it edits and saves the text
+        void OnEnable()
+        {
+            if (!Application.isEditor && Baked != null) json = "";
+        }
+
+        // what the layout is read from: its baked bytes when it has them, its text otherwise
+        object Source => (object?)Baked ?? json;
+        StoreyDocument Read() => Baked is BakedLayout b ? b.Document() : PrototypeJson.Read(json).Document;
 
         public string Json => json;
         public int BuildingCount => buildingCount;
@@ -40,8 +71,8 @@ namespace Triband.Storey.Unity
         public string[] UnknownKeys => unknownKeys;
 
         /// <summary>
-        /// The parsed layout, parsed once per asset load, on the caller's thread: one being parsed on a build thread
-        /// (<see cref="DocumentOffMainThread"/>) is waited for.
+        /// The parsed layout, read once per asset load (from <see cref="Baked"/> when there is one), on the caller's
+        /// thread: one being read on a build thread (<see cref="DocumentOffMainThread"/>) is waited for.
         /// </summary>
         public StoreyDocument Document
         {
@@ -49,7 +80,7 @@ namespace Triband.Storey.Unity
             {
                 if (cached == null)
                 {
-                    cached = parse != null && ReferenceEquals(parse.Text, json) ? parse.Wait() : PrototypeJson.Read(json).Document;
+                    cached = parse != null && ReferenceEquals(parse.Source, Source) ? parse.Wait() : Read();
                     parse = null;
                 }
                 return cached;
@@ -67,7 +98,8 @@ namespace Triband.Storey.Unity
         public StoreyDocument? DocumentOffMainThread()
         {
             if (cached != null) return cached;
-            if (parse == null || !ReferenceEquals(parse.Text, json)) parse = new Lod.LayoutParse(json);
+            var from = Source;
+            if (parse == null || !ReferenceEquals(parse.Source, from)) parse = from is BakedLayout b ? new Lod.LayoutParse(b) : new Lod.LayoutParse(json);
             var d = parse.Document;
             if (d != null) { cached = d; parse = null; }
             return d;
@@ -111,13 +143,14 @@ namespace Triband.Storey.Unity
 
         static void LetGo()
         {
-            foreach (var a in letGo) { a.cached = null; a.parse = null; }   // a parse running finishes on its thread, unread
+            // a parse running finishes on its thread, unread; the baked layout's reader goes with its strings, made again when asked for
+            foreach (var a in letGo) { a.cached = null; a.parse = null; a.bakedLayout = null; a.bakedFrom = null; }
             letGo.Clear();
         }
 
-        internal void Set(string text, DocumentSummary s)
+        internal void Set(string text, DocumentSummary s, byte[] bakedBytes)
         {
-            json = text;
+            json = text; baked = bakedBytes; bakedFrom = null; bakedLayout = null;
             documentVersion = s.documentVersion;
             buildingCount = s.buildingCount;
             buildingNames = s.buildingNames.ToArray();

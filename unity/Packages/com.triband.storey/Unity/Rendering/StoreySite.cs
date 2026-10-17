@@ -229,7 +229,8 @@ namespace Triband.Storey.Unity
             if (showing && Application.isPlaying && layout != null)
             {
                 holding.Add(layout);
-                foreach (var n in neighbours) if (n != null && n.layout != null && !holding.Contains(n.layout)) holding.Add(n.layout);
+                // a neighbour's baked layout is read from its bytes for the edge: its parse isn't needed
+                foreach (var n in neighbours) if (n != null && n.layout != null && n.layout.Baked == null && !holding.Contains(n.layout)) holding.Add(n.layout);
             }
             bool same = holding.Count == held.Count;
             for (int i = 0; same && i < held.Count; i++) same = ReferenceEquals(held[i], holding[i]);
@@ -274,7 +275,7 @@ namespace Triband.Storey.Unity
             {
                 site.StartThreads();
                 if (layout.DocumentOffMainThread() == null) parsing = true;
-                foreach (var n in neighbours) if (n != null && n.layout != null && n.layout.DocumentOffMainThread() == null) parsing = true;
+                foreach (var n in neighbours) if (n != null && n.layout != null && n.layout.Baked == null && n.layout.DocumentOffMainThread() == null) parsing = true;
             }
             site.Colliders = generateColliders && (Application.isPlaying || collidersInEditMode);
             // the neighbouring districts, for party walls along the edge: a change builds everything again
@@ -289,8 +290,13 @@ namespace Triband.Storey.Unity
             {
                 neighboursFor = layout; shownJson = null; pendingAll = true;
                 neighboursSeen.Clear(); foreach (var n in neighbours) neighboursSeen.Add((n?.layout, n?.offset ?? default, n?.layout?.Json));
-                site.District = layout.name; site.Neighbours.Clear();
-                foreach (var n in neighbours) if (n != null && n.layout != null && n.layout != layout) site.Neighbours.Add((n.layout.Document.buildings, n.layout.name, n.offset.x, n.offset.y));
+                site.District = layout.name; site.Neighbours.Clear(); site.BakedNeighbours.Clear();
+                foreach (var n in neighbours)
+                {
+                    if (n == null || n.layout == null || n.layout == layout) continue;
+                    if (n.layout.Baked is BakedLayout baked) site.BakedNeighbours.Add((baked, n.layout.name, n.offset.x, n.offset.y));   // the edge alone, from the bytes (docs/PERFORMANCE.md §6.3)
+                    else site.Neighbours.Add((n.layout.Document.buildings, n.layout.name, n.offset.x, n.offset.y));
+                }
             }
             // an artist's window, door or facade detail was added or changed: everything is built again with it
             foreach (var o in openings) if (o != null && Generate.OpeningKinds.Get(o.Id) == null) o.Register();
