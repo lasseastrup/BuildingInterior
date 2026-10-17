@@ -231,6 +231,12 @@ This is already lean (Plan §6.5). If the minimum tier's memory binds, two furth
 - Positions as UNorm16×4, quantised to each mesh's bounds, with the dequantise folded into the renderer's transform (scale and offset). The GPU Resident Drawer handles per-instance matrices, and the fourth component can hold the tag. 24 → 16 bytes for LOD1, 32 → 24 for LOD0. At 50 m bounds the step is under a millimetre. The risk is hairline cracks where two buildings' meshes meet on different grids: test it on party walls.
 - LOD0's kind and wall id as UInt16×2 instead of two floats (−4 bytes). The kind field packs the party-wall neighbour's index (`kind + 8 × (neighbour + 1)`), which needs 17 bits for 8,192 buildings, so it needs one more bit budgeted elsewhere.
 
+Status: decided against for now; revisit on the device's numbers.
+- **What it would save.** On the minimum tier (about 13 MB of LOD0 and 10 MB of LOD1 after the walk, §13), quantised positions would take off about 3.3 MB on each, and the 16-bit ids about 1.6 MB: about 8 MB of a 120 MB budget.
+- **Why the budget doesn't need it now.** The worst view's gap of about 8 MB (§13) has been closed since this review: the text is dropped in players and documents are released (§6.5), the party-wall memo stores nothing for edges without a neighbour (§6.6), and the layout is baked (§6.4).
+- **The risk.** Each mesh's own grid makes hairline cracks possible where two buildings' meshes meet.
+- **When to revisit.** If Storey Diagnostics' memory line ("mem", and the notes as it passes each 256 MB) shows the minimum tier past its budget on the device. The iPhone 11 Pro, the current target, has 4 GB.
+
 ### 4.3 Meshes and objects are not reused
 
 Every detail build creates `Mesh` objects and every drop destroys them. Mesh creation is cheap next to the copy, but pooling the part objects (§3.4) and keeping their meshes (`SetVertexBufferParams` reallocates as needed) removes managed-wrapper churn and keeps the GPU Resident Drawer's mesh registrations stable.
