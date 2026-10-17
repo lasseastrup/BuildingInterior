@@ -80,6 +80,10 @@ namespace Triband.Storey.Unity
         [Tooltip("Buildings drawing steady (most of the city: none cut, fading or in the way) skip their back faces in the colour, depth and shadow passes, as an opaque material usually does, so about half their triangles never reach the tiler (docs/PERFORMANCE.md §7.1). Every one-sided surface the prototype draws two-sided has its back, so no hole shows from outside (the headless back-face ray test). Off draws every face, as the prototype does. Needs shaders with the _StoreyCull property: Storey's own, and the Color Palette Lit sample once re-imported.")]
         public bool cullBackFacesWhenSteady = true;
 
+        [Header("Measurement")]
+        [Tooltip("The frame time that 99 frames in a hundred must be under for Storey Performance Run (the play kit) to pass a path on this tier (docs/PERFORMANCE.md §14): 20 ms where frames are 60 fps (at most one frame in a hundred late), 40 on the minimum tier's 30 fps. Nothing else reads it.")]
+        [Min(1)] public float p99FrameMs = 20f;
+
         // No GPU occlusion culling or frame rate here. Unity has no per-renderer switch for GPU occlusion: it is each quality
         // level's Universal Renderer setting. The frame rate is the project's (Application.targetFrameRate), and Storey's own
         // budget is the milliseconds above. docs/SPEC.md §6.7 lists the project settings Storey needs.

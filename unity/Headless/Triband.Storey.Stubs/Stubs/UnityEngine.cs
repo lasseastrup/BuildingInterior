@@ -42,6 +42,11 @@ namespace UnityEngine
         public static int Min(int a, int b) => a;
         public static float Clamp(float value, float min, float max) => value;
         public static float Atan2(float y, float x) => 0;
+        public static float Sin(float f) => 0;
+        public static float Cos(float f) => 0;
+        public static float PingPong(float t, float length) => 0;
+        public static float Repeat(float t, float length) => 0;
+        public static int RoundToInt(float f) => 0;
         public static float Atan(float f) => 0;
     }
 
@@ -116,6 +121,7 @@ namespace UnityEngine
         public static void LogWarning(object message, Object context) { }
         public static void LogError(object message) { }
         public static void LogException(System.Exception exception) { }
+        public static bool isDebugBuild => false;
     }
 
     public class PropertyAttribute : System.Attribute
@@ -201,11 +207,15 @@ namespace UnityEngine
         public static Vector3 down => default;
         public static Vector3 right => default;
         public static Vector3 forward => default;
+        public static Vector3 back => default;
+        public Vector3 normalized => default;
         public static float Dot(Vector3 a, Vector3 b) => 0;
         public static Vector3 operator +(Vector3 a, Vector3 b) => a;
         public static Vector3 operator -(Vector3 a, Vector3 b) => a;
         public static Vector3 operator -(Vector3 a) => a;
         public static Vector3 operator *(Vector3 a, float d) => a;
+        public static Vector3 operator /(Vector3 a, float d) => a;
+        public static float Distance(Vector3 a, Vector3 b) => 0;
         public static bool operator ==(Vector3 a, Vector3 b) => true;
         public static bool operator !=(Vector3 a, Vector3 b) => false;
         public static implicit operator Vector4(Vector3 v) => new Vector4(v.x, v.y, v.z, 0);
@@ -584,7 +594,12 @@ namespace UnityEngine
 
     public class Behaviour : Component { public bool isActiveAndEnabled => false; public bool enabled { get; set; } }
 
-    public class MonoBehaviour : Behaviour { public bool useGUILayout { get; set; } }
+    public class MonoBehaviour : Behaviour
+    {
+        public bool useGUILayout { get; set; }
+        public Coroutine StartCoroutine(System.Collections.IEnumerator routine) => null;
+    }
+    public sealed class Coroutine { }
 
     public sealed class Transform : Component
     {
@@ -599,6 +614,7 @@ namespace UnityEngine
         public Vector3 localPosition { get => default; set { } }
         public Vector3 localScale { get => default; set { } }
         public void LookAt(Vector3 worldPosition) { }
+        public void SetPositionAndRotation(Vector3 position, Quaternion rotation) { }
         public Vector3 lossyScale => default;
         public Matrix4x4 localToWorldMatrix => default;
         public Matrix4x4 worldToLocalMatrix => default;
@@ -757,7 +773,7 @@ namespace Unity.Profiling
         public readonly struct AutoScope : System.IDisposable { public void Dispose() { } }
     }
 
-    public readonly struct ProfilerCategory { public static ProfilerCategory Memory => default; }
+    public readonly struct ProfilerCategory { public static ProfilerCategory Memory => default; public static ProfilerCategory Render => default; public static ProfilerCategory Scripts => default; }
     public enum ProfilerRecorderOptions { None = 0, StartImmediately = 1, KeepAliveDuringDomainReload = 2, CollectOnlyOnCurrentThread = 4, WrapAroundWhenCapacityReached = 8, SumAllSamplesInFrame = 16, GpuRecorder = 64, Default = 24 }
     public struct ProfilerRecorder : System.IDisposable
     {

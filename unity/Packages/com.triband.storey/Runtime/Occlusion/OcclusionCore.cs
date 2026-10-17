@@ -141,11 +141,20 @@ namespace Triband.Storey.Occlusion
         /// </summary>
         public void Frame(PlayerState p, (double x, double y, double z) cam, (double x, double y, double z) target, double dt)
         {
+            FrameView(p, cam, target, dt);
+            FrameCutaway(dt);
+        }
+
+        /// <summary><see cref="Frame"/>'s first half: the building the view is on, the buildings in the way, the view.</summary>
+        public void FrameView(PlayerState p, (double x, double y, double z) cam, (double x, double y, double z) target, double dt)
+        {
             HoldView(p, cam);
             UpdateOccluders(p, cam, dt);
             ApplyView(p, cam, target);
-            UpdateCutaway(dt);
         }
+
+        /// <summary><see cref="Frame"/>'s second half, after <see cref="FrameView"/>: the cutaway's walls (a Profiler marker of their own in Unity).</summary>
+        public void FrameCutaway(double dt) => UpdateCutaway(dt);
 
         /// <summary>Stop: every occluder and every wall back to normal.</summary>
         public void Clear()

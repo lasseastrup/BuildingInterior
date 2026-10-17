@@ -30,3 +30,4 @@ MonoBehaviour:
   occlusionOnFarMaterials: 0
   specularAndReflections: 0
   cullBackFacesWhenSteady: 1
+  p99FrameMs: 40

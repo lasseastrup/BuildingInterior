@@ -24,6 +24,7 @@ namespace Triband.Storey.PlayKit
 
         void LateUpdate()
         {
+            using var _t = StoreyTimings.Time("walk: camera");
             if (character == null) return;
             var p = character.State; var o = occlusion != null && occlusion.site != null ? occlusion.site.transform.position : Vector3.zero;
             float dt = Mathf.Min(Time.deltaTime, 0.05f);

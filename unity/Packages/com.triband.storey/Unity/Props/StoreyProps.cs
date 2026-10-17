@@ -178,6 +178,7 @@ namespace Triband.Storey.Unity
 
         void LateUpdate()
         {
+            using var _t = StoreyTimings.Time("props: frame");
             // a site built again (an edit, a district streamed in): indices may have moved, and props placed before their
             // site had built find it now
             int any = SiteRenderer.AnyVersion;

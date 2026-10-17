@@ -74,6 +74,7 @@ namespace Triband.Storey.PlayKit
 
         void Update()
         {
+            using var _t = StoreyTimings.Time("walk: character");
             var world = occlusion != null ? occlusion.World : null;
             var cam = viewCamera != null ? viewCamera : Camera.main;
             float dt = Mathf.Min(Time.deltaTime, 0.05f);
@@ -101,6 +102,7 @@ namespace Triband.Storey.PlayKit
 
         void OnGUI()
         {
+            using var _t = StoreyTimings.Time("hud: the place and the lift panel");
             var world = occlusion != null ? occlusion.World : null;
             label ??= new GUIStyle(GUI.skin.box) { fontSize = Mathf.Max(12, Screen.height / 50), alignment = TextAnchor.MiddleLeft };
             float s = label.fontSize * 2.2f;

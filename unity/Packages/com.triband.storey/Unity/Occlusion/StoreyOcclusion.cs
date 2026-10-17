@@ -193,7 +193,11 @@ namespace Triband.Storey.Unity
             Vector3 pw = player != null ? player.position : hasFeet ? feet : cam.transform.position;
             var p = playerState; p.Spawn(pw.x - origin.x, pw.y - origin.y, pw.z - origin.z);
             var cw = cam.transform.position; var tw = cameraTarget ?? pw + Vector3.up * (float)FollowCamera.Chest;
-            using (StoreyTimings.Time("occlusion: frame")) occ.Frame(p, (cw.x - origin.x, cw.y - origin.y, cw.z - origin.z), (tw.x - origin.x, tw.y - origin.y, tw.z - origin.z), Time.deltaTime);
+            using (StoreyTimings.Time("occlusion: frame"))
+            {
+                using (StoreyTimings.Time("occlusion: view and buildings in the way")) occ.FrameView(p, (cw.x - origin.x, cw.y - origin.y, cw.z - origin.z), (tw.x - origin.x, tw.y - origin.y, tw.z - origin.z), Time.deltaTime);
+                using (StoreyTimings.Time("occlusion: cutaway")) occ.FrameCutaway(Time.deltaTime);
+            }
             using (StoreyTimings.Time("occlusion: table and globals")) Write(r, w, occ, origin, pw);
             // the shapes the walk and the cutaway will want next: round the player, and the neighbours of the building they are in
             using (StoreyTimings.Time("occlusion: shapes asked ahead"))
