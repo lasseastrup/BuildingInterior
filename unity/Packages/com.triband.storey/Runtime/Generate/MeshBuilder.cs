@@ -278,6 +278,17 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>
+        /// A vertex whose normal and colour are entries already (<see cref="IndexedList{T}.EntryOf"/>): a face's vertices
+        /// share theirs, looked up once for the face where each vertex looked them up (docs/PERFORMANCE.md §8.3). The same
+        /// tables, in the same order.
+        /// </summary>
+        void V(P3 q, int ne, int ce)
+        {
+            P.Add(q); N.Index.Add(ne); C.Index.Add(ce);
+            if (!Lean) { K.Add(curK); WI.Add(curI); }
+        }
+
+        /// <summary>
         /// Triangles as they come (an artist's mesh: <see cref="OpeningKinds"/>): one vertex per point with its own normal,
         /// the winding as given (front faces wind as the generator's own). Returns the first new vertex.
         /// </summary>
@@ -297,8 +308,8 @@ namespace Triband.Storey.Generate
             P3 a = pts[0], b = pts[1], d = pts[2];
             var cr = P3.Cross(b - a, d - a);
             if (P3.Dot(cr, nr) < 0) { pts = (P3[])pts.Clone(); Array.Reverse(pts); }
-            int bse = P.Count;
-            foreach (var q in pts) V(q, nr, c);
+            int bse = P.Count, ne = N.EntryOf(nr), ce = C.EntryOf(c);
+            foreach (var q in pts) V(q, ne, ce);
             for (int j = 1; j < pts.Length - 1; j++) { I.Add(bse); I.Add(bse + j); I.Add(bse + j + 1); }
         }
 
@@ -307,8 +318,8 @@ namespace Triband.Storey.Generate
         {
             if (ShapeOnly) return;
             if (P3.Dot(P3.Cross(p1 - p0, p2 - p0), nr) < 0) { var t = p0; p0 = p3; p3 = t; t = p1; p1 = p2; p2 = t; }
-            int bse = P.Count;
-            V(p0, nr, c); V(p1, nr, c); V(p2, nr, c); V(p3, nr, c);
+            int bse = P.Count, ne = N.EntryOf(nr), ce = C.EntryOf(c);
+            V(p0, ne, ce); V(p1, ne, ce); V(p2, ne, ce); V(p3, ne, ce);
             I.Add(bse); I.Add(bse + 1); I.Add(bse + 2); I.Add(bse); I.Add(bse + 2); I.Add(bse + 3);
         }
 
@@ -316,8 +327,8 @@ namespace Triband.Storey.Generate
         public void PolyTris(List<P3> pts, List<int> tris, P3 nr, Swatch c)
         {
             if (tris.Count == 0 || ShapeOnly) return;
-            int bse = P.Count;
-            foreach (var q in pts) V(q, nr, c);
+            int bse = P.Count, ne = N.EntryOf(nr), ce = C.EntryOf(c);
+            foreach (var q in pts) V(q, ne, ce);
             for (int t = 0; t < tris.Count; t += 3)
             {
                 int a = tris[t], b = tris[t + 1], d = tris[t + 2];

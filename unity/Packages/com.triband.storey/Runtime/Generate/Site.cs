@@ -25,6 +25,9 @@ namespace Triband.Storey.Generate
         internal readonly ConcurrentDictionary<string, BridgeSpan?> bridgeMemo = new ConcurrentDictionary<string, BridgeSpan?>(StringComparer.Ordinal);
         /// <summary>Each pitched roof's rise above its walls (<see cref="Roofs.Rise"/>), filled by the massing's build.</summary>
         internal readonly ConcurrentDictionary<string, double> riseMemo = new ConcurrentDictionary<string, double>(StringComparer.Ordinal);
+        // each building's pitched roofs, the top one (k = its storeys) and its terraces', made once a site and only read after
+        // (docs/PERFORMANCE.md §8.5): LOD0, LOD1, LOD2, the walk shape and the collision mesh each made them
+        internal readonly ConcurrentDictionary<(BuildingData b, int k), RoofParts?> roofMemo = new ConcurrentDictionary<(BuildingData, int), RoofParts?>(2, 64);
         readonly HashSet<string> bridged = new HashSet<string>(StringComparer.Ordinal);
         const double BGRID = 32;
 

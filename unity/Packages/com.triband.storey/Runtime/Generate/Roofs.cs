@@ -58,8 +58,18 @@ namespace Triband.Storey.Generate
             return r;
         }
 
-        /// <summary>The building's own pitched roof, or null for a flat one.</summary>
+        /// <summary>
+        /// The building's own pitched roof, or null for a flat one: made once a site (a site is made anew for every load
+        /// and edit), every LOD reading the same parts. Read them; don't change them.
+        /// </summary>
         public static RoofParts? Parts(Site site, BuildingData b)
+        {
+            var key = (b, b.floors.Count);
+            if (site.roofMemo.TryGetValue(key, out var made)) return made;
+            return site.roofMemo.GetOrAdd(key, MakeParts(site, b));   // two threads may both make it: one is kept
+        }
+
+        static RoofParts? MakeParts(Site site, BuildingData b)
         {
             var st = Derived.StyleAt(b, b.floors.Count); if (st.roofType == RoofType.Flat) return null;
             int N = b.floors.Count, k0 = Derived.TierStart(b, N); var raw = Derived.OutlineAt(b, N);
@@ -524,6 +534,13 @@ namespace Triband.Storey.Generate
         public static RoofParts? TerraceRoof(Site site, BuildingData b, int k)
         {
             if (k <= 0 || k >= b.floors.Count) return null;
+            if (b.floors[k].terraceRoof == null) return null;
+            if (site.roofMemo.TryGetValue((b, k), out var made)) return made;
+            return site.roofMemo.GetOrAdd((b, k), MakeTerraceRoof(site, b, k));
+        }
+
+        static RoofParts? MakeTerraceRoof(Site site, BuildingData b, int k)
+        {
             var tr = b.floors[k].terraceRoof; if (tr == null || !Derived.IsSetback(b, k)) return null;
             int k0 = Derived.TierStart(b, k - 1); var raw = Derived.OutlineAt(b, k - 1); var up = Derived.OutlineAt(b, k);
             double T = Dim.T_EXT, e = 0.3, ox = b.pos.x, oz = b.pos.z;

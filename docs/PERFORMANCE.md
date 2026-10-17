@@ -560,6 +560,8 @@ Fixes:
   - a struct comparer as a generic parameter instead of an interface (only 11 normals and 10–16 swatches per building).
 - **Structural (L):** emit straight into the upload layout (float positions, SNorm8 normals, colour bytes), keeping a double-precision debug path for the census and coplanar tests. That absorbs most of §8.2, halves the builder's 46 bytes a vertex, and is the route to Burst (§8.8).
 
+Status: a face's normal and colour are resolved once for its vertices (`MeshBuilder.Quad`, `Poly`, `PolyTris`), where each vertex looked them up: LOD0 generation's best of nine runs on the plain test city 1.02–1.05 ms → 0.91–0.93 a building, on the walk-in city 2.80 → 2.45–2.61 (headless), the same meshes to the byte. The quad and box fast paths, struct comparers and runs of `K`/`WI` are not done, nor the structural change.
+
 ### 8.4 Wall faces go through general Earcut (medium)
 
 Every wall face is a rectangle with rectangular holes in its own (u, y) plane, triangulated by Earcut (`Facade.cs:444-459`). That is 18 % of a plain LOD0 and 26 % of a walk-in one, mostly hole bridging.
@@ -568,7 +570,7 @@ A rectilinear triangulator would do it in O(openings): split the face at every o
 
 ### 8.5 Work done again for every LOD (medium)
 
-- **Roof parts.** A pitched building's straight skeleton and roof clipping run for LOD0, LOD1, LOD2, the walk shape and the collision mesh: five times. `BuildShape` builds them only to draw nothing (`Lod0.cs:525`). Memoise per site and building.
+- **Roof parts.** A pitched building's straight skeleton and roof clipping run for LOD0, LOD1, LOD2, the walk shape and the collision mesh: five times. `BuildShape` builds them only to draw nothing (`Lod0.cs:525`). Memoise per site and building. Status: done (CHANGELOG): the top roof and each roofed setback's are made once a site (`Site.roofMemo`), and every LOD reads them. On the plain test city each of LOD0, LOD1, the collision mesh and the walk shape allocates 13 KB less, LOD2 a third of what it did (6.8 KB, was 20.1), and LOD2 takes 0.021–0.023 ms where it took 0.035–0.043 (headless); the same meshes.
   - Within `Roofs.Parts`, gable vertices are matched by formatted strings (`Roofs.cs:167-178`: `q[0].ToString("F5") + "," + …` in nested loops). Use rounded integer keys.
   - `Skeleton` allocates a `double[2]` per point query. Its garbage grows with corners: 12 KB at 4 corners, 523 KB at 68 (0.5 ms). The test city averages 5, so this is latent for authored rounded outlines.
 - **The party-wall memo is reset per build** (§6.6). Within a build it works (184–260 queries, 5 computed), but every LOD of every building recomputes it in a fresh `ConcurrentDictionary`. Keep it for the `Site`'s lifetime: a new `Site` is made per load and per edit anyway, and the per-build reset came from the prototype, which mutates buildings in place.
