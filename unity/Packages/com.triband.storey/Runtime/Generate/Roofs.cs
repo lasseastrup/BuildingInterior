@@ -43,6 +43,21 @@ namespace Triband.Storey.Generate
 
         enum EdgeKind { Eave, Rake, Own, Skip, Gable }
 
+        /// <summary>
+        /// How far a building's pitched roof rises above its walls' tops (0 for a flat one), worked out once a site. Making
+        /// the roof to find it out takes up to 5 ms for the largest (Clipper2's offsets and clips): the massing's build, on a
+        /// build thread as the layout loads, keeps it (<see cref="Lod2.Build"/>), so the occlusion's first ray at a building
+        /// finds it there instead of making the roof on the main thread (docs/PERFORMANCE.md §10.2).
+        /// </summary>
+        public static double Rise(Site site, BuildingData b)
+        {
+            if (!IsPitched(b)) return 0;
+            if (site.riseMemo.TryGetValue(b.id, out double r)) return r;
+            r = Parts(site, b)?.Rise ?? 0;
+            site.riseMemo[b.id] = r;
+            return r;
+        }
+
         /// <summary>The building's own pitched roof, or null for a flat one.</summary>
         public static RoofParts? Parts(Site site, BuildingData b)
         {

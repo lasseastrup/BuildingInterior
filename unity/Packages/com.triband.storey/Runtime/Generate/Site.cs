@@ -20,6 +20,8 @@ namespace Triband.Storey.Generate
         // the memos are filled as buildings are generated, which may be on several threads at once (docs/CITY.md §2)
         internal readonly ConcurrentDictionary<string, ConcurrentDictionary<long, List<Party.Range>>> partyMemo = new ConcurrentDictionary<string, ConcurrentDictionary<long, List<Party.Range>>>(StringComparer.Ordinal);
         internal readonly ConcurrentDictionary<string, BridgeSpan?> bridgeMemo = new ConcurrentDictionary<string, BridgeSpan?>(StringComparer.Ordinal);
+        /// <summary>Each pitched roof's rise above its walls (<see cref="Roofs.Rise"/>), filled by the massing's build.</summary>
+        internal readonly ConcurrentDictionary<string, double> riseMemo = new ConcurrentDictionary<string, double>(StringComparer.Ordinal);
         readonly HashSet<string> bridged = new HashSet<string>(StringComparer.Ordinal);
         const double BGRID = 32;
 

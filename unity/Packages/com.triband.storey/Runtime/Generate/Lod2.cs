@@ -281,7 +281,9 @@ namespace Triband.Storey.Generate
                 }
                 else if (last)
                 {
-                    RoofPieces(Roofs.Parts(site, b)!.Parts);
+                    var rp = Roofs.Parts(site, b)!;
+                    site.riseMemo[b.id] = rp.Rise;   // the occlusion's ray test needs it (Roofs.Rise)
+                    RoofPieces(rp.Parts);
                     // the lid, open where a courtyard opens through the roof (its walls' faces)
                     int from = M.Tris; var rings = new List<List<Vec2>> { fp };
                     foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && Courtyards.HoleAt(b, v, N)) rings.AddRange(Courtyards.Offset(v.shape, -T));

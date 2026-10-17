@@ -126,7 +126,7 @@ namespace Triband.Storey.Occlusion
         readonly Dictionary<BuildingData, Shape> shapes = new Dictionary<BuildingData, Shape>();
         Shape ShapeOf(BuildingData b)
         {
-            if (!shapes.TryGetValue(b, out var s)) shapes[b] = s = new Shape { tiers = Party.Tiers(b), rise = Roofs.IsPitched(b) ? (Roofs.Parts(World.Site, b)?.Rise ?? 0) : 1.1 };
+            if (!shapes.TryGetValue(b, out var s)) shapes[b] = s = new Shape { tiers = Party.Tiers(b), rise = Roofs.IsPitched(b) ? Roofs.Rise(World.Site, b) : 1.1 };
             return s;
         }
 

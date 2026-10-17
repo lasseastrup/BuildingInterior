@@ -628,11 +628,15 @@ The memory bench's five-minute walk (`TheWalkModelStaysSmallOnAFiveMinuteWalk`) 
 | First Sink footprint per building, storey and slot: `SinkFootprint.Build` + pack, main thread | 0.08–0.13 ms mean, max 2.2 ms, **83 KB of garbage for about 60 vertices** (a fresh `MeshBuilder`, never recycled; LINQ) | `MeshBuilder.Make`/`Recycle`, no LINQ, build it on a worker with the building's LOD0 |
 | The occluded site changes (each `Show`, each edit, each district crossing, crossing back too): a new `PlayWorld` and `OcclusionCore` (`StoreyOcclusion.cs:103-114`) | 3.9 ms and 1.7 MB for 3,007 buildings; throws away walk shapes, roof caches and footprints | keep one per site; build it on a worker at load; reuse the site's grid (the walk model duplicates it: 0.82 MB) |
 
+Status: done but the grid (CHANGELOG). The massing's build keeps each roof's rise (`Roofs.Rise`), so the first ray test reads it. The walk model makes the shapes of the buildings within 24 m of the player, and of the neighbours of the one they are in, ahead on build threads (`PlayWorld.Prepare`): on the walk-in city's walk with the threads given a frame's time, every shape met was ready (`FirstMeetingTests`). Sink's footprints come from a shared builder (2.4 KB of garbage each) and are kept per site, 32 at most. The walk model and occlusion core are kept per site and made on a build thread; other districts' are made ahead. The walk model keeps its own grid: its cells hold the buildings in the prototype's order, which the walks' parity with the prototype depends on.
+
 ### 10.3 Footprints are hidden and shown again every frame (medium; Unity-side)
 
 `StoreyOcclusion.Write` calls `HideFootprints()` every frame (`StoreyOcclusion.cs:157, 214-220`): `SetActive(false)` and a push onto a stack per footprint. Then each sunk occluder pops one, assigns `sharedMesh`, sets its layer and calls `SetActive(true)` (`:176, 197-200`). With two or more footprints the stack swaps which object gets which mesh, so `sharedMesh` really changes every frame.
 
 Under the GPU Resident Drawer a renderer whose material or mesh changes is re-registered in full, processed on the main thread at PostLateUpdate [R1]. In the orbit test 67 % of frames had an occluder. Keep one persistent object per occluder slot (16 at most), and set mesh, layer and enabled state only when they change.
+
+Status: done (CHANGELOG): an object per slot, its mesh, layer and state set only on a change.
 
 ### 10.4 Table writes per occluder (low)
 

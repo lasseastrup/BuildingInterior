@@ -100,9 +100,65 @@ namespace Triband.Storey.Play
         /// <summary>How many buildings' shapes the walk model holds (built or handed in).</summary>
         public int ShapeCount { get { lock (gate) return shapes.Count; } }
 
-        /// <summary>How many shapes the walk model has built itself, with none from its <see cref="Source"/>.</summary>
+        /// <summary>How many shapes the walk model has built itself when asked, with none from its <see cref="Source"/> and none prepared.</summary>
         public int ShapesBuilt => built;
         int built;
+
+        /// <summary>How many shapes were made ahead on build threads (<see cref="Prepare"/>).</summary>
+        public int ShapesPrepared => prepared;
+        int prepared;
+
+        readonly HashSet<string> preparing = new HashSet<string>(StringComparer.Ordinal);
+        readonly List<BuildingData> prepNear = new List<BuildingData>();
+
+        /// <summary>
+        /// Have the shapes of the buildings near a point (the player's, site space) ready before they are asked for: those the
+        /// walk model doesn't hold are taken from its <see cref="Source"/>, or made on build threads (<paramref name="on"/>,
+        /// in the background lane), so meeting a building doesn't make its shape on the caller's thread (docs/PERFORMANCE.md
+        /// §10.2). At most <see cref="Keep"/> less those in use are asked for at once. Call it on the thread the walk model is
+        /// asked on (its <see cref="Source"/> is).
+        /// </summary>
+        public void Prepare(double x, double z, double radius, Lod.BuildThreads on)
+        {
+            NearInto(x, z, radius, prepNear);
+            // the grid's cells hold more than the circle (32 m each): only the buildings whose box it reaches, or the walk
+            // model's keep would be overrun and its shapes made again and again
+            int n = 0;
+            for (int i = 0; i < prepNear.Count; i++)
+            {
+                var b = prepNear[i]; var bb = bboxAll[b.id];
+                double dx = Math.Max(Math.Max(bb.x0 + b.pos.x - x, 0), x - bb.x1 - b.pos.x), dz = Math.Max(Math.Max(bb.z0 + b.pos.z - z, 0), z - bb.z1 - b.pos.z);
+                if (dx * dx + dz * dz <= radius * radius) prepNear[n++] = b;
+            }
+            prepNear.RemoveRange(n, prepNear.Count - n);
+            Prepare(prepNear, on);
+        }
+
+        /// <summary>Have these buildings' shapes ready before they are asked for (the neighbours of the building the player is in: the cutaway's), as above.</summary>
+        public void Prepare(List<BuildingData> buildings, Lod.BuildThreads on)
+        {
+            int room = Math.Max(0, Keep / 2);
+            foreach (var b in buildings)
+            {
+                lock (gate)
+                {
+                    if (shapes.ContainsKey(b.id) || preparing.Contains(b.id)) continue;
+                    if (room-- <= 0) return;
+                }
+                var s = Source?.Invoke(b);
+                if (s != null) { Use(b, s); continue; }
+                lock (gate) preparing.Add(b.id);
+                on.Run(() =>
+                {
+                    try { var made = Lod0.BuildShape(Site, b); System.Threading.Interlocked.Increment(ref prepared); Use(b, made); }
+                    finally { lock (gate) preparing.Remove(b.id); }
+                    return 0;
+                }, Lod.BuildLane.Background);
+            }
+        }
+
+        /// <summary>How many shapes are being made ahead now.</summary>
+        public int Preparing { get { lock (gate) return preparing.Count; } }
 
         readonly System.Collections.Concurrent.ConcurrentDictionary<string, List<BuildingData>> touching = new System.Collections.Concurrent.ConcurrentDictionary<string, List<BuildingData>>(StringComparer.Ordinal);
 

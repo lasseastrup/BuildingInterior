@@ -615,7 +615,8 @@ namespace UnityEngine
 
     public sealed class GameObject : Object
     {
-        public void SetActive(bool value) { }
+        public void SetActive(bool value) { activeSelf = value; }
+        public bool activeSelf { get; private set; } = true;
         public UnityEngine.SceneManagement.Scene scene => default;
         public GameObject(string name) { }
         public int layer { get; set; }
