@@ -294,6 +294,12 @@ namespace Triband.Storey.Tests
         /// block in a runtime assembly is invisible to the rule above and moves a decision
         /// into a layer where nothing here can see it. Editor-only behaviour goes behind an
         /// installed delegate in the editor assembly instead.
+        ///
+        /// One exception, for data rather than behaviour: the artist assets' source-mesh
+        /// references (<see cref="EditorOnlyData"/>), which a build must not ship
+        /// (docs/PERFORMANCE.md §11.2). A field left out of the player's class is what keeps
+        /// Unity from including the asset it names. Those blocks name no editor API, and the
+        /// stubs project compiles the player's side too (<c>-p:Player=true</c>).
         /// </summary>
         [Theory, MemberData(nameof(Packages))]
         public void OnlyEditorAssembliesNameTheEditor(string package)
@@ -304,10 +310,15 @@ namespace Triband.Storey.Tests
                 var relative = p.RelativeTo(file);
                 if (relative.Split('/').Any(part => part == "Editor") || relative.Contains("/ThirdParty/")) continue;
                 var code = Code(File.ReadAllText(file));
+                bool data = EditorOnlyData.Contains(relative);
                 foreach (var banned in new[] { "UnityEditor", "UNITY_EDITOR", "PrefabUtility" })
-                    Assert.False(code.Contains(banned, StringComparison.Ordinal), $"{relative} names {banned}, which belongs in an editor assembly");
+                    if (!(data && banned == "UNITY_EDITOR"))
+                        Assert.False(code.Contains(banned, StringComparison.Ordinal), $"{relative} names {banned}, which belongs in an editor assembly");
             }
         }
+
+        /// <summary>The runtime sources that may keep editor-only serialized data behind <c>#if UNITY_EDITOR</c>.</summary>
+        static readonly string[] EditorOnlyData = { "Unity/Rendering/StoreyDetail.cs", "Unity/Rendering/StoreyOpening.cs" };
 
         /// <summary>
         /// Referencing <c>Unity.Burst</c> without declaring <c>com.unity.burst</c> compiles in

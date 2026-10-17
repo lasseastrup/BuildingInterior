@@ -14,7 +14,7 @@ namespace Triband.Storey.Unity
     /// The mesh: pivot at the bottom middle of the hole in the wall, +Y up, +Z out of the wall (Z 0 on the wall's outer
     /// face, negative into the reveal), metres. Each submesh is a part in one of the style's colours (<see cref="parts"/>):
     /// its material isn't used, as the building's colours come from the palette. The mesh is copied in when it is set
-    /// (<see cref="Bake"/>), so it needn't be readable in a build.
+    /// (<c>Bake</c>), so it needn't be readable, and the mesh references are the editor's: they don't ship in a build.
     /// </summary>
     [CreateAssetMenu(menuName = "Storey/Window or Door", fileName = "Window", order = 30)]
     public sealed class StoreyOpening : ScriptableObject
@@ -39,10 +39,13 @@ namespace Triband.Storey.Unity
         [SerializeField, HideInInspector] string id = "";
         [Tooltip("A street door; otherwise a window.")]
         public bool door;
+#if UNITY_EDITOR
+        // the editor's alone: copied in when set (Bake), they don't ship in a build (docs/PERFORMANCE.md §11.2)
         [Tooltip("The mesh, as above: pivot at the bottom middle of the hole, +Z out of the wall.")]
         public Mesh? mesh;
         [Tooltip("LOD1's mesh (the shell seen from further away): something much simpler, or none for LOD1's plain pane.")]
         public Mesh? lod1Mesh;
+#endif
         [Tooltip("The mesh was made facing −Z: turn it round.")]
         public bool facesBack;
         [Tooltip("The colour of each submesh, in order. Glass shows the window shader's rooms on shell storeys and is see-through on walk-in ones.")]
@@ -87,6 +90,7 @@ namespace Triband.Storey.Unity
             return new Part { colour = ColorSlot.Frame };
         }
 
+#if UNITY_EDITOR
         /// <summary>
         /// Copy the meshes in (editor: the meshes are readable there) and register the kind. The editor calls it when the
         /// asset changes.
@@ -111,6 +115,7 @@ namespace Triband.Storey.Unity
             b.tris = all.ToArray(); b.counts = counts.ToArray();
             return b;
         }
+#endif
 
         /// <summary>The engine-free kind the generator places.</summary>
         public OpeningKind ToKind() => new OpeningKind

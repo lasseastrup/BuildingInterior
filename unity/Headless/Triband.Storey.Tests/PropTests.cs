@@ -105,5 +105,27 @@ namespace Triband.Storey.Tests
             Assert.True(core.HidesPoint(b, 1.0));    // the player's own storey squashes to a low base too
             Assert.False(core.HidesPoint(b, -0.5));  // below it: nothing
         }
+
+        /// <summary>
+        /// docs/PERFORMANCE.md §11.1: the props run after the sites, so they read this frame's rows; in Play mode their frame
+        /// visits the moving props alone; a prop leaves its lists by the last taking its place; and a prop material's steady
+        /// copy is made only for a graph with the STOREY_STEADY keyword whose alpha clip isn't baked in, in Play mode, from
+        /// the building's own steady answer.
+        /// </summary>
+        [Fact]
+        public void ThePropsFrameIsTheMovingPropsAndTheirSteadyCopiesAreTheGraphsOwn()
+        {
+            string Text(params string[] path) => System.IO.File.ReadAllText(UnityAsset.Package("com.triband.storey", path));
+            var props = Text("Unity", "Props", "StoreyProps.cs");
+            int Order(string text) => int.Parse(System.Text.RegularExpressions.Regex.Match(text, @"\[DefaultExecutionOrder\((\d+)\)\]").Groups[1].Value);
+            Assert.True(Order(props) > Order(Text("Unity", "Rendering", "StoreySite.cs")), "the props after the sites");
+            Assert.Contains("if (playing)\n                for (int i = 0; i < moving.Count; i++)", props.Replace("\r\n", "\n"));
+            Assert.DoesNotContain("readonly List<Entry> entries", props);
+            Assert.Contains("items[p] = moved; Place(moved) = p;", props);
+            Assert.Contains("FindKeyword(\"STOREY_STEADY\")", props);
+            Assert.Contains("bool baked = !clip.isValid && m.renderQueue >= (int)UnityEngine.Rendering.RenderQueue.AlphaTest;", props);
+            Assert.Contains("bool steady = playing && r != null && !off && r.PropSteady(idx);", props);
+            Assert.Contains("global::Triband.Storey.Occlusion.Steady.Of(idx, st.z, st.w, StoreyGlobals.ActiveIndex, StoreyGlobals.IsolateAmount, StoreyGlobals.IsolatedIndex)", Text("Unity", "Rendering", "SiteRenderer.cs"));
+        }
     }
 }

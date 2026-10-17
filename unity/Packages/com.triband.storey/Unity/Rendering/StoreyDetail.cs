@@ -16,7 +16,7 @@ namespace Triband.Storey.Unity
     /// the middle of its back, which goes 25 cm above the opening's top (clear of a window's head and a door's canopy;
     /// an awning can hang below it). Each submesh is a part in one of the style's colours (<see cref="parts"/>): its
     /// material isn't used, as the building's colours come from the palette. The mesh is copied in when it is set
-    /// (<see cref="Bake"/>), so it needn't be readable in a build.
+    /// (<c>Bake</c>), so it needn't be readable, and the mesh references are the editor's: they don't ship in a build.
     /// </summary>
     [CreateAssetMenu(menuName = "Storey/Facade Detail", fileName = "Facade Detail", order = 31)]
     public sealed class StoreyDetail : ScriptableObject
@@ -41,10 +41,13 @@ namespace Triband.Storey.Unity
         public Details.Anchor anchor = Details.Anchor.Wall;
         [Tooltip("Where a style's rules put it, at the density the style gives it (Facade tab › Details by rule): under upper-floor windows or in the wall between windows, for one on a wall; over ground-floor windows, for one over an opening.")]
         public Details.Rule rule = Details.Rule.None;
+#if UNITY_EDITOR
+        // the editor's alone: copied in when set (Bake), they don't ship in a build (docs/PERFORMANCE.md §11.2)
         [Tooltip("The mesh, as above: +Y up, +Z out of the wall, its pivot where it meets the wall.")]
         public Mesh? mesh;
         [Tooltip("LOD1's mesh (the shell seen from further away): something much simpler. None uses the mesh itself.")]
         public Mesh? lod1Mesh;
+#endif
         [Tooltip("The mesh was made facing −Z: turn it round.")]
         public bool facesBack;
         [Tooltip("The colour of each submesh, in order.")]
@@ -92,6 +95,7 @@ namespace Triband.Storey.Unity
             return new Part { colour = c };
         }
 
+#if UNITY_EDITOR
         /// <summary>
         /// Copy the meshes in (editor: the meshes are readable there) and register the kind. The editor calls it when the
         /// asset changes.
@@ -115,6 +119,7 @@ namespace Triband.Storey.Unity
             b.tris = all.ToArray(); b.counts = counts.ToArray();
             return b;
         }
+#endif
 
         /// <summary>The engine-free kind the generator places: for one of Storey's own five, the generator's.</summary>
         public DetailKind ToKind() => BuiltIn ? DetailKinds.Get(id)! : new DetailKind

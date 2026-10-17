@@ -585,6 +585,7 @@ namespace UnityEngine
         public T GetComponentInChildren<T>() => default!;
         public T GetComponentInParent<T>() => default!;
         public T[] GetComponents<T>() => System.Array.Empty<T>();
+        public void GetComponents<T>(System.Collections.Generic.List<T> results) { }
     }
 
     public class Collider : Component { }
@@ -686,6 +687,7 @@ namespace UnityEngine
         public void SetColor(string name, Color value) { }
         public void SetKeyword(in UnityEngine.Rendering.LocalKeyword keyword, bool value) { }
         public void CopyMatchingPropertiesFromMaterial(Material mat) { }
+        public string[] shaderKeywords { get; set; } = System.Array.Empty<string>();
         public void SetFloat(int nameID, float value) { }
         public bool HasProperty(int nameID) => false;
         public int renderQueue { get; set; }
@@ -694,6 +696,7 @@ namespace UnityEngine
     public class Renderer : Component
     {
         public Material[] sharedMaterials { get; set; } = System.Array.Empty<Material>();
+        public void GetSharedMaterials(System.Collections.Generic.List<Material> m) { }
         public bool enabled { get; set; }
         public Material sharedMaterial { get; set; } = new Material();
         public UnityEngine.Rendering.ShadowCastingMode shadowCastingMode { get; set; }

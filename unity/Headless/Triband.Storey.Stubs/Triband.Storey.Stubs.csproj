@@ -35,13 +35,27 @@
     <DefineConstants>$(DefineConstants);ENABLE_INPUT_SYSTEM</DefineConstants>
   </PropertyGroup>
 
+  <!--
+    The editor's compile by default: UNITY_EDITOR, and the authoring package's editor code too. With -p:Player=true, a
+    player's: no UNITY_EDITOR, no editor code and no UnityEditor stubs, so runtime code reaching an editor-only member
+    fails here as it would in a build.
+  -->
+  <PropertyGroup Condition="'$(Player)' != 'true'">
+    <DefineConstants>$(DefineConstants);UNITY_EDITOR</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Player)' == 'true'">
+    <IntermediateOutputPath>obj/player/$(Configuration)/</IntermediateOutputPath>
+    <OutputPath>bin/player/$(Configuration)/</OutputPath>
+  </PropertyGroup>
+
   <ItemGroup>
     <Compile Include="Stubs/**/*.cs" />
     <Compile Include="../../Packages/com.triband.storey/Runtime/**/*.cs" />
     <Compile Include="../../Packages/com.triband.storey/Unity/**/*.cs" />
     <Compile Include="../../Packages/com.triband.storey/ColorPipeline/**/*.cs" />
     <Compile Include="../../Packages/com.triband.storey/Addressables/**/*.cs" />
-    <Compile Include="../../Packages/com.triband.storey.authoring/Editor/**/*.cs" />
+    <Compile Include="../../Packages/com.triband.storey.authoring/Editor/**/*.cs" Condition="'$(Player)' != 'true'" />
+    <Compile Remove="Stubs/UnityEditor.cs" Condition="'$(Player)' == 'true'" />
     <Compile Include="../../Packages/com.triband.storey.playkit/Runtime/**/*.cs" />
   </ItemGroup>
 

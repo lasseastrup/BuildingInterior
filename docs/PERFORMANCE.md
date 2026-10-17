@@ -769,9 +769,18 @@ Covered in §3.5: built on the workers, cooked with `Physics.BakeMesh` in a job,
 - **Unregistering is quadratic**: `List.Remove` per prop (`StoreyProps.cs:84`). 10,000 props took 19–148 ms to unregister and 20,000 took 65–406 ms (x64), which lands on the frame a district unloads. Swap-remove with an index stored on the entry.
 - **A rebuild re-files every prop on every site**: each `SiteRenderer.AnyVersion` bump (every `Show`, end of a load, edit) re-resolves them all in one frame. Re-resolve only the props of the site that changed. Prune empty groups, and use `GetComponents(List<Renderer>)` on register.
 
+Status: done (CHANGELOG; docs/PROPS.md §2.2, §2.4). Not measured in Unity: PROPS.md's own checks (§5) are still outstanding.
+- **Steady copies.** For a prop graph with the `STOREY_STEADY` keyword whose Alpha Clipping a material can turn off, Storey Props gives each renderer a copy of its material in Play mode. The copy has the keyword on, Alpha Clipping off and the opaque queue, and is used while the building's steady answer holds (`SiteRenderer.PropSteady`: the building's own rule, with no party walls) and always in the street. Swaps happen on transitions only and are counted ("prop swaps" in Storey Diagnostics). A graph without the keyword is left as it was.
+- **The frame.** In Play mode the loop visits the moving props alone, and `isPlaying` is read once.
+- **Removal.** The entries are removed by swapping with the last, through each entry's stored place.
+- **Rebuilds.** A rebuild re-files the props of the sites built anew alone, and looks for the street's props in those sites alone. A site's renderer counts as new when it is another object, so its versions starting again aren't missed.
+- **Housekeeping.** Empty groups are dropped, renderers are gathered without an array per transform, and the manager runs at execution order 1001, after the sites.
+
 ### 11.2 Facade details and artist windows
 
 `StoreyDetail` and `StoreyOpening` keep serialised `Mesh` references (`StoreyDetail.cs:45-47`, `StoreyOpening.cs:43-45`) that only the editor reads. In a build the meshes ship and load with every site that lists the kind, beside the baked float copy and the kind's double-precision copy (48 bytes a vertex for positions and normals). A 2,000-vertex, 3,000-triangle detail is about 84 KB baked, 132 KB as a kind, plus the Mesh asset. Make the references editor-only (or move them to an editor-side asset) and keep one runtime copy. Medium, depending on how large the detail libraries get.
+
+Status: the references are editor-only (CHANGELOG). `mesh`, `lod1Mesh` and `Bake` are in `#if UNITY_EDITOR`, so a build leaves the fields, and the meshes they name, out. `PackageLayoutTests` allows that in these two files alone, for data, not behaviour. The stubs project compiles the player's side too (`dotnet build Triband.Storey.Stubs -c Release -p:Player=true`). The baked float copy and the kind's copy both stay: a site registers a kind again from the baked copy when the generator's registry has lost it.
 
 ### 11.3 Windows, palette and globals
 

@@ -63,6 +63,12 @@ Unity 6.3's `MeshRenderer` / `SkinnedMeshRenderer.SetShaderUserValue(uint)` give
    - **Outputs:** `Color` (Vector 3), into **Fragment ▸ Base Color**; `Alpha` (Float), into **Fragment ▸ Alpha**.
    - In the Graph Settings turn **Alpha Clipping** on, threshold 0.5. Alpha is always 1, but wiring it makes Shader Graph run the function in the depth and shadow passes too.
 3. **Optional:** wrap the two nodes in a sub-graph, so every prop graph takes one node. Shader Graph assets can't be written outside the editor, so this is a two-minute job in Unity.
+4. **Optional: the steady variant** (docs/PERFORMANCE.md §11.1). Every prop graph clips, so on Apple GPUs every prop draw is a discarding one, which the GPU can't hide behind other geometry before shading. A graph can have the buildings' steady variant:
+   - **The keyword.** Add a Boolean Keyword with the reference `STOREY_STEADY`, set to Multi Compile and Local, default off. With it on, `StoreyOcclude` returns before any clip.
+   - **Alpha Clipping.** In the Graph Settings, turn on **Allow Material Override**, so a material can turn Alpha Clipping off. Alternatively, turn Alpha Clipping off in the graph altogether; the cost is that the LOD cross-fade and Dissolve then no longer reach the prop's shadow and depth.
+   - **What Storey Props does with it.** In Play mode it gives each renderer a copy of its material, with the keyword on and Alpha Clipping off, in the opaque queue. A prop uses the copy while nothing can hide its building's pixels (the building's own steady rule), and always in the street. The copies follow their materials' properties and keywords twice a second.
+   - **Graphs it skips.** A graph without the keyword, a transparent one, or one whose Alpha Clipping is baked in (on, without the override) keeps its materials.
+   - **Shipping the variant.** Unity builds an Alpha Clipping-off variant only when a material in the build uses it. Keep one material per graph with Alpha Clipping off in the build (in a Resources folder, say), or turn on **Strict shader variant matching** in development builds to see a missing one. Otherwise the copies draw the clipping variant: correct, but nothing gained.
 
 **How clipping behaves in each pass:**
 - **Colour pass:** all the clipping happens here, as for the buildings, so the light indoors doesn't change with the cutaway.
@@ -90,11 +96,12 @@ Unity 6.3's `MeshRenderer` / `SkinnedMeshRenderer.SetShaderUserValue(uint)` give
 
 The inspector says which building and storey it's in.
 
-**Storey Props** is the manager. It's hidden, made on demand, and runs after the sites each frame.
-- **No per-prop cost:** one list, one loop, no garbage, and no Update per prop.
+**Storey Props** is the manager. It's hidden, made on demand, and runs after the sites each frame (execution order 1001, so it reads this frame's rows).
+- **No per-prop cost:** no garbage and no Update per prop. In Play mode the frame visits the moving props alone; in the editor, every prop, for those moved by hand. A prop leaves the lists by swapping with the last.
 - **Writing the value:** only when a prop's building changes.
-- **Rebuilds:** when any site is built again (an edit, a district streamed in), props re-resolve their building's index by id, and props that had no building look again.
-- **Distance culling:** each building's props are a group, switched off with `forceRenderingOff` once the building has settled at LOD1 or LOD2 (Play mode only). That's one check per group per frame, not per prop. Their own `enabled` is never touched.
+- **Rebuilds:** when a site is built again (an edit, a district streamed in), that site's props re-resolve their building's index by id. Props that had no building look for one in that site alone; the other sites' props are left as they are.
+- **Distance culling:** each building's props are a group, switched off with `forceRenderingOff` once the building has settled at LOD1 or LOD2 (Play mode only). That's one check per group per frame, not per prop. Their own `enabled` is never touched. A group goes when its last prop does.
+- **Steady copies:** a group's props move to their materials' steady copies, and back, as the building's steady answer changes (§2.2, step 4).
 
 **Tools ▸ Storey ▸ Props ▸ Show Prop Buildings** tints every prop by its building, and magenta in the street. A prop that doesn't change colour has a shader without the nodes. This is also the quickest check that the user value reaches the shader with your settings.
 
@@ -113,7 +120,8 @@ It's all or nothing: no dither, no squash.
 - **CPU:**
   - Still props cost nothing per frame.
   - An awake rigidbody costs a vector compare per frame, plus a grid lookup and an outline test (no garbage, `PropTests`) each time it has gone 5 cm.
-  - Each building with props costs one LOD check per frame.
+  - Each building with props costs one LOD check and one steady check per frame.
+  - A steady copy swap re-registers the renderer with the GPU Resident Drawer, as a building's does. Storey Diagnostics counts them as "prop swaps".
 - **GPU:**
   - Per vertex, the same reads as a building vertex.
   - Per pixel, the same tests as a building's.
@@ -138,4 +146,5 @@ It's all or nothing: no dither, no squash.
 5. **Distance:** walk away. The house's props fade with its LOD0, and the Frame Debugger shows no prop draws once the house is at LOD1.
 6. **Edits:** edit the house in the editor. Its props keep following it (its index may move).
 7. **Hide Whole:** set it on a prop with a third-party shader. It pops in and out with its storey.
-8. **The profiler:** no GC Alloc from Storey Props while walking.
+8. **The profiler:** no GC Alloc from Storey Props while walking (the steady copies' sync allocates their keyword lists twice a second, when there are copies).
+9. **The steady variant:** with the keyword and the override in a prop graph, the Frame Debugger shows the house's props in the opaque queue (2000) without `_ALPHATEST_ON` until the house is in the way, cut away or fading, and in the AlphaTest queue then.

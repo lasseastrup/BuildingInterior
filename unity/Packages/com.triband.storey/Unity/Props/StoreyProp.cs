@@ -40,6 +40,7 @@ namespace Triband.Storey.Unity
 
         internal StoreyProps.Entry? entry;
         readonly List<Renderer> found = new List<Renderer>();
+        static readonly List<Renderer> onOne = new List<Renderer>();   // one transform's, without an array each (main thread)
 
         /// <summary>Its renderers: every MeshRenderer and SkinnedMeshRenderer under it, but those under another Storey Prop.</summary>
         internal Renderer[] CollectRenderers()
@@ -52,7 +53,8 @@ namespace Triband.Storey.Unity
         void Collect(Transform t, bool self)
         {
             if (!self && t.GetComponent<StoreyProp>() != null) return;
-            foreach (var r in t.GetComponents<Renderer>()) if (r is MeshRenderer || r is SkinnedMeshRenderer) found.Add(r);
+            t.GetComponents(onOne);
+            foreach (var r in onOne) if (r is MeshRenderer || r is SkinnedMeshRenderer) found.Add(r);   // read before the children use the list
             for (int i = 0; i < t.childCount; i++) Collect(t.GetChild(i), false);
         }
 

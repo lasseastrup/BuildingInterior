@@ -682,6 +682,18 @@ namespace Triband.Storey.Unity
         }
 
         /// <summary>
+        /// Whether a building's props may draw their materials' steady copies now (docs/PERFORMANCE.md §11.1): nothing can
+        /// hide its pixels, as for its own renderers (<see cref="global::Triband.Storey.Occlusion.Steady"/>); a prop carries
+        /// no party wall.
+        /// </summary>
+        internal bool PropSteady(int idx)
+        {
+            if ((uint)idx >= (uint)table.State.Length) return false;
+            var st = table.State[idx];
+            return global::Triband.Storey.Occlusion.Steady.Of(idx, st.z, st.w, StoreyGlobals.ActiveIndex, StoreyGlobals.IsolateAmount, StoreyGlobals.IsolatedIndex);
+        }
+
+        /// <summary>
         /// Room for the objects a layout of <paramref name="buildings"/> makes, in the transform hierarchy the site is in, made
         /// at once (docs/PERFORMANCE.md §3.4): it grew a reallocation at a time as the load made them. The automatic LOD's
         /// cells (about one for every ten buildings in the test cities), its detail objects (kept up to the residency caps)

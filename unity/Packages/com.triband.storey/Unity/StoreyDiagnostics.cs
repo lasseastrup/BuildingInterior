@@ -315,6 +315,8 @@ namespace Triband.Storey.Unity
                 b.Append(" | swaps ").Append(SiteRenderer.SteadySwaps).Append(" new ").Append(SiteRenderer.RenderersMade).Append(" reused ").Append(SiteRenderer.RenderersReused).Append(" rooms switched ").Append(SiteRenderer.RoomsSwitched);
                 SiteRenderer.SteadySwaps = SiteRenderer.RenderersMade = SiteRenderer.RenderersReused = SiteRenderer.RoomsSwitched = 0;
             }
+            // props' renderers given their materials' steady copies or their own again (docs/PERFORMANCE.md §11.1)
+            if (StoreyProps.SteadySwaps > 0) { b.Append(" | prop swaps ").Append(StoreyProps.SteadySwaps); StoreyProps.SteadySwaps = 0; }
             b.Append(" | heap ").Append(GC.GetTotalMemory(false) >> 20).Append("MB");
             if (systemMemory.Valid || totalMemory.Valid || gfxMemory.Valid)
                 b.Append(" mem ").Append(Mb(systemMemory)).Append('/').Append(Mb(totalMemory)).Append('/').Append(Mb(gfxMemory)).Append("MB");

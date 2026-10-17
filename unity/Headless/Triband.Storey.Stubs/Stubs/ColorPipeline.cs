@@ -53,6 +53,7 @@ namespace Triband.ColorPipeline.Runtime
     }
 }
 
+#if UNITY_EDITOR
 namespace Triband.ColorPipeline.Editor
 {
     using Triband.Core.Utils;
@@ -67,3 +68,4 @@ namespace Triband.ColorPipeline.Editor
             ColorSelectedDelegate colorSelectedCallback = null, ColorPreviewedDelegate colorPreviewedCallback = null) { }
     }
 }
+#endif
