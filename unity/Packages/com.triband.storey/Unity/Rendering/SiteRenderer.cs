@@ -167,31 +167,79 @@ namespace Triband.Storey.Unity
                 steadyCulled = CullSteadyBackFaces;
             }
             int active = StoreyGlobals.ActiveIndex, isolated = StoreyGlobals.IsolatedIndex; float iso = StoreyGlobals.IsolateAmount;
-            bool farOcc = lods?.Settings.FarOcclusion ?? true;
-            var state = table.State;
-            foreach (var bt in built.Values)
-                for (int w = 0; w < 3; w++)
-                {
-                    var list = bt.solid[w]; if (list.Count == 0) continue;
-                    var copy = w == 2 ? massingSteady : opaqueSteady;
-                    if (copy == null && (w != 0 || bt.rooms.Count == 0)) continue;
-                    var st = state[bt.idx];
-                    bool on = global::Triband.Storey.Occlusion.Steady.Of(bt.idx, st.z, st.w, active, iso, isolated, w == 0 ? bt.mates : null, w == 2, farOcc);
-                    if (w == 0 && bt.rooms.Count > 0) RoomsDraw(bt, on, active);
-                    if (copy == null || on == bt.steady[w]) continue;
-                    bt.steady[w] = on;
-                    foreach (var r in list) if (r != null) { r.sharedMaterial = on ? copy : w == 2 ? massing : opaque; SteadySwaps++; }
-                }
-            if (massingSteady == null) return;
-            foreach (var c in cells.Values)
+            bool farOcc = lods?.Settings.FarOcclusion ?? true, isolating = global::Triband.Storey.Occlusion.Steady.Isolating(iso);
+            // what every building's answer goes by: when it changed, every building and cell is looked at again
+            var with = (active, isolating, isolating ? isolated : 0, farOcc, roomsHide);
+            if (with != steadyWith) { steadyWith = with; steadyAll = true; }
+            // the buildings whose rows changed since, as the table marked them
+            if (blockStart >= 0)
             {
-                if (c.renderers.Count == 0) continue;
-                bool on = true;
-                foreach (int idx in c.order) { var st = state[idx]; if (!global::Triband.Storey.Occlusion.Steady.Of(idx, st.z, st.w, active, iso, isolated, null, true, farOcc)) { on = false; break; } }
-                if (on == c.steady) continue;
-                c.steady = on;
-                foreach (var r in c.renderers) if (r != null) r.sharedMaterial = on ? massingSteady : massing;
+                table.SteadyChanged.Take(blockStart, blockSize, rowsTaken);
+                foreach (int idx in rowsTaken) steadyDirty.Add(idx);
+                rowsTaken.Clear();
             }
+            // while Storey Diagnostics records, every building and cell once a second: one that changes though nothing marked
+            // it is a change the marks missed, noted
+            bool check = !steadyAll && StoreyDiagnostics.Recording && Time.frameCount - steadyChecked >= 60, all = steadyAll || check;
+            if (check) steadyChecked = Time.frameCount;
+            var state = table.State; int missed = 0;
+            foreach (int idx in steadyDirty)
+                if (byIdx.TryGetValue(idx, out var bt))
+                {
+                    if (!all) SteadyOf(bt, state, active, iso, isolated, farOcc);
+                    if (bt.inCell) steadyCells.Add(bt.cell);
+                }
+            if (all) foreach (var bt in built.Values) if (SteadyOf(bt, state, active, iso, isolated, farOcc) && check && !steadyDirty.Contains(bt.idx)) missed++;
+            if (massingSteady != null)
+            {
+                if (all) { foreach (var kv in cells) if (SteadyOf(kv.Value, state, active, iso, isolated, farOcc) && check && !steadyCells.Contains(kv.Key)) missed++; }
+                else foreach (var key in steadyCells) if (cells.TryGetValue(key, out var c)) SteadyOf(c, state, active, iso, isolated, farOcc);
+            }
+            if (missed > 0) StoreyDiagnostics.Note($"steady variants: {missed} buildings or cells were out of date, a change nothing marked (docs/PERFORMANCE.md §3.3)");
+            steadyDirty.Clear(); steadyCells.Clear(); steadyAll = false;
+        }
+
+        // what the steady variant and the cells' visibility go by that changed since they were last looked at
+        // (docs/PERFORMANCE.md §3.3), where every building and cell was looked at before every render context, and every
+        // cell's members walked every frame: buildings by table index (their rows as the table marks them, their LOD0's
+        // mates, renderers made, their rooms' distance or forcing), cells by key (their members, their meshes). Everything
+        // again when a view global or setting they all go by changes. A second render context in a frame finds nothing marked
+        readonly HashSet<int> steadyDirty = new HashSet<int>();
+        readonly HashSet<(int x, int z)> steadyCells = new HashSet<(int, int)>(), shownCells = new HashSet<(int, int)>();
+        readonly List<int> rowsTaken = new List<int>();
+        bool steadyAll = true, shownAll = true;
+        (int active, bool isolating, int isolated, bool farOcc, bool roomsHide) steadyWith;
+        int steadyChecked, shownChecked;
+
+        /// <summary>A building's opaque and massing renderers on the steady copy or their own material, and its LOD0's rooms drawn or not, as things are now: true when any changed.</summary>
+        bool SteadyOf(Built bt, Vector4[] state, int active, float iso, int isolated, bool farOcc)
+        {
+            bool changed = false;
+            for (int w = 0; w < 3; w++)
+            {
+                var list = bt.solid[w]; if (list.Count == 0) continue;
+                var copy = w == 2 ? massingSteady : opaqueSteady;
+                if (copy == null && (w != 0 || bt.rooms.Count == 0)) continue;
+                var st = state[bt.idx];
+                bool on = global::Triband.Storey.Occlusion.Steady.Of(bt.idx, st.z, st.w, active, iso, isolated, w == 0 ? bt.mates : null, w == 2, farOcc);
+                if (w == 0 && bt.rooms.Count > 0 && RoomsDraw(bt, on, active)) changed = true;
+                if (copy == null || on == bt.steady[w]) continue;
+                bt.steady[w] = on; changed = true;
+                foreach (var r in list) if (r != null) { r.sharedMaterial = on ? copy : w == 2 ? massing : opaque; SteadySwaps++; }
+            }
+            return changed;
+        }
+
+        /// <summary>A cell's renderers on the massing's steady copy while every member may draw steady, on the massing otherwise: true when they changed.</summary>
+        bool SteadyOf(Cell c, Vector4[] state, int active, float iso, int isolated, bool farOcc)
+        {
+            if (c.renderers.Count == 0) return false;
+            bool on = true;
+            foreach (int idx in c.order) { var st = state[idx]; if (!global::Triband.Storey.Occlusion.Steady.Of(idx, st.z, st.w, active, iso, isolated, null, true, farOcc)) { on = false; break; } }
+            if (on == c.steady) return false;
+            c.steady = on;
+            foreach (var r in c.renderers) if (r != null) r.sharedMaterial = on ? massingSteady : massing;
+            return true;
         }
 
         // LOD0's rooms (docs/PERFORMANCE.md §7.7): whether they may be left out this frame (the automatic LOD, a perspective
@@ -207,11 +255,12 @@ namespace Triband.Storey.Unity
         /// the distance from which LOD0's windows are painted over (<see cref="Built.near"/>; with the fixed LOD they never
         /// are), anything able to show its inside (a cut or a fade: not <paramref name="steady"/>), or kept at full detail
         /// (<see cref="Forced"/>). They cast shadows only for the building the player is in, whose own light needs them
-        /// (SPEC §5): elsewhere the shell's shadow keeps the sun out of them, through the windows only.
+        /// (SPEC §5): elsewhere the shell's shadow keeps the sun out of them, through the windows only. True when either changed.
         /// </summary>
-        void RoomsDraw(Built bt, bool steady, int active)
+        bool RoomsDraw(Built bt, bool steady, int active)
         {
             bool on = !roomsHide || bt.near || !steady || bt.idx == active || forcedIdx.Contains(bt.idx), cast = bt.idx == active;
+            bool changed = on != bt.roomsOn || cast != bt.roomsCast;
             if (on != bt.roomsOn)
             {
                 bt.roomsOn = on; RoomsSwitched++;
@@ -223,6 +272,7 @@ namespace Triband.Storey.Unity
                 var mode = cast ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
                 foreach (var r in bt.rooms) if (r != null) r.shadowCastingMode = mode;
             }
+            return changed;
         }
 
         // ---- the automatic LOD (docs/CITY.md §2, §3) ----
@@ -231,6 +281,8 @@ namespace Triband.Storey.Unity
         readonly Dictionary<(int x, int z), Cell> cells = new Dictionary<(int, int), Cell>();
         readonly HashSet<(int x, int z)> dirtyCells = new HashSet<(int, int)>();
         readonly HashSet<int> forcedIdx = new HashSet<int>(), prefetchIdx = new HashSet<int>();
+        // the buildings with LOD0 up, whose rooms' distance and vertices are looked at every frame (not every building)
+        readonly HashSet<Built> withLod0 = new HashSet<Built>();
         readonly LodView lodView = new LodView();
         readonly Dictionary<string, int> carry = new Dictionary<string, int>(StringComparer.Ordinal);
         // detail being generated on worker threads: one at a time per building, uploaded when done
@@ -892,7 +944,7 @@ namespace Triband.Storey.Unity
         {
             if (which == 1) return;
             var shape = d.shape!; bt.shape = shape;
-            bt.mates = d.opaque.Count > 0 ? d.opaque[0].Mates : Array.Empty<int>();
+            bt.mates = d.opaque.Count > 0 ? d.opaque[0].Mates : Array.Empty<int>(); steadyDirty.Add(bt.idx);
             bt.wallCount = shape.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
             if (bt.wallBase >= 0)
             {
@@ -934,7 +986,7 @@ namespace Triband.Storey.Unity
         {
             if (which == 1) return;
             long nv = 0, nr = 0; foreach (var p in d.opaque) nv += p.Verts; foreach (var p in d.glass!) nv += p.Verts; foreach (var p in d.rooms!) nr += p.Verts;
-            bt.lod0Verts = nv; bt.roomsVerts = nr;
+            bt.lod0Verts = nv; bt.roomsVerts = nr; withLod0.Add(bt);
             if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 up: {name} ({bt.wallCount} walls at {bt.wallBase}, {d.opaque.Count} + {d.glass.Count} + {d.rooms.Count} meshes, {nv + nr:N0} vertices, {nr:N0} of them the rooms')");
             // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
             if (d.collision != null && bt.collision == null) bt.collisionMade = d.collision;
@@ -1153,7 +1205,7 @@ namespace Triband.Storey.Unity
             if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 dropped: {site?.ById(bt.id)?.name ?? bt.id}");
             bt.mates = Array.Empty<int>();
             if (bt.wallBase >= 0) table.ReleaseWalls(bt.wallBase, bt.wallCount);
-            bt.wallBase = -1; bt.wallCount = 0; bt.shape = null; bt.lod0Verts = 0;
+            bt.wallBase = -1; bt.wallCount = 0; bt.shape = null; bt.lod0Verts = 0; withLod0.Remove(bt);
         }
 
         /// <summary>
@@ -1229,11 +1281,13 @@ namespace Triband.Storey.Unity
             // the largest towers on a desktop. In the editor (an edit wants its building's walls at once), and with no
             // build threads, it is built now
             bool atOnce = !Application.isPlaying || threads == 0;
+            // a forced building's rooms always draw (RoomsDraw): those leaving the set and those joining it are looked at again
+            foreach (int i in forcedIdx) steadyDirty.Add(i);
             forcedIdx.Clear();
             foreach (var id in Forced)
             {
                 if (!built.TryGetValue(id, out var bt)) continue;
-                forcedIdx.Add(bt.idx);
+                forcedIdx.Add(bt.idx); steadyDirty.Add(bt.idx);
                 var e = l.Get(bt.idx); var b = site?.ById(id);
                 if (e == null || e.Has0 || b == null) continue;
                 if (!atOnce) { Hurry(bt.idx); continue; }
@@ -1285,7 +1339,7 @@ namespace Triband.Storey.Unity
                 {
                     var e = l.Get(idx)!; table.SetLod(idx, e.Shown, e.From, (float)e.T);
                     if (e.T < 1) fading = true;
-                    if (byIdx.TryGetValue(idx, out var cb)) ShowDetail(cb);
+                    if (byIdx.TryGetValue(idx, out var cb)) { ShowDetail(cb); if (cb.inCell) shownCells.Add(cb.cell); }
                 }
                 stats.lod0 = f.Count[0]; stats.lod1 = f.Count[1]; stats.lod2 = f.Count[2]; stats.culled = f.Count[3];
                 // the LOD0 geometry shown, and in the view (by each building's box, as the LOD manager sees it); and each LOD0
@@ -1294,13 +1348,14 @@ namespace Triband.Storey.Unity
                 // this frame's eye stays inside it)
                 double paint = l.Settings.Lod0Distance(eye.pixelsPerMetre), ex = eye.position.x - o.x, ey = eye.position.y - o.y, ez = eye.position.z - o.z;
                 long shownV = 0, viewV = 0; int roomsShown = 0;
-                foreach (var bt in built.Values)
+                foreach (var bt in withLod0)
                 {
-                    if (bt.lod0Verts == 0 || !(l.Get(bt.idx) is LodManager.Entry e)) continue;
+                    if (!(l.Get(bt.idx) is LodManager.Entry e)) continue;
                     if (bt.rooms.Count > 0)
                     {
                         double dx = Math.Max(Math.Max(e.x0 - ex, 0), ex - e.x1), dy = Math.Max(Math.Max(-ey, 0), ey - e.y1), dz = Math.Max(Math.Max(e.z0 - ez, 0), ez - e.z1);
-                        bt.near = Math.Sqrt(dx * dx + dy * dy + dz * dz) < paint * (bt.near ? 1.1 : 1.05);
+                        bool near = Math.Sqrt(dx * dx + dy * dy + dz * dz) < paint * (bt.near ? 1.1 : 1.05);
+                        if (near != bt.near) { bt.near = near; steadyDirty.Add(bt.idx); }
                     }
                     if (!e.Visible(0)) continue;
                     long v = bt.lod0Verts + (bt.roomsOn ? bt.roomsVerts : 0);
@@ -1313,22 +1368,21 @@ namespace Triband.Storey.Unity
             }
             if (cellJobs.Count > 0) made = TakeCells(sw, made);
             MergeCells(false);
-            int shown = 0, pieces = 0;
-            foreach (var c in cells.Values)
+            // the cells whose members' LODs changed this frame, or whose members or meshes did (docs/PERFORMANCE.md §3.3):
+            // every cell's members were walked every frame. While Storey Diagnostics records, every cell once a second, one
+            // that changes though nothing marked it noted
+            bool check = !shownAll && StoreyDiagnostics.Recording && Time.frameCount - shownChecked >= 60;
+            if (check) shownChecked = Time.frameCount;
+            if (shownAll || check)
             {
-                // drawn while a member shows its massing; in the shadow maps alone while a member shows LOD1 instead, whose
-                // own renderers cast no shadow: the massing has its outline and heights in a twentieth of the triangles
-                bool on = false, cast = false;
-                foreach (int idx in c.order) { var e = l.Get(idx); if (e == null || e.Visible(2)) { on = true; break; } if (e.Visible(1)) cast = true; }
-                bool shadowsOnly = !on && cast;
-                if (on) shown++;
-                if ((on || shadowsOnly) != c.shown || shadowsOnly != c.shadowsOnly)
-                {
-                    c.shown = on || shadowsOnly; c.shadowsOnly = shadowsOnly;
-                    foreach (var r in c.renderers) { r.enabled = c.shown; r.shadowCastingMode = CellCasting(c); }
-                }
-                pieces += c.renderers.Count;
+                int missed = 0;
+                foreach (var kv in cells) if (CellShown(kv.Value, l) && check && !shownCells.Contains(kv.Key)) missed++;
+                if (missed > 0) StoreyDiagnostics.Note($"cells: {missed} shown or hidden late, a change nothing marked (docs/PERFORMANCE.md §3.3)");
             }
+            else foreach (var key in shownCells) if (cells.TryGetValue(key, out var c)) CellShown(c, l);
+            shownCells.Clear(); shownAll = false;
+            int shown = 0, pieces = 0;
+            foreach (var c in cells.Values) { if (c.shown && !c.shadowsOnly) shown++; pieces += c.renderers.Count; }
             var (r0, r1) = l.Resident();
             lodBusy = fading || queued > 0 || jobs.Count > 0 || staged.Count > 0 || load != null || cellJobs.Count > 0;
             stats.loading = load != null ? load.Count - load.Taken : 0;
@@ -1336,6 +1390,22 @@ namespace Triband.Storey.Unity
             stats.cells = cells.Count; stats.cellMeshes = pieces; stats.cellsShown = shown;
             stats.queued = queued; stats.generating = jobs.Count; stats.uploading = staged.Count; stats.builtThisFrame = made; stats.ms = sw.Elapsed.TotalMilliseconds;
             budgetSpent += sw.Elapsed.TotalMilliseconds;
+        }
+
+        /// <summary>
+        /// A cell drawn while a member shows its massing; in the shadow maps alone while a member shows LOD1 instead, whose
+        /// own renderers cast no shadow: the massing has its outline and heights in a twentieth of the triangles. True when
+        /// that changed.
+        /// </summary>
+        static bool CellShown(Cell c, LodManager l)
+        {
+            bool on = false, cast = false;
+            foreach (int idx in c.order) { var e = l.Get(idx); if (e == null || e.Visible(2)) { on = true; break; } if (e.Visible(1)) cast = true; }
+            bool shadowsOnly = !on && cast;
+            if ((on || shadowsOnly) == c.shown && shadowsOnly == c.shadowsOnly) return false;
+            c.shown = on || shadowsOnly; c.shadowsOnly = shadowsOnly;
+            foreach (var r in c.renderers) { r.enabled = c.shown; r.shadowCastingMode = CellCasting(c); }
+            return true;
         }
 
         /// <summary>
@@ -1374,7 +1444,7 @@ namespace Triband.Storey.Unity
             StoreyTimings.Count("cells merged");
             if (!cells.TryGetValue(key, out var c)) return;
             if (c.members.Count == 0) { KillCell(c); cells.Remove(key); return; }
-            c.order = c.members.Keys.ToArray();
+            c.order = c.members.Keys.ToArray(); steadyCells.Add(key); shownCells.Add(key);
             var members = new List<Cells.Member>(c.members.Count);
             foreach (var bt in c.members.Values) members.Add(new Cells.Member(MassingOf(bt), bt.idx + 2 * Lod1.LOD_TAG, bt.rowMap!));
             // the massings go into the packed cell, and their lists to the next ones built (a member's is made again from the
@@ -1423,7 +1493,7 @@ namespace Triband.Storey.Unity
 
         void UploadCell((int x, int z) key, Cell c, List<Cells.Packed> pieces)
         {
-            KillCell(c);
+            KillCell(c); steadyCells.Add(key); shownCells.Add(key);
             if (cellRoot == null) { cellRoot = new GameObject("Cells") { hideFlags = flags, layer = layer }; cellRoot.transform.SetParent(parent, false); }
             for (int i = 0; i < pieces.Count; i++)
             {
@@ -1493,6 +1563,7 @@ namespace Triband.Storey.Unity
                 var copy = mat == opaque ? opaqueSteady : massingSteady;
                 if (bt.steady[which] && copy != null) mr.sharedMaterial = copy;   // as the LOD's others are
             }
+            steadyDirty.Add(bt.idx);   // the first of a LOD's has its own material until looked at
         }
 
         /// <summary>
@@ -1524,8 +1595,9 @@ namespace Triband.Storey.Unity
             if (b.root != null) Kill(b.root);
             if (b.collision != null) Kill(b.collision);
             foreach (var list in b.meshes) foreach (var m in list) Kill(m);   // edit mode rebuilds often: meshes are not left behind
-            byIdx.Remove(b.idx);
-            if (b.inCell && cells.TryGetValue(b.cell, out var c)) { c.members.Remove(b.idx); dirtyCells.Add(b.cell); }
+            byIdx.Remove(b.idx); withLod0.Remove(b);
+            // its row, reset, is in its cell's until the cell is merged again
+            if (b.inCell && cells.TryGetValue(b.cell, out var c)) { c.members.Remove(b.idx); dirtyCells.Add(b.cell); steadyCells.Add(b.cell); }
         }
 
         // the colliders being cooked on Unity's job workers, one batch at a time, and their buildings
@@ -1658,7 +1730,8 @@ namespace Triband.Storey.Unity
         {
             FinishBake(true, discard: true);
             foreach (var b in built.Values) Release(b);
-            built.Clear(); byIdx.Clear();
+            built.Clear(); byIdx.Clear(); withLod0.Clear();
+            steadyDirty.Clear(); steadyCells.Clear(); shownCells.Clear(); steadyAll = shownAll = true;
             foreach (var c in cells.Values) KillCell(c);
             cells.Clear(); dirtyCells.Clear();
             foreach (var j in cellJobs)

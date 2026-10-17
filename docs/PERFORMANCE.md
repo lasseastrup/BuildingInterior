@@ -155,6 +155,14 @@ Status: done (CHANGELOG). The budget is counted per mesh part. A worker's build 
 
 Both are O(buildings) in the tens of microseconds headless, more on an A10, and they grow with the loaded districts. In a player `beginContextRendering` fires once per `RenderPipeline.Render` call, which is once a frame plus each manual `Camera.Render` or render request; in the editor, once per visible Scene and Game view [R3].
 
+Status: done (CHANGELOG).
+- **What is marked.** The building table marks a row when its fade starts or ends, or when its occluder slot comes or goes. These are the only parts of a row that `Steady.Of` reads (`Steady.Same`; `SteadyTests.ARowChangeLeftUnmarkedChangesNoAnswer` checks every unmarked change against every view). Each site takes the marks in its own block (`Lod.Marks`). A building is also marked when its LOD0's party-wall neighbours change, when a renderer is made for it, when its rooms come within or leave the windows' clear distance, and when it joins or leaves the forced set.
+- **What is looked at.** Only the marked buildings and their cells. Cells are also looked at when their members or meshes change, and for visibility when a member's LOD changed (the LOD manager's `Changed`). Everything is looked at again when the active or isolated building, far occlusion or the rooms' setting changes.
+- **Frame guard.** None: a second render context in the same frame finds nothing marked.
+- **LOD0 statistics.** The loop that sizes the shown LOD0 geometry and the rooms' distances now goes over the buildings with LOD0 only.
+- **Self-check.** While Storey Diagnostics records, everything is looked at once a second, and a building or cell that changes without having been marked is noted as a missed change.
+- **Not measured yet.** The steady pass's cost on device.
+
 ### 3.4 Scene objects
 
 | Object | Count on the 3,000-building test city | Made | Note |

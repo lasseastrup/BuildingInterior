@@ -245,8 +245,23 @@ namespace Triband.Storey.Unity
         public void SetLod(int idx, int displayed, int from, float fade) => SetState(idx, new Vector4(displayed, from, fade, State[idx].w));
         public void SetOccluder(int idx, int slotOrMinusOne) { var s = State[idx]; SetState(idx, new Vector4(s.x, s.y, s.z, slotOrMinusOne + 1)); }
 
-        /// <summary>A building's state row (the chunk is uploaded only when it changed).</summary>
-        public void SetState(int idx, Vector4 v) { if (State[idx] == v) return; State[idx] = v; stateDirty.Mark(idx); }
+        /// <summary>
+        /// A building's state row (the chunk is uploaded only when it changed). One whose steady answer may have changed with
+        /// it is marked in <see cref="SteadyChanged"/>.
+        /// </summary>
+        public void SetState(int idx, Vector4 v)
+        {
+            var s = State[idx]; if (s == v) return;
+            if (!Occlusion.Steady.Same(s.z, s.w, v.z, v.w)) SteadyChanged.Mark(idx);
+            State[idx] = v; stateDirty.Mark(idx);
+        }
+
+        /// <summary>
+        /// The buildings' rows whose fade or occluder slot changed in a way the steady variant goes by
+        /// (<see cref="Occlusion.Steady.Same"/>): each site takes its block's before the cameras render, and looks at only
+        /// those buildings again (docs/PERFORMANCE.md §3.3). The footprints' rows are left out.
+        /// </summary>
+        public readonly Lod.Marks SteadyChanged = new Lod.Marks(Capacity);
 
         /// <summary>A wall's slide (uploaded only when it changed).</summary>
         public void SetWall(int id, float slide) { if (Wall[id] == slide) return; Wall[id] = slide; wallDirty.Mark(id); }

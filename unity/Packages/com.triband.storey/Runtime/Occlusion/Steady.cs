@@ -23,7 +23,7 @@ namespace Triband.Storey.Occlusion
         public static bool Of(int index, float fade, float occluder, int active, float isolate, int isolated, int[]? mates = null, bool far = false, bool farOcclusion = true)
         {
             if (fade < 1f) return false;
-            if (isolate > 0.001f && index != isolated) return false;
+            if (Isolating(isolate) && index != isolated) return false;
             if (occluder > 0.5f && (!far || farOcclusion)) return false;
             if (active >= 0)
             {
@@ -32,5 +32,17 @@ namespace Triband.Storey.Occlusion
             }
             return true;
         }
+
+        /// <summary>Whether a building is isolated at this amount: the others then never draw steady.</summary>
+        public static bool Isolating(float isolate) => isolate > 0.001f;
+
+        /// <summary>
+        /// Whether a state row going from one fade and occluder slot to another leaves <see cref="Of"/>'s answer for it as
+        /// it was, whatever else it is asked with: it reads only whether the fade is under 1 and whether there is a slot. The
+        /// building table marks the rows for which it doesn't, and only those buildings are looked at again
+        /// (docs/PERFORMANCE.md §3.3).
+        /// </summary>
+        public static bool Same(float fade0, float occluder0, float fade1, float occluder1) =>
+            (fade0 < 1f) == (fade1 < 1f) && (occluder0 > 0.5f) == (occluder1 > 0.5f);
     }
 }
