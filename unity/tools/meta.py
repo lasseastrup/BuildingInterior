@@ -140,9 +140,13 @@ PluginImporter:
   assetBundleVariant:
 """
 
+# A plain C source plug-in for iOS only (the build threads' quality of service): no ARC, no frameworks.
+PLUGIN_IOS_C = PLUGIN_IOS.replace("CompileFlags: -fobjc-arc", "CompileFlags: ").replace("FrameworkDependencies: Metal;", "FrameworkDependencies: ")
+
 IMPORTERS = {
     ".asset": ("NativeFormatImporter", NATIVE),
     ".mm": ("PluginImporter", PLUGIN_IOS),
+    ".c": ("PluginImporter", PLUGIN_IOS_C),
     ".shader": ("ShaderImporter", SHADER),
     ".cs": ("MonoImporter", SCRIPT),
     ".asmdef": ("AssemblyDefinitionImporter", SIMPLE),

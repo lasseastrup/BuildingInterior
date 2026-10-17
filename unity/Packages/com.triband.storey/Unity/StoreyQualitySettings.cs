@@ -61,7 +61,7 @@ namespace Triband.Storey.Unity
         [Tooltip("Generate LOD0 and LOD1 on Storey's own build threads; only the upload is on the main thread. Off builds on the main thread (WebGL always does).")]
         public bool buildOnWorkerThreads = true;
 
-        [Tooltip("How many build threads: 0 is automatic, two on a phone or tablet and one fewer than the cores (at most four) on a desktop. They run below normal priority, beside Unity's own job workers; more brings detail in sooner and competes with the engine for cores.")]
+        [Tooltip("How many build threads: 0 is automatic, two on a phone or tablet and one fewer than the cores (at most four) on a desktop. Every site shares them: their count is the most any site's quality asset asks for. They run below normal priority (on iOS at the utility quality of service, below Unity's main and render threads), beside Unity's own job workers; more brings detail in sooner and competes with the engine for cores.")]
         [Min(0)] public int buildThreads = 0;
 
         [Header("Memory")]

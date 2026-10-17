@@ -60,7 +60,7 @@ Effort: S under a day, M a few days, L a week or more. Impact as estimated in ea
 
 The roadmap (§15) orders everything else.
 
-Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), LOD0's rooms as their own renderers (§7.7), #8's priority for detail in view and its priority classes (§9.2), #2 (§3.1), #7: the shells closed, the ray test in the suite and back faces culled on steady draws by default (§7.1), #9 but the walk model's grid (§10.2, §10.3), #4's `Show` off the main thread (§6.2), and the uploads: budgeted per mesh part and per tier, with the vertices finished on the build threads (§3.2, §4.1). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
+Done since: #5 (§7.6), #6's per-variant vertex outputs (§7.2) and §7.3's shadow coordinate (SH per vertex is still open), the minimum tier's lighting without specular or reflections (§7.3), shadow proxies (§7.8), LOD0's rooms as their own renderers (§7.7), #8's priority for detail in view and its priority classes (§9.2), #2 (§3.1), #7: the shells closed, the ray test in the suite and back faces culled on steady draws by default (§7.1), #9 but the walk model's grid (§10.2, §10.3), #4's `Show` off the main thread (§6.2), the uploads: budgeted per mesh part and per tier, with the vertices finished on the build threads (§3.2, §4.1), and #8's iOS threads: utility quality of service and one count for every site, with the recorder's switches to measure them (§9.1). The shaders are compile-checked outside Unity now (`unity/tools/shaders/check.py`).
 
 ## 1. Scope and method
 
@@ -579,6 +579,8 @@ Recommendation:
 - Set the build threads' QoS to utility from native code (`pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0)` in `BuildThreads.Started`, through a tiny iOS plugin) [CPU-4].
 - Measure one against two threads on an iPhone 7 (frame time and time to detail) before choosing.
 - Make the count one global setting; today every site resizes the shared pool from its own quality asset every frame (`SiteRenderer.cs:715-724`), so two sites with different assets would fight.
+
+Status: done but the measurement (CHANGELOG). Each build thread sets its own quality-of-service class to utility before its first build on iOS (`Plugins/iOS/StoreyThreads.c`, `StoreyThreads.Utility`, through `BuildThreads.Configure`). Every site shares one count, the most any site's settings ask for (`BuildThreads.SharedCount`), or `StoreyThreads.Override`. For the measurement, Storey Diagnostics has **Build Threads** (every site's count for a run) and **Utility Threads** (off: each thread keeps the class it started with). Its record names the count and each thread's class before and after, and every ten seconds a "detail" note gives how long detail took from a build's start to its last mesh up (median, 90th percentile, most, per LOD) and how many buildings waited for a thread. Its frame line shows the builds waiting for their upload (`upl`). What's left is the device: a run with 1 and one with 2 threads on an iPhone 7, and on the primary tier whether utility's efficiency cores bring detail in too slowly.
 
 ### 9.2 One FIFO queue (medium)
 

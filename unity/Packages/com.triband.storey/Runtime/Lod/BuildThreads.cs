@@ -24,7 +24,8 @@ namespace Triband.Storey.Lod
 
     /// <summary>
     /// Storey's build threads (docs/CITY.md §2): a few long-lived background threads, named "Storey build N" and below
-    /// normal priority where the platform allows it, that run detail and massing builds one after another. A build takes
+    /// normal priority where the platform allows it (on iOS, the Unity layer asks for the utility quality-of-service class
+    /// through <see cref="Configure"/>), that run detail and massing builds one after another. A build takes
     /// 8 to 22 ms on a desktop core, longer than Unity's guidance for a job, so it stays off Unity's job workers; and with
     /// its own threads rather than the .NET thread pool, Storey decides how many of them compete with the engine's (the
     /// job workers, the render thread). A <see cref="TaskScheduler"/>, so builds are ordinary tasks: waiting for one that
@@ -37,6 +38,17 @@ namespace Triband.Storey.Lod
         public static Action<string>? Started;
         public static Action? Ended;
 
+        /// <summary>
+        /// Called on each build thread before its first build, and before its next one whenever <see cref="Reconfigure"/>
+        /// was called since: what only a thread can set of itself (on iOS its quality-of-service class, docs/PERFORMANCE.md
+        /// §9.1).
+        /// </summary>
+        public static Action? Configure;
+        static int configured;
+
+        /// <summary>Have every build thread call <see cref="Configure"/> again before its next build.</summary>
+        public static void Reconfigure() => Interlocked.Increment(ref configured);
+
         /// <summary>The build threads every site shares; none until <see cref="Resize"/>.</summary>
         public static BuildThreads Shared { get; } = new BuildThreads(0);
 
@@ -45,6 +57,19 @@ namespace Triband.Storey.Lod
         /// the cores on a desktop, at most four (and at least one).
         /// </summary>
         public static int Automatic(int cores, bool handheld) => Math.Max(1, Math.Min(handheld ? 2 : 4, cores - 1));
+
+        /// <summary>
+        /// How many threads every site shares (docs/PERFORMANCE.md §9.1): the most any site asks for (<paramref name="settings"/>:
+        /// each site's count, -1 automatic, 0 none), or <paramref name="overrideCount"/> when it is 0 or more (a
+        /// measurement's) and a site builds on threads at all (none do where there are no threads, WebGL). One count, so
+        /// sites with different settings don't resize the threads in turn.
+        /// </summary>
+        public static int SharedCount(int overrideCount, IReadOnlyList<int> settings, int cores, bool handheld)
+        {
+            int n = 0;
+            for (int i = 0; i < settings.Count; i++) n = Math.Max(n, settings[i] < 0 ? Automatic(cores, handheld) : settings[i]);
+            return overrideCount >= 0 && n > 0 ? overrideCount : n;
+        }
 
         // the lanes, most urgent first; the lock is the first lane's (as it was the one queue's)
         readonly LinkedList<Task>[] lanes = { new LinkedList<Task>(), new LinkedList<Task>(), new LinkedList<Task>(), new LinkedList<Task>() };
@@ -118,6 +143,7 @@ namespace Triband.Storey.Lod
         void Loop()
         {
             Started?.Invoke(Thread.CurrentThread.Name ?? "Storey build");
+            int seen = -1;
             try
             {
                 while (true)
@@ -133,6 +159,8 @@ namespace Triband.Storey.Lod
                             Monitor.Wait(queue);
                         }
                     }
+                    int c = Volatile.Read(ref configured);
+                    if (c != seen) { seen = c; try { Configure?.Invoke(); } catch (Exception) { } }   // one that can't still builds
                     TryExecuteTask(task);
                 }
             }

@@ -402,6 +402,39 @@ namespace Triband.Storey.Tests
         }
 
         /// <summary>
+        /// The iOS plug-ins (<c>Plugins/iOS</c>): each is in the iOS player alone, and every entry point the package's C#
+        /// imports from <c>"__Internal"</c> is defined in one of them, with C linkage in C++ and Objective-C++. A name that
+        /// drifts on either side, or a plug-in left on for the editor, fails only on the device or in the editor's import,
+        /// which no headless build sees.
+        /// </summary>
+        [Theory, MemberData(nameof(Packages))]
+        public void EveryIosEntryPointIsDefinedInAnIosOnlyPlugin(string package)
+        {
+            var p = Layout.Get(package);
+            var plugins = Directory.GetFiles(p.Root, "*", SearchOption.AllDirectories)
+                .Where(f => f.Replace('\\', '/').Contains("/Plugins/iOS/", StringComparison.Ordinal) && !f.EndsWith(".meta", StringComparison.Ordinal)).ToList();
+            var imported = Directory.GetFiles(p.Root, "*.cs", SearchOption.AllDirectories)
+                .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"DllImport\(""__Internal""\)\]\s*(?:(?:public|private|internal|static|extern|unsafe)\s+)+[\w\.\[\]<>]+\s+(\w+)\s*\(").Select(m => m.Groups[1].Value))
+                .Distinct().ToList();
+            foreach (var name in imported)
+            {
+                var at = plugins.Select(f => (f, m: Regex.Match(File.ReadAllText(f), @"^(.*)\b" + name + @"\s*\([^;{)]*\)\s*\{", RegexOptions.Multiline))).Where(x => x.m.Success).ToList();
+                Assert.True(at.Count == 1, $"{p.Name}: {name} is imported from __Internal and defined in {at.Count} iOS plug-ins");
+                var (file, m) = at[0];
+                if (!file.EndsWith(".c", StringComparison.Ordinal) && !file.EndsWith(".m", StringComparison.Ordinal))
+                    Assert.True(m.Groups[1].Value.Contains("extern \"C\"", StringComparison.Ordinal), $"{p.RelativeTo(file)}: {name} needs extern \"C\" (C++ mangles the name)");
+            }
+            foreach (var f in plugins)
+            {
+                var meta = File.ReadAllText(f + ".meta");
+                Assert.Matches(new Regex(@"Any:\s*\n\s*second:\s*\n\s*enabled: 0"), meta);
+                Assert.Matches(new Regex(@"Editor: Editor\s*\n\s*second:\s*\n\s*enabled: 0"), meta);
+                Assert.Matches(new Regex(@"iPhone: iOS\s*\n\s*second:\s*\n\s*enabled: 1"), meta);
+                Assert.True(Regex.Matches(meta, @"enabled: 1").Count == 1, $"{p.RelativeTo(f)}: on for a platform besides iOS");
+            }
+        }
+
+        /// <summary>
         /// GUIDs well formed and distinct across all packages. A duplicate makes Unity reassign
         /// one of them arbitrarily, so the reference that breaks is not necessarily in the file
         /// that was copied.

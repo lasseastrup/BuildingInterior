@@ -7,6 +7,7 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Threading;
+using Triband.Storey.Lod;
 using UnityEngine;
 
 namespace Triband.Storey.Unity
@@ -38,6 +39,12 @@ namespace Triband.Storey.Unity
         [Min(30)] public int frames = 240;
         [Tooltip("iOS: note Metal's own word on each GPU command buffer that fails: why (a GPU fault, too much geometry for a pass's memoryless attachments, …) and which of its passes. Metal records every pass's state for it, which costs the GPU a little.")]
         public bool metalErrors = true;
+
+        [Header("Measurement")]
+        [Tooltip("For a run that measures the build threads (docs/PERFORMANCE.md §9.1): every site's count, in place of what the quality assets ask for (-1: theirs; 0 builds on the main thread). Make a run with 1 and one with 2, and compare the records' frame times and their 'detail' notes: how long detail takes to come, and how many buildings wait for a thread.")]
+        [Min(-1)] public int buildThreads = -1;
+        [Tooltip("iOS: the build threads at the utility quality-of-service class, below Unity's main and render threads (the default). Off for a run that compares: each keeps the class it started with.")]
+        public bool utilityThreads = true;
 
         /// <summary>A recorder is running: notes are kept, so a caller makes one only then.</summary>
         public static bool Recording => current != null;
@@ -98,6 +105,11 @@ namespace Triband.Storey.Unity
 #if UNITY_IOS
         byte[]? metalText; int metalTaken, metalCheckAt;
 #endif
+        // the build threads (docs/PERFORMANCE.md §9.1): the measurement's settings as they were before this run set them,
+        // the count last noted, and the window the detail notes sum up
+        int threadsBefore = -1; bool utilityBefore = true; int threadsSeen = -1;
+        double detailFrom; long waitSum; int waitMost, waitFrames;
+        readonly List<float>[] detailMs = { new List<float>(), new List<float>() };
         static bool movedLastRun;
         string? lastRun, lastRunSummary; bool showing; string copied = "";
         GUIStyle? textStyle, buttonStyle;
@@ -128,7 +140,12 @@ namespace Triband.Storey.Unity
                 }
                 catch (Exception e) { UnityEngine.Debug.LogWarning("Storey Diagnostics: the last run's record couldn't be read: " + e.Message); }
             }
-            header = Header() + WatchMetal() + "\n";
+            threadsBefore = StoreyThreads.Override; utilityBefore = StoreyThreads.Utility;
+            if (buildThreads >= 0) StoreyThreads.Override = buildThreads;
+            StoreyThreads.Utility = utilityThreads;
+            threadsSeen = -1; detailFrom = Time.realtimeSinceStartupAsDouble; waitSum = 0; waitMost = waitFrames = 0;
+            SiteRenderer.DetailTimes.Clear();
+            header = Header() + WatchMetal() + "\n" + Threads() + "\n";
             Application.logMessageReceivedThreaded += OnLog;
             Application.lowMemory += OnLowMemory;
             systemMemory = global::Unity.Profiling.ProfilerRecorder.StartNew(global::Unity.Profiling.ProfilerCategory.Memory, "System Used Memory");
@@ -162,6 +179,8 @@ namespace Triband.Storey.Unity
             UnityEngine.Rendering.RenderPipelineManager.beginContextRendering -= OnBeginRendering;
             UnityEngine.Rendering.RenderPipelineManager.endContextRendering -= OnEndRendering;
             TakeMetal(Time.frameCount);
+            NoteDetail(true);
+            StoreyThreads.Override = threadsBefore; StoreyThreads.Utility = utilityBefore;
             Add("recording stopped");
             Save();
             probe?.Dispose(); probe = null; asked.Clear();
@@ -195,6 +214,7 @@ namespace Triband.Storey.Unity
             TakeMetal(f);
             Describe();
             DescribeCameras();
+            WatchThreads();
             var text = Line(f);
             lock (gate)
             {
@@ -261,7 +281,7 @@ namespace Triband.Storey.Unity
                 if (s.LodStats is SiteRenderer.LodStats st)
                 {
                     b.Append(" L0 ").Append(st.lod0).Append(" L1 ").Append(st.lod1).Append(" L2 ").Append(st.lod2).Append(" res0 ").Append(st.resident0)
-                        .Append(" gen ").Append(st.generating).Append(" wait ").Append(st.queued).Append(" built ").Append(st.builtThisFrame).Append(" lod ").Append(F1(st.ms)).Append("ms");
+                        .Append(" gen ").Append(st.generating).Append(" upl ").Append(st.uploading).Append(" wait ").Append(st.queued).Append(" built ").Append(st.builtThisFrame).Append(" lod ").Append(F1(st.ms)).Append("ms");
                     if (st.loading > 0) b.Append(" loading ").Append(st.loading);
                     b.Append(" v0 ").Append(st.lod0VerticesInView / 1000).Append("k/").Append(st.lod0Vertices / 1000).Append('k').Append(" rooms ").Append(st.roomsShown).Append('/').Append(st.lod0);
                 }
@@ -359,6 +379,63 @@ namespace Triband.Storey.Unity
                     .Append(", opaque texture ").Append(Prop(d, "requiresColorTexture")).Append(", anti-aliasing ").Append(Prop(d, "antialiasing"))
                     .Append(", shadows ").Append(Prop(d, "renderShadows"));
             return b.ToString();
+        }
+
+        // ---- the build threads ------------------------------------------------------------------------------------------
+
+        /// <summary>The header's line on the build threads: how many this device gets, who decides, and their class on iOS.</summary>
+        string Threads()
+        {
+            bool handheld = SystemInfo.deviceType == DeviceType.Handheld;
+            var b = new StringBuilder("build threads: ");
+            b.Append(buildThreads >= 0 ? $"{buildThreads} for this run (Storey Diagnostics' Build Threads)" : "the quality assets' count")
+                .Append("; automatic on this device: ").Append(BuildThreads.Automatic(SystemInfo.processorCount, handheld))
+                .Append(" (").Append(SystemInfo.processorCount).Append(handheld ? " cores, handheld)" : " cores)");
+            b.Append(Application.platform == RuntimePlatform.IPhonePlayer
+                ? (utilityThreads ? "; utility quality of service" : "; the quality of service they start with (Utility Threads off)")
+                : "; below-normal priority (no quality of service off iOS)");
+            return b.ToString();
+        }
+
+        /// <summary>
+        /// The build threads' count noted when it changes, and every ten seconds while detail comes: how long it took from
+        /// a build's start to its last part up, and how many buildings waited for a thread.
+        /// </summary>
+        void WatchThreads()
+        {
+            int n = BuildThreads.Shared.Count;
+            if (n != threadsSeen)
+            {
+                if (threadsSeen >= 0 || n > 0) Add($"build threads: {n}{(StoreyThreads.Override >= 0 ? " (Storey Diagnostics' Build Threads)" : "")}");
+                threadsSeen = n;
+            }
+            int waiting = 0;
+            foreach (var s in StoreySite.AllSet) if (s.isActiveAndEnabled && s.LodStats is SiteRenderer.LodStats st) waiting += st.queued;
+            waitSum += waiting; waitMost = Math.Max(waitMost, waiting); waitFrames++;
+            foreach (var (which, ms) in SiteRenderer.DetailTimes) detailMs[which].Add(ms);
+            SiteRenderer.DetailTimes.Clear();
+            NoteDetail(false);
+        }
+
+        void NoteDetail(bool now)
+        {
+            double t = Time.realtimeSinceStartupAsDouble;
+            if (!now && t - detailFrom < 10) return;
+            if (detailMs[0].Count + detailMs[1].Count > 0)
+            {
+                var b = new StringBuilder($"detail in the last {F1(t - detailFrom)} s with {BuildThreads.Shared.Count} build threads:");
+                for (int w = 0; w < 2; w++)
+                {
+                    var l = detailMs[w]; if (l.Count == 0) continue;
+                    l.Sort();
+                    b.Append(" LOD").Append(w).Append(' ').Append(l.Count).Append(" up, ").Append(F1(l[l.Count / 2])).Append(" ms from a build's start to its last mesh up (90th percentile ")
+                        .Append(F1(l[(int)(l.Count * 0.9)])).Append(", most ").Append(F1(l[l.Count - 1])).Append(");");
+                    l.Clear();
+                }
+                b.Append(" buildings waiting for a thread ").Append(F1(waitFrames > 0 ? (double)waitSum / waitFrames : 0)).Append(" on average, ").Append(waitMost).Append(" at most");
+                Add(b.ToString());
+            }
+            detailFrom = t; waitSum = 0; waitMost = waitFrames = 0;
         }
 
         // ---- Metal's errors (iOS) --------------------------------------------------------------------------------------
@@ -593,7 +670,7 @@ namespace Triband.Storey.Unity
                 foreach (var l in incident) b.Append(l).Append('\n');
             }
             b.Append("\nThe last ").Append(ringCount).Append(" frames: frame, time, its length; with Frame Timing Stats the main thread's, the GPU's and the present wait, ms; gpu-N: frames since the last the GPU finished; mtl-fail N: Metal command buffers failed so far (iOS)")
-                .Append(" | per site: LOD0/1/2 shown, LOD0 resident, generating, waiting, built this frame, LOD ms, v0: LOD0 vertices in view/shown, wall ids used/table")
+                .Append(" | per site: LOD0/1/2 shown, LOD0 resident, generating, built and waiting for their upload, waiting for a thread, meshes uploaded this frame, LOD ms, v0: LOD0 vertices in view/shown, wall ids used/table")
                 .Append(" | in: the player's building, floor, clip height, cut, its state row (LOD, from, fade, slot+1) | in the way: building, kN its storey at the player, sN its slot")
                 .Append(" | feet, camera | swaps N new M: renderers given another material, and renderers made | managed heap; memory: the process's, Unity's, the graphics driver's\n");
             for (int i = 0; i < ringCount; i++) b.Append(ring[(ringNext - ringCount + i + ring.Length) % ring.Length]).Append('\n');

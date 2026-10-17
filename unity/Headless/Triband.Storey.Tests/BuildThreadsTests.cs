@@ -28,6 +28,45 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void EverySiteSharesOneCountTheMostAnyAsksFor()
+        {
+            // docs/PERFORMANCE.md §9.1: each site sized the threads by its own settings, so two sites with different quality
+            // assets resized them in turn every frame
+            Assert.Equal(2, BuildThreads.SharedCount(-1, new[] { -1, 1 }, 6, true));   // automatic on a phone: two
+            Assert.Equal(3, BuildThreads.SharedCount(-1, new[] { -1, 3 }, 6, true));
+            Assert.Equal(1, BuildThreads.SharedCount(-1, new[] { -1, 0 }, 2, true));   // an iPhone 7 reports two cores
+            Assert.Equal(0, BuildThreads.SharedCount(-1, new[] { 0, 0 }, 8, false));   // none: on the main thread
+            Assert.Equal(0, BuildThreads.SharedCount(-1, Array.Empty<int>(), 8, false));
+            Assert.Equal(1, BuildThreads.SharedCount(1, new[] { -1, 4 }, 16, false));   // a measurement's
+            Assert.Equal(0, BuildThreads.SharedCount(0, new[] { 2 }, 16, false));
+            Assert.Equal(0, BuildThreads.SharedCount(2, new[] { 0 }, 16, false));   // where no site builds on threads (WebGL), none
+        }
+
+        [Fact]
+        public void EachThreadConfiguresItselfBeforeItsFirstBuildAndAgainWhenAsked()
+        {
+            // what only a thread can set of itself (on iOS its quality-of-service class, docs/PERFORMANCE.md §9.1): before its
+            // first build, and before its next once asked again. Other tests' threads call it too: only ours are looked at
+            var events = new ConcurrentQueue<(int thread, string what)>();
+            BuildThreads.Configure = () => events.Enqueue((Environment.CurrentManagedThreadId, "configure"));
+            var bt = new BuildThreads(2);
+            try
+            {
+                Task<int> Build() => bt.Run(() => { events.Enqueue((Environment.CurrentManagedThreadId, "build")); Thread.Sleep(2); return Environment.CurrentManagedThreadId; });
+                var first = Enumerable.Range(0, 8).Select(_ => Build()).ToArray(); Done(first);
+                var ours = first.Select(t => t.Result).Distinct().ToList();
+                Assert.All(ours, id => Assert.Equal("configure", events.First(e => e.thread == id).what));
+                Assert.All(ours, id => Assert.Equal(1, events.Count(e => e.thread == id && e.what == "configure")));
+                int before = events.Count;
+                BuildThreads.Reconfigure();
+                var second = Enumerable.Range(0, 8).Select(_ => Build()).ToArray(); Done(second);
+                var after = events.Skip(before).ToList();
+                Assert.All(second.Select(t => t.Result).Distinct(), id => Assert.Equal("configure", after.First(e => e.thread == id).what));
+            }
+            finally { bt.Resize(0); BuildThreads.Configure = null; }
+        }
+
+        [Fact]
         public void BuildsRunOnNamedThreadsAtMostAsManyAtOnceAsAskedFor()
         {
             var bt = new BuildThreads(2);

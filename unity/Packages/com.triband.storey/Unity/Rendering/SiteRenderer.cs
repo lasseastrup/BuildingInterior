@@ -82,6 +82,9 @@ namespace Triband.Storey.Unity
         {
             BuildThreads.Started = name => UnityEngine.Profiling.Profiler.BeginThreadProfiling("Storey", name);
             BuildThreads.Ended = UnityEngine.Profiling.Profiler.EndThreadProfiling;
+            // iOS: each build thread asks for the utility quality-of-service class (docs/PERFORMANCE.md §9.1)
+            StoreyThreads.Init();
+            BuildThreads.Configure = StoreyThreads.Configure;
             Application.quitting += () => BuildThreads.Shared.Resize(0);
             // the steady variant is picked just before the cameras render: every site's frame has written the table and the view
             UnityEngine.Rendering.RenderPipelineManager.beginContextRendering += (context, cameras) => { foreach (var s in live) s.UpdateSteady(); };
@@ -239,6 +242,7 @@ namespace Triband.Storey.Unity
             public Built bt = null!; public Site site = null!; public string name = ""; public int which;
             public BuildLane lane;
             public System.Threading.Tasks.Task<object> task = null!;
+            public long started;   // Stopwatch ticks
         }
         GameObject? cellRoot;
         float lastLod = -1;
@@ -301,8 +305,11 @@ namespace Triband.Storey.Unity
             public int resident0, resident1;
             /// <summary>Cells, the meshes they're split into, and the cells drawn.</summary>
             public int cells, cellMeshes, cellsShown;
-            /// <summary>Detail LODs wanted and not started yet, being generated on worker threads, and uploaded this frame.</summary>
-            public int queued, generating, builtThisFrame;
+            /// <summary>
+            /// Detail LODs wanted and not started yet, being generated on worker threads, built and waiting for their meshes'
+            /// upload, and the meshes uploaded this frame.
+            /// </summary>
+            public int queued, generating, uploading, builtThisFrame;
             /// <summary>Milliseconds the LOD work took this frame (picking, building, cells).</summary>
             public double ms;
             /// <summary>Cells of a layout loading over frames still to load (<see cref="LoadOverFrames"/>).</summary>
@@ -319,7 +326,7 @@ namespace Triband.Storey.Unity
                 $"{buildings:N0} buildings: LOD0 {lod0}, LOD1 {lod1}, LOD2 {lod2}, not drawn {culled}\n" +
                 $"Resident: LOD0 {resident0}, LOD1 {resident1}\n" +
                 $"Cells: {cellsShown} of {cells} drawn ({cellMeshes} meshes)\n" +
-                $"Built this frame {builtThisFrame}, generating {generating}, waiting {queued}; LOD {ms:0.00} ms\n" +
+                $"Meshes uploaded this frame {builtThisFrame}, generating {generating}, uploading {uploading}, waiting {queued}; LOD {ms:0.00} ms\n" +
                 $"LOD0 vertices: {lod0Vertices:N0} shown, {lod0VerticesInView:N0} in view; rooms drawn in {roomsShown} of {lod0}" +
                 (loading > 0 ? $"\nLoading: {loading} cells to go" : "");
         }
@@ -921,8 +928,15 @@ namespace Triband.Storey.Unity
         {
             public Built bt = null!; public Site site = null!; public string name = ""; public int which; public BuildLane lane;
             public Detail d = null!; public System.Threading.Tasks.Task<int> finishing = null!; public int next, parts;
+            public long started;   // the job's
         }
         readonly List<Staged> staged = new List<Staged>();
+
+        /// <summary>
+        /// While Storey Diagnostics records, every site's worker builds up since it last took them: the LOD, and the
+        /// milliseconds from the build's start to its last part up, the time detail takes to come (docs/PERFORMANCE.md §9.1).
+        /// </summary>
+        public static readonly List<(int which, float ms)> DetailTimes = new List<(int, float)>();
 
         void Stage(Job j)
         {
@@ -938,7 +952,7 @@ namespace Triband.Storey.Unity
             int which = j.which;
             staged.Add(new Staged
             {
-                bt = j.bt, site = j.site, name = j.name, which = which, lane = j.lane, d = d, parts = n,
+                bt = j.bt, site = j.site, name = j.name, which = which, lane = j.lane, d = d, parts = n, started = j.started,
                 finishing = BuildThreads.Shared.Run(() => { for (int k = 0; k < n; k++) PartAt(which, d, k).Finish(rows[k], wallBase); return n; }, j.lane),
             });
         }
@@ -972,6 +986,7 @@ namespace Triband.Storey.Unity
                 staged.RemoveAt(i--); busy.Remove(st.bt.idx);
                 EndDetail(st.bt, st.name, st.which, st.d);
                 l.SetBuilt(st.bt.idx, st.which, true);
+                if (StoreyDiagnostics.Recording && DetailTimes.Count < 4096) DetailTimes.Add((st.which, (float)StoreyDiagnostics.Ms(st.started)));
             }
             return made;
         }
@@ -1037,19 +1052,25 @@ namespace Triband.Storey.Unity
         internal void StartThreads() => _ = Threads;
 
         /// <summary>
-        /// Build threads (<see cref="BuildThreads.Shared"/>, sized here: one count for every site): the settings' number, or
-        /// automatic, two on a phone or tablet and one fewer than the cores (at most four) on a desktop.
+        /// Build threads (<see cref="BuildThreads.Shared"/>, sized here): one count for every site, the most any asks for
+        /// (automatic: two on a phone or tablet and one fewer than the cores, at most four, on a desktop), or
+        /// <see cref="StoreyThreads.Override"/>. Each site sized them by its own settings, so two sites with different
+        /// quality assets resized them in turn every frame (docs/PERFORMANCE.md §9.1). A site whose settings ask for none
+        /// builds on the main thread.
         /// </summary>
         int Threads
         {
             get
             {
                 if (lods == null) return 0;
-                int n = lods.Settings.Threads >= 0 ? lods.Settings.Threads : BuildThreads.Automatic(SystemInfo.processorCount, SystemInfo.deviceType == DeviceType.Handheld);
+                askedFor.Clear(); askedFor.Add(lods.Settings.Threads);
+                foreach (var s in live) if (s.lods != null) askedFor.Add(s.lods.Settings.Threads);
+                int n = BuildThreads.SharedCount(StoreyThreads.Override, askedFor, SystemInfo.processorCount, SystemInfo.deviceType == DeviceType.Handheld);
                 if (BuildThreads.Shared.Count != n) BuildThreads.Shared.Resize(n);
-                return n;
+                return lods.Settings.Threads == 0 ? 0 : n;
             }
         }
+        static readonly List<int> askedFor = new List<int>();
 
         /// <summary>
         /// Detail built on the worker threads, staged as it comes in (<see cref="Stage"/>) and uploaded part by part within the
@@ -1131,7 +1152,7 @@ namespace Triband.Storey.Unity
         void StartJob(Built bt, BuildingData b, int which, BuildLane lane)
         {
             var s0 = site!; int ix = bt.idx; var mates = (blockStart, blockSize); bool collider = which == 0 && colliders && bt.collision == null;
-            jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, lane = lane, task = BuildThreads.Shared.Run(() => Generate(s0, b, ix, which, mates, collider), lane) });
+            jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, lane = lane, started = System.Diagnostics.Stopwatch.GetTimestamp(), task = BuildThreads.Shared.Run(() => Generate(s0, b, ix, which, mates, collider), lane) });
         }
 
         /// <summary>A building's builds still waiting for a thread move to the forced lane: it is wanted at once now.</summary>
@@ -1265,7 +1286,7 @@ namespace Triband.Storey.Unity
             stats.loading = load != null ? load.Count - load.Taken : 0;
             stats.buildings = built.Count; stats.resident0 = r0; stats.resident1 = r1;
             stats.cells = cells.Count; stats.cellMeshes = pieces; stats.cellsShown = shown;
-            stats.queued = queued; stats.generating = jobs.Count; stats.builtThisFrame = made; stats.ms = sw.Elapsed.TotalMilliseconds;
+            stats.queued = queued; stats.generating = jobs.Count; stats.uploading = staged.Count; stats.builtThisFrame = made; stats.ms = sw.Elapsed.TotalMilliseconds;
             budgetSpent += sw.Elapsed.TotalMilliseconds;
         }
 
