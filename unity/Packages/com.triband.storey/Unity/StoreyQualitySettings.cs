@@ -58,6 +58,9 @@ namespace Triband.Storey.Unity
         [Tooltip("LOD0's see-through windows start as LOD1's painted rooms where LOD0 takes over, so the switch doesn't change the windows, and clear to glass by this share of that distance (0.6: clear at 60% of it). 1: clear at once.")]
         [Range(0.1f, 1f)] public float windowsClearAt = 0.6f;
 
+        [Tooltip("Where LOD0's windows are painted over, as a share of the LOD0 distance: 1, where LOD0 takes over (as LOD1's painted rooms); less, closer in, so fewer buildings draw their rooms behind the glass (4-10% fewer LOD0 triangles at 0.5 on the walk-in test city). Windows Clear At is a share of this.")]
+        [Range(0.3f, 1f)] public float windowsPaintedFrom = 1f;
+
         [Tooltip("Generate LOD0 and LOD1 on Storey's own build threads; only the upload is on the main thread. Off builds on the main thread (WebGL always does).")]
         public bool buildOnWorkerThreads = true;
 
@@ -97,7 +100,7 @@ namespace Triband.Storey.Unity
             if (s.PX.Length != 3) s.PX = new double[3];   // into the array it has: the site applies this every frame
             s.PX[0] = lod0PixelsPerMetre; s.PX[1] = lod1PixelsPerMetre; s.PX[2] = lod2PixelsPerMetre;
             s.Hysteresis = hysteresis; s.Fade = Mathf.Max(0.01f, fadeSeconds); s.FadeDetail = crossFadeFullDetail; s.Far = farDistance;
-            s.GlassClear = windowsClearAt; s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.MaxColliders = collidersKept; s.BudgetMs = buildBudgetMs;
+            s.GlassClear = windowsClearAt; s.WindowsPainted = windowsPaintedFrom; s.MaxLod0 = lod0Residency; s.MaxLod1 = lod1Residency; s.MaxColliders = collidersKept; s.BudgetMs = buildBudgetMs;
             s.Threads = !buildOnWorkerThreads ? 0 : buildThreads > 0 ? buildThreads : -1;
             s.KeepChunkBytes = (long)meshChunksKeptMB << 20;
             s.FarOcclusion = occlusionOnFarMaterials;

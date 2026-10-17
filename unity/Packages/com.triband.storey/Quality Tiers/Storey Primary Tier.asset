@@ -24,6 +24,7 @@ MonoBehaviour:
   collidersKept: 64
   buildBudgetMs: 2
   windowsClearAt: 0.6
+  windowsPaintedFrom: 1
   buildOnWorkerThreads: 1
   buildThreads: 0
   meshChunksKeptMB: 16

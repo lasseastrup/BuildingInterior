@@ -763,7 +763,7 @@ namespace Triband.Storey.Unity
             // LOD only: with a fixed LOD there is no switch to hide)
             if (lods != null && Eye is LodEye ge)
             {
-                float at = (float)lods.Settings.Lod0Distance(ge.pixelsPerMetre), clear = (float)Math.Min(1, Math.Max(0, lods.Settings.GlassClear));
+                float at = (float)lods.Settings.PaintDistance(ge.pixelsPerMetre), clear = (float)Math.Min(1, Math.Max(0, lods.Settings.GlassClear));
                 StoreyGlobals.SetGlassFill(at * clear, clear >= 1 ? 0 : at);
                 // the rooms are left out past that distance (RoomsDraw), where no window shows them; an orthographic camera
                 // stands in front of its eye, nearer than the windows' distances say
@@ -1480,7 +1480,7 @@ namespace Triband.Storey.Unity
                 // with rooms, whether its nearest point is in the distance from which its windows are painted over (RoomsDraw),
                 // on from 5 % beyond it and off from 10 %, so a building on the line doesn't flick (and a camera moving after
                 // this frame's eye stays inside it)
-                double paint = l.Settings.Lod0Distance(eye.pixelsPerMetre), ex = eye.position.x - o.x, ey = eye.position.y - o.y, ez = eye.position.z - o.z;
+                double paint = l.Settings.PaintDistance(eye.pixelsPerMetre), ex = eye.position.x - o.x, ey = eye.position.y - o.y, ez = eye.position.z - o.z;
                 long shownV = 0, viewV = 0; int roomsShown = 0;
                 foreach (var bt in withLod0)
                 {

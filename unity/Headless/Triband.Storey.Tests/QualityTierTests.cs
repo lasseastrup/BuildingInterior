@@ -41,7 +41,7 @@ namespace Triband.Storey.Tests
             Assert.Equal(d.FadeDetail, p["crossFadeFullDetail"] == "1");
             Assert.Equal(d.MaxLod0, int.Parse(p["lod0Residency"])); Assert.Equal(d.MaxLod1, int.Parse(p["lod1Residency"]));
             Assert.Equal(d.MaxColliders, int.Parse(p["collidersKept"])); Assert.Equal(d.BudgetMs, D(p["buildBudgetMs"]));
-            Assert.Equal(d.GlassClear, D(p["windowsClearAt"]));
+            Assert.Equal(d.GlassClear, D(p["windowsClearAt"])); Assert.Equal(d.WindowsPainted, D(p["windowsPaintedFrom"]));
             Assert.Equal(d.Threads, p["buildOnWorkerThreads"] == "1" && p["buildThreads"] == "0" ? -1 : 0);   // automatic
             Assert.Equal(d.KeepChunkBytes, long.Parse(p["meshChunksKeptMB"]) << 20);
             Assert.Equal(d.FarOcclusion, p["occlusionOnFarMaterials"] == "1");

@@ -42,6 +42,7 @@ namespace UnityEngine
         public static int Min(int a, int b) => a;
         public static float Clamp(float value, float min, float max) => value;
         public static float Atan2(float y, float x) => 0;
+        public static float Asin(float f) => 0;
         public static float Sin(float f) => 0;
         public static float Cos(float f) => 0;
         public static float PingPong(float t, float length) => 0;

@@ -226,9 +226,9 @@ namespace Triband.Storey.Tests
             Assert.Contains("MeshPack.Pack(l0.Op, true, mates, weld: false, rooms: full.rooms)", renderer);
             Assert.Contains("bool on = !roomsHide || p.near || !steady || bt.idx == active || forcedIdx.Contains(bt.idx), cast = bt.idx == active;", renderer);
             Assert.Contains("StoreyGlobals.SetGlassFill(at * clear, clear >= 1 ? 0 : at);", renderer);
-            Assert.Contains("float at = (float)lods.Settings.Lod0Distance(ge.pixelsPerMetre)", renderer);
+            Assert.Contains("float at = (float)lods.Settings.PaintDistance(ge.pixelsPerMetre)", renderer);
             Assert.Contains("roomsHide = clear < 1 && !ge.orthographic;", renderer);
-            Assert.Contains("double paint = l.Settings.Lod0Distance(eye.pixelsPerMetre)", renderer);
+            Assert.Contains("double paint = l.Settings.PaintDistance(eye.pixelsPerMetre)", renderer);   // the same distance (docs/PERFORMANCE.md §7.7)
             Assert.Contains("bool near = Math.Sqrt(dx * dx + dy * dy + dz * dz) < paint * (p!.near ? 1.1 : 1.05);", renderer);
             Assert.Contains("if (near != p.near) { p.near = near; steadyDirty.Add(bt.idx); }", renderer);   // looked at again (docs/PERFORMANCE.md §3.3)
             Assert.Contains("Add(bt, 0, nm, MeshOf(d.rooms[r], nm, bt.wallBase, st, k), opaque, false, rooms: true);", renderer);

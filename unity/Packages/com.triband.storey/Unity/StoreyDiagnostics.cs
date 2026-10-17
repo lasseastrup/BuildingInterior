@@ -306,7 +306,14 @@ namespace Triband.Storey.Unity
                 }
                 if (o.player != null) { var p = o.player.position; b.Append(" | feet ").Append(F1(p.x)).Append(',').Append(F1(p.y)).Append(',').Append(F1(p.z)); }
                 var cam = o.viewCamera != null ? o.viewCamera : Camera.main;
-                if (cam != null) { var c = cam.transform.position; b.Append(" cam ").Append(F1(c.x)).Append(',').Append(F1(c.y)).Append(',').Append(F1(c.z)); }
+                if (cam != null)
+                {
+                    var c = cam.transform.position; b.Append(" cam ").Append(F1(c.x)).Append(',').Append(F1(c.y)).Append(',').Append(F1(c.z));
+                    // where it looks: the compass heading (0 along +z, 90 along +x) and the pitch (negative: down), in degrees
+                    var look = cam.transform.forward;
+                    b.Append(" looking ").Append(Mathf.RoundToInt(Mathf.Repeat(Mathf.Atan2(look.x, look.z) * Mathf.Rad2Deg, 360))).Append(',')
+                        .Append(Mathf.RoundToInt(Mathf.Asin(Mathf.Clamp(look.y, -1, 1)) * Mathf.Rad2Deg));
+                }
             }
             // renderers given their steady copy or their own material again (each re-registered by the GPU Resident Drawer), made,
             // kept from a drop and given a new mesh, and LOD0 rooms switched on or off

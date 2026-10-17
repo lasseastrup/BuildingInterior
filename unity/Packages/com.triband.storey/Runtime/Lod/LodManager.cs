@@ -50,9 +50,19 @@ namespace Triband.Storey.Lod
         /// of that distance (blended between), so the switch changes nothing in the windows. 1: clear at once (no blend).
         /// </summary>
         public double GlassClear = 0.6;
+        /// <summary>
+        /// Where LOD0's windows are painted over, as a share of the LOD0 distance (<see cref="PaintDistance"/>): 1, where
+        /// LOD0 takes over, as LOD1's panes are; less, closer in, so fewer buildings draw their rooms (4–10 % fewer LOD0
+        /// colour-pass triangles at 0.5 on the walk-in test city's views). Their glass clears from <see cref="GlassClear"/>
+        /// of that.
+        /// </summary>
+        public double WindowsPainted = 1;
 
         /// <summary>The distance at which a building's nearest point takes LOD0 coming closer, for a camera's pixels per metre.</summary>
         public double Lod0Distance(double pixelsPerMetre) => pixelsPerMetre * Bias / (PX[0] * (1 + Hysteresis));
+
+        /// <summary>The distance from which LOD0's windows are painted over and its rooms left out (<see cref="WindowsPainted"/> of <see cref="Lod0Distance"/>).</summary>
+        public double PaintDistance(double pixelsPerMetre) => Lod0Distance(pixelsPerMetre) * Math.Max(0.1, Math.Min(1, WindowsPainted));
 
         /// <summary>Build threads generating detail (<see cref="BuildThreads"/>): 0 builds on the main thread, -1 automatic (<see cref="BuildThreads.Automatic"/>).</summary>
         public int Threads = -1;
