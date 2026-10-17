@@ -240,10 +240,19 @@ namespace Triband.Storey.Unity
         sealed class Job
         {
             public Built bt = null!; public Site site = null!; public string name = ""; public int which;
-            public BuildLane lane;
-            public System.Threading.Tasks.Task<object> task = null!;
+            public volatile BuildLane lane;
+            public System.Threading.Tasks.Task<object?> task = null!;
             public long started;   // Stopwatch ticks
+            // a build no longer wanted stops at its next storey (docs/PERFORMANCE.md §9.2), once it has been unwanted a while:
+            // a building on the edge of a LOD's distance would otherwise lose its build each time the camera wavers
+            public volatile bool cancelled;
+            public float unwantedSince = -1;
+
+            /// <summary>Between a LOD0's storeys, on its build thread: the more urgent builds waiting run first; true stops it.</summary>
+            public bool Between() { BuildThreads.Shared.RunMoreUrgent(lane); return cancelled; }
         }
+        /// <summary>How long a build stays unwanted before it is stopped (seconds).</summary>
+        const float CancelAfter = 0.25f;
         GameObject? cellRoot;
         float lastLod = -1;
         bool lodBusy;
@@ -817,7 +826,7 @@ namespace Triband.Storey.Unity
         void BuildDetail(Built bt, BuildingData b, int which)
         {
             object made;
-            using (StoreyTimings.Time(which == 0 ? "build: LOD0 on the main thread" : "build: LOD1 on the main thread", b.name)) made = Generate(site!, b, bt.idx, which, (blockStart, blockSize), colliders && bt.collision == null);
+            using (StoreyTimings.Time(which == 0 ? "build: LOD0 on the main thread" : "build: LOD1 on the main thread", b.name)) made = Generate(site!, b, bt.idx, which, (blockStart, blockSize), colliders && bt.collision == null)!;
             FinishDetail(bt, b.name, which, made);
         }
 
@@ -838,7 +847,7 @@ namespace Triband.Storey.Unity
         /// generator's memos are per site and thread-safe; ParallelBuildTests). <paramref name="mates"/>: the site's block
         /// of the table, for party walls; <paramref name="collider"/>: the building's collision mesh is wanted too.
         /// </summary>
-        static object Generate(Site site, BuildingData b, int idx, int which, (int start, int count) mates, bool collider)
+        static object? Generate(Site site, BuildingData b, int idx, int which, (int start, int count) mates, bool collider, Func<bool>? between = null)
         {
             // once packed, the builders' lists give their chunks back for the next build (MeshBuilder.Recycle)
             if (which == 1)
@@ -851,8 +860,9 @@ namespace Triband.Storey.Unity
                 m.Recycle();
                 return shell;
             }
-            Lod0Result l0;
-            using (markLod0.Auto()) l0 = Lod0.Build(site, b);
+            Lod0Result? l0;
+            using (markLod0.Auto()) l0 = between != null ? Lod0.Build(site, b, between) : Lod0.Build(site, b);
+            if (l0 == null) return null;   // stopped: no longer wanted (docs/PERFORMANCE.md §9.2)
             l0.Op.RetagForUpload(idx); l0.Glass.RetagForUpload(idx);
             // the glass's panes carry their place too, to start as LOD1's; neither is welded (it would find almost nothing)
             // the rooms apart from the rest (docs/PERFORMANCE.md §7.7): drawn only while a window can show them
@@ -952,7 +962,7 @@ namespace Triband.Storey.Unity
 
         void Stage(Job j)
         {
-            var d = (Detail)j.task.Result;
+            var d = (Detail)j.task.Result!;
             BeginDetail(j.bt, j.which, d);
             int n = PartsOf(j.which, d), wallBase = j.which == 0 ? j.bt.wallBase : -1;
             var rows = new int[n][];
@@ -1049,7 +1059,7 @@ namespace Triband.Storey.Unity
         }
 
         /// <summary>A finished build that won't be uploaded after all: its packed arrays go back for the next build's.</summary>
-        static void Discard(object made)
+        static void Discard(object? made)
         {
             if (!(made is Detail d)) return;
             foreach (var p in d.opaque) p.Release();
@@ -1096,7 +1106,7 @@ namespace Triband.Storey.Unity
             {
                 var j = jobs[i]; if (!j.task.IsCompleted) continue;
                 bool current = ReferenceEquals(j.site, site) && built.TryGetValue(j.bt.id, out var cur) && ReferenceEquals(cur, j.bt);
-                bool ok = j.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && current;
+                bool ok = j.task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && j.task.Result != null && current;   // null: stopped
                 var e = ok ? l.Get(j.bt.idx) : null;
                 // a prefetched LOD0 is taken though the building doesn't want it by distance (yet)
                 if (e == null || (j.which == 0 ? e.Has0 : e.Has1) || (e.Want > j.which && j.lane != BuildLane.Background)) ok = false;
@@ -1122,7 +1132,7 @@ namespace Triband.Storey.Unity
                 using (StoreyTimings.Time(which == 0 ? "build: LOD0 waited for (a worker's)" : "build: LOD1 waited for (a worker's)", j.name))
                     try { j.task.Wait(); } catch (AggregateException) { }
                 jobs.RemoveAt(i); busy.Remove(bt.idx);
-                if (j.task.Status != System.Threading.Tasks.TaskStatus.RanToCompletion) return false;
+                if (j.task.Status != System.Threading.Tasks.TaskStatus.RanToCompletion || j.task.Result == null) return false;   // failed, or stopped
                 if (!ReferenceEquals(j.site, site)) { Discard(j.task.Result); return false; }
                 FinishDetail(bt, j.name, which, j.task.Result);
                 return true;
@@ -1164,8 +1174,33 @@ namespace Triband.Storey.Unity
         void StartJob(Built bt, BuildingData b, int which, BuildLane lane)
         {
             var s0 = site!; int ix = bt.idx; var mates = (blockStart, blockSize); bool collider = which == 0 && colliders && bt.collision == null;
-            jobs.Add(new Job { bt = bt, site = s0, name = b.name, which = which, lane = lane, started = System.Diagnostics.Stopwatch.GetTimestamp(), task = BuildThreads.Shared.Run(() => Generate(s0, b, ix, which, mates, collider), lane) });
+            var job = new Job { bt = bt, site = s0, name = b.name, which = which, lane = lane, started = System.Diagnostics.Stopwatch.GetTimestamp() };
+            Func<bool> between = job.Between;
+            job.task = BuildThreads.Shared.Run(() => Generate(s0, b, ix, which, mates, collider, between), lane);
+            jobs.Add(job);
         }
+
+        /// <summary>
+        /// Builds still running that a finished one would be thrown away for (another layout, the building's LOD there
+        /// already, or a coarser one wanted, unless prefetched) are stopped at their next storey once they have been
+        /// unwanted for <see cref="CancelAfter"/> (docs/PERFORMANCE.md §9.2): a tower's LOD0 held its thread 75–135 ms on a
+        /// desktop whether or not anything would use it.
+        /// </summary>
+        void CancelUnwanted(float now)
+        {
+            var l = lods!;
+            foreach (var j in jobs)
+            {
+                if (j.cancelled || j.task.IsCompleted) continue;
+                bool current = ReferenceEquals(j.site, site) && built.TryGetValue(j.bt.id, out var cur) && ReferenceEquals(cur, j.bt);
+                var e = current ? l.Get(j.bt.idx) : null;
+                bool unwanted = e == null || (j.which == 0 ? e.Has0 : e.Has1) || (e.Want > j.which && j.lane != BuildLane.Background);
+                if (!unwanted) { j.unwantedSince = -1; continue; }
+                if (j.unwantedSince < 0) j.unwantedSince = now;
+                else if (now - j.unwantedSince >= CancelAfter) { j.cancelled = true; cancelledBuilds++; }
+            }
+        }
+        int cancelledBuilds;
 
         /// <summary>A building's builds still waiting for a thread move to the forced lane: it is wanted at once now.</summary>
         void Hurry(int idx)
@@ -1245,6 +1280,7 @@ namespace Triband.Storey.Unity
                     if (made > 0 && sw.Elapsed.TotalMilliseconds > budget) { queued++; continue; }
                     BuildDetail(bt, b, which); l.SetBuilt(idx, which, true); made++;
                 }
+                if (jobs.Count > 0) CancelUnwanted(now);
                 foreach (int idx in f.Changed)
                 {
                     var e = l.Get(idx)!; table.SetLod(idx, e.Shown, e.From, (float)e.T);
@@ -1630,7 +1666,9 @@ namespace Triband.Storey.Unity
                     System.Threading.CancellationToken.None, System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously, System.Threading.Tasks.TaskScheduler.Default);
             cellJobs.Clear();
             lods?.Clear();
-            // what they make is for the old layout: they finish unread, and give their packed meshes' chunks back
+            // what they make is for the old layout: they stop at their next storey, or finish unread, and give their packed
+            // meshes' chunks back
+            foreach (var j in jobs) j.cancelled = true;
             foreach (var j in jobs)
                 j.task.ContinueWith(t => { if (t.Status == System.Threading.Tasks.TaskStatus.RanToCompletion) Discard(t.Result); },
                     System.Threading.CancellationToken.None, System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously, System.Threading.Tasks.TaskScheduler.Default);

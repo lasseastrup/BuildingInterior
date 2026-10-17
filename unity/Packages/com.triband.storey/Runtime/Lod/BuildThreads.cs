@@ -106,6 +106,31 @@ namespace Triband.Storey.Lod
         }
 
         /// <summary>
+        /// Between the steps of a long build (a storey of a LOD0), on the build thread running it: the builds waiting in a
+        /// lane more urgent than <paramref name="lane"/> are run here and now, before it goes on (docs/PERFORMANCE.md §9.2).
+        /// With every thread on a tower's LOD0 (75–135 ms on a desktop), a building wanted at once waited for one of them to
+        /// finish; it waits for a storey now. Nothing runs on a thread not this scheduler's, a main thread waiting for the build
+        /// say. True when one ran.
+        /// </summary>
+        public bool RunMoreUrgent(BuildLane lane)
+        {
+            if (!ours.ContainsKey(Environment.CurrentManagedThreadId)) return false;
+            bool ran = false;
+            while (true)
+            {
+                Task? task = null;
+                lock (queue)
+                    for (int i = 0; i < (int)lane && task == null; i++)
+                        if (lanes[i].First != null) { task = lanes[i].First!.Value; lanes[i].RemoveFirst(); }
+                if (task == null) return ran;
+                TryExecuteTask(task); ran = true;
+            }
+        }
+
+        // the threads that are this scheduler's, by managed id (no state is kept per thread: PackageLayoutTests)
+        readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> ours = new System.Collections.Concurrent.ConcurrentDictionary<int, bool>();
+
+        /// <summary>
         /// Move a build that is still waiting into a more urgent lane, last in it (a building wanted at once whose build was
         /// queued as wanted soon). False when it has started, or is in that lane or a more urgent one already.
         /// </summary>
@@ -144,6 +169,7 @@ namespace Triband.Storey.Lod
         {
             Started?.Invoke(Thread.CurrentThread.Name ?? "Storey build");
             int seen = -1;
+            ours[Environment.CurrentManagedThreadId] = true;
             try
             {
                 while (true)
@@ -164,7 +190,7 @@ namespace Triband.Storey.Lod
                     TryExecuteTask(task);
                 }
             }
-            finally { Ended?.Invoke(); }
+            finally { ours.TryRemove(Environment.CurrentManagedThreadId, out _); Ended?.Invoke(); }
         }
 
         // the first build waiting in the most urgent lane that has one (under the lock)

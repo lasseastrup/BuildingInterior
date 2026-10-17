@@ -51,15 +51,22 @@ namespace Triband.Storey.Generate
     public static class Lod0
     {
         /// <summary>Build a building's LOD0. <paramref name="solids"/> records volumes for the coplanar checker.</summary>
-        public static Lod0Result Build(Site site, BuildingData b, bool solids = false) => Make(site, b, solids, false);
+        public static Lod0Result Build(Site site, BuildingData b, bool solids = false) => Make(site, b, solids, false, null)!;
+
+        /// <summary>
+        /// <see cref="Build(Site, BuildingData, bool)"/>, asking <paramref name="stop"/> after each storey (docs/PERFORMANCE.md
+        /// §9.2): true stops it, giving back what it made, and the build is null. A caller on a build thread runs more urgent
+        /// builds there too (<see cref="Lod.BuildThreads.RunMoreUrgent"/>). The same meshes when it isn't stopped.
+        /// </summary>
+        public static Lod0Result? Build(Site site, BuildingData b, Func<bool> stop) => Make(site, b, false, false, stop);
 
         /// <summary>
         /// A building's LOD0 shape alone: the segments and walls <see cref="Build"/> makes, the same to the last bit,
         /// without its meshes. For the walk model when no renderer has built the building (docs/PLAY.md §1).
         /// </summary>
-        public static Lod0Shape BuildShape(Site site, BuildingData b) => Make(site, b, false, true).Shape;
+        public static Lod0Shape BuildShape(Site site, BuildingData b) => Make(site, b, false, true, null)!.Shape;
 
-        static Lod0Result Make(Site site, BuildingData b, bool solids, bool shapeOnly)
+        static Lod0Result? Make(Site site, BuildingData b, bool solids, bool shapeOnly, Func<bool>? stop)
         {
             var self = new Shared(site, b);
             int idx = site.IndexOf(b);
@@ -67,7 +74,8 @@ namespace Triband.Storey.Generate
             r.Glass.Walls = r.Op.Walls;   // glass shares the wall ids of the walls it sits in
             r.Glass.WallBase = r.Op.WallBase;
             if (solids) r.Op.Solids = new List<Solid>();
-            foreach (var _ in self.Steps(r)) { }
+            foreach (var _ in self.Steps(r))
+                if (stop != null && stop()) { r.Op.Recycle(); r.Glass.Recycle(); return null; }
             r.Shape = new Lod0Shape(r.Segs, r.Extra, r.Op.Walls, r.Op.WallBase);
             return r;
         }

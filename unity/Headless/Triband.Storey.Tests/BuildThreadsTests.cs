@@ -143,6 +143,45 @@ namespace Triband.Storey.Tests
             finally { hold.Set(); bt.Resize(0); }
         }
 
+        /// <summary>
+        /// Between a long build's steps, the more urgent builds waiting run on its thread first (docs/PERFORMANCE.md §9.2):
+        /// with the only thread on a long build, a forced one waits for a step, not for the build. Only a build thread runs
+        /// them: a main thread asking runs nothing.
+        /// </summary>
+        [Fact]
+        public void BetweenItsStepsALongBuildLetsMoreUrgentOnesRunFirst()
+        {
+            var bt = new BuildThreads(1);
+            using var started = new ManualResetEventSlim(false);
+            using var queued = new ManualResetEventSlim(false);
+            try
+            {
+                var order = new ConcurrentQueue<string>();
+                var longBuild = bt.Run(() =>
+                {
+                    started.Set();
+                    for (int step = 0; step < 10; step++)
+                    {
+                        if (step == 1) Assert.True(queued.Wait(5000));
+                        Thread.Sleep(2); order.Enqueue("step " + step);
+                        bt.RunMoreUrgent(BuildLane.Detail);
+                    }
+                    return 0;
+                }, BuildLane.Detail);
+                Assert.True(started.Wait(5000));
+                var forced = bt.Run(() => { order.Enqueue("forced"); return 0; }, BuildLane.Forced);
+                var other = bt.Run(() => { order.Enqueue("other detail"); return 0; }, BuildLane.Detail);   // as urgent: waits its turn
+                Assert.False(bt.RunMoreUrgent(BuildLane.Background));   // not a build thread: nothing
+                queued.Set();
+                Done(new Task[] { longBuild, forced, other });
+                var got = order.ToArray();
+                Assert.Equal("step 0", got[0]);
+                Assert.True(Array.IndexOf(got, "forced") <= 2, string.Join(", ", got));      // after a step or two, not ten
+                Assert.Equal("other detail", got[^1]);
+            }
+            finally { queued.Set(); bt.Resize(0); }
+        }
+
         [Fact]
         public void AFailureStaysInItsTaskAndNoThreadsRunOnTheCaller()
         {
