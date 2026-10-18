@@ -51,7 +51,9 @@ namespace UnityEditor
     public static class Selection
     {
         public static Object activeObject { get; set; } = new Object();
-        public static GameObject activeGameObject => new GameObject("");
+        public static GameObject activeGameObject { get => new GameObject(""); set { } }
+        public static Object[] objects { get => new Object[0]; set { } }
+        public static System.Action selectionChanged;
     }
 
     public sealed class InitializeOnLoadMethodAttribute : System.Attribute { }
@@ -132,6 +134,7 @@ namespace UnityEditor
         public Rect position { get => default; set { } }
         public void ShowNotification(GUIContent notification, double fadeoutWait) { }
         public static T GetWindow<T>(bool utility, string title, bool focus) where T : EditorWindow => null;
+        public static EditorWindow focusedWindow => null;
         public Vector2 minSize { get => default; set { } }
     }
 

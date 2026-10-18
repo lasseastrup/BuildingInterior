@@ -131,6 +131,12 @@ namespace Triband.Storey.Editor
 
         static bool StoreyToolActive() => typeof(StoreyTool).IsAssignableFrom(ToolManager.activeToolType);
 
+        // Frame Selected (F) in the Scene view asks the selection's inspectors for these (Unity messages, by name): in the
+        // Storey context it frames the building being edited, not the whole site
+        Bounds? FrameBounds() => target is StoreySite s ? StoreyToolContext.FrameBounds(s) : null;
+        bool HasFrameBounds() => FrameBounds() != null;
+        Bounds OnGetFrameBounds() => FrameBounds() ?? default;
+
         static void SetTab(StoreyEditView v, StoreyTab t)
         {
             v.tab = t;

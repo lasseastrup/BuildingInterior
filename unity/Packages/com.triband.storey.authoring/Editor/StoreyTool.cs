@@ -11,7 +11,8 @@ namespace Triband.Storey.Editor
 {
     /// <summary>
     /// What the three Storey tools share (docs/EDITOR.md slices 6.5–6.7): only one set of handles in the Scene view at a
-    /// time (SPEC §9), a click that hits nothing of the tool's selects the building under the pointer, and the site is
+    /// time (SPEC §9), a click that hits nothing of the tool's selects the building under the pointer (another site's too,
+    /// which is then the one edited), and the site is
     /// drawn with the view the tab wants (the active storey clipped and cut away as in play in the Interior tab). They
     /// belong to <see cref="StoreyToolContext"/>. No keyboard shortcuts: everything is a button in the inspector or the
     /// Storey Floors overlay.
@@ -105,7 +106,10 @@ namespace Triband.Storey.Editor
                 var (o, d) = MouseRay();
                 if (b != null && Click(e, b, o, d, sv)) { GUIUtility.hotControl = id; ev.Use(); return; }
                 var hit = Picking.Building(e.Document, o, d);
-                if (hit.index >= 0) { e.View.Select(e.Document.buildings[hit.index].id); ev.Use(); Inspectors(); }
+                // another site's building, in front of this one's or with none of this one's behind it: edit that
+                var world = HandleUtility.GUIPointToWorldRay(ev.mousePosition);
+                if (StoreyToolContext.SiteAt(world, Site!, hit.distance) is StoreySite other) { StoreyToolContext.Edit(other, world); ev.Use(); Inspectors(); }
+                else if (hit.index >= 0) { e.View.Select(e.Document.buildings[hit.index].id); ev.Use(); Inspectors(); }
             }
             else if (ev.type == EventType.MouseUp && GUIUtility.hotControl == id)
             {

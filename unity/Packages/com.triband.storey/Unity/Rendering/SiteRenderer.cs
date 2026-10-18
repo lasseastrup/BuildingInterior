@@ -530,6 +530,12 @@ namespace Triband.Storey.Unity
         /// <summary>The building table's index of a building, for the shader globals (isolate, active building); -1 when not shown.</summary>
         public int TableIndexOf(string id) => built.TryGetValue(id, out var b) ? b.idx : -1;
 
+        /// <summary>
+        /// An object this site made to draw its buildings (a building's detail mesh or a merged cell), not one the project put
+        /// under the site: what the Scene view picks when a building is clicked.
+        /// </summary>
+        public bool Made(Transform t) => (detailRoot != null && t.IsChildOf(detailRoot.transform)) || (cellRoot != null && t.IsChildOf(cellRoot.transform));
+
         /// <summary>The layout as built (null before <see cref="Show"/>). A new one after every change.</summary>
         public Site? Site => site;
 
