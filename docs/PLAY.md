@@ -109,7 +109,13 @@ Each triangle is tagged Floor, Stair, Wall or Roof (`CollisionMesh.Kind`). The d
 - **Run time:** a collider is built only when a building is. Its collision mesh is made on the build thread with the building's first LOD0. The buildings built since the last batch are cooked together, in parallel with `Physics.BakeMesh` in an `IJobParallelFor` on Unity's job workers, while the frames go on: the colliders are assigned in a later frame, once the batch has finished, so cooking never holds a frame. No mesh is destroyed while its batch cooks (a building released meanwhile waits for it), and in edit mode, which updates only when asked, the batch is finished at once. Each mesh is given to its collider with the same cooking options, so assigning it cooks nothing. The options are `UseFastMidphase` only: the mesh is already welded and has no degenerate triangles, so cleaning and welding are skipped. The mesh is positions and indices only, with 16-bit indices.
 - **Edit time:** no colliders by default, so dragging a wall cooks nothing. **Colliders in edit mode** turns them on for editor raycasts. Each edit then rebuilds the colliders of only the buildings it touched.
 
+**When a building's collider is there.** It comes with the building's LOD0 (in view and near enough, docs/CITY.md §2), assigned a frame or two after the LOD0 is up, and a site loading over frames builds no LOD0 before it has read its layout. Physics doesn't wait, so a rigid body placed on a building falls through until the collider is there.
+- **Storey Props** with a Rigidbody are held still until then (docs/PROPS.md §2.6).
+- **Anything else** (a physics character, a rigid body that isn't a prop) waits on `StoreySite.CollidersReadyAround(position, radius)`: true once every building within the radius has its collider, and when the site makes none. A spawn or teleport asks for detail there first (`PrefetchAround`) and waits for this behind its fade, as it waits for `DetailReadyAround`. `SiteRenderer.HasCollider(id)` asks about one building.
+- **A building showing its LOD0 has its collider.** One whose collider went past the cap while its LOD0 was kept has it made again from that LOD0 when it's shown. A LOD0 prefetched round the player and never shown is the first collider to go past the cap, and it was shown later without one.
+
 **Limits.**
 - Walls on the roof storey are 1.2 m high, a parapet's height, whatever the parapet.
 - Lift shafts are solid floor: the walk model does not let the player fall down them either.
 - Gable ends above the top storey are not walls in the collision mesh. The pitched roof itself is.
+- A building out of view or far away has no collider until its LOD0 is built. Storey Props there stay held; any other rigid body falls through it.

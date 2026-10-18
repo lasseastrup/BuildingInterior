@@ -238,6 +238,29 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void APrefetchedLod0NeverShownIsTheFirstColliderToGoThoughItIsKept()
+        {
+            // why the site makes a collider again for a kept LOD0 shown again (SiteRenderer.UpdateLods): a building prefetched
+            // round the player has its LOD0 built, and its collider with it, but isn't shown, so past the collider cap it is
+            // the longest since its LOD0 showed (never) while that LOD0 is kept; walked up to, the LOD0 is shown with nothing
+            // built that would bring a collider
+            var m = new LodManager();
+            Box(m, 0, 20);                                  // close: LOD0 shown
+            var kept = Box(m, 1, 100, built: false);        // 10 px/m: LOD1, and prefetched
+            var f = m.Update(0, 1, 0, Pxm, 1, null, null, new[] { 1 });
+            Assert.Contains((1, 0), f.Build.Select(b => (b.idx, b.lod)));
+            foreach (var (i, lod, _) in f.Build) m.SetBuilt(i, lod, true);
+            m.Update(0, 1, 0, Pxm, 1, null, null, new[] { 1 });
+            Assert.True(kept.Has0); Assert.Equal(1, kept.Shown);
+            var drop = new System.Collections.Generic.List<int>();
+            m.OldestDetail(new[] { 0, 1 }, 1, drop);
+            Assert.Equal(new[] { 1 }, drop);
+            var g = m.Update(80, 1, 0, Pxm, 1, null, null, new[] { 1 });   // the camera 20 m from it
+            Assert.Equal(0, kept.Shown);
+            Assert.DoesNotContain(g.Build, b => b.idx == 1 && b.lod == 0);
+        }
+
+        [Fact]
         public void SelectionStaysCheapForTheCity()
         {
             var m = new LodManager(); var r = new Random(1);

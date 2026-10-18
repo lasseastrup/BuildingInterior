@@ -14,7 +14,9 @@ namespace Triband.Storey.Unity
     /// <item>switches the building's props off once it has settled at LOD1 or LOD2 (Play mode), on again at LOD0;</item>
     /// <item>for a prop set to Hide Whole, switches it off while its point is in a storey the occlusion hides;</item>
     /// <item>in Play mode, gives its renderers their materials' steady copies while nothing can hide its building's
-    /// pixels, for a graph with the steady variant (docs/PROPS.md §2.2, docs/PERFORMANCE.md §11.1).</item>
+    /// pixels, for a graph with the steady variant (docs/PROPS.md §2.2, docs/PERFORMANCE.md §11.1);</item>
+    /// <item>in Play mode, holds its rigid body still while there may be nothing under it yet: its building's collider
+    /// isn't up, or its site is still loading (docs/PROPS.md §2.6).</item>
     /// </list>
     /// </summary>
     [ExecuteAlways]
@@ -24,6 +26,9 @@ namespace Triband.Storey.Unity
     {
         /// <summary>How far a moving prop goes before it is found again (metres).</summary>
         public const float MoveThreshold = 0.05f;
+
+        /// <summary>Below this speed (metres a second) a rigid body counts as at rest: placed, not thrown.</summary>
+        public const float RestingSpeed = 0.5f;
 
         internal sealed class Entry
         {
@@ -44,6 +49,9 @@ namespace Triband.Storey.Unity
             public Material[][]? own, steadyMats;
             public sbyte copies;
             public bool steady;
+            // its rigid body (docs/PROPS.md §2.6): not looked at since it was registered or refreshed (Play mode), found in
+            // the street while a site was loading, and held still now
+            public bool fresh, pending, held;
         }
 
         internal sealed class Group
@@ -51,6 +59,7 @@ namespace Triband.Storey.Unity
             public readonly List<Entry> members = new List<Entry>();
             public (StoreySite site, int idx) key;
             public bool off, steady;
+            public bool ground;   // something under its props' rigid bodies: the building's collider is up, or none is coming
         }
 
         /// <summary>
@@ -88,6 +97,11 @@ namespace Triband.Storey.Unity
         readonly Dictionary<StoreySite, (SiteRenderer? r, int v)> siteVersions = new Dictionary<StoreySite, (SiteRenderer?, int)>();
         readonly List<StoreySite> rebuiltSites = new List<StoreySite>(), goneSites = new List<StoreySite>();
         bool wasPlaying;
+        // in Play mode (docs/PROPS.md §2.6): the props to look at before the next physics step, those found in the street
+        // while a site was loading, and the rigid bodies held still, each with how many props hold it and what it had
+        readonly List<Entry> fresh = new List<Entry>(), pending = new List<Entry>();
+        readonly Dictionary<Rigidbody, HeldBody> holds = new Dictionary<Rigidbody, HeldBody>();
+        struct HeldBody { public int count; public Vector3 v, w; public CollisionDetectionMode mode; }
 
         /// <summary>How many props are kept (for the inspector and tests).</summary>
         public static int Count => instance != null ? instance.entries.Count : 0;
@@ -121,6 +135,7 @@ namespace Triband.Storey.Unity
             var e = new Entry { prop = p };
             m.byProp[p] = e; m.entries.Add(e); p.entry = e;
             m.Gather(e);
+            m.Fresh(e);   // its body looked at before the next physics step, not here: the game may yet set its velocity
             m.Locate(e);
         }
 
@@ -129,6 +144,7 @@ namespace Triband.Storey.Unity
             if (instance == null || !instance.byProp.TryGetValue(p, out var e)) return;
             var m = instance;
             m.byProp.Remove(p); m.entries.Remove(e); m.moving.Remove(e); m.whole.Remove(e); p.entry = null;
+            m.Let(e);   // its body goes on as it was
             SetSteady(e, false);   // its own materials back
             m.Join(e, null, leaving: true);
             Write(e, 0); e.lodOff = e.wholeOff = false; Apply(e);
@@ -139,8 +155,10 @@ namespace Triband.Storey.Unity
             if (instance == null || !instance.byProp.TryGetValue(p, out var e)) return;
             SetSteady(e, false); e.copies = 0; e.own = e.steadyMats = null;   // its renderers or their materials may be others now
             Write(e, 0); e.lodOff = e.wholeOff = false; Apply(e);
+            instance.Let(e);   // its body may be another now, or somewhere else: looked at again
             instance.Gather(e);
             e.written = uint.MaxValue; e.placed = false;
+            instance.Fresh(e);
             instance.Locate(e);
         }
 
@@ -204,7 +222,7 @@ namespace Triband.Storey.Unity
 
         Group GroupOf(StoreySite s, int idx)
         {
-            if (!groups.TryGetValue((s, idx), out var g)) groups[(s, idx)] = g = new Group { key = (s, idx) };
+            if (!groups.TryGetValue((s, idx), out var g)) groups[(s, idx)] = g = new Group { key = (s, idx), ground = Ground(Application.isPlaying, s.Renderer, idx) };
             return g;
         }
 
@@ -221,6 +239,7 @@ namespace Triband.Storey.Unity
                 e.group = g;
                 if (g != null) { g.members.Add(e); e.lodOff = g.off; } else e.lodOff = false;
                 Apply(e);
+                UpdateHold(e);   // another building, or the street: held as that one's collider says
             }
             // as its building's props are; one in the street is never hidden: steady throughout Play mode
             if (!leaving) SetSteady(e, g != null ? g.steady : Application.isPlaying);
@@ -259,13 +278,20 @@ namespace Triband.Storey.Unity
                 seenVersion = any;
                 Rebuilt();
             }
-            // a moving prop: found again once it has gone 5 cm (a rigidbody's only while awake); in the editor, a still one
-            // moved by hand. A still prop costs nothing a frame in Play mode
+            // the props registered since the physics last stepped, and once no site is loading, those found in the street
+            // meanwhile, now filed where they are: their rigid bodies held or let go (docs/PROPS.md §2.6)
+            if (playing)
+            {
+                Settle();
+                if (pending.Count > 0 && !SiteLoading()) Placed();
+            }
+            // a moving prop: found again once it has gone 5 cm (a rigidbody's only while awake, and not while held, which
+            // doesn't move it); in the editor, a still one moved by hand. A still prop costs nothing a frame in Play mode
             if (playing)
                 for (int i = 0; i < moving.Count; i++)
                 {
                     var e = moving[i];
-                    if (e.prop == null || (e.body != null && e.body.IsSleeping())) continue;
+                    if (e.prop == null || e.held || (e.body != null && e.body.IsSleeping())) continue;
                     var at = PointOf(e);
                     if (!e.placed || (at - e.last).sqrMagnitude > MoveThreshold * MoveThreshold) Locate(e);
                 }
@@ -298,6 +324,14 @@ namespace Triband.Storey.Unity
                 {
                     g.steady = steady;
                     foreach (var e in g.members) SetSteady(e, steady);
+                }
+                // its props' rigid bodies held while it has no collider: not up yet, or let go past the site's cap. The site
+                // ran first, so one assigned or destroyed this frame is seen before the physics steps again
+                bool ground = Ground(playing, r, idx);
+                if (ground != g.ground)
+                {
+                    g.ground = ground;
+                    foreach (var e in g.members) UpdateHold(e);
                 }
             }
 
@@ -343,14 +377,142 @@ namespace Triband.Storey.Unity
             }
         }
 
-        /// <summary>Play mode started or ended: the props in the street on their steady copies, or every prop on its own materials again.</summary>
+        /// <summary>
+        /// Play mode started or ended: the props in the street on their steady copies, or every prop on its own materials
+        /// again; every prop looked at before the first physics step, or every rigid body held let go.
+        /// </summary>
         void Played(bool playing)
         {
             wasPlaying = playing;
-            for (int i = 0; i < entries.Count; i++) { var e = entries[i]; if (e.group == null || !playing) SetSteady(e, playing && e.group == null); }
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var e = entries[i];
+                if (e.group == null || !playing) SetSteady(e, playing && e.group == null);
+                if (playing) Fresh(e); else { Let(e); e.fresh = e.pending = false; }
+            }
             if (playing) return;
+            fresh.Clear(); pending.Clear(); holds.Clear();
             foreach (var g in groups.Values) g.steady = false;
             ReleaseCopies();
+        }
+
+        // ---- rigid bodies held while there may be nothing under them (docs/PROPS.md §2.6) ----
+
+        // a building's collider comes with its LOD0, built on a worker as the camera nears and cooked off the main thread a
+        // frame or two after (docs/PLAY.md §5), and a site loading over frames hasn't even read its layout in its first
+        // frames: a rigid body placed on a floor or a roof fell through it before it was there
+
+        // before each physics step: the props registered since the last look (a scene starting, a district streamed in, one
+        // made in a physics callback) are held before they can fall through a floor that isn't there yet
+        void FixedUpdate()
+        {
+            if (!wasPlaying) Played(true);
+            Settle();
+        }
+
+        /// <summary>To be looked at before the next physics step, by <see cref="Settle"/> (Play mode only).</summary>
+        void Fresh(Entry e)
+        {
+            if (e.fresh || !Application.isPlaying) return;
+            e.fresh = true; fresh.Add(e);
+        }
+
+        /// <summary>
+        /// The props registered or refreshed since the last look, looked at: held or not (<see cref="UpdateHold"/>). A scene
+        /// starting or a district streamed in registers its props before its site has read its layout, so one found in the
+        /// street while a site making colliders is loading, at rest, is held until none is (<see cref="Placed"/>): it may yet
+        /// be in one of its buildings.
+        /// </summary>
+        void Settle()
+        {
+            if (fresh.Count == 0) return;
+            bool loading = SiteLoading();
+            for (int i = 0; i < fresh.Count; i++)
+            {
+                var e = fresh[i];
+                if (!e.fresh) continue;
+                e.fresh = false;
+                if (e.at < 0) continue;   // unregistered meanwhile
+                // a site shown since the props last filed everything (one enabled after it as a scene loads, say) may have it
+                if (e.group == null && SiteRenderer.AnyVersion != seenVersion) Locate(e);
+                if (e.group == null && loading && !e.pending && e.body != null && Resting(e.body)) { e.pending = true; pending.Add(e); }
+                UpdateHold(e);
+            }
+            fresh.Clear();
+        }
+
+        /// <summary>
+        /// No site making colliders is loading any more: the props found in the street meanwhile are where they are, filed in
+        /// a building by <see cref="Rebuilt"/> (held while its collider isn't up) or in the street (let go).
+        /// </summary>
+        void Placed()
+        {
+            for (int i = 0; i < pending.Count; i++) { var e = pending[i]; e.pending = false; UpdateHold(e); }
+            pending.Clear();
+        }
+
+        /// <summary>A site making colliders is still loading: a prop found in the street may yet be in one of its buildings.</summary>
+        static bool SiteLoading()
+        {
+            foreach (var s in StoreySite.AllSet)
+                if (s != null && s.isActiveAndEnabled && s.Loading && s.Renderer is SiteRenderer r && r.Colliders) return true;
+            return false;
+        }
+
+        /// <summary>Something under a building's props for their rigid bodies: its collider is up, or none is coming (outside Play mode, colliders off).</summary>
+        static bool Ground(bool playing, SiteRenderer? r, int idx) => !playing || r == null || !r.Colliders || r.ColliderUp(idx);
+
+        /// <summary>At rest: asleep, or slower than <see cref="RestingSpeed"/>.</summary>
+        static bool Resting(Rigidbody b) => b.IsSleeping() || b.linearVelocity.sqrMagnitude < RestingSpeed * RestingSpeed;
+
+        /// <summary>
+        /// A prop's rigid body held still while there may be nothing under it, let go once there is: in Play mode, for a prop
+        /// that waits for colliders (<see cref="StoreyProp.waitForCollider"/>), while its building has no collider, or, in the
+        /// street, while a site that was loading when it was found may yet put it in a building.
+        /// </summary>
+        void UpdateHold(Entry e)
+        {
+            bool want = e.at >= 0 && !e.fresh && e.body != null && e.prop != null && e.prop.waitForCollider && Application.isPlaying
+                && (e.group != null ? !e.group.ground : e.pending);
+            if (want == e.held) return;
+            if (!want) { Let(e); return; }
+            bool moving = !Resting(e.body!);
+            Hold(e);
+            // one moving into a building with no collider (thrown onto a roof out of view, say) has the building's asked for
+            // at once, rather than when the camera brings it: it comes with the building's LOD0
+            if (e.held && moving && e.group != null && e.site != null) e.site.PrefetchAround(e.last, 1);
+        }
+
+        /// <summary>
+        /// A prop's hold on its body: the body made kinematic, its velocities and collision detection kept to give back,
+        /// unless it is kinematic already, the game's doing, which is left alone. Props on one body share its hold.
+        /// </summary>
+        void Hold(Entry e)
+        {
+            var body = e.body!;
+            if (holds.TryGetValue(body, out var h)) { h.count++; holds[body] = h; e.held = true; return; }
+            if (body.isKinematic) return;
+            h = new HeldBody { count = 1, v = body.linearVelocity, w = body.angularVelocity, mode = body.collisionDetectionMode };
+            // a kinematic body takes speculative continuous detection at most (Unity warns at the others): given back after
+            if (h.mode == CollisionDetectionMode.Continuous || h.mode == CollisionDetectionMode.ContinuousDynamic) body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            body.isKinematic = true;
+            holds[body] = h; e.held = true;
+        }
+
+        /// <summary>A prop's hold given up. With its body's last, the body goes on as it was: dynamic again, at the velocities it was held at.</summary>
+        void Let(Entry e)
+        {
+            if (!e.held) return;
+            e.held = false;
+            var body = e.body!;   // perhaps destroyed since: the dictionary still finds it, by its instance
+            if (!holds.TryGetValue(body, out var h)) return;
+            if (--h.count > 0) { holds[body] = h; return; }
+            holds.Remove(body);
+            if (body == null) return;
+            body.isKinematic = false;   // first: a kinematic body takes no velocity, nor continuous detection
+            body.collisionDetectionMode = h.mode;
+            if (h.v != Vector3.zero) body.linearVelocity = h.v;
+            if (h.w != Vector3.zero) body.angularVelocity = h.w;
         }
 
         // ---- prop materials' steady copies (docs/PROPS.md §2.2, docs/PERFORMANCE.md §11.1) ----
@@ -479,7 +641,12 @@ namespace Triband.Storey.Unity
 
         // after a script reload the hidden manager is still there with nothing in it: it carries on, and a second goes
         void OnEnable() { if (instance == null) instance = this; else if (instance != this) DestroyImmediate(gameObject); }
-        void OnDestroy() { if (instance == this) { instance = null; ReleaseCopies(); } }
+        void OnDestroy()
+        {
+            if (instance != this) return;
+            for (int i = 0; i < entries.Count; i++) Let(entries[i]);   // no body is left kinematic
+            instance = null; ReleaseCopies();
+        }
 
         /// <summary>The building a prop is in, by name, and the storey (for the inspector); null in the street.</summary>
         public static (string building, int storey)? Where(StoreyProp p)

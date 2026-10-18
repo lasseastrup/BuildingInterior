@@ -93,6 +93,7 @@ Unity 6.3's `MeshRenderer` / `SkinnedMeshRenderer.SetShaderUserValue(uint)` give
 | **Motion: Moving** | Found again whenever it has moved 5 cm; a Rigidbody's only while awake. |
 | **Locate By** | Its renderers' bounds centre (the default), or its pivot. |
 | **Hide Whole** | §2.5. |
+| **Wait For Collider** | In Play mode, its Rigidbody is held still until there is a floor under it (§2.6). On by default. |
 
 The inspector says which building and storey it's in.
 
@@ -102,6 +103,7 @@ The inspector says which building and storey it's in.
 - **Rebuilds:** when a site is built again (an edit, a district streamed in), that site's props re-resolve their building's index by id. Props that had no building look for one in that site alone; the other sites' props are left as they are.
 - **Distance culling:** each building's props are a group, switched off with `forceRenderingOff` once the building has settled at LOD1 or LOD2 (Play mode only). That's one check per group per frame, not per prop. Their own `enabled` is never touched. A group goes when its last prop does.
 - **Steady copies:** a group's props move to their materials' steady copies, and back, as the building's steady answer changes (§2.2, step 4).
+- **Rigidbodies:** held still while their building has no collider, and while their site is loading (§2.6).
 
 **Tools ▸ Storey ▸ Props ▸ Show Prop Buildings** tints every prop by its building, and magenta in the street. A prop that doesn't change colour has a shader without the nodes. This is also the quickest check that the user value reaches the shader with your settings.
 
@@ -115,12 +117,33 @@ A Storey Prop with **Hide Whole** is switched off while its point is in a storey
 
 It's all or nothing: no dither, no squash.
 
+### 2.6 Rigidbodies: held until there is a floor under them
+
+A building's collider comes with its LOD0 (docs/PLAY.md §5): built on a build thread as the camera nears, then cooked off the main thread and assigned a frame or two later. A site loading over frames hasn't even read its layout in its first frames. Physics starts at once, so a rigidbody placed on a floor or a roof fell through before the floor was there.
+
+So in Play mode a Storey Prop's Rigidbody is **held**: kinematic while there may be nothing under it, let go as soon as there is.
+
+- **When it's held:**
+  - its building has no collider: not up yet (the site loading, the building's LOD0 not built, the collider cooking), or let go past **Colliders Kept**;
+  - it registered (or was refreshed) in the street, at rest, while a site making colliders was still loading: it may yet be in one of that site's buildings. Once no site is loading it's let go, or held by its building's rule. A prop already in the street when a district starts loading isn't held.
+- **Decided before the physics step.** A prop that registers (a scene starting, a district streamed in, an instantiated prefab) is looked at in the props manager's `FixedUpdate`, which runs before Unity's physics steps, or its `LateUpdate`, whichever comes first. Not as it registers: a game that instantiates a prop and sets its velocity right after keeps that velocity.
+- **What a hold keeps.** The body's velocities, given back when it's let go, so a body held in flight goes on. Continuous collision detection (Continuous, Continuous Dynamic) is Continuous Speculative while held, the most a kinematic body takes, and given back after.
+- **Out of view or far.** A building gets its LOD0, and with it its collider, only in view and near enough (docs/CITY.md §2), so its props stay held until then. They're hidden meanwhile anyway: a building's props are drawn only with its LOD0. A body that moves into a building with no collider (thrown onto a roof out of view, say) is held where it is, and that building's LOD0 is asked for at once (`StoreySite.PrefetchAround`), so it goes on a moment later.
+- **Never held:** a body that's kinematic already (the game's), a prop with **Wait For Collider** off, the props of a site with **Generate colliders** off, and anything outside Play mode.
+- **Several props on one body** (a Rigidbody on their parent) share its hold: it's held while any of them is.
+- **A held prop isn't looked for again,** since nothing moves it. A script that teleports one calls `Refresh()`, as for a still prop.
+- **A script that makes a held body kinematic itself** does so again once it's let go: letting go makes it dynamic.
+- **The inspector** says when a prop is held (`StoreyProp.Held`).
+
+A rigidbody or a physics character that isn't a Storey Prop waits on `StoreySite.CollidersReadyAround` instead (docs/PLAY.md §5).
+
 ## 3. What it costs
 
 - **CPU:**
   - Still props cost nothing per frame.
   - An awake rigidbody costs a vector compare per frame, plus a grid lookup and an outline test (no garbage, `PropTests`) each time it has gone 5 cm.
-  - Each building with props costs one LOD check and one steady check per frame.
+  - Each building with props costs one LOD check, one steady check and one collider check per frame.
+  - A held rigidbody costs nothing per frame. Holding one and letting it go happen on changes only: the prop registering, its building's collider coming or going, the site's load ending.
   - A steady copy swap re-registers the renderer with the GPU Resident Drawer, as a building's does. Storey Diagnostics counts them as "prop swaps".
 - **GPU:**
   - Per vertex, the same reads as a building vertex.
@@ -148,3 +171,8 @@ It's all or nothing: no dither, no squash.
 7. **Hide Whole:** set it on a prop with a third-party shader. It pops in and out with its storey.
 8. **The profiler:** no GC Alloc from Storey Props while walking (the steady copies' sync allocates their keyword lists twice a second, when there are copies).
 9. **The steady variant:** with the keyword and the override in a prop graph, the Frame Debugger shows the house's props in the opaque queue (2000) without `_ALPHATEST_ON` until the house is in the way, cut away or fading, and in the AlphaTest queue then.
+10. **Rigidbodies at the start (§2.6):** put crates (Storey Prop and Rigidbody) on a roof and on an upper floor, press Play. They stay where they are, and the inspector says they're held until the building's collider is up; then they settle where they were. Repeat:
+    - with Load Over Frames on and off;
+    - with the crates on a building behind the camera: they're let go once the camera turns to it;
+    - in a district streamed in;
+    - with a crate set to Continuous Dynamic: no warning in the Console.

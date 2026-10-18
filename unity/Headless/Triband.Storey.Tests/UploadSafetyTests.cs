@@ -132,5 +132,20 @@ namespace Triband.Storey.Tests
             Assert.Contains("o.renderer.enabled = false; o.filter.sharedMesh = null;", renderer);
             Assert.DoesNotContain("OnGUI", Text("Unity", "Rendering", "StoreySite.cs"));
         }
+
+        [Fact]
+        public void ABuildingShowingItsLod0HasItsCollider()
+        {
+            // a LOD0 kept after its collider went past the cap (one prefetched and never shown goes first:
+            // LodManagerTests.APrefetchedLod0NeverShownIsTheFirstColliderToGoThoughItIsKept) is shown again with nothing
+            // built: its collider is asked for again from its shape, unless it is being cooked. A rigid body waiting for it
+            // (docs/PROPS.md §2.6) would wait for good otherwise
+            string Text(params string[] path) => System.IO.File.ReadAllText(UnityAsset.Package("com.triband.storey", path));
+            var renderer = Text("Unity", "Rendering", "SiteRenderer.cs");
+            int a = renderer.IndexOf("foreach (int idx in f.Changed)", System.StringComparison.Ordinal), b = renderer.IndexOf("foreach (int idx in f.Held)", a, System.StringComparison.Ordinal);
+            Assert.True(a > 0 && b > a);
+            Assert.Contains("if (colliders && cb.collision == null && cb.shape != null && e.Visible(0) && !Baking(cb)) colliderPending.Add(cb.id);", renderer.Substring(a, b - a));
+            Assert.Contains("internal bool ColliderUp(int idx) => byIdx.TryGetValue(idx, out var b) && b.collision != null;", renderer);
+        }
     }
 }

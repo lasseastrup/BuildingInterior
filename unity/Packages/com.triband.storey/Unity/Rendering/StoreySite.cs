@@ -96,7 +96,8 @@ namespace Triband.Storey.Unity
         /// Ask for full detail round a point the view is about to reach (a spawn, a teleport; world space): the buildings
         /// within <paramref name="radius"/> metres of it get their LOD0 built ahead of the rest of the city, after the ones
         /// the view can't do without (docs/PERFORMANCE.md §3.1), for <paramref name="seconds"/>. A spawn or teleport behind a
-        /// fade or a loading screen waits for <see cref="DetailReadyAround"/>; the play kit's character asks at every spawn.
+        /// fade or a loading screen waits for <see cref="DetailReadyAround"/>, and a physics character for
+        /// <see cref="CollidersReadyAround"/> too; the play kit's character asks at every spawn.
         /// </summary>
         public void PrefetchAround(Vector3 world, float radius = 8, float seconds = 10) => prefetchAt.Add((world, radius, Time.unscaledTime + seconds));
 
@@ -112,6 +113,23 @@ namespace Triband.Storey.Unity
             site.BuildingsNear(world.x - o.x, world.z - o.z, radius, nearIds);
             foreach (var id in nearIds) if (!site.HasDetail(id)) return false;
             return true;
+        }
+
+        /// <summary>
+        /// Every building within <paramref name="radius"/> metres of a point (world space) has its collider up (docs/PLAY.md
+        /// §5): a physics character or rigid body put there has floors, stairs and walls to meet. A building's collider comes
+        /// with its LOD0, cooked off the main thread a frame or two after it, so a spawn or teleport asks for detail there
+        /// first (<see cref="PrefetchAround"/>) and waits for this behind its fade, as for <see cref="DetailReadyAround"/>.
+        /// True when the site makes no colliders: there are none to wait for. A Storey Prop with a rigid body waits for its
+        /// building's by itself (docs/PROPS.md §2.6).
+        /// </summary>
+        public bool CollidersReadyAround(Vector3 world, float radius = 8)
+        {
+            if (site == null) return false;
+            if (!site.Colliders) return true;
+            if (Loading) return false;   // a building there may not be built yet
+            var o = transform.position;
+            return site.CollidersUpNear(world.x - o.x, world.z - o.z, radius);
         }
         readonly List<(Vector3 at, float radius, float until)> prefetchAt = new List<(Vector3, float, float)>();
         readonly List<string> nearIds = new List<string>();

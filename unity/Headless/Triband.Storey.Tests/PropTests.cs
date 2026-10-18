@@ -127,5 +127,40 @@ namespace Triband.Storey.Tests
             Assert.Contains("bool steady = playing && r != null && !off && r.PropSteady(idx);", props);
             Assert.Contains("global::Triband.Storey.Occlusion.Steady.Of(idx, st.z, st.w, StoreyGlobals.ActiveIndex, StoreyGlobals.IsolateAmount, StoreyGlobals.IsolatedIndex)", Text("Unity", "Rendering", "SiteRenderer.cs"));
         }
+
+        /// <summary>
+        /// docs/PROPS.md §2.6: in Play mode a prop's rigid body is held still while there may be nothing under it. Whether is
+        /// decided before the next physics step (a scene's props register before its site has read its layout), not as the
+        /// prop registers (the game may set its velocity just after); a prop that stops being a prop lets go; a held prop
+        /// isn't looked for again, as nothing moves it; a hold takes continuous detection down to speculative before making
+        /// the body kinematic, and the body is dynamic again before its detection and velocities are given back; each
+        /// building's collider is asked for once a frame for all its props; and props wait by default.
+        /// </summary>
+        [Fact]
+        public void APropsRigidBodyIsHeldUntilTheFloorUnderItIsThere()
+        {
+            string Text(params string[] path) => System.IO.File.ReadAllText(UnityAsset.Package("com.triband.storey", path)).Replace("\r\n", "\n");
+            var props = Text("Unity", "Props", "StoreyProps.cs");
+            string Method(string start, string next)
+            {
+                int a = props.IndexOf(start, System.StringComparison.Ordinal); Assert.True(a > 0, start);
+                int b = props.IndexOf(next, a, System.StringComparison.Ordinal); Assert.True(b > a, next);
+                return props.Substring(a, b - a);
+            }
+            int At(string text, string what) { int i = text.IndexOf(what, System.StringComparison.Ordinal); Assert.True(i >= 0, what); return i; }
+            Assert.Contains("Settle();", Method("void FixedUpdate()", "void Fresh(Entry e)"));
+            var register = Method("internal static void Register(StoreyProp p)", "internal static void Unregister(");
+            Assert.True(At(register, "m.Fresh(e);") < At(register, "m.Locate(e);"), "looked at later, not as it registers");
+            Assert.Contains("!e.fresh", Method("void UpdateHold(Entry e)", "void Hold(Entry e)"));
+            Assert.Contains("m.Let(e);", Method("internal static void Unregister(StoreyProp p)", "internal static void Refresh("));
+            Assert.Contains("if (e.prop == null || e.held || (e.body != null && e.body.IsSleeping())) continue;", props);
+            var hold = Method("void Hold(Entry e)", "void Let(Entry e)");
+            Assert.True(At(hold, "= CollisionDetectionMode.ContinuousSpeculative;") < At(hold, "body.isKinematic = true;"));
+            var let = Method("void Let(Entry e)", "// ---- prop materials' steady copies");
+            Assert.True(At(let, "body.isKinematic = false;") < At(let, "body.collisionDetectionMode = h.mode;"));
+            Assert.True(At(let, "body.isKinematic = false;") < At(let, "body.linearVelocity = h.v;"));
+            Assert.Contains("bool ground = Ground(playing, r, idx);", Method("foreach (var kv in groups)", "// props drawn whole"));
+            Assert.Contains("public bool waitForCollider = true;", Text("Unity", "Props", "StoreyProp.cs"));
+        }
     }
 }

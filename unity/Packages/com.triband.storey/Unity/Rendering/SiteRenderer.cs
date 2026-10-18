@@ -521,6 +521,33 @@ namespace Triband.Storey.Unity
             }
         }
 
+        /// <summary>
+        /// The building has its collider, cooked and assigned (<see cref="Colliders"/>): a rigid body can rest on it. Not yet
+        /// while the building waits for its first LOD0, which brings it, or while that is cooked (a frame or two after), and no
+        /// longer once let go past <see cref="LodSettings.MaxColliders"/>.
+        /// </summary>
+        public bool HasCollider(string id) => built.TryGetValue(id, out var b) && b.collision != null;
+
+        /// <summary><see cref="HasCollider"/> by table index (<see cref="TableIndexOf"/>), for the props manager.</summary>
+        internal bool ColliderUp(int idx) => byIdx.TryGetValue(idx, out var b) && b.collision != null;
+
+        /// <summary>
+        /// Every building whose box comes within <paramref name="radius"/> metres of a point (site space, x and z) has its
+        /// collider (<see cref="HasCollider"/>). The boxes are the layout's (its outlines'), so the fixed LOD answers too.
+        /// </summary>
+        public bool CollidersUpNear(double x, double z, double radius)
+        {
+            if (site == null) return false;
+            foreach (var bt in built.Values)
+            {
+                if (bt.collision != null || !(site.ById(bt.id) is BuildingData b)) continue;
+                var (x0, z0, x1, z1) = site.Bounds(b);
+                double dx = Math.Max(Math.Max(x0 - x, 0), x - x1), dz = Math.Max(Math.Max(z0 - z, 0), z - z1);
+                if (dx * dx + dz * dz <= radius * radius) return false;
+            }
+            return true;
+        }
+
         /// <summary>The automatic LOD's numbers from the last frame.</summary>
         public LodStats Stats => stats;
 
@@ -1487,7 +1514,11 @@ namespace Triband.Storey.Unity
                 {
                     var e = l.Get(idx)!; table.SetLod(idx, e.Shown, e.From, e.RowFade);
                     if (e.T < 1 || e.Hold > 0) fading = true;
-                    if (byIdx.TryGetValue(idx, out var cb)) { ShowDetail(cb); if (cb.inCell) shownCells.Add(cb.cell); }
+                    if (!byIdx.TryGetValue(idx, out var cb)) continue;
+                    ShowDetail(cb); if (cb.inCell) shownCells.Add(cb.cell);
+                    // a LOD0 shown again after it was kept may have lost its collider past the cap meanwhile (one prefetched
+                    // and never shown is the first to): made again from its shape, so one showing its LOD0 has its collider
+                    if (colliders && cb.collision == null && cb.shape != null && e.Visible(0) && !Baking(cb)) colliderPending.Add(cb.id);
                 }
                 // a late LOD0's windows clearing (LodManager.Entry.Hold): its row alone, nothing shown or hidden
                 foreach (int idx in f.Held) { var e = l.Get(idx)!; table.SetLod(idx, e.Shown, e.From, e.RowFade); fading = true; }
@@ -1803,7 +1834,8 @@ namespace Triband.Storey.Unity
 
         /// <summary>
         /// The colliders of every building built since the last batch, together: their meshes made with their LOD0 on the
-        /// build threads (on the main thread only when colliders are switched on: 0.4 to 2 ms a building), then cooked
+        /// build threads (on the main thread only when colliders are switched on, or for a kept LOD0 shown again after its
+        /// collider went past the cap: 0.4 to 2 ms a building), then cooked
         /// across Unity's job workers while the frames go on, and assigned, already cooked, once the batch has finished
         /// (<see cref="FinishBake"/>). In edit mode, which only updates when asked, at once.
         /// </summary>
@@ -1853,13 +1885,20 @@ namespace Triband.Storey.Unity
             if (lods != null) TrimColliders();
         }
 
+        /// <summary>The building's collider is in the batch being cooked.</summary>
+        bool Baking(Built bt)
+        {
+            foreach (var (b, _) in baking) if (b == bt) return true;
+            return false;
+        }
+
         readonly List<int> collided = new List<int>(), colliderDrop = new List<int>();
         int colliderCap = int.MinValue;   // the cap last trimmed to
 
         /// <summary>
         /// Past the settings' cap (<see cref="LodSettings.MaxColliders"/>), the colliders of the buildings whose LOD0 went
         /// longest ago go: a collider stays when its building's LOD0 goes, and they piled up for the session (docs/CITY.md §7).
-        /// One is made again with the building's next LOD0.
+        /// One is made again with the building's next LOD0, or when its LOD0, kept meanwhile, is shown again.
         /// </summary>
         void TrimColliders()
         {

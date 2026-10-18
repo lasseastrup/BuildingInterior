@@ -8,7 +8,8 @@ namespace Triband.Storey.Unity
     /// An object inside a building: furniture, clutter, a rigidbody that may fall down the stairs or out of a window
     /// (docs/PROPS.md). Every renderer under it is drawn as part of the building it's in: its shader (a Shader Graph with
     /// the Storey Prop nodes) reads the building from the renderer's user value, which this keeps up to date, and the
-    /// building's occlusion and LOD fade apply to it. A renderer under another Storey Prop belongs to that one.
+    /// building's occlusion and LOD fade apply to it. A renderer under another Storey Prop belongs to that one. In Play mode
+    /// its rigid body, if it has one, is held still while its building has no collider yet (docs/PROPS.md §2.6).
     /// </summary>
     [ExecuteAlways]
     [DisallowMultipleComponent]
@@ -33,10 +34,15 @@ namespace Triband.Storey.Unity
         public Point locateBy = Point.BoundsCentre;
         [Tooltip("For a renderer whose shader can't take the Storey Prop nodes: switch the whole prop off when the point is in a storey the occlusion hides (no dither, no squash).")]
         public bool hideWhole;
+        [Tooltip("In Play mode, hold its Rigidbody still (kinematic) while the building it's in has no collider yet, so it doesn't fall through a floor that isn't there: while the site loads, and until the building's LOD0, which brings its collider, is built. Let go once the collider is up.")]
+        public bool waitForCollider = true;
 
         /// <summary>The building it's in (null: in the street), and the site; for the inspector.</summary>
         public string? BuildingId => entry?.buildingId;
         public StoreySite? Site => entry?.site;
+
+        /// <summary>Its rigid body is held still now, waiting for its building's collider (<see cref="waitForCollider"/>); for the inspector.</summary>
+        public bool Held => entry?.held == true;
 
         internal StoreyProps.Entry? entry;
         readonly List<Renderer> found = new List<Renderer>();

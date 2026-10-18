@@ -716,7 +716,16 @@ namespace UnityEngine
     public sealed class MeshRenderer : Renderer { public void SetShaderUserValue(uint value) { } }
     public class SkinnedMeshRenderer : Renderer { public void SetShaderUserValue(uint value) { } }
 
-    public class Rigidbody : Component { public bool IsSleeping() => false; }
+    public class Rigidbody : Component
+    {
+        public bool IsSleeping() => false;
+        public bool isKinematic { get; set; }
+        public Vector3 linearVelocity { get; set; }
+        public Vector3 angularVelocity { get; set; }
+        public CollisionDetectionMode collisionDetectionMode { get; set; }
+    }
+
+    public enum CollisionDetectionMode { Discrete = 0, Continuous = 1, ContinuousDynamic = 2, ContinuousSpeculative = 3 }
 
     [System.AttributeUsage(System.AttributeTargets.Class)]
     public sealed class DisallowMultipleComponent : System.Attribute { }

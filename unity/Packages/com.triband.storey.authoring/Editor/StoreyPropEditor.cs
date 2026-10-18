@@ -16,6 +16,7 @@ namespace Triband.Storey.Editor
             var p = (StoreyProp)target;
             var at = StoreyProps.Where(p);
             EditorGUILayout.HelpBox(at is var (b, k) ? $"In {b}, {(k == 0 ? "ground floor" : "floor " + k)}." : "In the street: not in any building, so never hidden.", MessageType.None);
+            if (p.Held) EditorGUILayout.HelpBox("Its Rigidbody is held still (kinematic) until the building's collider is up: the site is loading, or the building's LOD0, which brings it, isn't built yet (docs/PROPS.md §2.6).", MessageType.None);
             EditorGUILayout.HelpBox("Its renderers' materials need the Storey Prop nodes in their Shader Graph (docs/PROPS.md §2.2). Tools ▸ Storey ▸ Props ▸ Show Prop Buildings tints every prop by its building: one that doesn't change colour doesn't read it.", MessageType.Info);
         }
     }
