@@ -81,7 +81,7 @@ struct Varyings
     half3 normalWS    : TEXCOORD0;
 #ifndef STOREY_MASSING
     half4 color       : TEXCOORD1;
-    half4 win         : TEXCOORD9;   // a window pane: u, v across and up it, 1 on a pane (2 + its row's high byte on a flat one), its number (LOD0/LOD1)
+    half4 win         : TEXCOORD9;   // a window pane: u, v across and up it, 1 on a pane (2 + its row's high byte, + 256 with a centre bar, on a flat one), its number (LOD0/LOD1)
 #endif
 #if defined(EVALUATE_SH_VERTEX) || defined(EVALUATE_SH_MIXED)
     half3 vertexSH    : TEXCOORD10;  // the ambient probe, or its L2 part, per vertex: every face is flat, so exact (§7.3)
@@ -131,7 +131,10 @@ Varyings StoreyVert(Attributes IN)
     worldPos = StoreySink(worldPos, IN.tag, kind, origY);
     StoreyVarying v;
     bool shown = StoreyVertex(IN.tag, wall, kind, wid, worldPos, origY, v);
-    float3 normalWS = TransformObjectToWorldNormal(IN.normalOS.xyz);
+    // a flat pane stands upright: its normal's up byte is its centre bar's mark (ColorRows.EncodePane), not light
+    float3 normalOS = IN.normalOS.xyz;
+    if (IN.normalOS.w < -0.5 / 127.0) normalOS.y = 0.0;
+    float3 normalWS = TransformObjectToWorldNormal(normalOS);
 #ifdef STOREY_SHADOW
     OUT.positionCS = TransformWorldToHClip(ApplyShadowBias(worldPos, normalWS, _LightDirection));
 #else
@@ -156,14 +159,15 @@ Varyings StoreyVert(Attributes IN)
 #endif
     uint4 ce = (uint4)round(IN.color * 255.0);
     // a pane: the normal's fourth byte not 0, negative for LOD1's flat pane (Lod1.PaneProud), whose recess the fragment stage
-    // draws (StoreyPaneRecess). A flat pane's colour row goes with it, for its reveals' wall colour, in places a pane leaves
-    // unused: the colour's alpha (the row's low byte) and its pane mark (2 + the high byte); 16-bit floats hold both exactly
+    // draws (StoreyPaneRecess), with LOD0's centre bar where its up byte says so. A flat pane's colour row goes with it, for
+    // its reveals' and bar's colours, in places a pane leaves unused: the colour's alpha (the row's low byte) and its pane
+    // mark (2 + the high byte, + 256 with a bar); 16-bit floats hold both exactly
     float nw = IN.normalOS.w;
-    bool pane = abs(nw) > 0.5 / 127.0, flat = nw < -0.5 / 127.0;
+    bool pane = abs(nw) > 0.5 / 127.0, flat = nw < -0.5 / 127.0, bar = flat && IN.normalOS.y > 0.5 / 127.0;
     // one lookup, its slot and shade picked first (StoreyVertexColor's otherwise): HLSL evaluates both sides of a ?:, and
     // the colour's side read a pane's number as its slot
     OUT.color = float4(StoreyPaletteColor(ce.x | (ce.y << 8), pane ? 6u : ce.z, pane ? paneTone : ce.w / 128.0), flat ? (float)ce.x : 1.0);   // a face's vertices share one swatch: exact per vertex
-    OUT.win = pane ? float4(IN.color.a, (abs(nw) * 127.0 - 1.0) / 126.0, flat ? 2.0 + (float)ce.y : 1.0, (float)ce.z) : float4(0, 0, 0, 0);
+    OUT.win = pane ? float4(IN.color.a, (abs(nw) * 127.0 - 1.0) / 126.0, flat ? 2.0 + (float)ce.y + (bar ? 256.0 : 0.0) : 1.0, (float)ce.z) : float4(0, 0, 0, 0);
 #endif
 #ifdef STOREY_STEADY
     OUT.misc = float2(v.bid, v.lod);

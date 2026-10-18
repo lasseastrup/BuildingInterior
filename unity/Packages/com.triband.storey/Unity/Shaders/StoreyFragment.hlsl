@@ -23,16 +23,19 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     s.normalWS = normalize(isFront ? IN.normalWS : -IN.normalWS);
 #if !defined(STOREY_MASSING) && !defined(STOREY_GLASS)
     // LOD1's flat pane (Lod1.PaneProud): what the line of sight meets in the recess LOD0 cuts (StoreyPaneRecess). A reveal
-    // is lit as LOD0's is, the wall's colour facing its own way; the pane shows its room from where LOD0's pane is. The
-    // pane's derivatives are the window effect's too, taken once here for every pixel of the quad
+    // is lit as LOD0's is, the wall's colour facing its own way, and the centre bar in the trim's; the pane shows its room
+    // from where LOD0's pane is. The pane's derivatives are the window effect's too, taken once here for every pixel of
+    // the quad
     float2 paneUV = IN.win.xy, wdx = ddx(IN.win.xy), wdy = ddy(IN.win.xy); bool reveal = false;
     if (IN.win.z > 1.5 && isFront)   // the same for a whole triangle, so for every pixel of a quad: its derivatives hold
     {
-        float3 rn = StoreyPaneRecess(paneUV, wdx, wdy, ddx(IN.worldPos), ddy(IN.worldPos), s.positionWS, s.normalWS);
+        uint mark = (uint)(IN.win.z - 1.5);   // the row's high byte, + 256 with a centre bar
+        bool trim;
+        float3 rn = StoreyPaneRecess(paneUV, wdx, wdy, ddx(IN.worldPos), ddy(IN.worldPos), s.positionWS, s.normalWS, mark >= 256u, trim);
         if (dot(rn, rn) > 0.5)
         {
-            reveal = true;
-            s.albedo = StoreyWallColor((uint)(IN.win.z - 1.5) * 256u + (uint)(IN.color.a + 0.5));   // its row, as LOD0's reveals
+            reveal = true;   // a reveal or the bar: no room drawn
+            s.albedo = StoreyWallOrTrim((mark & 255u) * 256u + (uint)(IN.color.a + 0.5), trim);   // its row, as LOD0's
             s.normalWS = rn;
         }
     }

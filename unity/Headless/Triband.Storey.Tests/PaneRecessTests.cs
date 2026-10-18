@@ -21,35 +21,56 @@ namespace Triband.Storey.Tests
         readonly ITestOutputHelper output;
         public PaneRecessTests(ITestOutputHelper o) { output = o; }
 
-        /// <summary>StoreyPaneRecess as the shader has it, in doubles: (true, where on LOD0's pane) or (false, the reveal's normal).</summary>
-        static (bool pane, double u, double v, P3 n) Recess(double u, double v, double perMu, double perMv, P3 pos, P3 eye, P3 N)
+        /// <summary>
+        /// StoreyPaneRecess as the shader has it, in doubles: (true, where on LOD0's pane) or (false, the normal of the reveal
+        /// or, trim, the centre bar met).
+        /// </summary>
+        static (bool pane, double u, double v, P3 n, bool trim) Recess(double u, double v, double perMu, double perMv, P3 pos, P3 eye, P3 N, bool bar = false)
         {
             double tl = Math.Sqrt(N.z * N.z + N.x * N.x); var T = new P3(N.z / tl, 0, -N.x / tl);
             double vx = eye.x - pos.x, vy = eye.y - pos.y, vz = eye.z - pos.z, vl = Math.Sqrt(vx * vx + vy * vy + vz * vz); vx /= vl; vy /= vl; vz /= vl;
             double vn = Math.Max(vx * N.x + vy * N.y + vz * N.z, 1e-3);
             double gu = -(vx * T.x + vz * T.z) / vn * Recess195 * perMu, gv = -vy / vn * Recess195 * perMv;
             double hu = u + gu, hv = v + gv;
-            if (hu >= 0 && hu <= 1 && hv >= 0 && hv <= 1) return (true, hu, hv, default);
+            if (hu >= 0 && hu <= 1 && hv >= 0 && hv <= 1)
+            {
+                double front = u + gu * (BarFront / Recess195), hw = Facade.BarHalf * perMu;
+                if (bar && Math.Max(front, hu) > 0.5 - hw && Math.Min(front, hu) < 0.5 + hw)
+                {
+                    if (Math.Abs(front - 0.5) < hw) return (false, 0, 0, N, true);
+                    double sb = -Math.Sign(gu); return (false, 0, 0, new P3(sb * T.x, 0, sb * T.z), true);
+                }
+                return (true, hu, hv, default, false);
+            }
             double au = (gu >= 0 ? 1 - u : u) / Math.Max(Math.Abs(gu), 1e-6), av = (gv >= 0 ? 1 - v : v) / Math.Max(Math.Abs(gv), 1e-6);
-            if (au < av) { double s = -Math.Sign(gu); return (false, 0, 0, new P3(s * T.x, 0, s * T.z)); }
-            return (false, 0, 0, new P3(0, -Math.Sign(gv), 0));
+            if (au < av) { double s = -Math.Sign(gu); return (false, 0, 0, new P3(s * T.x, 0, s * T.z), false); }
+            return (false, 0, 0, new P3(0, -Math.Sign(gv), 0), false);
         }
 
-        const double Recess195 = 0.195;
+        const double Recess195 = 0.195, BarFront = 0.15;
 
         [Fact]
         public void TheShadersRecessIsLod0sDepthFromLod1sPane()
         {
             // from LOD1's pane, PaneProud off the wall's outer face, to LOD0's, T × 0.45 from its inner face
             Assert.Equal(Recess195, Dim.T_EXT - Dim.T_EXT * 0.45 + Lod1.PaneProud, 9);
+            // LOD0's centre bar: its front T × 0.6 from the wall's inside, 3 cm either side of the middle (Facade.Dress)
+            Assert.Equal(BarFront, Dim.T_EXT + Lod1.PaneProud - Dim.T_EXT * 0.6, 9);
             var hlsl = File.ReadAllText(UnityAsset.Package("com.triband.storey", "Unity", "Shaders", "StoreyWindow.hlsl"));
             Assert.Matches(new Regex(@"#define STOREY_PANE_RECESS 0\.195\b"), hlsl);
+            Assert.Matches(new Regex(@"#define STOREY_BAR_FRONT 0\.15\b"), hlsl);
+            Assert.Matches(new Regex(@"#define STOREY_BAR_HALF " + Facade.BarHalf.ToString(System.Globalization.CultureInfo.InvariantCulture).Replace(".", "\\.") + @"\b"), hlsl);
             // the sum written out above is the shader's
             foreach (var line in new[]
             {
                 "float2 go = -float2(dot(V, T), V.y) / max(dot(V, N), 1e-3) * (STOREY_PANE_RECESS * perM);",
-                "if (all(hit >= 0.0) && all(hit <= 1.0)) { uv = hit; return float3(0.0, 0.0, 0.0); }",
+                "if (all(hit >= 0.0) && all(hit <= 1.0))",
+                "uv = hit; return float3(0.0, 0.0, 0.0);",
                 "float2 at = lerp(uv, 1.0 - uv, step(0.0, go)) / max(abs(go), 1e-6);",
+                "float front = uv.x + go.x * (STOREY_BAR_FRONT / STOREY_PANE_RECESS), hw = STOREY_BAR_HALF * perM.x;",
+                "if (bar && max(front, hit.x) > 0.5 - hw && min(front, hit.x) < 0.5 + hw)",
+                "if (abs(front - 0.5) < hw) return N;",
+                "return -sign(go.x) * T;",
                 "if (at.x < at.y) return -sign(go.x) * T;",
                 "return float3(0.0, -sign(go.y), 0.0);",
             }) Assert.Contains(line, hlsl);
@@ -68,7 +89,8 @@ namespace Triband.Storey.Tests
         /// <summary>
         /// Rays from where LOD1 and LOD0 meet (35 to 80 m, at every angle and height) through points on LOD1's flat panes:
         /// what LOD0 shows on the same line of sight against what the shader says. They agree but where LOD0 has trim the
-        /// shader leaves out (a sill's or head's edge, a wide window's mullion), and the wall's share of the windows is LOD0's.
+        /// shader leaves out (a sill's or head's edge), the wall's share of the windows is LOD0's, and so is the share of a
+        /// wide window's centre bar.
         /// </summary>
         [Theory]
         [InlineData("glass")]
@@ -84,7 +106,7 @@ namespace Triband.Storey.Tests
             var flats = Enumerable.Range(0, l1.Tris).Where(Flat).ToList();
             Assert.NotEmpty(flats);
             var rng = new Random(5);
-            int rays = 0, agree = 0, trim = 0, wall0 = 0, wall1 = 0, normals = 0, normalsRight = 0;
+            int rays = 0, agree = 0, trim = 0, wall0 = 0, wall1 = 0, normals = 0, normalsRight = 0, bar0 = 0, bar1 = 0;
             var miss = new Dictionary<string, int>();
             while (rays < 6000)
             {
@@ -110,26 +132,32 @@ namespace Triband.Storey.Tests
                 var wa = l1.PaneUV[ia]; var wb = l1.PaneUV[ib]; var wc = l1.PaneUV[ic];
                 double u = wa.u + (wb.u - wa.u) * r1 + (wc.u - wa.u) * r2, v = wa.v + (wb.v - wa.v) * r1 + (wc.v - wa.v) * r2;
                 double perMu = PerMetre(A, B, C, wa.u, wb.u, wc.u, P => P.x * tx + P.z * tz), perMv = PerMetre(A, B, C, wa.v, wb.v, wc.v, P => P.y);
-                var sh = Recess(u, v, perMu, perMv, p, eye, N);
+                var sh = Recess(u, v, perMu, perMv, p, eye, N, wa.bar);
                 var slot = (ColorSlot)s0[h0].tag;
                 bool isWall = slot == ColorSlot.Wall, isPane = slot == ColorSlot.Glass;
+                // LOD0's centre bar: trim LOD0 shows within 4 cm of the window's middle along the wall (its 3 cm, and its side)
+                double middle = (p.x * tx + p.z * tz) - (u - 0.5) / perMu, at0 = (eye.x + dx * t0) * tx + (eye.z + dz * t0) * tz;
+                bool isBar = slot == ColorSlot.Trim && wa.bar && Math.Abs(at0 - middle) < Facade.BarHalf + 0.01;
                 if (isWall) wall0++;
-                if (!sh.pane) wall1++;
-                if ((isWall && !sh.pane) || (isPane && sh.pane)) agree++;
+                if (!sh.pane && !sh.trim) wall1++;
+                if (isBar) bar0++;
+                if (sh.trim) bar1++;
+                if ((isWall && !sh.pane && !sh.trim) || (isPane && sh.pane) || (slot == ColorSlot.Trim && sh.trim)) agree++;
                 else if (slot == ColorSlot.Trim || slot == ColorSlot.Frame) trim++;
                 else { string k = $"LOD0 {slot}, shader {(sh.pane ? "pane" : "reveal")}"; miss[k] = miss.TryGetValue(k, out var c) ? c + 1 : 1; }
                 // the reveal faces the way LOD0's does (its wall's own face where the line of sight meets the wall before the opening)
-                if (isWall && !sh.pane)
+                if (isWall && !sh.pane && !sh.trim)
                 {
                     var q = s0[h0]; double ql = Math.Sqrt(q.nx * q.nx + q.ny * q.ny + q.nz * q.nz);
                     normals++; if (sh.n.x * q.nx / ql + sh.n.y * q.ny / ql + sh.n.z * q.nz / ql > 0.99 || q.nx * N.x / ql + q.nz * N.z / ql > 0.99) normalsRight++;
                 }
             }
-            output.WriteLine($"{preset}: {rays} rays through LOD1's flat panes; LOD0 shows its wall on {100.0 * wall0 / rays:0.0}%, the shader {100.0 * wall1 / rays:0.0}% (before it, 0); agree {100.0 * agree / rays:0.0}%, LOD0's trim {100.0 * trim / rays:0.0}%, its reveals' normals {100.0 * normalsRight / Math.Max(1, normals):0.0}% right");
+            output.WriteLine($"{preset}: {rays} rays through LOD1's flat panes; LOD0 shows its wall on {100.0 * wall0 / rays:0.0}%, the shader {100.0 * wall1 / rays:0.0}% (before it, 0); its centre bars {100.0 * bar0 / rays:0.0}%, the shader {100.0 * bar1 / rays:0.0}%; agree {100.0 * agree / rays:0.0}%, LOD0's other trim {100.0 * trim / rays:0.0}%, its reveals' normals {100.0 * normalsRight / Math.Max(1, normals):0.0}% right");
             foreach (var kv in miss.OrderByDescending(kv => kv.Value)) output.WriteLine($"  {kv.Key}: {kv.Value}");
             Assert.True(agree >= 0.95 * (rays - trim), $"{agree} of {rays - trim} agree");
             Assert.True(Math.Abs(wall1 - wall0) <= 0.03 * rays, $"the wall's share: LOD0 {wall0}, the shader {wall1} of {rays}");
             Assert.True(normalsRight >= 0.98 * normals, $"{normalsRight} of {normals} reveals face LOD0's way");
+            Assert.True(Math.Abs(bar1 - bar0) <= 0.01 * rays, $"the centre bars' share: LOD0 {bar0}, the shader {bar1} of {rays}");
         }
 
         /// <summary>

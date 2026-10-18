@@ -94,14 +94,14 @@ void StoreyStyleColors(uint row, float4 tones, out float3 wall, out float3 trim,
     glass = StoreyAtlasAt(base + (slots.w & 0xFFFF), a).rgb * tones.w;
 }
 
-// A style's wall colour (entry 0 of its row) at full shade, for LOD1's flat panes' reveals (StoreyFragment): the row's
-// first uint4 and its remap row, two buffer loads and the atlas's, where StoreyPaletteColor makes four. A row past the
-// table reads its last row.
-float3 StoreyWallColor(uint row)
+// A style's wall colour (entry 0 of its row) or its trim's (entry 1) at full shade, for LOD1's flat panes' reveals and
+// centre bars (StoreyFragment): the row's first uint4 and its remap row, two buffer loads and the atlas's, where
+// StoreyPaletteColor makes four. A row past the table reads its last row.
+float3 StoreyWallOrTrim(uint row, bool trim)
 {
     row = min(row, (uint)max((int)_StoreyTableSize.z - 1, 0));
-    uint wall = _StoreyColors[row * 3].x & 0xFFFF, remap = _StoreyColors[row * 3 + 2].w >> 16;
-    return StoreyAtlasAt(remap * _ColorAtlasWidth + wall, StoreyAtlasSizeNow()).rgb;
+    uint first = _StoreyColors[row * 3].x, remap = _StoreyColors[row * 3 + 2].w >> 16;
+    return StoreyAtlasAt(remap * _ColorAtlasWidth + (trim ? first >> 16 : first & 0xFFFF), StoreyAtlasSizeNow()).rgb;
 }
 
 // The LOD0/LOD1 vertex colour attribute (UNorm8 x 4): row low byte, row high byte, slot, shade x 128

@@ -191,10 +191,21 @@ namespace Triband.Storey.Generate
                     double fw = frames ? FrameW : 0;
                     if (frames) WindowFrame(op, F, o.u0, o.u1, y + o.y0, y + o.y1, fw, C.frame);
                     if (bars) Bars(op, F, o.u0 + fw, o.u1 - fw, y + o.y0 + fw, y + o.y1 - fw, st!.paneCols ?? 1, st.paneRows ?? 1, C.frame);
-                    else if (o.u1 - o.u0 > 1.7) { double mm = (o.u0 + o.u1) / 2; op.OBox(F, mm - 0.03, mm + 0.03, y + o.y0, y + o.y1, T * 0.3, T * 0.6, C.trim, C.trim, Skip.Top | Skip.Bot); }
+                    else if (CentreBar(st, o)) { double mm = (o.u0 + o.u1) / 2; op.OBox(F, mm - BarHalf, mm + BarHalf, y + o.y0, y + o.y1, T * 0.3, T * 0.6, C.trim, C.trim, Skip.Top | Skip.Bot); }
                 }
             }
         }
+
+        /// <summary>
+        /// Whether a plain window gets LOD0's centre bar: a wide one, in a style without glazing bars. The bar is
+        /// <see cref="BarHalf"/> either side of the middle, in the trim's colour, from <see cref="Dim.T_EXT"/> × 0.3 to × 0.6
+        /// into the wall (it stands proud of the pane). LOD1's flat pane is marked with it, and the shader draws it there
+        /// (StoreyPaneRecess).
+        /// </summary>
+        public static bool CentreBar(FacadeStyle? st, Opening o) => !(st != null && (st.paneCols > 1 || st.paneRows > 1)) && o.u1 - o.u0 > 1.7;
+
+        /// <summary>Half LOD0's centre bar's width, metres.</summary>
+        public const double BarHalf = 0.03;
 
         /// <summary>A seed for a wall piece's brick patches, the same on every build.</summary>
         public static uint Seed(string id, int k, int edge, double lo)
@@ -511,15 +522,16 @@ namespace Triband.Storey.Generate
 
         /// <summary>
         /// A glass or door pane filling an opening: one quad (two for glass seen from both sides). <paramref name="flat"/>:
-        /// LOD1's pane proud of a flat wall, for which the shader draws the recess LOD0 cuts (<see cref="Lod1.PaneProud"/>).
+        /// LOD1's pane proud of a flat wall, for which the shader draws the recess LOD0 cuts (<see cref="Lod1.PaneProud"/>), and
+        /// <paramref name="bar"/> LOD0's centre bar in it (<see cref="CentreBar"/>).
         /// </summary>
-        public static void Pane(MeshBuilder gb, Frame F, double u0, double u1, double y0, double y1, double wv, Swatch c, bool two, bool flat = false)
+        public static void Pane(MeshBuilder gb, Frame F, double u0, double u1, double y0, double y1, double wv, Swatch c, bool two, bool flat = false, bool bar = false)
         {
             P3 a = F.At(u0, y0, wv), b = F.At(u1, y0, wv), d = F.At(u1, y1, wv), e = F.At(u0, y1, wv);
             int first = gb.Verts;
             gb.Quad(a, b, d, e, new P3(F.w.x, 0, F.w.z), c);
             if (two) gb.Quad(a, b, d, e, new P3(-F.w.x, 0, -F.w.z), c);
-            PaneUV(gb, first, F, u0, u1, y0, y1, flat);
+            PaneUV(gb, first, F, u0, u1, y0, y1, flat, bar);
         }
 
         /// <summary>
@@ -528,7 +540,7 @@ namespace Triband.Storey.Generate
         /// the shader needs no frame; and the window's number, from its centre on the wall's face, as LOD2's shader works
         /// it out.
         /// </summary>
-        public static void PaneUV(MeshBuilder gb, int first, Frame F, double u0, double u1, double y0, double y1, bool flat = false)
+        public static void PaneUV(MeshBuilder gb, int first, Frame F, double u0, double u1, double y0, double y1, bool flat = false, bool bar = false)
         {
             bool flip = F.u.x * F.w.z - F.u.z * F.w.x < 0;   // F.u runs against cross(up, w) = (w.z, 0, −w.x)
             byte id = WindowId(F.At((u0 + u1) / 2, (y0 + y1) / 2, Dim.T_EXT));
@@ -536,7 +548,7 @@ namespace Triband.Storey.Generate
             {
                 var p = gb.P[i]; double a = (p.x - F.O.x) * F.u.x + (p.z - F.O.z) * F.u.z;
                 double u = Math.Max(0, Math.Min(1, (a - u0) / Math.Max(1e-6, u1 - u0)));
-                gb.PaneUV[i] = (flip ? 1 - u : u, Math.Max(0, Math.Min(1, (p.y - y0) / Math.Max(1e-6, y1 - y0))), id, flat);
+                gb.PaneUV[i] = (flip ? 1 - u : u, Math.Max(0, Math.Min(1, (p.y - y0) / Math.Max(1e-6, y1 - y0))), id, flat, flat && bar);
             }
         }
 

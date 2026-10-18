@@ -28,12 +28,18 @@ float4 _StoreyGlassFill;        // LOD0's see-through panes: x clear (see-throug
 // LOD0 shows that reveal beside, under or over its pane, a share of the window that grows with the angle. The recess's
 // depth from LOD1's pane to LOD0's, metres:
 #define STOREY_PANE_RECESS 0.195
+// LOD0's centre bar in a wide window (Facade.CentreBar): 3 cm either side of its middle (Facade.BarHalf), its front 15 cm
+// behind LOD1's pane (Dim.T_EXT × 0.6 from the wall's inside), and on past LOD0's pane
+#define STOREY_BAR_HALF 0.03
+#define STOREY_BAR_FRONT 0.15
 
 // What the line of sight at a point of a flat pane (uv: across and up it, 0 to 1) meets in the recess LOD0 cuts: LOD0's
-// pane, uv then where on it, and 0 returned; or a reveal, whose outward normal (world space) is returned. The window's uv
-// per metre comes from the screen derivatives of uv and of the point (posDx, posDy): on a flat pane uv is affine in it.
-float3 StoreyPaneRecess(inout float2 uv, float2 uvDx, float2 uvDy, float3 posDx, float3 posDy, float3 posWS, float3 N)
+// pane, uv then where on it, and 0 returned; or a reveal or (bar: the window has one) the centre bar, whose outward
+// normal (world space) is returned, trim saying which. The window's uv per metre comes from the screen derivatives of uv
+// and of the point (posDx, posDy): on a flat pane uv is affine in it.
+float3 StoreyPaneRecess(inout float2 uv, float2 uvDx, float2 uvDy, float3 posDx, float3 posDy, float3 posWS, float3 N, bool bar, out bool trim)
 {
+    trim = false;
     float3 T = normalize(float3(N.z, 0.0, -N.x) + float3(1e-6, 0.0, 0.0));   // across: cross(up, N), as the pane's u runs
     float2 perM = float2(abs(uvDx.x) + abs(uvDy.x), abs(uvDx.y) + abs(uvDy.y))
                 / max(float2(abs(dot(posDx, T)) + abs(dot(posDy, T)), abs(posDx.y) + abs(posDy.y)), 1e-6);
@@ -41,7 +47,18 @@ float3 StoreyPaneRecess(inout float2 uv, float2 uvDx, float2 uvDy, float3 posDx,
     // going in to LOD0's pane, the line of sight moves this far across and up the window
     float2 go = -float2(dot(V, T), V.y) / max(dot(V, N), 1e-3) * (STOREY_PANE_RECESS * perM);
     float2 hit = uv + go;
-    if (all(hit >= 0.0) && all(hit <= 1.0)) { uv = hit; return float3(0.0, 0.0, 0.0); }
+    if (all(hit >= 0.0) && all(hit <= 1.0))
+    {
+        // the centre bar, met at its front, or at its side towards the eye between its front and the pane
+        float front = uv.x + go.x * (STOREY_BAR_FRONT / STOREY_PANE_RECESS), hw = STOREY_BAR_HALF * perM.x;
+        if (bar && max(front, hit.x) > 0.5 - hw && min(front, hit.x) < 0.5 + hw)
+        {
+            trim = true;
+            if (abs(front - 0.5) < hw) return N;
+            return -sign(go.x) * T;
+        }
+        uv = hit; return float3(0.0, 0.0, 0.0);
+    }
     // it leaves the window's outline on the way: the side it reaches first (in shares of the way in) faces back at it
     float2 at = lerp(uv, 1.0 - uv, step(0.0, go)) / max(abs(go), 1e-6);
     if (at.x < at.y) return -sign(go.x) * T;

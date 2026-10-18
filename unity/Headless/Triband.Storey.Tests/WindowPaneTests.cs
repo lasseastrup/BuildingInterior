@@ -28,15 +28,17 @@ namespace Triband.Storey.Tests
         {
             for (int i = 0; i <= 20; i++)
                 foreach (bool flat in new[] { false, true })
-                {
-                    double u = i / 20.0, v = 1 - i / 20.0;
-                    var (a, nw, id) = ColorRows.EncodePane(u, v, (byte)(i * 12), flat);
-                    Assert.True(Math.Abs((int)nw) >= 1, "a pane vertex must be told from the rest");
-                    Assert.Equal(flat, nw < 0);   // LOD1's flat pane: negative (the shader draws its recess)
-                    var (du, dv, did, dflat) = ColorRows.DecodePane(a, nw, id);
-                    Assert.True(Math.Abs(du - u) <= 0.5 / 255 + 1e-9 && Math.Abs(dv - v) <= 0.5 / 126 + 1e-9);
-                    Assert.Equal((i * 12, flat), (did, dflat));
-                }
+                    foreach (bool bar in new[] { false, true })
+                    {
+                        double u = i / 20.0, v = 1 - i / 20.0;
+                        var (a, nw, id, ny) = ColorRows.EncodePane(u, v, (byte)(i * 12), flat, bar);
+                        Assert.True(Math.Abs((int)nw) >= 1, "a pane vertex must be told from the rest");
+                        Assert.Equal(flat, nw < 0);   // LOD1's flat pane: negative (the shader draws its recess)
+                        Assert.Equal(flat && bar ? 1 : 0, (int)ny);   // its upright normal's up byte: the centre bar
+                        var (du, dv, did, dflat, dbar) = ColorRows.DecodePane(a, nw, id, ny);
+                        Assert.True(Math.Abs(du - u) <= 0.5 / 255 + 1e-9 && Math.Abs(dv - v) <= 0.5 / 126 + 1e-9);
+                        Assert.Equal((i * 12, flat, flat && bar), (did, dflat, dbar));
+                    }
         }
 
         [Fact]
@@ -53,7 +55,7 @@ namespace Triband.Storey.Tests
             Assert.True(seen.Count > 150, $"only {seen.Count} numbers");
         }
 
-        static List<(P3 p, P3 n, (double u, double v, byte id, bool flat) w)> Panes(MeshBuilder m) =>
+        static List<(P3 p, P3 n, (double u, double v, byte id, bool flat, bool bar) w)> Panes(MeshBuilder m) =>
             m.PaneUV.Where(kv => m.C[kv.Key].slot == ColorSlot.Glass).Select(kv => (m.P[kv.Key], m.N[kv.Key], kv.Value)).ToList();
 
         [Theory]
@@ -99,6 +101,39 @@ namespace Triband.Storey.Tests
             Assert.Contains(lod1, x => !x.w.flat && x.p.y < Derived.FloorBase(b, 1));   // the glazed door
             Assert.DoesNotContain(Panes(Lod1.Build(site, b, recessed: true)), x => x.w.flat);
             Assert.DoesNotContain(Panes(Lod0.Build(site, b).Op), x => x.w.flat);
+        }
+
+        /// <summary>
+        /// A flat pane is marked with LOD0's centre bar where LOD0's window has one (Facade.CentreBar: wider than 1.7 m, no
+        /// glazing bars), and only then: the glass preset's curtain wall has them, its narrower windows and a style with
+        /// glazing bars don't.
+        /// </summary>
+        [Fact]
+        public void AFlatPaneHasTheCentreBarLod0sWindowHas()
+        {
+            var (b, site) = Block(false);
+            b.style = Styles.Preset("glass");
+            var l0 = Lod0.Build(site, b).Op; var l1 = Lod1.Build(site, b);
+            // LOD0's bars: trim boxes 6 cm wide inside the openings, by their middles along each wall
+            var bars = Enumerable.Range(0, l0.Tris).Where(t => l0.C[l0.I[3 * t]].slot == ColorSlot.Trim)
+                .Select(t => l0.P[l0.I[3 * t]]).ToList();
+            int with = 0, without = 0;
+            for (int t = 0; t < l1.Tris; t++)
+            {
+                var vs = Enumerable.Range(0, 3).Select(k => l1.I[3 * t + k]).ToList();
+                if (!vs.All(i => l1.PaneUV.TryGetValue(i, out var w) && w.flat)) continue;
+                var ws = vs.Select(i => l1.PaneUV[i]).ToList();
+                Assert.True(ws.All(w => w.bar == ws[0].bar), "a pane's corners agree");
+                // the window's width: along the wall over the change in u, from the corners that differ most in u
+                var n = l1.N[vs[0]]; double tx = n.z, tz = -n.x;
+                var (a, c) = (from i in vs from j in vs select (i, j)).OrderByDescending(q => Math.Abs(l1.PaneUV[q.i].u - l1.PaneUV[q.j].u)).First();
+                double width = Math.Abs((l1.P[a].x - l1.P[c].x) * tx + (l1.P[a].z - l1.P[c].z) * tz) / Math.Abs(l1.PaneUV[a].u - l1.PaneUV[c].u);
+                Assert.Equal(width > 1.7, ws[0].bar);
+                if (ws[0].bar) with++; else without++;
+            }
+            Assert.True(with > 0 && without > 0, $"{with} triangles of panes with a bar, {without} without");
+            b.style.paneCols = 2;   // glazing bars instead: no centre bar
+            Assert.DoesNotContain(Panes(Lod1.Build(site, b)), x => x.w.bar);
         }
 
         [Fact]
