@@ -27,14 +27,16 @@ namespace Triband.Storey.Tests
         public void APanesPlaceAndNumberRoundTrip()
         {
             for (int i = 0; i <= 20; i++)
-            {
-                double u = i / 20.0, v = 1 - i / 20.0;
-                var (a, nw, id) = ColorRows.EncodePane(u, v, (byte)(i * 12));
-                Assert.True(nw >= 1, "a pane vertex must be told from the rest");
-                var (du, dv, did) = ColorRows.DecodePane(a, nw, id);
-                Assert.True(Math.Abs(du - u) <= 0.5 / 255 + 1e-9 && Math.Abs(dv - v) <= 0.5 / 126 + 1e-9);
-                Assert.Equal(i * 12, did);
-            }
+                foreach (bool flat in new[] { false, true })
+                {
+                    double u = i / 20.0, v = 1 - i / 20.0;
+                    var (a, nw, id) = ColorRows.EncodePane(u, v, (byte)(i * 12), flat);
+                    Assert.True(Math.Abs((int)nw) >= 1, "a pane vertex must be told from the rest");
+                    Assert.Equal(flat, nw < 0);   // LOD1's flat pane: negative (the shader draws its recess)
+                    var (du, dv, did, dflat) = ColorRows.DecodePane(a, nw, id);
+                    Assert.True(Math.Abs(du - u) <= 0.5 / 255 + 1e-9 && Math.Abs(dv - v) <= 0.5 / 126 + 1e-9);
+                    Assert.Equal((i * 12, flat), (did, dflat));
+                }
         }
 
         [Fact]
@@ -51,7 +53,7 @@ namespace Triband.Storey.Tests
             Assert.True(seen.Count > 150, $"only {seen.Count} numbers");
         }
 
-        static List<(P3 p, P3 n, (double u, double v, byte id) w)> Panes(MeshBuilder m) =>
+        static List<(P3 p, P3 n, (double u, double v, byte id, bool flat) w)> Panes(MeshBuilder m) =>
             m.PaneUV.Where(kv => m.C[kv.Key].slot == ColorSlot.Glass).Select(kv => (m.P[kv.Key], m.N[kv.Key], kv.Value)).ToList();
 
         [Theory]
@@ -79,6 +81,24 @@ namespace Triband.Storey.Tests
                         if (Math.Abs(c.p.y - a.p.y) > 0.05) Assert.True(Math.Sign(c.p.y - a.p.y) == Math.Sign(c.w.v - a.w.v));
                     }
             }
+        }
+
+        /// <summary>
+        /// LOD1's plain windows are panes proud of a flat wall, marked so the shader draws the recess LOD0 cuts behind them;
+        /// its doors (a glazed one too) are recessed in their openings as LOD0's are, and LOD0's panes and the prototype's
+        /// recessed LOD1 have no flat pane.
+        /// </summary>
+        [Fact]
+        public void OnlyLod1sPlainWindowsAreFlatPanes()
+        {
+            var (b, site) = Block(false);
+            b.style.doorType = DoorType.Glazed;
+            var lod1 = Panes(Lod1.Build(site, b));
+            Assert.Contains(lod1, x => x.w.flat);
+            Assert.All(lod1.Where(x => x.p.y > Derived.FloorBase(b, 1) - 0.01), x => Assert.True(x.w.flat, $"an upper storey's window at {x.p} isn't flat"));
+            Assert.Contains(lod1, x => !x.w.flat && x.p.y < Derived.FloorBase(b, 1));   // the glazed door
+            Assert.DoesNotContain(Panes(Lod1.Build(site, b, recessed: true)), x => x.w.flat);
+            Assert.DoesNotContain(Panes(Lod0.Build(site, b).Op), x => x.w.flat);
         }
 
         [Fact]

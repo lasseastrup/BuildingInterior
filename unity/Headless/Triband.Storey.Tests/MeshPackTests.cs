@@ -31,7 +31,7 @@ namespace Triband.Storey.Tests
                 var p = gb.P[i]; var n = gb.N[i]; var s = gb.C[i];
                 var (cr, cg, cb, ca) = ColorRows.EncodeVertex(RowOf(s.style), s.slot, s.tone);
                 verts[i] = new PackedMesh.Vertex { x = (float)p.x, y = (float)p.y, z = (float)p.z, nx = S8(n.x), ny = S8(n.y), nz = S8(n.z), r = cr, g = cg, b = cb, a = ca, tag = gb.Tag };
-                if (windows && s.slot == ColorSlot.Glass && gb.PaneUV.TryGetValue(i, out var uv)) { var (pa, pw, pb) = ColorRows.EncodePane(uv.u, uv.v, uv.id); verts[i].a = pa; verts[i].nw = pw; verts[i].b = pb; }
+                if (windows && s.slot == ColorSlot.Glass && gb.PaneUV.TryGetValue(i, out var uv)) { var (pa, pw, pb) = ColorRows.EncodePane(uv.u, uv.v, uv.id, uv.flat); verts[i].a = pa; verts[i].nw = pw; verts[i].b = pb; }
             }
             if (gb.Lean) return (verts, null);
             var cut = new PackedMesh.Cutaway[nv];

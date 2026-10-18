@@ -413,7 +413,7 @@ namespace Triband.Storey.Generate
                 foreach (var kv in gb.PaneUV)
                 {
                     int i = kv.Key; if ((uint)i >= (uint)nv || pk.colours[gb.C.Index[i]].glass == 0) continue;
-                    var (pa, pw, pb) = ColorRows.EncodePane(kv.Value.u, kv.Value.v, kv.Value.id);
+                    var (pa, pw, pb) = ColorRows.EncodePane(kv.Value.u, kv.Value.v, kv.Value.id, kv.Value.flat);
                     ref var q = ref v[i]; q.a = pa; q.nw = pw; q.b = pb;
                 }
             float x0 = bounds[0], y0 = bounds[1], z0 = bounds[2], x1 = bounds[3], y1 = bounds[4], z1 = bounds[5];
@@ -510,7 +510,7 @@ namespace Triband.Storey.Generate
                 v.x = (float)p.x; v.y = (float)p.y; v.z = (float)p.z;
                 v.nx = n.x; v.ny = n.y; v.nz = n.z;
                 v.r = (byte)(si & 255); v.g = (byte)(si >> 8); v.b = c.b; v.a = c.a; v.tag = tag;
-                if (windows && c.glass != 0 && gb.PaneUV.TryGetValue(i, out var uv)) { var (pa, pw, pb) = ColorRows.EncodePane(uv.u, uv.v, uv.id); v.a = pa; v.nw = pw; v.b = pb; }
+                if (windows && c.glass != 0 && gb.PaneUV.TryGetValue(i, out var uv)) { var (pa, pw, pb) = ColorRows.EncodePane(uv.u, uv.v, uv.id, uv.flat); v.a = pa; v.nw = pw; v.b = pb; }
             }
         }
     }

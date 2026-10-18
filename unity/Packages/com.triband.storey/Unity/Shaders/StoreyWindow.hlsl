@@ -23,13 +23,29 @@ float4 _StoreyGlassFill;        // LOD0's see-through panes: x clear (see-throug
 
 #include "StoreyWindowId.hlsl"
 
-// LOD1's flat walls (Lod1.cs): a plain window's pane lies on the wall, and its reveal is shaded here, darker at the sides
-// and the head the way the recess LOD0 models shades them, a little at the sill. uv: across and up the pane (0..1).
-float StoreyRevealShade(float2 uv)
+// LOD1's flat walls (Lod1.cs): a plain window's pane stands 3 cm proud of the wall (Lod1.PaneProud), where LOD0 cuts the
+// window 16.5 cm into it (Dim.T_EXT × 0.55) with the wall's colour round its pane. Seen from a side, from above or below,
+// LOD0 shows that reveal beside, under or over its pane, a share of the window that grows with the angle. The recess's
+// depth from LOD1's pane to LOD0's, metres:
+#define STOREY_PANE_RECESS 0.195
+
+// What the line of sight at a point of a flat pane (uv: across and up it, 0 to 1) meets in the recess LOD0 cuts: LOD0's
+// pane, uv then where on it, and 0 returned; or a reveal, whose outward normal (world space) is returned. The window's uv
+// per metre comes from the screen derivatives of uv and of the point (posDx, posDy): on a flat pane uv is affine in it.
+float3 StoreyPaneRecess(inout float2 uv, float2 uvDx, float2 uvDy, float3 posDx, float3 posDy, float3 posWS, float3 N)
 {
-    float side = min(uv.x, 1.0 - uv.x), head = 1.0 - uv.y;
-    float s = saturate(side * 8.0) * saturate(head * 6.0) * lerp(0.85, 1.0, saturate(uv.y * 12.0));
-    return lerp(0.5, 1.0, s);
+    float3 T = normalize(float3(N.z, 0.0, -N.x) + float3(1e-6, 0.0, 0.0));   // across: cross(up, N), as the pane's u runs
+    float2 perM = float2(abs(uvDx.x) + abs(uvDy.x), abs(uvDx.y) + abs(uvDy.y))
+                / max(float2(abs(dot(posDx, T)) + abs(dot(posDy, T)), abs(posDx.y) + abs(posDy.y)), 1e-6);
+    float3 V = normalize(_WorldSpaceCameraPos - posWS);
+    // going in to LOD0's pane, the line of sight moves this far across and up the window
+    float2 go = -float2(dot(V, T), V.y) / max(dot(V, N), 1e-3) * (STOREY_PANE_RECESS * perM);
+    float2 hit = uv + go;
+    if (all(hit >= 0.0) && all(hit <= 1.0)) { uv = hit; return float3(0.0, 0.0, 0.0); }
+    // it leaves the window's outline on the way: the side it reaches first (in shares of the way in) faces back at it
+    float2 at = lerp(uv, 1.0 - uv, step(0.0, go)) / max(abs(go), 1e-6);
+    if (at.x < at.y) return -sign(go.x) * T;
+    return float3(0.0, -sign(go.y), 0.0);
 }
 
 // The room atlas's UV for a point (uv, 0 to 1) on a pane, seen along viewTS (towards the camera, in the pane's

@@ -7,14 +7,18 @@ namespace Triband.Storey.Generate
     /// LOD1: exterior shell only. Outer faces with opaque windows, doors, floor bands, plinth,
     /// canopies, parapet and stair/lift bulkheads. No interior, frames or transparency, and no
     /// per-vertex occlusion data (a lean mesh). A plain window is a pane just proud of a flat wall,
-    /// its reveal shaded in the shader (StoreyFragment): cutting the wall round every window made
-    /// the walls four-fifths of LOD1. Doors and artist-made windows keep their openings.
+    /// and the shader draws the recess LOD0 cuts behind it, its reveals as the view shows them
+    /// (StoreyWindow.hlsl): cutting the wall round every window made the walls four-fifths of LOD1.
+    /// Doors and artist-made windows keep their openings.
     /// </summary>
     public static class Lod1
     {
         public const int LOD_TAG = 65536;
 
-        /// <summary>How far a flat wall's window pane stands proud of the wall (metres): clear of it at LOD1's distances.</summary>
+        /// <summary>
+        /// How far a flat wall's window pane stands proud of the wall (metres): clear of it at LOD1's distances. The shader's
+        /// recess (STOREY_PANE_RECESS) is from here to LOD0's pane, <see cref="Dim.T_EXT"/> × 0.55 into the wall.
+        /// </summary>
         public const double PaneProud = 0.03;
 
         /// <summary>The doors of <paramref name="ops"/>, in order, into <paramref name="into"/> (emptied first).</summary>
@@ -63,7 +67,8 @@ namespace Triband.Storey.Generate
                             var kk = o.door ? (o.bare ? null : dk) : wk;
                             if (kk?.lod1 != null) { OpeningKinds.Place(op, null, F, kk, kk.lod1, o.u0, o.u1, o.door ? y : y + o.y0, y + o.y1, C, true); continue; }
                             bool glazedDoor = o.door && Derived.StyleAt(b, k).doorType == DoorType.Glazed;
-                            Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, recessed || o.door ? T * 0.45 : T + PaneProud, o.door && !glazedDoor ? C.door : C.glassDark, false);
+                            bool flat = !recessed && !o.door;   // a plain window on the flat wall: the shader draws its recess
+                            Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, flat ? T + PaneProud : T * 0.45, o.door && !glazedDoor ? C.door : C.glassDark, false, flat);
                             if (o.door && !o.bare && !glazedDoor && kk == null) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
                         }
                         if (!party) L0.PieceStrips(op, k, F, m, pc, ops, y, h, C);

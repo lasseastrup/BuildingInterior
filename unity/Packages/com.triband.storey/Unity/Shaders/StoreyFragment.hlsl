@@ -19,10 +19,26 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     s.albedo = IN.color.rgb;
     s.alpha = _StoreyAlpha;
 #endif
-    if (_StoreyLodTint > 0.5) s.albedo = lerp(s.albedo, StoreyLodTint(v.lod), 0.65);
-    if (_StoreyIso.x > 0.001 && abs(v.bid - _StoreyIso.y) > 0.5) s.albedo = lerp(s.albedo, float3(0.78, 0.82, 0.83), _StoreyIso.x * 0.7);
     s.positionWS = IN.worldPos;
     s.normalWS = normalize(isFront ? IN.normalWS : -IN.normalWS);
+#if !defined(STOREY_MASSING) && !defined(STOREY_GLASS)
+    // LOD1's flat pane (Lod1.PaneProud): what the line of sight meets in the recess LOD0 cuts (StoreyPaneRecess). A reveal
+    // is lit as LOD0's is, the wall's colour facing its own way; the pane shows its room from where LOD0's pane is. The
+    // pane's derivatives are the window effect's too, taken once here for every pixel of the quad
+    float2 paneUV = IN.win.xy, wdx = ddx(IN.win.xy), wdy = ddy(IN.win.xy); bool reveal = false;
+    if (IN.win.z > 1.5 && isFront)   // the same for a whole triangle, so for every pixel of a quad: its derivatives hold
+    {
+        float3 rn = StoreyPaneRecess(paneUV, wdx, wdy, ddx(IN.worldPos), ddy(IN.worldPos), s.positionWS, s.normalWS);
+        if (dot(rn, rn) > 0.5)
+        {
+            reveal = true;
+            s.albedo = StoreyWallColor((uint)(IN.win.z - 1.5) * 256u + (uint)(IN.color.a + 0.5));   // its row, as LOD0's reveals
+            s.normalWS = rn;
+        }
+    }
+#endif
+    if (_StoreyLodTint > 0.5) s.albedo = lerp(s.albedo, StoreyLodTint(v.lod), 0.65);
+    if (_StoreyIso.x > 0.001 && abs(v.bid - _StoreyIso.y) > 0.5) s.albedo = lerp(s.albedo, float3(0.78, 0.82, 0.83), _StoreyIso.x * 0.7);
     // the main light's shadow coordinate as URP's Lit takes it: from the vertex with one cascade or screen-space shadows,
     // the pixel's own with cascades, where a vertex's cascade is wrong across a large face (docs/PERFORMANCE.md §7.3)
 #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
@@ -46,16 +62,13 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     {
     #ifdef STOREY_MASSING
         float2 wuv; float id; float onPane = StoreyFacadeWindow(IN.fac, IN.fac2.xy, IN.fac2.z, s.positionWS, v.origY, s.normalWS, wuv, id);
-    #else
-        float2 wuv = IN.win.xy; float id = IN.win.w; float onPane = IN.win.z;
-    #endif
         float2 wdx = ddx(wuv), wdy = ddy(wuv);   // uniform branch: every pixel of the quad takes them
+    #else
+        // a flat pane's room from where LOD0's pane is, sampled at the pane's own scale (a reveal's pixels show the wall)
+        float2 wuv = paneUV; float id = IN.win.w; float onPane = reveal ? 0.0 : IN.win.z;
+    #endif
         if (onPane > 0.5 && isFront) color.rgb = StoreyWindowPane(wuv, wdx, wdy, id, s.positionWS, s.normalWS);
     }
-  #ifndef STOREY_MASSING
-    // LOD1's flat walls: the window's reveal, shaded at the pane's edges (LOD0 models it)
-    if (v.lod > 0.5 && IN.win.z > 0.5 && isFront) color.rgb *= StoreyRevealShade(IN.win.xy);
-  #endif
 #elif !defined(STOREY_DEPTH)
     // LOD0's see-through glass: where LOD0 has just taken over it is LOD1's pane (the painted room, opaque), and it clears
     // to glass as the camera comes closer, so the LOD switch changes nothing in the windows and the real rooms behind

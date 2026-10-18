@@ -71,14 +71,18 @@ namespace Triband.Storey.Generate
 
         /// <summary>
         /// A window pane's vertex (docs/EDITOR.md §6.8): its place on the pane across (the colour's shade byte, 0 to 255),
-        /// up (the normal's fourth byte, 1 to 127; 0 marks every other vertex) and the window's number (the slot byte). A
-        /// pane's slot and shade are the opaque glass's, fixed in the shader.
+        /// up (the normal's fourth byte, 1 to 127, negative for LOD1's flat pane, whose recess the shader draws; 0 marks
+        /// every other vertex) and the window's number (the slot byte). A pane's slot and shade are the opaque glass's,
+        /// fixed in the shader.
         /// </summary>
-        public static (byte a, sbyte nw, byte b) EncodePane(double u, double v, byte id) =>
-            ((byte)Math.Round(Math.Max(0, Math.Min(1, u)) * 255), (sbyte)(1 + Math.Round(Math.Max(0, Math.Min(1, v)) * 126)), id);
+        public static (byte a, sbyte nw, byte b) EncodePane(double u, double v, byte id, bool flat = false)
+        {
+            int up = 1 + (int)Math.Round(Math.Max(0, Math.Min(1, v)) * 126);
+            return ((byte)Math.Round(Math.Max(0, Math.Min(1, u)) * 255), (sbyte)(flat ? -up : up), id);
+        }
 
-        /// <summary>What the shader reads back (StoreyWindow.hlsl): u, v, the window's number.</summary>
-        public static (double u, double v, int id) DecodePane(byte a, sbyte nw, byte b) => (a / 255.0, (nw - 1) / 126.0, b);
+        /// <summary>What the shader reads back (StoreyLit.hlsl): u, v, the window's number, and whether it is a flat pane.</summary>
+        public static (double u, double v, int id, bool flat) DecodePane(byte a, sbyte nw, byte b) => (a / 255.0, (Math.Abs(nw) - 1) / 126.0, b, nw < 0);
 
         /// <summary>A pane's shade: the opaque glass's (<c>Palette.glassDark</c>).</summary>
         public const double PaneTone = 0.42;

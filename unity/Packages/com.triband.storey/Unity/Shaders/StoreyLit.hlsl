@@ -81,7 +81,7 @@ struct Varyings
     half3 normalWS    : TEXCOORD0;
 #ifndef STOREY_MASSING
     half4 color       : TEXCOORD1;
-    half4 win         : TEXCOORD9;   // a window pane: u, v across and up it, 1 on a pane, its number (LOD0/LOD1)
+    half4 win         : TEXCOORD9;   // a window pane: u, v across and up it, 1 on a pane (2 + its row's high byte on a flat one), its number (LOD0/LOD1)
 #endif
 #if defined(EVALUATE_SH_VERTEX) || defined(EVALUATE_SH_MIXED)
     half3 vertexSH    : TEXCOORD10;  // the ambient probe, or its L2 part, per vertex: every face is flat, so exact (§7.3)
@@ -155,11 +155,15 @@ Varyings StoreyVert(Attributes IN)
     const float paneTone = 0.42;
 #endif
     uint4 ce = (uint4)round(IN.color * 255.0);
-    bool pane = IN.normalOS.w > 0.5 / 127.0;
+    // a pane: the normal's fourth byte not 0, negative for LOD1's flat pane (Lod1.PaneProud), whose recess the fragment stage
+    // draws (StoreyPaneRecess). A flat pane's colour row goes with it, for its reveals' wall colour, in places a pane leaves
+    // unused: the colour's alpha (the row's low byte) and its pane mark (2 + the high byte); 16-bit floats hold both exactly
+    float nw = IN.normalOS.w;
+    bool pane = abs(nw) > 0.5 / 127.0, flat = nw < -0.5 / 127.0;
     // one lookup, its slot and shade picked first (StoreyVertexColor's otherwise): HLSL evaluates both sides of a ?:, and
     // the colour's side read a pane's number as its slot
-    OUT.color = float4(StoreyPaletteColor(ce.x | (ce.y << 8), pane ? 6u : ce.z, pane ? paneTone : ce.w / 128.0), 1.0);   // a face's vertices share one swatch: exact per vertex
-    OUT.win = pane ? float4(IN.color.a, (IN.normalOS.w * 127.0 - 1.0) / 126.0, 1.0, (float)ce.z) : float4(0, 0, 0, 0);
+    OUT.color = float4(StoreyPaletteColor(ce.x | (ce.y << 8), pane ? 6u : ce.z, pane ? paneTone : ce.w / 128.0), flat ? (float)ce.x : 1.0);   // a face's vertices share one swatch: exact per vertex
+    OUT.win = pane ? float4(IN.color.a, (abs(nw) * 127.0 - 1.0) / 126.0, flat ? 2.0 + (float)ce.y : 1.0, (float)ce.z) : float4(0, 0, 0, 0);
 #endif
 #ifdef STOREY_STEADY
     OUT.misc = float2(v.bid, v.lod);

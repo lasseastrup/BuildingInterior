@@ -509,14 +509,17 @@ namespace Triband.Storey.Generate
             }
         }
 
-        /// <summary>A glass or door pane filling an opening: one quad (two for glass seen from both sides).</summary>
-        public static void Pane(MeshBuilder gb, Frame F, double u0, double u1, double y0, double y1, double wv, Swatch c, bool two)
+        /// <summary>
+        /// A glass or door pane filling an opening: one quad (two for glass seen from both sides). <paramref name="flat"/>:
+        /// LOD1's pane proud of a flat wall, for which the shader draws the recess LOD0 cuts (<see cref="Lod1.PaneProud"/>).
+        /// </summary>
+        public static void Pane(MeshBuilder gb, Frame F, double u0, double u1, double y0, double y1, double wv, Swatch c, bool two, bool flat = false)
         {
             P3 a = F.At(u0, y0, wv), b = F.At(u1, y0, wv), d = F.At(u1, y1, wv), e = F.At(u0, y1, wv);
             int first = gb.Verts;
             gb.Quad(a, b, d, e, new P3(F.w.x, 0, F.w.z), c);
             if (two) gb.Quad(a, b, d, e, new P3(-F.w.x, 0, -F.w.z), c);
-            PaneUV(gb, first, F, u0, u1, y0, y1);
+            PaneUV(gb, first, F, u0, u1, y0, y1, flat);
         }
 
         /// <summary>
@@ -525,7 +528,7 @@ namespace Triband.Storey.Generate
         /// the shader needs no frame; and the window's number, from its centre on the wall's face, as LOD2's shader works
         /// it out.
         /// </summary>
-        public static void PaneUV(MeshBuilder gb, int first, Frame F, double u0, double u1, double y0, double y1)
+        public static void PaneUV(MeshBuilder gb, int first, Frame F, double u0, double u1, double y0, double y1, bool flat = false)
         {
             bool flip = F.u.x * F.w.z - F.u.z * F.w.x < 0;   // F.u runs against cross(up, w) = (w.z, 0, −w.x)
             byte id = WindowId(F.At((u0 + u1) / 2, (y0 + y1) / 2, Dim.T_EXT));
@@ -533,7 +536,7 @@ namespace Triband.Storey.Generate
             {
                 var p = gb.P[i]; double a = (p.x - F.O.x) * F.u.x + (p.z - F.O.z) * F.u.z;
                 double u = Math.Max(0, Math.Min(1, (a - u0) / Math.Max(1e-6, u1 - u0)));
-                gb.PaneUV[i] = (flip ? 1 - u : u, Math.Max(0, Math.Min(1, (p.y - y0) / Math.Max(1e-6, y1 - y0))), id);
+                gb.PaneUV[i] = (flip ? 1 - u : u, Math.Max(0, Math.Min(1, (p.y - y0) / Math.Max(1e-6, y1 - y0))), id, flat);
             }
         }
 

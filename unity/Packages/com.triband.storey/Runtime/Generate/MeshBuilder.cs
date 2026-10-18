@@ -51,9 +51,10 @@ namespace Triband.Storey.Generate
         public List<Solid>? Solids;
         /// <summary>
         /// Where on its window pane a vertex is, 0 to 1 across and up (vertex index → u, v): the window shader maps a
-        /// room behind the pane by it (docs/EDITOR.md §6.8). Only pane vertices have one.
+        /// room behind the pane by it (docs/EDITOR.md §6.8). Only pane vertices have one. <c>flat</c>: LOD1's pane proud of
+        /// a flat wall, for which the shader draws the recess LOD0 cuts (<see cref="Lod1.PaneProud"/>).
         /// </summary>
-        public readonly Dictionary<int, (double u, double v, byte id)> PaneUV = new Dictionary<int, (double u, double v, byte id)>();
+        public readonly Dictionary<int, (double u, double v, byte id, bool flat)> PaneUV = new Dictionary<int, (double u, double v, byte id, bool flat)>();
         /// <summary>
         /// The rooms' triangles, as ranges (the first triangle, and one past the last), in the order made: what is seen only
         /// through the windows, which the renderer draws apart, and only while the windows are clear (docs/PERFORMANCE.md
@@ -225,7 +226,7 @@ namespace Triband.Storey.Generate
                 if (PaneUV.Count > 0)
                 {
                     // each pane vertex's place moves with it, the first of those welded into one kept
-                    var panes = weldPanes ??= new List<KeyValuePair<int, (double, double, byte)>>();
+                    var panes = weldPanes ??= new List<KeyValuePair<int, (double, double, byte, bool)>>();
                     foreach (var kv in PaneUV) panes.Add(kv);
                     PaneUV.Clear();
                     foreach (var kv in panes) { int to = map[kv.Key]; if (!PaneUV.ContainsKey(to)) PaneUV[to] = kv.Value; }
@@ -237,7 +238,7 @@ namespace Triband.Storey.Generate
         }
 
         ChunkList<int>? weldSlots, weldMap;
-        List<KeyValuePair<int, (double u, double v, byte id)>>? weldPanes;
+        List<KeyValuePair<int, (double u, double v, byte id, bool flat)>>? weldPanes;
 
         /// <summary>Set by <see cref="Weld"/> (a build thread welds before the upload; the upload then skips it). Add nothing after.</summary>
         public bool Welded { get; private set; }
