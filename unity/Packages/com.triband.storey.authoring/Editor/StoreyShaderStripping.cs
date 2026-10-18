@@ -20,20 +20,23 @@ namespace Triband.Storey.Editor
     /// The scripting define <c>STOREY_KEEP_ALL_SHADER_VARIANTS</c> keeps them. Storey's other keywords are all needed:
     /// <c>STOREY_STEADY</c> must stay a variant of its own, since a <c>discard</c> anywhere in a shader is what costs
     /// hidden-surface removal. URP strips its own keywords by its pipeline assets' features (Strip Unused Variants in its
-    /// global settings). After the build the Console has a line on each of Storey's shaders: its variants compiled, and
-    /// how many were left out.
+    /// global settings). After the build the Console has a line on each of Storey's shaders (and the Color Palette Lit
+    /// sample's): the vertex and fragment programs compiled, how many were left out, and the keywords in the fragment
+    /// programs, how many of them each is in: what the build's settings keep, and what a shader could stop declaring.
     /// </summary>
     sealed class StoreyShaderStripping : IPreprocessShaders, IPreprocessBuildWithReport, IPostprocessBuildWithReport
     {
-        public int callbackOrder => 0;
+        /// <summary>After URP's own stripping (its order is 0), so the counts are what the build compiles.</summary>
+        public int callbackOrder => 1000;
 
         static bool keepSimple = true;
-        static readonly Dictionary<string, (int kept, int stripped)> counts = new Dictionary<string, (int, int)>();
+        static readonly Dictionary<string, (int vertex, int fragment, int stripped)> counts = new Dictionary<string, (int, int, int)>();
+        static readonly Dictionary<string, Dictionary<string, int>> keywords = new Dictionary<string, Dictionary<string, int>>();
         static readonly ShaderKeyword simple = new ShaderKeyword(StoreyGlobals.SimpleLightingKeyword);
 
         public void OnPreprocessBuild(BuildReport report)
         {
-            counts.Clear();
+            counts.Clear(); keywords.Clear();
 #if STOREY_KEEP_ALL_SHADER_VARIANTS
             keepSimple = true;
 #else
@@ -64,7 +67,13 @@ namespace Triband.Storey.Editor
                 for (int i = data.Count - 1; i >= 0; i--)
                     if (data[i].shaderKeywordSet.IsEnabled(simple)) { data.RemoveAt(i); stripped++; }
             counts.TryGetValue(shader.name, out var c);
-            counts[shader.name] = (c.kept + data.Count, c.stripped + stripped);
+            bool fragment = snippet.shaderType == UnityEditor.Rendering.ShaderType.Fragment;
+            counts[shader.name] = (c.vertex + (fragment ? 0 : data.Count), c.fragment + (fragment ? data.Count : 0), c.stripped + stripped);
+            if (!fragment) return;
+            // the keywords the fragment programs kept have (a fragment program has every keyword its pass declares)
+            if (!keywords.TryGetValue(shader.name, out var k)) keywords[shader.name] = k = new Dictionary<string, int>();
+            foreach (var d in data)
+                foreach (var kw in d.shaderKeywordSet.GetShaderKeywords()) { k.TryGetValue(kw.name, out int n); k[kw.name] = n + 1; }
         }
 
         public void OnPostprocessBuild(BuildReport report)
@@ -72,8 +81,14 @@ namespace Triband.Storey.Editor
             if (counts.Count == 0) return;
             var b = new StringBuilder("Storey shaders in this build (docs/PERFORMANCE.md §7.9):");
             foreach (var kv in counts.OrderBy(kv => kv.Key, System.StringComparer.Ordinal))
-                b.Append("\n  ").Append(kv.Key).Append(": ").Append(kv.Value.kept.ToString("N0")).Append(" variants compiled")
-                    .Append(kv.Value.stripped > 0 ? $", {kv.Value.stripped:N0} with {StoreyGlobals.SimpleLightingKeyword} left out (no quality asset in the build turns Specular And Reflections off)" : "");
+            {
+                var (vertex, fragment, stripped) = kv.Value;
+                b.Append("\n  ").Append(kv.Key).Append(": ").Append(fragment.ToString("N0")).Append(" fragment and ").Append(vertex.ToString("N0")).Append(" vertex programs compiled")
+                    .Append(stripped > 0 ? $", {stripped:N0} with {StoreyGlobals.SimpleLightingKeyword} left out (no quality asset in the build turns Specular And Reflections off)" : "");
+                if (keywords.TryGetValue(kv.Key, out var k) && k.Count > 0)
+                    b.Append("\n    keywords (in how many of its fragment programs): ")
+                        .Append(string.Join(", ", k.OrderByDescending(e => e.Value).ThenBy(e => e.Key, System.StringComparer.Ordinal).Select(e => $"{e.Key} {e.Value:N0}")));
+            }
             Debug.Log(b.ToString());
         }
     }

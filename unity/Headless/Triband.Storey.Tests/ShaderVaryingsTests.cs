@@ -43,6 +43,8 @@ namespace Triband.Storey.Tests
             Assert.Single(Regex.Matches(strip, @"data\.RemoveAt\("));
             var prefixes = Regex.Matches(strip, @"shader\.name\.StartsWith\(""([^""]+)""").Select(m => m.Groups[1].Value).ToArray();
             Assert.Equal(new[] { "Storey/", "Flamingo/Storey/" }, prefixes);
+            // after URP's own stripping (its order is 0), so what it counts is what the build compiles
+            Assert.True(int.Parse(Regex.Match(strip, @"callbackOrder => (\d+);").Groups[1].Value) > 0);
             var package = UnityAsset.Package("com.triband.storey");
             foreach (var f in Directory.GetFiles(Path.Combine(package, "Unity", "Shaders"), "*.shader").Concat(Directory.GetFiles(Path.Combine(package, "Samples~", "ColorPaletteLit"), "*.shader")))
             {
@@ -75,6 +77,23 @@ namespace Triband.Storey.Tests
                     if (line.Contains("st.z >= 1.0")) rest = rest.Replace("(isDisp ? st.z : -1.0 - st.z)", "");   // read only under 1
                     Assert.False(rest.Contains("st.z"), $"{Path.GetFileName(f)}: {line.Trim()}");
                 }
+            }
+        }
+
+        /// <summary>
+        /// The Color Palette Lit sample's colour passes declare the additional lights its project's nodes read: Per Vertex
+        /// only (the sample's README). Per Pixel and Forward+'s light loop drew the same, each doubling the variants.
+        /// </summary>
+        [Fact]
+        public void TheSampleDeclaresOnlyTheLightKeywordsItsNodesRead()
+        {
+            var sample = Path.Combine(UnityAsset.Package("com.triband.storey"), "Samples~", "ColorPaletteLit");
+            foreach (var f in Directory.GetFiles(sample, "*.shader"))
+            {
+                var forward = Regex.Split(Regex.Replace(File.ReadAllText(f), @"//[^\n]*", ""), @"\bPass\s*\{").Skip(1).Single(p => p.Contains("\"LightMode\" = \"UniversalForward\""));
+                Assert.Matches(new Regex(@"#pragma\s+multi_compile\s+_\s+_ADDITIONAL_LIGHTS_VERTEX\s*\n"), forward);
+                Assert.DoesNotMatch(new Regex(@"\b_ADDITIONAL_LIGHTS\b"), forward);
+                Assert.DoesNotContain("_CLUSTER_LIGHT_LOOP", forward);
             }
         }
 

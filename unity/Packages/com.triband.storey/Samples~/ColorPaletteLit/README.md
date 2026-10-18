@@ -13,7 +13,7 @@ Only the lighting differs from Storey's own shaders. LOD switching and cross-fad
 What those files do, checked against the copies of 2026-10-01:
 
 - **Shadows.** With `TRIBAND_SHADOWS_ON`, `MainLight_float` samples URP's own main-light shadow map: the cascade, the asset's soft-shadow quality, its strength and its fade. Storey's ShadowCaster pass draws into that map, so buildings cast onto props and props onto buildings. Without the keyword nothing is shadowed. The graph fades shadows out with distance a second time (`_GlobalShadowFadeDistanceStart`, `_GlobalShadowFadeInterval`), and so does this file.
-- **Additional lights.** They count only when the URP asset sets Additional Lights to *Per Vertex* (`_ADDITIONAL_LIGHTS_VERTEX`). They are still evaluated per pixel. *Per Pixel* and Forward+ add nothing, here as in the graph.
+- **Additional lights.** They count only when the URP asset sets Additional Lights to *Per Vertex* (`_ADDITIONAL_LIGHTS_VERTEX`). They are still evaluated per pixel. *Per Pixel* and Forward+ add nothing, here as in the graph, so these shaders don't declare `_ADDITIONAL_LIGHTS` or `_CLUSTER_LIGHT_LOOP`: each doubled the colour passes' variants, all drawing the same. The graph's other lighting keywords are declared as it declares them. After a player build, Storey's line in the Console gives each shader's programs and the keywords left in them.
 - **Globals.** `_GlobalShadowColor`, the shadow fade, and `_GlobalPlayerPosition` (the blob) are set by the project, and buildings follow them.
 
 If those files move, change the three include paths. If the graph's lighting changes, change this file to match.

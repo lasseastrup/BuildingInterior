@@ -548,7 +548,7 @@ namespace UnityEngine.Rendering
 {
     public enum GraphicsDeviceType { OpenGLES3 = 11, Metal = 16, Direct3D11 = 2, Direct3D12 = 18, Vulkan = 21 }
     public readonly struct ShaderKeyword { public ShaderKeyword(string keywordName) { } public string name => ""; }
-    public struct ShaderKeywordSet { public bool IsEnabled(ShaderKeyword keyword) => false; }
+    public struct ShaderKeywordSet { public bool IsEnabled(ShaderKeyword keyword) => false; public ShaderKeyword[] GetShaderKeywords() => new ShaderKeyword[0]; }
     public enum IndexFormat { UInt16 = 0, UInt32 = 1 }
     public enum VertexAttribute { Position, Normal, Tangent, Color, TexCoord0, TexCoord1, TexCoord2, TexCoord3, TexCoord4, TexCoord5, TexCoord6, TexCoord7, BlendWeight, BlendIndices }
     public enum VertexAttributeFormat { Float32, Float16, UNorm8, SNorm8, UNorm16, SNorm16, UInt8, SInt8, UInt16, SInt16, UInt32, SInt32 }

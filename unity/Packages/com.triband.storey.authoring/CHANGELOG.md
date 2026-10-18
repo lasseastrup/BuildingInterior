@@ -22,6 +22,7 @@
 - The automatic LOD picks for the Scene view's camera, and the editor updates when that camera moves. The LOD stats are shown in the Scene view for a selected site (`StoreyLodEditor`).
 
 ### Changed
+- `StoreyShaderStripping` runs after URP's own stripping (`callbackOrder` 1000; it was 0, as URP's, so its counts could include what URP then left out). Its line after a player build gives each Storey shader's fragment and vertex programs compiled, and the keywords in the fragment programs with how many each is in, the Color Palette Lit sample's shaders too.
 - The Test City menu (Make 300, 1,000 or 3,000 Buildings, the walk-in ones and Remove Test City) is the Storey Test City window. Making a city no longer asks first: Undo takes it back.
 - A style carries the key of the preset it was applied from (`FacadeStyle.preset`: a package preset's own, `brick` and the rest as the prototype names them, or a project preset's asset GUID), and the **Preset** list shows that preset as the style's, a project's too. A field of the style edited by hand takes the key off (*Custom*), as in the prototype, except the roof, which a preset never sets; before, no edit did, so an edited style still showed its preset, and so did a preset saved from it. **Save as preset…** names the style after the new asset and shows it as the style's.
 - The test city moved from the site's inspector to **Tools ▸ Storey ▸ Test City** (Make 300, 1,000 or 3,000 Buildings, which asks first, and Remove Test City), acting on the selected site.

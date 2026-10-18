@@ -419,6 +419,7 @@ namespace UnityEditor.Build
 
 namespace UnityEditor.Rendering
 {
-    public struct ShaderSnippetData { public string passName => ""; }
+    public enum ShaderType { Vertex = 1, Fragment = 2, Geometry = 3, Hull = 4, Domain = 5, Surface = 6, RayTracing = 7 }
+    public struct ShaderSnippetData { public string passName => ""; public ShaderType shaderType => default; }
     public struct ShaderCompilerData { public UnityEngine.Rendering.ShaderKeywordSet shaderKeywordSet; }
 }
