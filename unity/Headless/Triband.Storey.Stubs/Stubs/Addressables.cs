@@ -1,6 +1,8 @@
 // The members of Unity's Addressables (com.unity.addressables 1.21 and 2.x) Storey's Addressables support uses, as
 // Unity declares them, so the optional assembly compiles here; every body is empty.
 
+#pragma warning disable CS0067, CS0108, CS0169, CS0414, CS0649, CS0660, CS0661   // empty bodies: events never raised, fields never set, == without Equals
+
 namespace UnityEngine.ResourceManagement.AsyncOperations
 {
     public enum AsyncOperationStatus { None, Succeeded, Failed }

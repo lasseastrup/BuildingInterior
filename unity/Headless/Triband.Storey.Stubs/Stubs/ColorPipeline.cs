@@ -2,6 +2,8 @@
 // (Packages/com.triband.storey/ColorPipeline) and the editor's picker (com.triband.storey.authoring/Editor/ColorPipeline) use, transcribed from Bitbucket triband/colorpipeline
 // (master, 2.1.11) and triband/core. Same rules as UnityEngine.cs: exactly what is used, bodies empty.
 
+#pragma warning disable CS0067, CS0108, CS0169, CS0414, CS0649, CS0660, CS0661   // empty bodies: events never raised, fields never set, == without Equals
+
 namespace Triband.Core.Utils
 {
     public struct SerializableGUID

@@ -20,6 +20,11 @@ jobs:
         run: python3 unity/tools/meta.py --check
       - name: Headless tests (behaviour, stub compile, package layout)
         run: dotnet test unity/Headless/Triband.Storey.Tests --logger "console;verbosity=normal"
+      - name: The engine-facing code as a player and for iOS compile it (stubs; the tests built the editor's)
+        run: |
+          for b in "-p:Player=true" "-p:Ios=true" "-p:Player=true -p:Ios=true"; do
+            dotnet build unity/Headless/Triband.Storey.Stubs -c Release $b
+          done
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'

@@ -128,7 +128,9 @@ namespace Triband.Storey.Tests
                         var here = MeshPack.Pack(m, windows, (100, 400), 20000); var there = MeshPack.Pack(m, windows, (100, 400), 20000);
                         var rows = there.Select(p => p.Styles.Select(RowOf).ToArray()).ToArray();
                         Assert.All(there, p => Assert.False(p.Finished));
+#pragma warning disable xUnit1031   // finished on a build thread, as the renderer does, and waited for here
                         threads.Run(() => { for (int k = 0; k < there.Count; k++) there[k].Finish(rows[k], 3000); return there.Count; }, BuildLane.Detail).Wait();
+#pragma warning restore xUnit1031
                         for (int k = 0; k < here.Count; k++)
                         {
                             here[k].Finish(here[k].Styles.Select(RowOf).ToArray(), 3000);

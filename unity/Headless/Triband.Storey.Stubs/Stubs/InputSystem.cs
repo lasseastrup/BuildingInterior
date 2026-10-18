@@ -2,6 +2,8 @@
 // UnityEngine.cs: exactly what is used, bodies empty. The stub build defines ENABLE_INPUT_SYSTEM, as Unity does when a
 // project's active input handling includes the Input System.
 
+#pragma warning disable CS0067, CS0108, CS0169, CS0414, CS0649, CS0660, CS0661   // empty bodies: events never raised, fields never set, == without Equals
+
 namespace UnityEngine.InputSystem.Controls
 {
     public class ButtonControl { public bool isPressed => false; public bool wasPressedThisFrame => false; public float ReadValue() => 0; }

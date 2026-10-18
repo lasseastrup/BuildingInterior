@@ -26,6 +26,11 @@ that half gets without a licence.
 # code against stubs, and the package layout (asmdefs, manifests, .meta files).
 dotnet test unity/Headless/Triband.Storey.Tests
 
+# The engine-facing code as a player and for iOS compile it (the tests build the editor's): no
+# UNITY_EDITOR, then UNITY_IOS, where the native hooks are. Any warning is an error, as Unity would show it.
+for b in "-p:Player=true" "-p:Ios=true" "-p:Player=true -p:Ios=true"; do
+  dotnet build unity/Headless/Triband.Storey.Stubs -c Release $b; done
+
 # The .meta files, without which Unity ignores a package installed from a git URL.
 # Run without --check to write the missing ones (GUIDs derive from the path).
 python3 unity/tools/meta.py --check
@@ -49,7 +54,7 @@ separate step from workstream 2 on. A key the model does not know is an import w
 here and a failing fixture test in the headless suite.
 
 A fresh Claude Code session installs the .NET SDK through `.claude/session-start.sh`.
-`.github/workflows/unity-tests.yml` runs the same two commands on pushes touching
+`.github/workflows/unity-tests.yml` runs the same checks on pushes touching
 `unity/`; it needs no secrets and can be deleted without losing anything.
 
 ## Layout

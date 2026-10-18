@@ -29,8 +29,12 @@
       declare somebody else's API, and annotating them would invent a contract nobody
       verified.
     -->
-    <!-- Unused stub parameters, never-assigned fields and hidden members are the point. -->
-    <NoWarn>CS0067;CS0169;CS0414;CS8618;CS0660;CS0661;CS0108;CS0649</NoWarn>
+    <!--
+      No warning switched off here: the package code's are Unity's too, and are fixed. The stubs' own (unused events,
+      never-assigned fields, == without Equals, which are the point of a declaration with an empty body) are switched
+      off in the stub files themselves, and any other is an error.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- As Unity defines it when the project's active input handling includes the Input System (the play kit reads it). -->
     <DefineConstants>$(DefineConstants);ENABLE_INPUT_SYSTEM</DefineConstants>
   </PropertyGroup>
@@ -38,14 +42,23 @@
   <!--
     The editor's compile by default: UNITY_EDITOR, and the authoring package's editor code too. With -p:Player=true, a
     player's: no UNITY_EDITOR, no editor code and no UnityEditor stubs, so runtime code reaching an editor-only member
-    fails here as it would in a build.
+    fails here as it would in a build. With -p:Ios=true as well, iOS's: UNITY_IOS, so the native hooks' side compiles
+    (the editor defines it too while iOS is the build target), and a field only the other side reads warns here.
   -->
   <PropertyGroup Condition="'$(Player)' != 'true'">
     <DefineConstants>$(DefineConstants);UNITY_EDITOR</DefineConstants>
+    <StubBuild>editor</StubBuild>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Player)' == 'true'">
-    <IntermediateOutputPath>obj/player/$(Configuration)/</IntermediateOutputPath>
-    <OutputPath>bin/player/$(Configuration)/</OutputPath>
+    <StubBuild>player</StubBuild>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Ios)' == 'true'">
+    <DefineConstants>$(DefineConstants);UNITY_IOS</DefineConstants>
+    <StubBuild>$(StubBuild)-ios</StubBuild>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(StubBuild)' != 'editor'">
+    <IntermediateOutputPath>obj/$(StubBuild)/$(Configuration)/</IntermediateOutputPath>
+    <OutputPath>bin/$(StubBuild)/$(Configuration)/</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>

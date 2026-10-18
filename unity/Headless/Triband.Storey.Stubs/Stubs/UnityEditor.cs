@@ -1,6 +1,8 @@
 // Hand-written declarations of the editor members the authoring package uses. Same bargain
 // as UnityEngine.cs: empty bodies, exact signatures, only what is called.
 
+#pragma warning disable CS0067, CS0108, CS0169, CS0414, CS0649, CS0660, CS0661   // empty bodies: events never raised, fields never set, == without Equals
+
 using UnityEngine;
 
 namespace UnityEditor

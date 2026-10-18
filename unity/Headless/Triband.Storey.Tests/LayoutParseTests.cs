@@ -1,3 +1,5 @@
+#pragma warning disable xUnit1031   // the waits are the subject: a build waited for runs on the waiting thread
+
 using System;
 using System.Threading;
 using Triband.Storey.Edit;

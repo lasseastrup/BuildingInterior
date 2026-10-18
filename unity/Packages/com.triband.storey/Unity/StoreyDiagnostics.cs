@@ -101,9 +101,9 @@ namespace Triband.Storey.Unity
         Camera[] cameras = new Camera[8];
         int? camerasSeen;
         // Metal's own word on the command buffers that fail (iOS: Plugins/iOS/StoreyMetalErrors.mm), taken each frame
-        bool metalWatched; long metalFailed;
+        long metalFailed;
 #if UNITY_IOS
-        byte[]? metalText; int metalTaken, metalCheckAt;
+        bool metalWatched; byte[]? metalText; int metalTaken, metalCheckAt;
 #endif
         // the build threads (docs/PERFORMANCE.md §9.1): the measurement's settings as they were before this run set them,
         // the count last noted, and the window the detail notes sum up
@@ -460,9 +460,9 @@ namespace Triband.Storey.Unity
         /// <summary>The Metal error hook started (iOS players); the header's line on it.</summary>
         string WatchMetal()
         {
-            metalWatched = false; metalFailed = 0;
+            metalFailed = 0;
 #if UNITY_IOS
-            metalTaken = 0; metalCheckAt = 0;
+            metalWatched = false; metalTaken = 0; metalCheckAt = 0;
             // the editor with iOS as its build target compiles this too: the plug-in is in the iOS player only
             if (Application.platform != RuntimePlatform.IPhonePlayer) return "Metal errors: not watched (iOS players only)";
             if (!metalErrors) return "Metal errors: not watched (Metal Errors is off)";

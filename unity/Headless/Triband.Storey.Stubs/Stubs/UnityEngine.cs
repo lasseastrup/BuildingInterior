@@ -14,6 +14,8 @@
 // and the reason the declarations are kept to exactly what is used rather than filled out
 // from memory. A stub for something unused is a claim about an API nobody checked.
 
+#pragma warning disable CS0067, CS0108, CS0169, CS0414, CS0649, CS0660, CS0661   // empty bodies: events never raised, fields never set, == without Equals
+
 namespace UnityEngine
 {
     public class Object
@@ -190,7 +192,7 @@ namespace UnityEngine
         public static Vector2 operator +(Vector2 a, Vector2 b) => a;
         public static bool operator ==(Vector2 a, Vector2 b) => a.x == b.x && a.y == b.y;
         public static bool operator !=(Vector2 a, Vector2 b) => !(a == b);
-        public override bool Equals(object? o) => o is Vector2 v && v == this;
+        public override bool Equals(object o) => o is Vector2 v && v == this;
         public override int GetHashCode() => x.GetHashCode() ^ y.GetHashCode();
         public static Vector2 operator -(Vector2 a, Vector2 b) => a;
         public static Vector2 operator *(Vector2 a, float d) => a;
@@ -580,6 +582,9 @@ namespace UnityEngine
 
     public class Component : Object
     {
+        // as Unity still declares it, so a component's own `light` needs `new` here as there
+        [System.Obsolete("Property light has been deprecated. Use GetComponent<Light>() instead. (UnityUpgradable)", true)]
+        public Component light => null;
         public Transform transform { get; } = new Transform();
         public GameObject gameObject { get; } = new GameObject("");
         public T GetComponent<T>() => default!;

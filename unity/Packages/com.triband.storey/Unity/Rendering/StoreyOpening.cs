@@ -56,7 +56,9 @@ namespace Triband.Storey.Unity
         public bool stretch = true;
 
         [SerializeField, HideInInspector] Baked lod0 = new Baked(), lod1 = new Baked();
+#pragma warning disable CS0649   // a player's is never assigned in code: Bake (editor) sets it, the asset brings it
         [SerializeField, HideInInspector] bool hasLod1;
+#pragma warning restore CS0649
 
         /// <summary>
         /// The id a style stores, kept through renames. The editor gives a new asset its GUID, and a copy its own (one
