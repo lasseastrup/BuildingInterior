@@ -23,6 +23,7 @@ namespace UnityEditor
         public static bool DisplayDialog(string title, string message, string ok) => true;
         public static int DisplayDialogComplex(string title, string message, string ok, string cancel, string alt) => 0;
         public static void SetDirty(Object target) { }
+        public static bool IsPersistent(Object target) => false;
     }
 
     public static class AssetDatabase
@@ -250,6 +251,7 @@ namespace UnityEditor
         public static Ray GUIPointToWorldRay(Vector2 position) => default;
         public static float GetHandleSize(Vector3 position) => 1;
         public static void AddDefaultControl(int controlId) { }
+        public static GameObject PickGameObject(Vector2 position, bool selectPrefabRoot) => null;
     }
 
     public enum MessageType { None, Info, Warning, Error }
@@ -359,12 +361,13 @@ namespace UnityEditor.EditorTools
 
     public sealed class EditorToolContextAttribute : System.Attribute
     {
-        public EditorToolContextAttribute(string displayName, System.Type targetType) { }
+        public EditorToolContextAttribute(string displayName = "", System.Type targetType = null) { }
     }
 
     public abstract class EditorToolContext : ScriptableObject
     {
         public virtual void OnActivated() { }
+        public virtual void OnToolGUI(EditorWindow window) { }
         protected virtual System.Type GetEditorToolType(Tool tool) => null;
     }
 
@@ -398,6 +401,11 @@ namespace UnityEditor.Overlays
     public abstract class IMGUIOverlay
     {
         public abstract void OnGUI();
+    }
+
+    public interface ITransientOverlay
+    {
+        bool visible { get; }
     }
 }
 

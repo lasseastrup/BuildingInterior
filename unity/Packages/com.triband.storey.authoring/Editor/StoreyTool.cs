@@ -108,7 +108,7 @@ namespace Triband.Storey.Editor
                 var hit = Picking.Building(e.Document, o, d);
                 // another site's building, in front of this one's or with none of this one's behind it: edit that
                 var world = HandleUtility.GUIPointToWorldRay(ev.mousePosition);
-                if (StoreyToolContext.SiteAt(world, Site!, hit.distance) is StoreySite other) { StoreyToolContext.Edit(other, world); ev.Use(); Inspectors(); }
+                if (StoreyToolContext.SiteAt(world, Site!, hit.distance) is { } other) { StoreyToolContext.Edit(other.site, other.id); ev.Use(); Inspectors(); }
                 else if (hit.index >= 0) { e.View.Select(e.Document.buildings[hit.index].id); ev.Use(); Inspectors(); }
             }
             else if (ev.type == EventType.MouseUp && GUIUtility.hotControl == id)
@@ -378,7 +378,7 @@ namespace Triband.Storey.Editor
 
         protected static void Label(Vector3 at, string text) => Handles.Label(at, text, EditorStyles.whiteBoldLabel);
 
-        protected static void Hint(string text)
+        internal static void Hint(string text)
         {
             if (Event.current.type != EventType.Repaint) return;
             Handles.BeginGUI();

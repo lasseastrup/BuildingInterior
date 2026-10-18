@@ -12,17 +12,20 @@ namespace Triband.Storey.Editor
     /// <summary>
     /// The floor card (SPEC §9, docs/EDITOR.md slice 6.6) as a Scene view overlay: the floor count with + and − (new floors
     /// copy the top floor), and with the Interior tool the floor list: pick the active floor, see its height, copy its
-    /// layout to every floor above, duplicate or delete it.
+    /// layout to every floor above, duplicate or delete it. Shown only while a building is edited (a Storey tool active on
+    /// it): a transient overlay, so it isn't in the Overlays menu.
     /// </summary>
     [Overlay(typeof(SceneView), "Storey Floors", true)]
-    internal sealed class StoreyFloorsOverlay : IMGUIOverlay
+    internal sealed class StoreyFloorsOverlay : IMGUIOverlay, ITransientOverlay
     {
+        public bool visible => StoreyToolContext.Editing;
+
         public override void OnGUI()
         {
-            var site = Selection.activeGameObject != null ? Selection.activeGameObject.GetComponent<StoreySite>() : null;
+            var site = StoreyToolContext.SelectedSite();
             var e = site != null ? StoreyEdit.Of(site) : null;
             var b = e?.Selected;
-            if (e == null || b == null) { GUILayout.Label("Select a Storey Site and a building to edit floors.", EditorStyles.wordWrappedMiniLabel); return; }
+            if (e == null || b == null) return;
 
             GUILayout.Label(b.name, EditorStyles.boldLabel);
             using (new GUILayout.HorizontalScope())

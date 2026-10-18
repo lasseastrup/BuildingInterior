@@ -536,6 +536,14 @@ namespace Triband.Storey.Unity
         /// </summary>
         public bool Made(Transform t) => (detailRoot != null && t.IsChildOf(detailRoot.transform)) || (cellRoot != null && t.IsChildOf(cellRoot.transform));
 
+        /// <summary>The building an object of the site's draws, by id; null for a merged cell, which draws many, and for any other object.</summary>
+        public string? BuildingOf(GameObject go)
+        {
+            foreach (var bt in built.Values)
+                if (bt.parts != null) foreach (var list in bt.parts.objs) foreach (var o in list) if (o.go == go) return bt.id;
+            return null;
+        }
+
         /// <summary>The layout as built (null before <see cref="Show"/>). A new one after every change.</summary>
         public Site? Site => site;
 
