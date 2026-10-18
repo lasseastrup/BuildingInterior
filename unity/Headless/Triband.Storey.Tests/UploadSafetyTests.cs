@@ -147,5 +147,32 @@ namespace Triband.Storey.Tests
             Assert.Contains("if (colliders && cb.collision == null && cb.shape != null && e.Visible(0) && !Baking(cb)) colliderPending.Add(cb.id);", renderer.Substring(a, b - a));
             Assert.Contains("internal bool ColliderUp(int idx) => byIdx.TryGetValue(idx, out var b) && b.collision != null;", renderer);
         }
+
+        [Fact]
+        public void CollidersAtLoadAreMadeBeforePhysicsStepsAndKept()
+        {
+            // docs/PLAY.md §5: a site with Colliders At Load (off unless asked for) loads at once, not over frames, and makes
+            // every collider still missing when a load ends and after a rebuild: made on the build threads, then cooked and
+            // waited for before it returns, so the next physics step has them; and none is let go past the cap
+            string Text(params string[] path) => System.IO.File.ReadAllText(UnityAsset.Package("com.triband.storey", path));
+            var renderer = Text("Unity", "Rendering", "SiteRenderer.cs"); var site = Text("Unity", "Rendering", "StoreySite.cs");
+            string Method(string text, string start, string next)
+            {
+                int a = text.IndexOf(start, System.StringComparison.Ordinal); Assert.True(a > 0, start);
+                int b = text.IndexOf(next, a, System.StringComparison.Ordinal); Assert.True(b > a, next);
+                return text.Substring(a, b - a);
+            }
+            int At(string text, string what) { int i = text.IndexOf(what, System.StringComparison.Ordinal); Assert.True(i >= 0, what); return i; }
+            var take = Method(renderer, "void TakeLoad(System.Diagnostics.Stopwatch? sw)", "/// <summary>");
+            Assert.True(At(take, "load = null;") < At(take, "if (allColliders) MakeColliders();"), "once every building is built");
+            Assert.Contains("if (allColliders) MakeColliders();", Method(renderer, "public void Rebuild(StoreyDocument doc, IEnumerable<string> ids)", "/// <summary>"));
+            var make = Method(renderer, "public void MakeColliders()", "// the buildings whose collision meshes MakeColliders");
+            Assert.True(At(make, "CollisionMesh.BuildAll(") < At(make, "BuildColliders();") && At(make, "BuildColliders();") < make.LastIndexOf("FinishBake(true);", System.StringComparison.Ordinal), "made, then cooked and waited for");
+            Assert.Contains("if (max <= 0 || allColliders) return;", Method(renderer, "void TrimColliders()", "struct BakeJob"));
+            Assert.Contains("public bool collidersAtLoad;", site);
+            Assert.Contains("bool OverFrames => LoadOverFrames && !(collidersAtLoad && generateColliders);", site);
+            Assert.DoesNotContain("Application.isPlaying && LoadOverFrames", site);
+            Assert.Contains("site.AllColliders = collidersAtLoad && generateColliders && Application.isPlaying;", site);
+        }
     }
 }

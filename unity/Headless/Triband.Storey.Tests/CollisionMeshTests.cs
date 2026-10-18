@@ -159,5 +159,47 @@ namespace Triband.Storey.Tests
             }
             output.WriteLine($"all built in {sw.Elapsed.TotalMilliseconds:0.0} ms");
         }
+
+        static string Print(CollisionMesh m)
+        {
+            var h = new HashCode();
+            foreach (var p in m.P) { h.Add(p.x); h.Add(p.y); h.Add(p.z); }
+            foreach (int i in m.I) h.Add(i);
+            foreach (var k in m.Kind) h.Add(k);
+            return $"{m.P.Count}/{m.Tris}/{h.ToHashCode()}";
+        }
+
+        /// <summary>
+        /// A site making every collider as it loads (Colliders At Load, docs/PLAY.md §5) makes their meshes on the build
+        /// threads at once (<see cref="CollisionMesh.BuildAll"/>): the same meshes as one after another, from a LOD0's shape
+        /// where it gives one and from a shape made for the purpose otherwise, and a building whose build throws is reported,
+        /// not thrown, the rest made all the same.
+        /// </summary>
+        [Fact]
+        public void ManyAtOnceAreTheSameAsOneByOne()
+        {
+            var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document;
+            Edit.TestCity.Generate(d, 300, walkIn: true);
+            var bs = d.buildings; var site = new Site(bs);
+            var each = bs.Select(b => Print(CollisionMesh.Build(site, b, Lod0.BuildShape(site, b)))).ToList();
+            var threads = new Lod.BuildThreads(4);
+            try
+            {
+                var sw = Stopwatch.StartNew();
+                var made = CollisionMesh.BuildAll(new Site(bs), bs, null, threads);
+                output.WriteLine($"{bs.Count} walk-in buildings' collision meshes, shapes made for them, on four build threads: {sw.Elapsed.TotalMilliseconds:0} ms");
+                Assert.Equal(each, made.Select(m => Print(m!)).ToList());
+                // from LOD0's shapes where given; one building that throws, reported
+                var site2 = new Site(bs);
+                var shapes = bs.Select((b, i) => i % 2 == 0 ? Lod0.Build(site2, b).Shape : null).ToList();
+                var broken = new BuildingData { name = "broken", floors = null! };   // throws as soon as it is read
+                var failed = new List<string>();
+                var some = CollisionMesh.BuildAll(site2, bs.Append(broken).ToList(), shapes.Append(null).ToList(), threads, (b, ex) => failed.Add(b.name));
+                Assert.Equal(new[] { "broken" }, failed);
+                Assert.Null(some[bs.Count]);
+                Assert.Equal(each, some.Take(bs.Count).Select(m => Print(m!)).ToList());
+            }
+            finally { threads.Resize(0); }
+        }
     }
 }

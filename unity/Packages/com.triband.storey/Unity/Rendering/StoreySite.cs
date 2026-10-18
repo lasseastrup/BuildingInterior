@@ -38,6 +38,8 @@ namespace Triband.Storey.Unity
         public bool generateColliders = true;
         [Tooltip("Colliders in edit mode too, rebuilt with every edit (raycasts and physics previews in the editor). Off, edits cook nothing.")]
         public bool collidersInEditMode;
+        [Tooltip("In Play mode, make every building's collider as the site loads, before physics first steps, and keep them all, instead of each with its building's LOD0 as the camera nears: nothing placed on a building falls through it at the start, a prop or not. The layout then loads at once, not over frames. About a millisecond a building on one desktop core, shared by the build threads, plus PhysX's cooking, and every collider kept (2 to 12 KB of mesh a building, besides PhysX's copy): for a level's layout, not a streamed city. Off, Storey Props wait for their building's collider.")]
+        public bool collidersAtLoad;
         [Tooltip("The artist-made windows and doors the layout's styles use (the editor keeps this list), so builds include them.")]
         public List<StoreyOpening> openings = new List<StoreyOpening>();
         [Tooltip("The artist-made facade details the layout uses, placed by hand or by its styles' rules (the editor keeps this list), so builds include them.")]
@@ -152,7 +154,7 @@ namespace Triband.Storey.Unity
             get
             {
                 // a layout still being parsed on a build thread has no area yet: asking for it mustn't parse it here
-                var d = preview ?? (layout == null ? null : Application.isPlaying && LoadOverFrames ? layout.Parsed : layout.Document);
+                var d = preview ?? (layout == null ? null : Application.isPlaying && OverFrames ? layout.Parsed : layout.Document);
                 if (d == null || d.buildings.Count == 0) return null;
                 var o = transform.position;
                 if (!ReferenceEquals(d, areaFor) || d.buildings.Count != areaCount || o != areaAt)
@@ -182,9 +184,13 @@ namespace Triband.Storey.Unity
         /// Load the layout over several frames when the site starts in Play mode, nearest cells first, rather than all in
         /// the frame it starts (docs/CITY.md §2): its text and its neighbours' are parsed on the build threads first. On by
         /// default, so a district streamed in never holds a frame; turn it off to have every building at once (behind a
-        /// loading screen, say), or wait for <see cref="Loading"/> to clear.
+        /// loading screen, say), or wait for <see cref="Loading"/> to clear. A site with <see cref="collidersAtLoad"/> loads at
+        /// once whatever this says.
         /// </summary>
         public bool LoadOverFrames { get; set; } = true;
+
+        /// <summary>A load in Play mode goes over frames: <see cref="LoadOverFrames"/>, unless every collider is wanted as it loads.</summary>
+        bool OverFrames => LoadOverFrames && !(collidersAtLoad && generateColliders);
 
         /// <summary>The layout is still loading over frames: its text is being parsed, or some of its buildings aren't built yet.</summary>
         public bool Loading => site != null && (parsing || preparing || site.Loading);
@@ -289,17 +295,19 @@ namespace Triband.Storey.Unity
                 shownJson = null; pendingAll = true;
             }
             site.Layer = gameObject.layer;   // everything the site makes is on its layer
-            site.LoadOverFrames = LoadOverFrames;
+            site.LoadOverFrames = OverFrames;
             // in Play mode, loading over frames, the layouts are parsed on the build threads, all at once, and the site waits
             // for them: a district streamed in isn't held up a frame by its text (docs/CITY.md §2)
             parsing = false;
-            if (Application.isPlaying && LoadOverFrames)
+            if (Application.isPlaying && OverFrames)
             {
                 site.StartThreads();
                 if (layout.DocumentOffMainThread() == null) parsing = true;
                 foreach (var n in neighbours) if (n != null && n.layout != null && n.layout.Baked == null && n.layout.DocumentOffMainThread() == null) parsing = true;
             }
             site.Colliders = generateColliders && (Application.isPlaying || collidersInEditMode);
+            // every collider made as the layout is built, before physics steps (docs/PLAY.md §5): a load is at once then
+            site.AllColliders = collidersAtLoad && generateColliders && Application.isPlaying;
             // the neighbouring districts, for party walls along the edge: a change builds everything again
             // (the layouts' texts compared as objects: a reimport makes a new one, and nothing is read or hashed)
             bool neighboursChanged = neighboursFor != layout || neighboursSeen.Count != neighbours.Count;
@@ -336,7 +344,7 @@ namespace Triband.Storey.Unity
                 // parse was (docs/PERFORMANCE.md §6.2)
                 if (shownJson != layout.Json && !parsing)
                 {
-                    if (!(Application.isPlaying && LoadOverFrames) || site.Prepare(layout.Document)) { site.Show(layout.Document); shownJson = layout.Json; }
+                    if (!(Application.isPlaying && OverFrames) || site.Prepare(layout.Document)) { site.Show(layout.Document); shownJson = layout.Json; }
                     else preparing = true;
                 }
             }

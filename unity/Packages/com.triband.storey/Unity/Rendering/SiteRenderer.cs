@@ -655,8 +655,27 @@ namespace Triband.Storey.Unity
             {
                 if (colliders == value) return;
                 colliders = value;
-                if (value) foreach (var id in built.Keys) colliderPending.Add(id);
+                if (value) { foreach (var id in built.Keys) colliderPending.Add(id); if (allColliders && load == null) MakeColliders(); }
                 else { FinishBake(true, discard: true); colliderPending.Clear(); foreach (var b in built.Values) { RemoveCollider(b); b.collisionMade = null; } }
+            }
+        }
+
+        bool allColliders;
+
+        /// <summary>
+        /// Every building has its collider from the frame it's built (a site's Colliders At Load, docs/PLAY.md §5): when a
+        /// load ends and after a rebuild, the colliders still missing are made at once (<see cref="MakeColliders"/>), and none is
+        /// let go past <see cref="LodSettings.MaxColliders"/>. Off, a building's collider comes with its LOD0, as the camera nears.
+        /// </summary>
+        public bool AllColliders
+        {
+            get => allColliders;
+            set
+            {
+                if (allColliders == value) return;
+                allColliders = value;
+                if (value) { if (load == null) MakeColliders(); }
+                else if (lods != null) TrimColliders();
             }
         }
 
@@ -712,7 +731,7 @@ namespace Triband.Storey.Unity
             // rows and one colour row in the test cities (more grow the tables as before; docs/PERFORMANCE.md §6.8)
             table.Reserve(doc.buildings.Count * 3 + 64, doc.buildings.Count + 64);
             foreach (var kv in remaps) book.SetRemap(kv.Key, kv.Value.original, kv.Value.overwrite);
-            if (lods == null) { foreach (var b in doc.buildings) Build(b); carry.Clear(); return; }
+            if (lods == null) { foreach (var b in doc.buildings) Build(b); carry.Clear(); if (allColliders) MakeColliders(); return; }
             // cell by cell, each merged as soon as its buildings are built: a few cells' massings are held at a time, not
             // every building's (docs/CITY.md §7), built on the workers ahead of the cell being taken. A massing reaching
             // into another cell only has that one merged again
@@ -743,7 +762,7 @@ namespace Triband.Storey.Unity
         void Reserve(int buildings)
         {
             var top = parent.root;
-            int more = lods == null ? buildings * 4 : buildings / 8 + 16 + Math.Min(lods.Settings.MaxLod0 * 4 + lods.Settings.MaxLod1 * 2, 4096) + Math.Max(0, lods.Settings.MaxColliders);
+            int more = lods == null ? buildings * 4 : buildings / 8 + 16 + Math.Min(lods.Settings.MaxLod0 * 4 + lods.Settings.MaxLod1 * 2, 4096) + (allColliders ? buildings : Math.Max(0, lods.Settings.MaxColliders));
             int want = top.hierarchyCount + more;
             if (top.hierarchyCapacity < want) top.hierarchyCapacity = want;
         }
@@ -765,6 +784,7 @@ namespace Triband.Storey.Unity
             if (!l.Done) return;
             load = null; carry.Clear();
             if (sw != null) { Version++; AnyVersion++; }   // over frames: the props and the occlusion find their buildings again
+            if (allColliders) MakeColliders();   // every building built: their colliders before physics steps again
         }
 
         /// <summary>
@@ -786,6 +806,7 @@ namespace Triband.Storey.Unity
                 book.ReleaseBuilding(site.IndexOf(b));
                 Build(b);
             }
+            if (allColliders) MakeColliders();   // the rebuilt buildings' colliders, gone with their old selves
         }
 
         /// <summary>Per frame: the view globals (neutral unless the editor set a view), the palette, the LODs, the table upload.</summary>
@@ -1833,6 +1854,44 @@ namespace Triband.Storey.Unity
         JobHandle bakeJob; NativeArray<int> bakeIds;
 
         /// <summary>
+        /// Every building's collider made now, and assigned before this returns, so the next physics step has them all
+        /// (<see cref="AllColliders"/>): a batch being cooked is finished first, then the buildings with none have their
+        /// collision meshes made on the build threads at once, from their LOD0's shape or a shape made for it alone
+        /// (<see cref="CollisionMesh.BuildAll"/>, the main thread helping), and cooked together across Unity's job workers,
+        /// waited for. Headless, about a millisecond a building on one desktop core before the cooking (docs/PLAY.md §5).
+        /// </summary>
+        public void MakeColliders()
+        {
+            if (!colliders || site == null) return;
+            using var _t = StoreyTimings.Time("site: every collider made at once");
+            FinishBake(true);
+            making.Clear(); makingFor.Clear(); makingFrom.Clear();
+            foreach (var bt in built.Values)
+            {
+                if (bt.collision != null) continue;
+                colliderPending.Add(bt.id);
+                if (bt.collisionMade == null && site.ById(bt.id) is BuildingData b) { making.Add(bt); makingFor.Add(b); makingFrom.Add(bt.shape); }
+            }
+            if (making.Count > 0)
+            {
+                StartThreads();
+                var made = CollisionMesh.BuildAll(site, makingFor, makingFrom, BuildThreads.Shared, (b, ex) => Debug.LogException(ex));
+                for (int i = 0; i < made.Length; i++)
+                {
+                    making[i].collisionMade = made[i];
+                    if (made[i] == null) colliderPending.Remove(making[i].id);   // it threw (logged): not again on the main thread
+                }
+            }
+            making.Clear(); makingFor.Clear(); makingFrom.Clear();
+            BuildColliders();
+            FinishBake(true);
+        }
+        // the buildings whose collision meshes MakeColliders has made at once, and what from
+        readonly List<Built> making = new List<Built>();
+        readonly List<BuildingData> makingFor = new List<BuildingData>();
+        readonly List<Lod0Shape?> makingFrom = new List<Lod0Shape?>();
+
+        /// <summary>
         /// The colliders of every building built since the last batch, together: their meshes made with their LOD0 on the
         /// build threads (on the main thread only when colliders are switched on, or for a kept LOD0 shown again after its
         /// collider went past the cap: 0.4 to 2 ms a building), then cooked
@@ -1902,7 +1961,7 @@ namespace Triband.Storey.Unity
         /// </summary>
         void TrimColliders()
         {
-            int max = lods!.Settings.MaxColliders; if (max <= 0) return;
+            int max = lods!.Settings.MaxColliders; if (max <= 0 || allColliders) return;
             collided.Clear(); foreach (var bt in built.Values) if (bt.collision != null) collided.Add(bt.idx);
             if (collided.Count <= max) return;
             lods.OldestDetail(collided, max, colliderDrop);

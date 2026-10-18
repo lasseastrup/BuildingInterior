@@ -137,6 +137,8 @@ So in Play mode a Storey Prop's Rigidbody is **held**: kinematic while there may
 
 A rigidbody or a physics character that isn't a Storey Prop waits on `StoreySite.CollidersReadyAround` instead (docs/PLAY.md §5).
 
+On a site with **Colliders At Load**, every building has its collider before physics first steps and keeps it, and a rebuilt building gets its own back in the same frame (docs/PLAY.md §5). No prop is held there; the hold is for sites whose colliders come with LOD0.
+
 ## 3. What it costs
 
 - **CPU:**

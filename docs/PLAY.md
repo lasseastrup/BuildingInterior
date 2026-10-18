@@ -110,6 +110,19 @@ Each triangle is tagged Floor, Stair, Wall or Roof (`CollisionMesh.Kind`). The d
 - **Edit time:** no colliders by default, so dragging a wall cooks nothing. **Colliders in edit mode** turns them on for editor raycasts. Each edit then rebuilds the colliders of only the buildings it touched.
 
 **When a building's collider is there.** It comes with the building's LOD0 (in view and near enough, docs/CITY.md §2), assigned a frame or two after the LOD0 is up, and a site loading over frames builds no LOD0 before it has read its layout. Physics doesn't wait, so a rigid body placed on a building falls through until the collider is there.
+- **Colliders At Load** on the Storey Site makes every building's collider as the site loads in Play mode, before physics first steps, and keeps them all (**Colliders Kept** doesn't apply): nothing placed on a building falls through it at the start, a prop or not. Off by default.
+  - **How.** The layout loads at once, not over frames. When the load ends, the collision meshes of the buildings without a collider are made on the build threads at once, the main thread helping (`CollisionMesh.BuildAll`), from a shape made for the purpose where a building has no LOD0 (`Lod0.BuildShape`, no meshes). They are then cooked together on Unity's job workers and waited for (`SiteRenderer.AllColliders`, `MakeColliders`). A building rebuilt by an edit gets its collider again in the same frame. LOD0s built later make no collision mesh of their own.
+  - **What it costs.** Headless, before PhysX's cooking, which needs the editor to measure:
+
+    | Layout | Buildings | One thread | Four threads | Collision meshes |
+    |---|---|---|---|---|
+    | Demo street | 7 | 59 ms | 19 ms | 7 KB a building |
+    | Test city | 300 | 382 ms | 155 ms | 0.5 MB |
+    | Test city, walk-in | 300 | 426 ms | 187 ms | 3.7 MB |
+    | Test city | 3,000 | 2.2 s | 0.7 s | 4.6 MB |
+    | Test city, walk-in | 3,000 | 3.2 s | 1.0 s | 22.6 MB |
+
+    PhysX keeps a cooked copy of each besides, and every building gets its own object for its collider. An iPhone 7 core is about a third of a desktop core, with two build threads. So it suits a level's layout; a streamed city leaves it off and lets its colliders come with LOD0, and a district streamed in with it on holds the frame it loads in. `CollisionMeshTests.ManyAtOnceAreTheSameAsOneByOne` checks the meshes made at once against those made one by one.
 - **Storey Props** with a Rigidbody are held still until then (docs/PROPS.md §2.6).
 - **Anything else** (a physics character, a rigid body that isn't a prop) waits on `StoreySite.CollidersReadyAround(position, radius)`: true once every building within the radius has its collider, and when the site makes none. A spawn or teleport asks for detail there first (`PrefetchAround`) and waits for this behind its fade, as it waits for `DetailReadyAround`. `SiteRenderer.HasCollider(id)` asks about one building.
 - **A building showing its LOD0 has its collider.** One whose collider went past the cap while its LOD0 was kept has it made again from that LOD0 when it's shown. A LOD0 prefetched round the player and never shown is the first collider to go past the cap, and it was shown later without one.
@@ -118,4 +131,4 @@ Each triangle is tagged Floor, Stair, Wall or Roof (`CollisionMesh.Kind`). The d
 - Walls on the roof storey are 1.2 m high, a parapet's height, whatever the parapet.
 - Lift shafts are solid floor: the walk model does not let the player fall down them either.
 - Gable ends above the top storey are not walls in the collision mesh. The pitched roof itself is.
-- A building out of view or far away has no collider until its LOD0 is built. Storey Props there stay held; any other rigid body falls through it.
+- Without Colliders At Load, a building out of view or far away has no collider until its LOD0 is built. Storey Props there stay held; any other rigid body falls through it.

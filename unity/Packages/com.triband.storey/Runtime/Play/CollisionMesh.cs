@@ -2,7 +2,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Triband.Storey.Generate;
+using Triband.Storey.Lod;
 
 namespace Triband.Storey.Play
 {
@@ -44,6 +46,29 @@ namespace Triband.Storey.Play
             m.PitchedRoof(site, b);
             m.Bridged(site, b, l0);
             return m;
+        }
+
+        /// <summary>
+        /// Many buildings' collision meshes at once on <paramref name="threads"/> (a site making every collider as it loads,
+        /// docs/PLAY.md §5), waited for: the calling thread runs those no build thread has taken yet. Each is made from the LOD0
+        /// shape <paramref name="shapes"/> gives at its index or, without one, from a shape made for it alone
+        /// (<see cref="Lod0.BuildShape"/>, no meshes). A building whose build throws gets null, and <paramref name="failed"/> is told.
+        /// </summary>
+        public static CollisionMesh?[] BuildAll(Site site, IReadOnlyList<BuildingData> bs, IReadOnlyList<Lod0Shape?>? shapes, BuildThreads threads, Action<BuildingData, Exception>? failed = null)
+        {
+            var tasks = new Task<CollisionMesh>[bs.Count];
+            for (int i = 0; i < bs.Count; i++)
+            {
+                var b = bs[i]; var shape = shapes?[i];
+                tasks[i] = threads.Run(() => Build(site, b, shape ?? Lod0.BuildShape(site, b)), BuildLane.Forced);
+            }
+            var made = new CollisionMesh?[bs.Count];
+            for (int i = 0; i < tasks.Length; i++)
+            {
+                try { made[i] = tasks[i].Result; }
+                catch (AggregateException ex) { failed?.Invoke(bs[i], ex.InnerException ?? ex); }
+            }
+            return made;
         }
 
         // ---- building blocks ----
