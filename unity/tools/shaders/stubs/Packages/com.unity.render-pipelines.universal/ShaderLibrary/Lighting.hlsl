@@ -40,5 +40,6 @@ half3 SampleSHPixel(half3 L2Term, half3 normalWS)
 float4 TransformWorldToShadowCoord(float3 p) { return mul(_MainLightWorldToShadow, float4(p, 1)); }
 float4 GetShadowCoord(VertexPositionInputs v) { return TransformWorldToShadowCoord(v.positionWS); }
 float3 ApplyShadowBias(float3 p, float3 n, float3 l) { return p + n * 0.01 + l * 0.01; }
+float4 ApplyShadowClamping(float4 c) { c.z = min(c.z, c.w); return c; }
 float4 UniversalFragmentPBR(InputData i, SurfaceData s) { return float4(s.albedo * (i.bakedGI + saturate(dot(i.normalWS, _MainLightPosition.xyz))), s.alpha); }
 #endif

@@ -47,7 +47,8 @@ CBUFFER_END
 static const float _StoreyAlpha = 1.0;
 #endif
 #ifdef STOREY_SHADOW
-float3 _LightDirection;   // set by URP for the shadow caster pass
+float3 _LightDirection;   // set by URP for the shadow caster pass: a directional light's direction
+float3 _LightPosition;    // and a spot or point light's place (_CASTING_PUNCTUAL_LIGHT_SHADOW)
 #endif
 
 struct Attributes
@@ -136,7 +137,16 @@ Varyings StoreyVert(Attributes IN)
     if (IN.normalOS.w < -0.5 / 127.0) normalOS.y = 0.0;
     float3 normalWS = TransformObjectToWorldNormal(normalOS);
 #ifdef STOREY_SHADOW
-    OUT.positionCS = TransformWorldToHClip(ApplyShadowBias(worldPos, normalWS, _LightDirection));
+    // as URP's own caster (ShadowCasterPass.hlsl): biased by the light's direction (a punctual light's from its place),
+    // and a directional light's casters pancaked onto the near plane. Unity fits a cascade's near plane to what the
+    // cascade shows, not to what casts into it: unclamped, whatever lies nearer the sun is clipped, a building's sunlit
+    // facade and roof, and with back faces culled only the frames of its shaded side's windows are left to cast
+#ifdef _CASTING_PUNCTUAL_LIGHT_SHADOW
+    float3 lightDir = normalize(_LightPosition - worldPos);
+#else
+    float3 lightDir = _LightDirection;
+#endif
+    OUT.positionCS = ApplyShadowClamping(TransformWorldToHClip(ApplyShadowBias(worldPos, normalWS, lightDir)));
 #else
     OUT.positionCS = TransformWorldToHClip(worldPos);
 #endif
