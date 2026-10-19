@@ -172,10 +172,16 @@ namespace Triband.Storey.Editor
             int r = EditorGUILayout.Popup(new GUIContent("Placed by rule", "Where a style's rules put it, at the density the style gives it (Facade tab ▸ Details by rule)"), at, rules.Select(x => x.label).ToArray());
             if (r != at) { Undo.RecordObject(d, "The detail's rule"); d.rule = rules[r].rule; changed = true; }
             serializedObject.Update();
-            foreach (var f in new[] { "mesh", "lod1Mesh", "facesBack", "parts", "size" }) EditorGUILayout.PropertyField(serializedObject.FindProperty(f), true);
+            foreach (var f in new[] { "mesh", "lod1Mesh", "facesBack", "size" }) EditorGUILayout.PropertyField(serializedObject.FindProperty(f), true);
             if (d.anchor != Details.Anchor.Wall) EditorGUILayout.PropertyField(serializedObject.FindProperty("stretch"), true);
             serializedObject.ApplyModifiedProperties();
             changed |= EditorGUI.EndChangeCheck();
+            if (d.parts.Count > 0) EditorGUILayout.LabelField(new GUIContent("Parts", "Each submesh takes one of the style's colours, or keeps a palette colour of its own whatever the style: the model's materials only name them."), EditorStyles.boldLabel);
+            for (int i = 0; i < d.parts.Count; i++)
+            {
+                var p = d.parts[i];
+                changed |= StoreyPartColours.Row(d, "#" + i, p.label.Length > 0 ? p.label : "Part " + (i + 1), ref p.colour, ref p.own, false, null);
+            }
             if (d.mesh != before && d.mesh != null) Fill(d);
             if (changed || (d.Id.Length > 0 && DetailKinds.Get(d.Id) == null)) { d.Bake(); EditorUtility.SetDirty(d); }
             if (d.mesh == null) { EditorGUILayout.HelpBox(Pivot(d.anchor) + " Each submesh is one part.", MessageType.Info); return; }
@@ -212,7 +218,7 @@ namespace Triband.Storey.Editor
                     var mats = r.sharedMaterials;
                     for (int i = 0; i < names.Length && i < mats.Length; i++) names[i] = mats[i] != null ? mats[i].name : "";
                 }
-            d.parts = names.Select(n => StoreyDetail.Guess(n ?? "")).ToList();
+            d.parts = names.Select(n => { var p = StoreyDetail.Guess(n ?? ""); p.label = n ?? ""; return p; }).ToList();
             var b = m.bounds;
             d.size = new Vector3(Mathf.Max(0.05f, b.size.x), Mathf.Max(0.05f, b.size.y), Mathf.Max(0.02f, b.max.z));
         }

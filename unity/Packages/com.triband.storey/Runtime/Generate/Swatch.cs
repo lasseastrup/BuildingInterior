@@ -122,7 +122,8 @@ namespace Triband.Storey.Generate
 
         public Rgb Resolve(Swatch s)
         {
-            string v = StyleColors.Of(StyleOf(s.style), s.slot, defaults);
+            // a part's own colour (KindColors), whatever the style
+            string v = KindColors.Is(s.slot) ? KindColors.RefOf(s.slot) ?? throw new FormatException($"{s}: no colour was handed out for slot {(int)s.slot}") : StyleColors.Of(StyleOf(s.style), s.slot, defaults);
             if (ColorRef.IsPaletteId(v))
             {
                 if (palette == null) throw new FormatException($"{s}: palette id {v} and no palette to resolve it");

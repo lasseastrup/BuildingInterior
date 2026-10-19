@@ -29,6 +29,8 @@ namespace Triband.Storey.Unity
             public ColorSlot colour = ColorSlot.Frame;
             [Tooltip("Part of the door itself: left out where the doorway stays open (walk-in storeys, which the player walks through).")]
             public bool leaf;
+            [Tooltip("A palette colour it keeps whatever the style (a palette id, or a CSS colour without Color Pipeline); empty takes the style colour above. Glass always takes the style's.")]
+            public string own = "";
             /// <summary>The part of the source this row colours: a prefab's material (its asset's GUID and local id), or a mesh's submesh ("#" and its number).</summary>
             [HideInInspector] public string key = "";
             /// <summary>What the artist calls it: the material's name.</summary>
@@ -190,7 +192,7 @@ namespace Triband.Storey.Unity
                 var row = Row(b, s);
                 var t = new int[b.counts[s]]; Array.Copy(b.tris, at, t, 0, t.Length); at += t.Length;
                 bool leafObject = s < b.flags.Length && (b.flags[s] & 1) != 0;
-                m.parts.Add(new OpeningKind.Part { slot = row?.colour ?? ColorSlot.Frame, leaf = door && (leafObject || row?.leaf == true), tris = t });
+                m.parts.Add(new OpeningKind.Part { slot = row?.colour ?? ColorSlot.Frame, own = string.IsNullOrEmpty(row?.own) ? null : row!.own, leaf = door && (leafObject || row?.leaf == true), tris = t });
             }
             return m;
         }

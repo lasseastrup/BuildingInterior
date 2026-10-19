@@ -24,21 +24,43 @@ namespace Triband.Storey.Editor
             StoreyCutout.Fit = StoreyCutoutEditor.FitToMeshes;
         }
 
-        /// <summary>What a prefab or a mesh gives the bake: its objects' meshes, its parts' keys in order with their names, and what was left out.</summary>
+        /// <summary>
+        /// What a prefab or a mesh gives the bake: its objects' meshes, its parts' keys in order with their names (and the
+        /// palette colour a Model Remapper part keeps), and what was left out.
+        /// </summary>
         internal sealed class Gathered
         {
             public readonly List<KindBake.Source> sources = new List<KindBake.Source>();
             public readonly List<string> keys = new List<string>();
             public readonly Dictionary<string, string> labels = new Dictionary<string, string>(StringComparer.Ordinal);
+            public readonly Dictionary<string, string> owns = new Dictionary<string, string>(StringComparer.Ordinal);
             public readonly List<string> notes = new List<string>();
             public int objects;
+            readonly Dictionary<(string material, int index), string> palette = new Dictionary<(string, int), string>();
 
             public void Key(string key, string label)
             {
                 if (labels.ContainsKey(key)) return;
                 labels[key] = label; keys.Add(key);
             }
+
+            /// <summary>
+            /// The key of a material's triangles of one palette colour (the Model Remapper's), named after the palette entry,
+            /// which it keeps as its own colour; by its index when there is no palette to name it.
+            /// </summary>
+            public string Palette(string material, string materialName, int index)
+            {
+                if (palette.TryGetValue((material, index), out var key)) return key;
+                var entry = StoreyColorField.PaletteEntryAt?.Invoke(index);
+                key = material + "|" + (entry?.id ?? "#" + index);
+                Key(key, entry?.name ?? $"{materialName}, palette colour {index}");
+                if (entry != null) owns[key] = entry.Value.id;
+                return palette[(material, index)] = key;
+            }
         }
+
+        /// <summary>The UV channel Color Pipeline's Model Remapper writes a vertex's palette index into (as index + 0.1), and its lit shader reads (uv3.x).</summary>
+        const int RemapperUV = 3;
 
         /// <summary>The components a prefab of a window may have without a note: what it is drawn with, and the cutouts.</summary>
         static bool Quiet(Component c) => c is Transform || c is MeshFilter || c is MeshRenderer || c is StoreyCutout || c is LODGroup || c.GetType().Name == LegacyCutout;
@@ -68,9 +90,14 @@ namespace Triband.Storey.Editor
             var made = KindBake.Bake(g.sources, hole, o.facesBack);
             var lod1Made = g1 != null ? KindBake.Bake(g1.sources, hole1, o.facesBack) : null;
             var labels = new Dictionary<string, string>(g.labels, StringComparer.Ordinal);
+            var owns = new Dictionary<string, string>(g.owns, StringComparer.Ordinal);
             var keys = new List<string>(g.keys);
-            if (g1 != null) foreach (var k in g1.keys) if (!labels.ContainsKey(k)) { labels[k] = g1.labels[k]; keys.Add(k); }
-            Rows(o, keys, labels);
+            if (g1 != null)
+            {
+                foreach (var k in g1.keys) if (!labels.ContainsKey(k)) { labels[k] = g1.labels[k]; keys.Add(k); }
+                foreach (var kv in g1.owns) owns[kv.Key] = kv.Value;
+            }
+            Rows(o, keys, labels, owns);
             o.Store(made, lod1Made, new Vector2((float)hole.w, (float)hole.h));
             o.holeFrom = from; o.objects = g.objects; o.hiddenFaces = made.hidden; o.wallFaces = made.onWall;
             o.notes = string.Join("\n", g.notes.Concat(g1?.notes ?? Enumerable.Empty<string>()).Distinct());
@@ -78,10 +105,11 @@ namespace Triband.Storey.Editor
 
         /// <summary>
         /// The parts list kept to the parts there are, in their order: a row per key, those already there kept with their
-        /// colours, new ones guessed from their names, the rest dropped. A row from before rows had keys is a mesh's
+        /// colours, new ones guessed from their names, the rest dropped. A Model Remapper part keeps its palette colour, unless
+        /// its name says glass; its leaf comes from the leaf objects alone. A row from before rows had keys is a mesh's
         /// submesh's, by its place.
         /// </summary>
-        static void Rows(StoreyOpening o, List<string> keys, Dictionary<string, string> labels)
+        static void Rows(StoreyOpening o, List<string> keys, Dictionary<string, string> labels, Dictionary<string, string> owns)
         {
             for (int i = 0; i < o.parts.Count; i++) if (string.IsNullOrEmpty(o.parts[i].key)) o.parts[i].key = "#" + i;
             var rows = new List<StoreyOpening.Part>();
@@ -89,7 +117,11 @@ namespace Triband.Storey.Editor
             {
                 string label = labels[k];
                 var row = o.parts.FirstOrDefault(p => p.key == k);
-                if (row == null) { row = StoreyOpening.Guess(label); row.key = k; }
+                if (row == null)
+                {
+                    row = StoreyOpening.Guess(label); row.key = k;
+                    if (owns.TryGetValue(k, out var id)) { row.leaf = false; if (row.colour != ColorSlot.Glass) row.own = id; }
+                }
                 row.label = label;
                 rows.Add(row);
             }
@@ -161,16 +193,47 @@ namespace Triband.Storey.Editor
         static void Add(Gathered g, Mesh mesh, Material[] mats, Matrix4x4 m, bool leaf, string objectName)
         {
             var s = Source(mesh, m, leaf);
+            var colours = PaletteColours(mesh);
             for (int k = 0; k < mesh.subMeshCount; k++)
             {
                 if (k >= mats.Length || mats[k] == null) { g.notes.Add($"A submesh of {objectName} has no material, so Unity doesn't draw it: it is left out."); continue; }
                 string key = Key(mats[k]);
-                g.Key(key, mats[k].name);
-                s.subs.Add(new KindBake.Sub { tris = mesh.GetTriangles(k), key = key });
+                var sub = new KindBake.Sub { tris = mesh.GetTriangles(k), key = key };
+                if (colours == null) g.Key(key, mats[k].name);
+                else
+                {
+                    // the Model Remapper's: a part for each palette colour, taken from each triangle's first vertex
+                    sub.keys = new string[sub.tris.Length / 3];
+                    for (int t = 0; t < sub.keys.Length; t++)
+                    {
+                        int v = sub.tris[t * 3];
+                        sub.keys[t] = g.Palette(key, mats[k].name, (uint)v < (uint)colours.Length ? colours[v] : 0);
+                    }
+                }
+                s.subs.Add(sub);
             }
             if (mats.Length > mesh.subMeshCount) g.notes.Add($"{objectName} has more materials than its mesh has submeshes: the extra ones are left out.");
             if (!mesh.isReadable) g.notes.Add($"{mesh.name} isn't readable: if Unity says so, tick Read/Write on its model.");
             g.sources.Add(s); g.objects++;
+        }
+
+        /// <summary>
+        /// The palette index each vertex of a mesh coloured by Color Pipeline's Model Remapper names (in UV channel 3, as the
+        /// index + 0.1); null for a mesh it didn't colour: none there, or values that aren't such indices.
+        /// </summary>
+        static int[]? PaletteColours(Mesh mesh)
+        {
+            var uv = new List<Vector4>();
+            mesh.GetUVs(RemapperUV, uv);
+            if (uv.Count == 0 || uv.Count != mesh.vertexCount) return null;
+            var index = new int[uv.Count];
+            for (int i = 0; i < uv.Count; i++)
+            {
+                float x = uv[i].x, f = x - Mathf.Floor(x);
+                if (x < 0 || Mathf.Abs(f - 0.1f) > 0.05f) return null;
+                index[i] = (int)Mathf.Floor(x);
+            }
+            return index;
         }
 
         static KindBake.Source Source(Mesh mesh, Matrix4x4 m, bool leaf)

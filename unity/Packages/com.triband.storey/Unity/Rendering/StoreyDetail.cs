@@ -26,6 +26,10 @@ namespace Triband.Storey.Unity
         {
             [Tooltip("The style colour this part takes.")]
             public ColorSlot colour = ColorSlot.DetailMetal;
+            [Tooltip("A palette colour it keeps whatever the style (a palette id, or a CSS colour without Color Pipeline); empty takes the style colour above.")]
+            public string own = "";
+            /// <summary>What the artist calls it: its material's name, when the mesh was set.</summary>
+            [HideInInspector] public string label = "";
         }
 
         [Serializable]
@@ -167,7 +171,8 @@ namespace Triband.Storey.Unity
             for (int s = 0; s < b.counts.Length; s++)
             {
                 var t = new int[b.counts[s]]; Array.Copy(b.tris, at, t, 0, t.Length); at += t.Length;
-                m.parts.Add(new DetailKind.Part { slot = s < parts.Count ? parts[s].colour : ColorSlot.DetailMetal, tris = t });
+                var row = s < parts.Count ? parts[s] : null;
+                m.parts.Add(new DetailKind.Part { slot = row?.colour ?? ColorSlot.DetailMetal, own = string.IsNullOrEmpty(row?.own) ? null : row!.own, tris = t });
             }
             return m;
         }

@@ -844,13 +844,12 @@ namespace Triband.Storey.Unity
                 using (StoreyTimings.Time("site: occlusion")) Occlusion(this);
                 StoreyGlobals.SetIsolate(0, -1);
                 StoreyGlobals.SetCap(new Color(0.23f, 0.25f, 0.24f));
-                palette.Bind();
-                table.Upload();
+                BindAndUpload();
                 return;
             }
             var v = v0;
             EditCutaway(v.cut && v.activeId != null && TableIndexOf(v.activeId) >= 0 ? v.activeId : null, v);
-            if (!writeView) { palette.Bind(); table.Upload(); return; }
+            if (!writeView) { BindAndUpload(); return; }
             int active = v.activeId != null ? TableIndexOf(v.activeId) : -1;
             StoreyGlobals.SetActive(active, active >= 0 ? v.clipY : 1e9f);
             if (active >= 0 && v.cut) { StoreyGlobals.SetCamera(v.camera, v.focus, v.cameraDir); StoreyGlobals.SetCut(true, v.stubHeight, v.cutBase, v.cutTop, v.clipY); }
@@ -859,7 +858,14 @@ namespace Triband.Storey.Unity
             StoreyGlobals.SetIsolate(iso >= 0 ? v.isolateAmount : 0, iso);
             StoreyGlobals.SetOcclusion(StoreyGlobals.OcclusionMode.Off, Vector3.zero, 2.4f);
             StoreyGlobals.SetCap(new Color(0.23f, 0.25f, 0.24f));
+            BindAndUpload();
+        }
+
+        /// <summary>The palette bound, the colours artists' parts keep written (docs/OPENINGS.md §6), and the table's changes uploaded.</summary>
+        void BindAndUpload()
+        {
             palette.Bind();
+            table.SyncKindColors(palette);
             table.Upload();
         }
 

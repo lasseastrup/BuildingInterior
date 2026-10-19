@@ -24,6 +24,15 @@ namespace Triband.Storey.Editor.ColorPipeline
             StoreyColorField.Picker = new ColorPipelinePicker();
             StoreyColorField.Defaults = () => StoreyColorSettings.Load()?.ToDefaults();
             StoreyColorField.FillDefaults = FillDefaults;
+            StoreyColorField.PaletteEntryAt = i =>
+            {
+                ColorPaletteDefinition palette;
+                try { palette = ColorPaletteDefinition.Instance; }
+                catch (Exception) { return null; }   // no palette yet
+                if (palette == null || i < 0 || i >= palette.Colors.Count) return null;
+                var d = palette.Colors[i];
+                return (ColorPipelinePalette.IdOf(d.ID), d.Name);
+            };
             StoreyColorField.Conform = d =>
             {
                 ColorPaletteDefinition palette;

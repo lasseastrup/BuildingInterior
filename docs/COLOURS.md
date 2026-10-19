@@ -193,11 +193,15 @@ int atlasRow = offset / Shader.GetGlobalInt("_ColorAtlasWidth"); // goes into en
   - A style may leave an optional colour (doors, rails, lift buttons, …) unset, so it takes the project's default from `StoreyColorSettings`. A default the settings don't set is the prototype's hex colour, which renders as its nearest palette entry, and the inspector shows it as that entry. *Store the defaults in Storey Color Settings* writes those entries into the settings (`StoreyColorSettings.FillUnsetDefaults`), so after that no default is a hex colour either.
   - Without Color Pipeline there is no palette to keep to, so colours stay CSS hex.
 
-### 3.9 Facade details (imported models, SPEC §4.4)
+### 3.9 Facade details, windows and doors (imported models, SPEC §4.4)
 
-An artist's facade detail (a Facade Detail asset, docs/EDITOR.md §6.12) is coloured as an artist's window or door is. Each submesh is a part that takes one of the style's colour slots: Detail metal, Grille, Detail dark, Dish, Rail, Trim and the rest. Its vertices carry the slot, so they use the building's own colour rows, and a palette change rewrites the table, not the buildings. The model's materials only name the parts.
+An artist's facade detail (a Facade Detail asset, docs/EDITOR.md §6.12) is coloured as an artist's window or door is (docs/EDITOR.md §6.9). Each part takes one of the style's colour slots: Detail metal, Grille, Detail dark, Dish, Rail, Trim and the rest. Its vertices carry the slot, so they use the building's own colour rows, and a palette change rewrites the table, not the buildings. The model's materials only name the parts.
 
-The plan here was different: import detail models through the Model Remapper, with Color Pipeline's default material, and store the palette ids of their vertices in a `FacadeDetailDefinition`. That isn't built. A detail with colours of its own beyond the style's slots would need it.
+A part can instead keep a palette colour of its own, whatever the style (docs/OPENINGS.md §6). Each such colour gets a slot from 24 up, handed out for the session (`KindColors`), which its vertices carry in their slot byte. The shaders read its palette index from `_StoreyDetailColors` (§3.5), which the building table writes from the palette (`BuildingTable.SyncKindColors`) and writes again when the palette's indices move. The building's remap row still applies. There are 232 such slots, for the whole project.
+
+A window or door made from a prefab the Model Remapper coloured reads the palette index of each vertex from UV channel 3 (as the index + 0.1, which the project's lit shader reads as `uv3.x`). It turns the indices into palette ids as it bakes, so deleting a palette entry doesn't shift them, and makes a part of each colour, which keeps it.
+
+The plan here was different: import detail models through the Model Remapper, with Color Pipeline's default material, and store the palette ids of their vertices in a `FacadeDetailDefinition`. That isn't built; detail models the Model Remapper coloured aren't read yet.
 
 ## 4. Alternatives considered
 

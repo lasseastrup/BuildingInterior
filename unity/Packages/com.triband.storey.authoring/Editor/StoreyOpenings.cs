@@ -198,22 +198,22 @@ namespace Triband.Storey.Editor
 
         void Field(string name) => EditorGUILayout.PropertyField(serializedObject.FindProperty(name), true);
 
-        /// <summary>A prefab's parts, one a material: its colour, and on a door whether it is the leaf. Returns whether one changed.</summary>
+        /// <summary>
+        /// A prefab's parts, one a material (or a Model Remapper colour): a style's colour or its own, and on a door whether
+        /// it is the leaf. Returns whether one changed.
+        /// </summary>
         static bool Parts(StoreyOpening o)
         {
             bool changed = false;
-            EditorGUILayout.LabelField(new GUIContent("Parts", "Each of the prefab's materials takes one of the style's colours: the materials themselves aren't used. Glass shows the window shader's rooms on shell storeys and is see-through on walk-in ones."), EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(new GUIContent("Parts", "Each of the prefab's materials, or each palette colour of a model the Model Remapper coloured, takes one of the style's colours or keeps its own: the materials themselves aren't used. Glass is always the style's: it shows the window shader's rooms on shell storeys and is see-through on walk-in ones."), EditorStyles.boldLabel);
             foreach (var p in o.parts)
             {
-                using (new EditorGUILayout.HorizontalScope())
+                if (o.door)
                 {
-                    var colour = (ColorSlot)EditorGUILayout.EnumPopup(p.label, p.colour);
-                    bool leaf = o.door && GUILayout.Toggle(p.leaf, new GUIContent("Leaf", "Part of the door itself, wherever it is: left out where the doorway stays open. The Storey Cutout's leaf objects are, too."), EditorStyles.miniButton, GUILayout.Width(44));
-                    if (colour == p.colour && leaf == (o.door && p.leaf)) continue;
-                    Undo.RecordObject(o, "The part's colour");
-                    p.colour = colour; if (o.door) p.leaf = leaf;
-                    changed = true;
+                    bool leaf = GUILayout.Toggle(p.leaf, new GUIContent("Leaf: " + p.label, "Part of the door itself, wherever it is: left out where the doorway stays open. The Storey Cutout's leaf objects are, too."), EditorStyles.miniButton);
+                    if (leaf != p.leaf) { Undo.RecordObject(o, "The part's leaf"); p.leaf = leaf; changed = true; }
                 }
+                changed |= StoreyPartColours.Row(o, p.key, p.label, ref p.colour, ref p.own, true, StoreyPartColours.PaletteOf(p.key));
             }
             return changed;
         }

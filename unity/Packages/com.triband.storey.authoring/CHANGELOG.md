@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- Windows and doors from prefabs the Model Remapper coloured (docs/EDITOR.md §6.9): the bake reads each vertex's palette index from UV channel 3 (as the index + 0.1), and makes a part of each palette colour, named after the palette entry, which keeps that colour; a part named for glass takes the style's Glass. The palette's ids are found through `StoreyColorField.PaletteEntryAt`, which the Color Pipeline integration installs, so deleting a palette entry doesn't shift the colours.
+- *Its own colour* for any part of a window, door or facade detail (`StoreyPartColours`): a palette colour picked with the project's colour picker, kept whatever the style. A facade detail's parts are listed with their materials' names (`StoreyDetail.Part.label`, from when the mesh is set).
 - **Assets ▸ Create ▸ Storey ▸ Window or Door from Prefab** (docs/EDITOR.md §6.9): a Storey Opening for each prefab selected, beside it, a door if its name says so or its Storey Cutout names leaf objects. Its parts are the prefab's materials, their colours guessed from their names.
   - The bake (`StoreyOpeningBake`, installed as the asset's baker) gathers the prefab's active objects with an enabled MeshRenderer, its LOD Group's LOD 0 (and LOD 1 for LOD1, unless *LOD1 prefab* is set), and reads its hole. It lists what it leaves out: inactive objects, submeshes without a material, and components other than meshes.
   - A Storey Opening is baked again when its prefab, or anything the prefab uses, is imported: a mesh, a material, a nested prefab, a variant's base (`AssetDatabase.GetDependencies`, kept per prefab until it is imported again).

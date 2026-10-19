@@ -86,9 +86,9 @@ namespace Triband.Storey.Unity
         public struct ColorWords { public uint x, y, z, w; }
         readonly uint[] packed = new uint[Generate.ColorRows.Words];
         /// <summary>
-        /// Palette indices of facade-detail model colours (slots 24 and up), none set until detail models exist. One for every
-        /// slot a vertex's byte can name: the shaders read it for every colour (StoreyPalette.hlsl), and on Metal a read past
-        /// a buffer's end can fault the GPU.
+        /// Palette indices of the colours artists' parts keep whatever the style (slots 24 and up, <see cref="Generate.KindColors"/>,
+        /// docs/OPENINGS.md §6): written by <see cref="SyncKindColors"/>. One for every slot a vertex's byte can name: the
+        /// shaders read it for every colour (StoreyPalette.hlsl), and on Metal a read past a buffer's end can fault the GPU.
         /// </summary>
         public readonly uint[] DetailColors = new uint[256 - Generate.ColorRows.Entries];
 
@@ -101,6 +101,8 @@ namespace Triband.Storey.Unity
         // partial uploads only where an array element is a buffer element
         readonly Lod.DirtyChunks occDirty = new Lod.DirtyChunks(OccSlots * OccWidth, OccWidth);   // a chunk an occluder slot
         bool detailsDirty = true;
+        // the palette the kind colours were written with, the colours' version then, and whether its indices moved since
+        Generate.IColorPalette? kindPalette; int kindVersion = -1; bool kindStale;
         readonly List<(int start, int count)> runs = new List<(int, int)>();
 
         // free lists, as the prototype keeps them
@@ -278,6 +280,27 @@ namespace Triband.Storey.Unity
         public void MarkWallDirty() => wallDirty.MarkAll();
         public void MarkWallDataDirty() => wallDataDirty.MarkAll();
 
+        /// <summary>
+        /// The palette index of each colour an artist's part keeps (<see cref="Generate.KindColors"/>), written into
+        /// <see cref="DetailColors"/> when one has been handed out since, or the palette's indices moved. Cheap when nothing
+        /// changed: every site calls it before the upload.
+        /// </summary>
+        public void SyncKindColors(Generate.IColorPalette palette)
+        {
+            if (ReferenceEquals(palette, kindPalette) && Generate.KindColors.Version == kindVersion && !kindStale) return;
+            if (!ReferenceEquals(palette, kindPalette))
+            {
+                if (kindPalette != null) kindPalette.Invalidated -= KindColorsStale;
+                palette.Invalidated += KindColorsStale;
+                kindPalette = palette;
+            }
+            kindStale = false; kindVersion = Generate.KindColors.Version;
+            Generate.KindColors.Fill(palette, DetailColors);
+            detailsDirty = true;
+        }
+
+        void KindColorsStale() => kindStale = true;
+
         /// <summary>Upload what changed and bind the buffers globally. Call once per frame before rendering.</summary>
         public void Upload()
         {
@@ -309,6 +332,10 @@ namespace Triband.Storey.Unity
             foreach (var (start, count) in runs) buffer.SetData(data, start, start, count);
         }
 
-        public void Dispose() { state.Dispose(); occ.Dispose(); wall.Dispose(); wallData.Dispose(); prms.Dispose(); colors.Dispose(); details.Dispose(); }
+        public void Dispose()
+        {
+            if (kindPalette != null) { kindPalette.Invalidated -= KindColorsStale; kindPalette = null; }
+            state.Dispose(); occ.Dispose(); wall.Dispose(); wallData.Dispose(); prms.Dispose(); colors.Dispose(); details.Dispose();
+        }
     }
 }

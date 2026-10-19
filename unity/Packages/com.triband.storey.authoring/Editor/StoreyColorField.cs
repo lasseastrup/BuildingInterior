@@ -44,6 +44,12 @@ namespace Triband.Storey.Editor
         /// </summary>
         public static Func<int>? FillDefaults { get; set; }
 
+        /// <summary>
+        /// The palette entry at an index, its id and name: what a model coloured by Color Pipeline's Model Remapper names in
+        /// its vertices (docs/OPENINGS.md §6). Null without a palette; Color Pipeline's integration installs it.
+        /// </summary>
+        public static Func<int, (string id, string name)?>? PaletteEntryAt { get; set; }
+
         sealed class HexPicker : IStoreyColorPicker
         {
             public string? Draw(string key, string label, string value, string field, Func<string, PaletteEntry?> lookup)

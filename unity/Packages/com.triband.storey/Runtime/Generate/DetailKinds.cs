@@ -18,6 +18,10 @@ namespace Triband.Storey.Generate
         public sealed class Part
         {
             public ColorSlot slot;
+            /// <summary>A palette colour it keeps whatever the style (a palette id or a CSS colour), in place of <see cref="slot"/>; null takes the style's.</summary>
+            public string? own;
+            // own's slot (KindColors), found when the kind is registered
+            internal ColorSlot? ownSlot;
             public int[] tris = Array.Empty<int>();
             // made ready once (docs/PERFORMANCE.md §8.1): when the kind is registered, or first placed
             internal KindPart? ready;
@@ -105,7 +109,13 @@ namespace Triband.Storey.Generate
         public static void Register(DetailKind k)
         {
             if (k.id.Length == 0 || IsBuiltIn(k.id)) return;
-            foreach (var m in new[] { k.lod0, k.lod1 }) if (m != null) foreach (var part in m.parts) KindPart.Of(m.P, m.N, part.tris, ref part.ready);
+            foreach (var m in new[] { k.lod0, k.lod1 })
+                if (m != null)
+                    foreach (var part in m.parts)
+                    {
+                        KindPart.Of(m.P, m.N, part.tris, ref part.ready);
+                        part.ownSlot = part.own != null ? KindColors.SlotOf(part.own) : null;
+                    }
             all[k.id] = k; Version++;
         }
         public static void Remove(string id) { if (!IsBuiltIn(id) && all.TryRemove(id, out _)) Version++; }
@@ -124,7 +134,7 @@ namespace Triband.Storey.Generate
             foreach (var whole in m.parts)
             {
                 var part = KindPart.Of(m.P, m.N, whole.tris, ref whole.ready);
-                if (part.Tris > 0) part.Put(op, at, new Swatch(C.style, whole.slot));
+                if (part.Tris > 0) part.Put(op, at, new Swatch(C.style, whole.ownSlot ?? whole.slot));
             }
         }
     }

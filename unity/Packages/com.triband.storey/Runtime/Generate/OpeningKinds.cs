@@ -15,6 +15,13 @@ namespace Triband.Storey.Generate
         public sealed class Part
         {
             public ColorSlot slot;
+            /// <summary>
+            /// A palette colour it keeps whatever the style (a palette id or a CSS colour), in place of <see cref="slot"/>; null
+            /// takes the style's. Glass always takes the style's: it is the window shader's.
+            /// </summary>
+            public string? own;
+            // own's slot (KindColors), found when the kind is registered
+            internal ColorSlot? ownSlot;
             /// <summary>A door's leaf (the door itself): left out where the doorway stays open, on a walk-in storey.</summary>
             public bool leaf;
             public int[] tris = Array.Empty<int>();
@@ -55,7 +62,13 @@ namespace Triband.Storey.Generate
         public static void Register(OpeningKind k)
         {
             if (k.id.Length == 0) return;
-            foreach (var m in new[] { k.lod0, k.lod1 }) if (m != null) foreach (var part in m.parts) KindPart.Of(m.P, m.N, part.tris, ref part.ready);
+            foreach (var m in new[] { k.lod0, k.lod1 })
+                if (m != null)
+                    foreach (var part in m.parts)
+                    {
+                        KindPart.Of(m.P, m.N, part.tris, ref part.ready);
+                        part.ownSlot = part.own != null && part.slot != ColorSlot.Glass ? KindColors.SlotOf(part.own) : null;
+                    }
             all[k.id] = k; Version++;
         }
         public static void Remove(string id) { if (all.TryRemove(id, out _)) Version++; }
@@ -167,7 +180,7 @@ namespace Triband.Storey.Generate
                     }
                     continue;
                 }
-                part.Put(op, at, new Swatch(C.style, whole.slot));
+                part.Put(op, at, new Swatch(C.style, whole.ownSlot ?? whole.slot));
             }
         }
     }

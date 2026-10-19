@@ -51,6 +51,7 @@ namespace UnityEngine
         public static float Repeat(float t, float length) => 0;
         public static int RoundToInt(float f) => 0;
         public static float Atan(float f) => 0;
+        public static float Floor(float f) => f;
     }
 
     public static class PlayerPrefs
@@ -503,6 +504,8 @@ namespace UnityEngine
         public Vector3[] vertices { get; set; } = System.Array.Empty<Vector3>();
         public Vector3[] normals { get; set; } = System.Array.Empty<Vector3>();
         public int[] GetTriangles(int submesh) => System.Array.Empty<int>();
+        public void GetUVs(int channel, System.Collections.Generic.List<Vector4> uvs) { }
+        public int vertexCount => 0;
         public void RecalculateNormals() { }
         public bool isReadable => true;
 

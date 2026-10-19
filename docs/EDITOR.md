@@ -380,6 +380,9 @@ An artist can make a window or a street door as a prefab of several objects, or 
 3. For a door, list the objects that are the door itself under *Leaf*. They are left out, with everything under them, on a walk-in ground floor, where the player walks through the doorway.
 4. Select the prefabs and choose *Assets › Create › Storey › Window or Door from Prefab*. Each gets a Storey Opening asset beside it. It is a door if its name says so or it has leaf objects.
 5. Check its **Parts**: one for each material in the prefab, each taking one of the style's colours, guessed from the material's name (*Glass*, *Frame*, *Sill* or *Trim*, *Door* or *Leaf*, *Handle* or *Metal*, *Wall*). The materials themselves aren't used. On a door, *Leaf* makes a part the leaf wherever it is.
+6. A part can keep a colour of its own instead: pick *Its own colour* and a palette colour (Color Pipeline's picker). It keeps that colour whatever the style, and follows palette edits and a building's remap like the style's colours. Glass always takes the style's, because it is the window shader's.
+
+**Prefabs coloured by Color Pipeline's Model Remapper** (one material, each vertex's palette index in UV channel 3): their parts are one for each palette colour, named after the palette entry, and each keeps that colour. So they look as they did in the old solution. A part named for glass takes the style's Glass instead. Any part can be given a style colour, so that the building's style colours it.
 
 What is read, and what isn't:
 - Active objects with an enabled MeshRenderer, each where it is in the prefab. The root's position and rotation don't count and its scale does, as when Unity instantiates a prefab. A mirrored object (a negative scale) is turned the right way out.
@@ -394,6 +397,7 @@ What is read, and what isn't:
 Either way, *Faces back* turns round one made facing −Z, and the parts take the building's palette colours:
 - **Glass** shows the window shader's rooms on shell and filled storeys (§6.8), and is see-through on walk-in ones.
 - **Leaf** marks the door itself, left out on a walk-in ground floor.
+- **Its own colour** keeps a palette colour whatever the style. A project can have 232 such colours across its windows, doors and facade details (`KindColors`). Past that, a part takes its style colour.
 
 In the Facade tab, pick it under **Window** (next to *Windows*) or **Street door** (with the other details). *Generated* goes back to the generator's own.
 
@@ -420,7 +424,7 @@ A style names its window and door by the asset's id, kept through renames and mo
 
 Facade details follow the same rule (§6.12).
 
-Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`, `Check`), `KindBake` (a prefab's objects into the opening's space), `Validate.KindTrial` (Check on a building), `FacadeStyle.windowKind`/`doorKind` (layout keys `windowKind`, `doorKind`) (`OpeningKindTests`, `KindBakeTests`); `AssetIds`, the id rule (`AssetIdsTests`). Unity: `StoreyOpening`, `StoreyCutout`, `StoreySite.openings`. Editor: `StoreyOpenings`, `StoreyOpeningBake`, `StoreyCutoutEditor`, `StoreyAssetIds`.
+Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`, `Check`), `KindBake` (a prefab's objects into the opening's space), `KindColors` (colours of their own), `Validate.KindTrial` (Check on a building), `FacadeStyle.windowKind`/`doorKind` (layout keys `windowKind`, `doorKind`) (`OpeningKindTests`, `KindBakeTests`, `KindColorsTests`); `AssetIds`, the id rule (`AssetIdsTests`). Unity: `StoreyOpening`, `StoreyCutout`, `StoreySite.openings`, `BuildingTable.SyncKindColors`. Editor: `StoreyOpenings`, `StoreyOpeningBake`, `StoreyCutoutEditor`, `StoreyPartColours`, `StoreyAssetIds`; `StoreyColorField.PaletteEntryAt`, installed by the Color Pipeline integration.
 
 **Checks:**
 1. Make a window from a model with Glass and Frame materials. Its parts list says Glass and Frame, and its size matches the model.
@@ -433,6 +437,7 @@ Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`, `Check`),
 8. Select three of Flamingo's window prefabs (with BuildingCutoutBox) and choose *Window or Door from Prefab*. Each asset's hole matches its BuildingCutoutBox gizmo, its parts are its materials, and *Check on a building* finds no faces that flicker.
 9. Add a Storey Cutout to a prefab: it fits the meshes, and the Scene view draws the hole. Move a nested sill prefab and save: the buildings update.
 10. Give a door prefab a leaf object: on a walk-in building the leaf is gone, the frame stays.
+11. Make a window from a prefab the Model Remapper coloured: its parts are its palette colours, and buildings show them whatever their style. Give one part a style colour: it follows the building's style. Change that palette entry in Color Pipeline: the windows change colour without a rebuild.
 
 ### 6.10 The site inspector's layout
 
@@ -501,7 +506,7 @@ The details in Facade ▸ *Place on walls* are **Facade Detail** assets. Storey'
    Then give it a chance per style in Facade ▸ *Details by rule*. Each detail has its own seed, so a rebuild puts every one back where it was. It keeps clear of what is already on the wall: what was put by hand, the AC units and vents, then the other details by rule in id order.
 5. In the Facade tab, pick it under *Place on walls* and click a wall. Click a placed one to remove it. Placing one refuses where it doesn't fit, and says why.
 
-Each part takes one of the style's colours, so the building's palette colours it; the model's materials only name the parts (docs/COLOURS.md §3.9).
+Each part takes one of the style's colours, so the building's palette colours it, or keeps a palette colour of its own whatever the style (*Its own colour*, as a window's part can: §6.9). The model's materials only name the parts (docs/COLOURS.md §3.9).
 
 LODs:
 - LOD0 places the mesh.
@@ -514,7 +519,7 @@ The mesh is copied into the asset when it's set, and baked again when its model 
 
 A new Facade Detail takes its asset's GUID as its id, and a copy, of one of the five too, gets one of its own as soon as it's imported, so it's a detail of its own (the rule in §6.9). A layout keeps a detail whose asset is gone: it isn't built, and the style's chance for it shows as *Missing detail* until set to 0.
 
-Not done: palette icons, LOD2 meshes, colliders (the five have none either), and triangle budgets beyond the LOD1 warning.
+Not done: palette icons, LOD2 meshes, colliders (the five have none either), triangle budgets beyond the LOD1 warning, and details made from prefabs or from models the Model Remapper coloured (windows and doors take both: §6.9).
 
 Engine-free:
 - `DetailKind`, `DetailKinds` (`Register`, `Get`, `Place`, `BuiltIn`), `Details.Rule`, `Details.OverLift`.
