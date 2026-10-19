@@ -7,14 +7,17 @@ using UnityEngine;
 namespace Triband.Storey.Unity
 {
     /// <summary>
-    /// An artist-made window or street door (docs/EDITOR.md §6.9): a mesh that fills the openings of every building whose
-    /// style picks it, in place of the generator's own windows or doors. Create one with
-    /// <i>Assets › Create › Storey › Window or Door</i> and give it a mesh.
+    /// An artist-made window or street door (docs/EDITOR.md §6.9): fills the openings of every building whose style picks
+    /// it, in place of the generator's own windows or doors. Make one from prefabs with <i>Assets › Create › Storey ›
+    /// Window or Door from Prefab</i>, or create one with <i>Assets › Create › Storey › Window or Door</i> and give it a
+    /// prefab or a mesh.
     ///
-    /// The mesh: pivot at the bottom middle of the hole in the wall, +Y up, +Z out of the wall (Z 0 on the wall's outer
-    /// face, negative into the reveal), metres. Each submesh is a part in one of the style's colours (<see cref="parts"/>):
-    /// its material isn't used, as the building's colours come from the palette. The mesh is copied in when it is set
-    /// (<c>Bake</c>), so it needn't be readable, and the mesh references are the editor's: they don't ship in a build.
+    /// A prefab: every object under it with a mesh, where it is in the prefab (docs/OPENINGS.md §3); its Storey Cutout (or
+    /// a BuildingCutoutBox) says where the hole is, so its pivot can be anywhere. A mesh: its pivot at the bottom middle of
+    /// the hole. Either way +Y up, +Z out of the wall (Z 0 on the wall's outer face, negative into the reveal), metres.
+    /// Each part (a prefab's material, a mesh's submesh) takes one of the style's colours (<see cref="parts"/>): the
+    /// materials themselves aren't used, as the building's colours come from the palette. The geometry is baked in when it
+    /// is set (<c>Bake</c>), and the prefab and mesh references are the editor's: they don't ship in a build.
     /// </summary>
     [CreateAssetMenu(menuName = "Storey/Window or Door", fileName = "Window", order = 30)]
     public sealed class StoreyOpening : ScriptableObject
@@ -26,38 +29,54 @@ namespace Triband.Storey.Unity
             public ColorSlot colour = ColorSlot.Frame;
             [Tooltip("Part of the door itself: left out where the doorway stays open (walk-in storeys, which the player walks through).")]
             public bool leaf;
+            /// <summary>The part of the source this row colours: a prefab's material (its asset's GUID and local id), or a mesh's submesh ("#" and its number).</summary>
+            [HideInInspector] public string key = "";
+            /// <summary>What the artist calls it: the material's name.</summary>
+            [HideInInspector] public string label = "";
         }
 
         [Serializable]
         sealed class Baked
         {
             public Vector3[] p = Array.Empty<Vector3>(), n = Array.Empty<Vector3>();
-            public int[] counts = Array.Empty<int>();   // triangles' indices per submesh, one after the other in tris
+            public int[] counts = Array.Empty<int>();   // triangles' indices per part, one after the other in tris
             public int[] tris = Array.Empty<int>();
+            // KindBake's (baked 1): each part's row key, and 1 where it is a leaf object's
+            public string[] keys = Array.Empty<string>();
+            public int[] flags = Array.Empty<int>();
         }
 
         [SerializeField, HideInInspector] string id = "";
         [Tooltip("A street door; otherwise a window.")]
         public bool door;
 #if UNITY_EDITOR
-        // the editor's alone: copied in when set (Bake), they don't ship in a build (docs/PERFORMANCE.md §11.2)
-        [Tooltip("The mesh, as above: pivot at the bottom middle of the hole, +Z out of the wall.")]
+        // the editor's alone: baked in when set (Bake), they don't ship in a build (docs/PERFORMANCE.md §11.2)
+        [Tooltip("The window or door as a prefab: every object under it with a mesh, where it is in the prefab. Its Storey Cutout says where the hole is. It wins over Mesh.")]
+        public GameObject? prefab;
+        [Tooltip("LOD1's prefab (the shell seen from further away): something much simpler. None takes the prefab's LOD Group's LOD 1 if it has one, or else LOD1's plain pane.")]
+        public GameObject? lod1Prefab;
+        [Tooltip("The window or door as one mesh: pivot at the bottom middle of the hole, +Z out of the wall.")]
         public Mesh? mesh;
         [Tooltip("LOD1's mesh (the shell seen from further away): something much simpler, or none for LOD1's plain pane.")]
         public Mesh? lod1Mesh;
+        // what the last bake found, for the inspector
+        [SerializeField, HideInInspector] internal string holeFrom = "", notes = "";
+        [SerializeField, HideInInspector] internal int objects, hiddenFaces, wallFaces;
 #endif
-        [Tooltip("The mesh was made facing −Z: turn it round.")]
+        [Tooltip("It was made facing −Z: turn it round.")]
         public bool facesBack;
-        [Tooltip("The colour of each submesh, in order. Glass shows the window shader's rooms on shell storeys and is see-through on walk-in ones.")]
+        [Tooltip("The colour of each part: a prefab's materials, a mesh's submeshes in order. Glass shows the window shader's rooms on shell storeys and is see-through on walk-in ones.")]
         public List<Part> parts = new List<Part>();
-        [Tooltip("The hole in the wall the mesh fills, in metres (from the mesh's bounds when it is set).")]
+        [Tooltip("The hole in the wall it fills, in metres: a prefab's from its Storey Cutout, a mesh's from its bounds when it is set.")]
         public Vector2 size = new Vector2(1.2f, 1.6f);
         [Tooltip("Stretch the mesh to each opening; off, it keeps its size, centred on the opening's bottom (set the style's window width to match).")]
         public bool stretch = true;
 
         [SerializeField, HideInInspector] Baked lod0 = new Baked(), lod1 = new Baked();
-#pragma warning disable CS0649   // a player's is never assigned in code: Bake (editor) sets it, the asset brings it
+#pragma warning disable CS0649   // a player's are never assigned in code: Bake (editor) sets them, the asset brings them
         [SerializeField, HideInInspector] bool hasLod1;
+        // how the geometry was baked: 0, the mesh copied as it is (turned round at ToMesh); 1, by KindBake, in the opening's space
+        [SerializeField, HideInInspector] int baked;
 #pragma warning restore CS0649
 
         /// <summary>
@@ -94,17 +113,45 @@ namespace Triband.Storey.Unity
 
 #if UNITY_EDITOR
         /// <summary>
-        /// Copy the meshes in (editor: the meshes are readable there) and register the kind. The editor calls it when the
-        /// asset changes.
+        /// Set by the editor as it loads: bakes the asset through <see cref="KindBake"/>, its prefab or its mesh, with what
+        /// only the editor can read (the materials' ids), and keeps <see cref="parts"/> to the parts it finds.
+        /// </summary>
+        internal static Action<StoreyOpening>? Baker;
+
+        /// <summary>
+        /// Bake the prefab or the mesh in (editor: they are readable there) and register the kind. The editor calls it when
+        /// the asset changes, and when what it is made from is reimported.
         /// </summary>
         public void Bake()
         {
             EnsureId();
-            lod0 = Copy(mesh);
-            hasLod1 = lod1Mesh != null;
-            lod1 = hasLod1 ? Copy(lod1Mesh) : new Baked();
+            if (Baker != null) Baker(this);
+            else
+            {
+                // before the editor's baker is installed: the mesh copied as it is
+                lod0 = Copy(mesh); hasLod1 = lod1Mesh != null; lod1 = hasLod1 ? Copy(lod1Mesh) : new Baked(); baked = 0;
+            }
             Register();
         }
+
+        /// <summary>What the editor's bake made: LOD0's parts, LOD1's (null: none), and the hole they fill.</summary>
+        internal void Store(KindBake.Result made, KindBake.Result? lod1Made, Vector2 hole)
+        {
+            lod0 = From(made); hasLod1 = lod1Made != null; lod1 = lod1Made != null ? From(lod1Made) : new Baked();
+            size = hole; baked = 1;
+        }
+
+        static Baked From(KindBake.Result r)
+        {
+            var b = new Baked { p = new Vector3[r.P.Count], n = new Vector3[r.P.Count], counts = new int[r.parts.Count], keys = new string[r.parts.Count], flags = new int[r.parts.Count] };
+            for (int i = 0; i < r.P.Count; i++) { b.p[i] = V(r.P[i]); b.n[i] = V(r.N[i]); }
+            var all = new List<int>();
+            for (int s = 0; s < r.parts.Count; s++) { var part = r.parts[s]; b.counts[s] = part.tris.Count; b.keys[s] = part.key; b.flags[s] = part.leaf ? 1 : 0; all.AddRange(part.tris); }
+            b.tris = all.ToArray();
+            return b;
+        }
+
+        static Vector3 V(P3 p) => new Vector3((float)p.x, (float)p.y, (float)p.z);
 
         Baked Copy(Mesh? m)
         {
@@ -129,7 +176,9 @@ namespace Triband.Storey.Unity
         OpeningKind.Mesh ToMesh(Baked b)
         {
             var m = new OpeningKind.Mesh { P = new P3[b.p.Length], N = new P3[b.p.Length] };
-            float turn = facesBack ? -1 : 1;   // half a turn about +Y: x and z change sign, winding kept
+            // a mesh copied as it is is turned round here (KindBake turns it as it bakes): half a turn about +Y, x and z
+            // change sign, winding kept
+            float turn = facesBack && baked == 0 ? -1 : 1;
             for (int i = 0; i < b.p.Length; i++)
             {
                 var p = b.p[i]; m.P[i] = new P3(p.x * turn, p.y, p.z * turn);
@@ -138,11 +187,20 @@ namespace Triband.Storey.Unity
             int at = 0;
             for (int s = 0; s < b.counts.Length; s++)
             {
-                var part = s < parts.Count ? parts[s] : new Part();
+                var row = Row(b, s);
                 var t = new int[b.counts[s]]; Array.Copy(b.tris, at, t, 0, t.Length); at += t.Length;
-                m.parts.Add(new OpeningKind.Part { slot = part.colour, leaf = part.leaf && door, tris = t });
+                bool leafObject = s < b.flags.Length && (b.flags[s] & 1) != 0;
+                m.parts.Add(new OpeningKind.Part { slot = row?.colour ?? ColorSlot.Frame, leaf = door && (leafObject || row?.leaf == true), tris = t });
             }
             return m;
+        }
+
+        /// <summary>The row that colours baked part <paramref name="s"/>: by its key (KindBake's), or by its place (a mesh copied as it is).</summary>
+        Part? Row(Baked b, int s)
+        {
+            if (s >= b.keys.Length) return s < parts.Count ? parts[s] : null;
+            foreach (var p in parts) if (p.key == b.keys[s]) return p;
+            return null;
         }
 
         /// <summary>Make the kind available to the generator (sites do it for the openings they use).</summary>

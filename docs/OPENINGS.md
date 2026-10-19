@@ -1,6 +1,6 @@
 # Artist-made windows and doors from prefabs
 
-How an artist's window or door can be a prefab of several objects, as Flamingo's old BuildingGenerator takes them, while Storey keeps building every opening into the building's own meshes. **Status: a plan; nothing here is built yet.** §8 is the order of work, and §9 lists the questions to answer before step 1.
+How an artist's window or door can be a prefab of several objects, as Flamingo's old BuildingGenerator takes them, while Storey keeps building every opening into the building's own meshes. **Status: step 1 is built (docs/EDITOR.md §6.9); the other steps follow in §8's order.** §9 has the answers to the questions asked before step 1.
 
 ## 1. Where we are
 
@@ -47,7 +47,7 @@ The mesh is copied into the asset (`Bake`), and the generator builds a copy into
 - Each object's transform relative to the root, as Unity instantiates a prefab: the root's position and rotation don't count, its scale does. Positions go through the matrix and normals through its inverse transpose. A mirrored object (negative scale) has its triangles wound the other way.
 - *Faces back* still turns the whole thing round.
 - Left out, and listed in the inspector: inactive objects, disabled renderers, objects tagged EditorOnly, skinned meshes, and every component that isn't a mesh (lights, colliders, audio, particles, scripts).
-- **LOD1:** if the prefab has a LOD Group, its LOD 0 renderers are the window and its LOD 1 renderers are LOD1's. Otherwise *LOD1 prefab* (or *LOD1 mesh*, as today), or none, which keeps LOD1's plain pane. §5 is about what a LOD1 costs.
+- **LOD1:** *LOD1 prefab* if it is set. Otherwise, if the prefab has a LOD Group, its LOD 0 renderers are the window and its LOD 1 renderers are LOD1's (renderers in neither are in both). Without either, none, which keeps LOD1's plain pane (an asset made from a mesh takes *LOD1 mesh*, as before). §5 is about what a LOD1 costs.
 
 ### 3.2 Storey Cutout
 
@@ -71,7 +71,7 @@ A component for the prefab's root (*Add Component › Storey › Storey Cutout*)
 ### 3.3 Parts: one per material
 
 - The parts list becomes one row per material in the prefab, not one per submesh. A row is keyed by the material asset (its GUID and local id), shows its name, and has its colour guessed from the name as today (`StoreyOpening.Guess`). Rows survive objects being added, removed or reordered, which today's submesh order wouldn't. An asset made from a mesh keeps its rows by submesh, as now.
-- A part can take triangles from many objects. Each part is welded (exact duplicates only), and faces nobody can see are left out: those on the wall's face that face into it, and those on the hole's sides that face into the wall. That also keeps the z-fighting rules (SPEC §4.5) for a frame modelled flush with the reveal.
+- A part can take triangles from many objects. Each part is welded (exact duplicates only), and faces nobody can see are left out: those inside the wall round the hole, and those on the wall's faces (its outer face, its back, the hole's sides) turned into it. A frame modelled flush with the reveal loses its faces against it. Faces lying on the wall's outer face round the hole and facing out are kept and counted: they flicker against the wall (SPEC §4.5), and the inspector says so.
 
 ### 3.4 Baking, and baking again
 
@@ -183,7 +183,9 @@ Steps 1 and 2 together give artists what the old solution gives them. Step 5 mov
 
 ## 9. Questions to answer before step 1
 
-1. **Textures:** do the old prefabs use textures? If they do, §7's first point needs deciding first.
-2. **Colours:** are their meshes coloured by the Model Remapper (one material, the palette index in TexCoord3), or by a material per colour? With the Remapper, step 5 comes before step 2.
-3. **The old cutout:** does the old generator take `Center` as the hole's middle, as the component's code does, or its bottom, as its comment says? Where is the pivot: on the wall's face, or at the storey's floor? That decides how a prefab converts, and whether old prefabs carry a height on the wall that Storey should keep (here the style decides the sill height).
-4. **What else is on them:** lights, colliders, LOD Groups, scripts? And does the old generator choose between several prefabs on one building?
+Answered when the plan was approved:
+
+1. **Textures:** the old prefabs use none, so §7's first point stays out.
+2. **Colours:** the old prefabs are coloured by the Model Remapper. So step 5 comes second, before the hole and the dressing: without it they would take the style's colours alone.
+3. **The old cutout:** not known. `Center` is read as the hole's middle, as the component's own gizmo and its fit to the bounds have it (step 1), and the style decides the sill height. If an old prefab's hole sits half its height too low or too high, its `Center` was meant as the bottom: fix it in the Storey Cutout the inspector offers.
+4. **What else is on them:** only meshes, and one prefab per style. So nothing is instanced, and a style keeps one window and one door.

@@ -69,6 +69,77 @@ namespace Triband.Storey.Generate
             return k != null && k.door == door ? k : null;
         }
 
+        /// <summary>How deep a shell or filled storey's reveal goes into the wall, from its outer face: where the generator's pane is.</summary>
+        public const double ShellReveal = Dim.T_EXT * 0.55;
+
+        /// <summary>What the inspector says of a kind (docs/OPENINGS.md §3.5).</summary>
+        public sealed class Checked
+        {
+            public int tris, lod1Tris;
+            /// <summary>The share of the hole nothing covers as seen from the street, 0 to 1: on a shell storey that shows into the building.</summary>
+            public double uncovered;
+            /// <summary>Something reaches behind the wall's back, into the rooms.</summary>
+            public bool behind;
+            /// <summary>Glass set deeper than a shell storey's reveal (<see cref="ShellReveal"/>): the hole shows past its side.</summary>
+            public bool deepGlass;
+            public bool glass, leaf;
+        }
+
+        /// <summary>
+        /// What looks wrong with a kind, or costs: its triangles, the share of its hole it leaves open (drawn over a grid of
+        /// about 2 cm, its faces turned to the street), whether it reaches behind the wall, and its glass and leaf.
+        /// </summary>
+        public static Checked Check(OpeningKind k)
+        {
+            var c = new Checked();
+            var m = k.lod0; var P = m.P;
+            foreach (var part in m.parts) c.tris += part.tris.Length / 3;
+            if (k.lod1 != null) foreach (var part in k.lod1.parts) c.lod1Tris += part.tris.Length / 3;
+            double w = Math.Max(0.05, k.w), h = Math.Max(0.05, k.h);
+            int nx = Math.Max(8, Math.Min(200, (int)Math.Ceiling(w / 0.02))), ny = Math.Max(8, Math.Min(200, (int)Math.Ceiling(h / 0.02)));
+            var covered = new bool[nx * ny];
+            foreach (var part in m.parts)
+            {
+                if (part.slot == ColorSlot.Glass) c.glass = true;
+                if (part.leaf) c.leaf = true;
+                var t = part.tris;
+                for (int i = 0; i + 2 < t.Length; i += 3)
+                {
+                    if ((uint)t[i] >= (uint)P.Length || (uint)t[i + 1] >= (uint)P.Length || (uint)t[i + 2] >= (uint)P.Length) continue;
+                    P3 a = P[t[i]], b = P[t[i + 1]], q = P[t[i + 2]];
+                    foreach (var p in new[] { a, b, q })
+                    {
+                        if (p.z < -Dim.T_EXT - 0.005) c.behind = true;
+                        if (part.slot == ColorSlot.Glass && p.z < -ShellReveal - 0.005) c.deepGlass = true;
+                    }
+                    var n = P3.Cross(b - a, q - a); double len = n.Length;
+                    if (len < 1e-12 || n.z / len < 0.05) continue;   // edge on, or turned away from the street
+                    double x0 = Math.Min(a.x, Math.Min(b.x, q.x)), x1 = Math.Max(a.x, Math.Max(b.x, q.x)), y0 = Math.Min(a.y, Math.Min(b.y, q.y)), y1 = Math.Max(a.y, Math.Max(b.y, q.y));
+                    int i0 = Math.Max(0, (int)Math.Floor((x0 + w / 2) / w * nx)), i1 = Math.Min(nx - 1, (int)Math.Ceiling((x1 + w / 2) / w * nx));
+                    int j0 = Math.Max(0, (int)Math.Floor(y0 / h * ny)), j1 = Math.Min(ny - 1, (int)Math.Ceiling(y1 / h * ny));
+                    for (int j = j0; j <= j1; j++)
+                        for (int ii = i0; ii <= i1; ii++)
+                        {
+                            double px = -w / 2 + (ii + 0.5) * w / nx, py = (j + 0.5) * h / ny;
+                            if (Inside2(a, b, q, px, py)) covered[j * nx + ii] = true;
+                        }
+                }
+            }
+            int n0 = 0; foreach (bool v in covered) if (!v) n0++;
+            c.uncovered = (double)n0 / covered.Length;
+            return c;
+        }
+
+        // the point (x, y) within triangle abc seen along Z, either winding (its edges count)
+        static bool Inside2(P3 a, P3 b, P3 c, double x, double y)
+        {
+            double d1 = (x - b.x) * (a.y - b.y) - (a.x - b.x) * (y - b.y);
+            double d2 = (x - c.x) * (b.y - c.y) - (b.x - c.x) * (y - c.y);
+            double d3 = (x - a.x) * (c.y - a.y) - (c.x - a.x) * (y - a.y);
+            bool neg = d1 < 0 || d2 < 0 || d3 < 0, pos = d1 > 0 || d2 > 0 || d3 > 0;
+            return !(neg && pos);
+        }
+
         /// <summary>
         /// Put kind <paramref name="k"/>'s mesh into an opening (u0..u1 along the wall, y0..y1 up). Glass goes in the
         /// see-through glass <paramref name="gl"/> on a walk-in storey (both faces), opaque with the window shader's pane

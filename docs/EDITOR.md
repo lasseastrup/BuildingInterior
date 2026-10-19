@@ -368,20 +368,49 @@ Limits:
 
 ### 6.9 Artist-made windows and doors
 
-An artist can make a window or a street door as a mesh, and every building whose style picks it gets one in each opening, in place of the generator's own.
+An artist can make a window or a street door as a prefab of several objects, or as one mesh. Every building whose style picks it gets one in each opening, in place of the generator's own. The design is docs/OPENINGS.md.
 
-1. Model it with the pivot at the bottom middle of the hole in the wall: +Y up, +Z out of the wall, in metres. Z 0 is the wall's outer face, and negative Z goes into the reveal; the wall is 0.3 m thick (`Dim.T_EXT`). Each submesh is one part. Name its material after what it is: *Glass*, *Frame*, *Sill* or *Trim*, *Door* or *Leaf*, *Handle* or *Metal*, *Wall*.
-2. *Assets › Create › Storey › Window or Door*, then set *Mesh*. The parts take their colours from the material names, and *Size* (the hole) comes from the mesh's bounds. Tick *Door* for a street door. *Faces back* turns round a mesh made facing −Z.
-3. Check the parts list. Each part takes one of the style's colours, so the building's palette colours it; the model's materials aren't used.
-   - **Glass** shows the window shader's rooms on shell and filled storeys (§6.8), and is see-through on walk-in ones.
-   - **Leaf** marks the door itself. It's left out on a walk-in ground floor, where the player walks through the doorway.
-4. In the Facade tab, pick it under **Window** (next to *Windows*) or **Street door** (with the other details). *Generated* goes back to the generator's own.
+**From a prefab**, as Flamingo's old BuildingGenerator takes them:
+1. Build it as a prefab: any objects with a MeshFilter and a MeshRenderer, each where you want it, nested prefabs and variants too. +Y is up and +Z out of the wall, in metres.
+2. Add **Storey Cutout** to the prefab's root (*Add Component › Storey › Storey Cutout*). It is the hole in the wall the window fills:
+   - *Size* and *Center* are in the root's X and Y, so the pivot can be anywhere. *Wall face* is where the wall's outer face is along Z; the wall is 0.3 m thick (`Dim.T_EXT`), behind it.
+   - Adding it fits the hole to the meshes. *Fit to* fits it to one object's meshes instead (the frame, so shutters and a sill stay outside the hole).
+   - While the root is selected, the Scene view draws the hole, the reveal to the wall's back, and the wall's face round it.
+   - A prefab with Flamingo's **BuildingCutoutBox** needs nothing: its *Size* and *Center* are read, *Center* as the middle of the hole, as its gizmo draws it. The inspector offers to give the prefab a Storey Cutout like it; take the BuildingCutoutBox off once the old generator is gone.
+3. For a door, list the objects that are the door itself under *Leaf*. They are left out, with everything under them, on a walk-in ground floor, where the player walks through the doorway.
+4. Select the prefabs and choose *Assets › Create › Storey › Window or Door from Prefab*. Each gets a Storey Opening asset beside it. It is a door if its name says so or it has leaf objects.
+5. Check its **Parts**: one for each material in the prefab, each taking one of the style's colours, guessed from the material's name (*Glass*, *Frame*, *Sill* or *Trim*, *Door* or *Leaf*, *Handle* or *Metal*, *Wall*). The materials themselves aren't used. On a door, *Leaf* makes a part the leaf wherever it is.
 
-The mesh is stretched to each opening, so the style's *Windows* type, *Window width* and *Bay spacing* still decide where openings are and how big. Turn off *Stretch* to keep the mesh's own size, centred on the opening's bottom; then set *Window width* to match. Heads, sills, frames, glazing bars, canopies and glazed doors aren't drawn where an artist's mesh is: the mesh is the whole window or door.
+What is read, and what isn't:
+- Active objects with an enabled MeshRenderer, each where it is in the prefab. The root's position and rotation don't count and its scale does, as when Unity instantiates a prefab. A mirrored object (a negative scale) is turned the right way out.
+- Inactive objects, objects tagged EditorOnly, other renderers and other components (lights, colliders, scripts) are left out. The inspector lists them.
+- A LOD Group's LOD 0 is the window and its LOD 1 is LOD1's. *LOD1 prefab* takes LOD1's place.
+- The bake leaves out the faces nobody sees: those inside the wall round the hole, and those on the wall's faces turned into it. It joins up what the model split (UV seams).
 
-LODs: LOD0 places the mesh. LOD1 places *LOD1 mesh* if there is one, and otherwise keeps its plain pane. LOD2 keeps its painted windows.
+**From a mesh**, as before:
+1. Model it with the pivot at the bottom middle of the hole in the wall: +Y up, +Z out of the wall, in metres. Z 0 is the wall's outer face, and negative Z goes into the reveal; the wall is 0.3 m thick. Each submesh is one part. Name its material after what it is, as above.
+2. *Assets › Create › Storey › Window or Door*, then set *Mesh*. The parts take their colours from the material names, and *Size* (the hole) comes from the mesh's bounds. Tick *Door* for a street door.
 
-The site lists the windows and doors its layout uses (*Openings*, kept by the editor when you save), so builds include them. The mesh is copied into the asset when set, and baked again when its model is reimported. If Unity says the mesh isn't readable, tick *Read/Write* on the model.
+Either way, *Faces back* turns round one made facing −Z, and the parts take the building's palette colours:
+- **Glass** shows the window shader's rooms on shell and filled storeys (§6.8), and is see-through on walk-in ones.
+- **Leaf** marks the door itself, left out on a walk-in ground floor.
+
+In the Facade tab, pick it under **Window** (next to *Windows*) or **Street door** (with the other details). *Generated* goes back to the generator's own.
+
+The inspector says how many objects, parts and triangles it has and where its hole came from, and warns of what will cost too much or look wrong:
+- more triangles than the generator's most dressed window (140, with arch heads, frames and glazing bars; a block of six storeys has about 156 windows), or a LOD1 of more than 12 (most buildings on screen are at LOD1, where the plain pane is 2);
+- faces on the wall's outer face round the hole, facing out: they flicker against the wall;
+- anything behind the wall's back: it shows inside the rooms;
+- a share of the hole left open (on a shell or filled storey it shows into the building), and glass deeper than 16.5 cm (a shell storey's reveal stops there);
+- a window without Glass (no rooms behind it), and a door without a leaf.
+
+*Check on a building* builds a 20 × 12 m block of six storeys with it, gives its triangles against the generator's own, and lists faces that overlap. *Open Prefab* opens the prefab; saving it bakes the asset again, as does reimporting anything it uses (a mesh, a material, a nested prefab, a variant's base). If Unity says a mesh isn't readable, tick *Read/Write* on its model.
+
+The window is stretched to each opening, so the style's *Windows* type, *Window width* and *Bay spacing* still decide where openings are and how big. Turn off *Stretch* to keep its own size, centred on the opening's bottom; then set *Window width* to match. Heads, sills, frames, glazing bars, canopies and glazed doors aren't drawn where an artist's window is: it is the whole window or door.
+
+LODs: LOD0 places the window. LOD1 places its LOD1 (*LOD1 prefab*, the LOD Group's LOD 1, or *LOD1 mesh*) if it has one, and otherwise keeps its plain pane. LOD2 keeps its painted windows.
+
+The site lists the windows and doors its layout uses (*Openings*, kept by the editor when you save), so builds include them. The geometry is baked into the asset, and the prefab and mesh references are the editor's: they don't ship.
 
 A style names its window and door by the asset's id, kept through renames and moves. The editor keeps every id unique:
 - A new window or door takes its asset's GUID as its id.
@@ -391,9 +420,7 @@ A style names its window and door by the asset's id, kept through renames and mo
 
 Facade details follow the same rule (§6.12).
 
-Not done yet: a window or door made as a prefab of several objects, with a hole of its own and dressing around it (shutters, sills, surrounds), as Flamingo's old generator takes them. The plan is docs/OPENINGS.md.
-
-Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`), `FacadeStyle.windowKind`/`doorKind` (layout keys `windowKind`, `doorKind`) (`OpeningKindTests`); `AssetIds`, the id rule (`AssetIdsTests`). Unity: `StoreyOpening`, `StoreySite.openings`. Editor: `StoreyOpenings`, `StoreyAssetIds`.
+Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`, `Check`), `KindBake` (a prefab's objects into the opening's space), `Validate.KindTrial` (Check on a building), `FacadeStyle.windowKind`/`doorKind` (layout keys `windowKind`, `doorKind`) (`OpeningKindTests`, `KindBakeTests`); `AssetIds`, the id rule (`AssetIdsTests`). Unity: `StoreyOpening`, `StoreyCutout`, `StoreySite.openings`. Editor: `StoreyOpenings`, `StoreyOpeningBake`, `StoreyCutoutEditor`, `StoreyAssetIds`.
 
 **Checks:**
 1. Make a window from a model with Glass and Frame materials. Its parts list says Glass and Frame, and its size matches the model.
@@ -403,6 +430,9 @@ Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`), `FacadeS
 5. Change the model in your DCC tool and reimport it: the buildings update.
 6. Duplicate the window and give the copy another mesh. Pick the copy under Window: buildings show the copy, and those that picked the original still show the original.
 7. Enter Play mode, and make a build: the windows and doors are there.
+8. Select three of Flamingo's window prefabs (with BuildingCutoutBox) and choose *Window or Door from Prefab*. Each asset's hole matches its BuildingCutoutBox gizmo, its parts are its materials, and *Check on a building* finds no faces that flicker.
+9. Add a Storey Cutout to a prefab: it fits the meshes, and the Scene view draws the hole. Move a nested sill prefab and save: the buildings update.
+10. Give a door prefab a leaf object: on a walk-in building the leaf is gone, the frame stays.
 
 ### 6.10 The site inspector's layout
 

@@ -41,6 +41,17 @@ namespace UnityEditor
         public static bool IsValidFolder(string path) => false;
         public static string CreateFolder(string parentFolder, string newFolderName) => "";
         public static Object LoadMainAssetAtPath(string assetPath) => new Object();
+        public static bool TryGetGUIDAndLocalFileIdentifier(Object obj, out string guid, out long localId) { guid = ""; localId = 0; return false; }
+        public static string GenerateUniqueAssetPath(string path) => path;
+        public static bool OpenAsset(Object target) => false;
+        public static bool Contains(Object obj) => false;
+    }
+
+    public static class PrefabUtility
+    {
+        public static GameObject LoadPrefabContents(string assetPath) => new GameObject("");
+        public static GameObject SaveAsPrefabAsset(GameObject instanceRoot, string assetPath) => instanceRoot;
+        public static void UnloadPrefabContents(GameObject contentsRoot) { }
     }
 
     public sealed class ActiveEditorTracker
@@ -174,11 +185,15 @@ namespace UnityEditor
     public class SerializedProperty
     {
         public string name => "";
+        public Vector2 vector2Value { get => default; set { } }
         public bool NextVisible(bool enterChildren) => false;
     }
 
-    public class SerializedObject
+    public class SerializedObject : System.IDisposable
     {
+        public SerializedObject() { }
+        public SerializedObject(Object obj) { }
+        public void Dispose() { }
         public void Update() { }
         public bool ApplyModifiedProperties() => false;
         public SerializedProperty FindProperty(string path) => new SerializedProperty();
@@ -317,6 +332,7 @@ namespace UnityEditor
         public static void LabelField(GUIContent label, GUIStyle style, params GUILayoutOption[] options) { }
         public static void PrefixLabel(string label) { }
         public static Color ColorField(GUIContent label, Color value, bool showEyedropper, bool showAlpha, bool hdr, params GUILayoutOption[] options) => value;
+        public static Object ObjectField(GUIContent label, Object obj, System.Type objType, bool allowSceneObjects, params GUILayoutOption[] options) => obj;
     }
 }
 

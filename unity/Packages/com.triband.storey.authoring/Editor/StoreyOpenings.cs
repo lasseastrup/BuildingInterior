@@ -1,8 +1,10 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Triband.Storey.Generate;
 using Triband.Storey.Unity;
+using Triband.Storey.Validate;
 using UnityEditor;
 using UnityEngine;
 
@@ -11,8 +13,9 @@ namespace Triband.Storey.Editor
     /// <summary>
     /// The project's artist-made windows and doors (<see cref="StoreyOpening"/>, docs/EDITOR.md §6.9): found and
     /// registered when the editor loads, each with an id of its own (<see cref="StoreyAssetIds"/>: a copy is a window of
-    /// its own), baked again when their models are reimported, and kept in each site's list of the ones its layout uses,
-    /// so builds include them.
+    /// its own), baked again when what they are made from is reimported (their prefabs, and whatever those use), made from
+    /// prefabs in one go (docs/OPENINGS.md §3.5), and kept in each site's list of the ones its layout uses, so builds include
+    /// them.
     /// </summary>
     [InitializeOnLoad]
     internal static class StoreyOpenings
@@ -38,17 +41,37 @@ namespace Triband.Storey.Editor
         static List<StoreyOpening>? all;
 
         /// <summary>Search again next time (the project changed).</summary>
-        public static void Changed() => all = null;
+        public static void Changed() { all = null; dependencies.Clear(); }
 
-        /// <summary>The openings made from a model just reimported, baked again.</summary>
+        /// <summary>The openings made from what was just imported, baked again: a model, a prefab, or anything a prefab uses.</summary>
         public static void Rebake(ISet<string> imported)
         {
+            foreach (var p in imported) dependencies.Remove(p);   // a prefab saved may use other things now
             foreach (var o in All())
             {
-                bool hit = (o.mesh != null && imported.Contains(AssetDatabase.GetAssetPath(o.mesh))) || (o.lod1Mesh != null && imported.Contains(AssetDatabase.GetAssetPath(o.lod1Mesh)));
-                if (!hit) continue;
+                if (!MadeFrom(o, imported)) continue;
                 o.Bake(); EditorUtility.SetDirty(o);
             }
+        }
+
+        static bool MadeFrom(StoreyOpening o, ISet<string> imported)
+        {
+            foreach (var src in new UnityEngine.Object?[] { o.prefab, o.lod1Prefab, o.mesh, o.lod1Mesh })
+            {
+                if (src == null) continue;
+                string path = AssetDatabase.GetAssetPath(src);
+                if (imported.Contains(path)) return true;
+                if (src is GameObject && Dependencies(path).Any(imported.Contains)) return true;
+            }
+            return false;
+        }
+
+        // what each prefab uses (its meshes, materials, nested prefabs and a variant's base), asked once
+        static readonly Dictionary<string, string[]> dependencies = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        static string[] Dependencies(string path)
+        {
+            if (!dependencies.TryGetValue(path, out var d)) dependencies[path] = d = AssetDatabase.GetDependencies(new[] { path }, true);
+            return d;
         }
 
         /// <summary>Add an opening to a site's list, if it isn't there.</summary>
@@ -78,38 +101,167 @@ namespace Triband.Storey.Editor
             site.openings = want;
             EditorUtility.SetDirty(site);
         }
+
+        /// <summary>
+        /// A window or door for each prefab selected, beside it: its door guessed from its name and its leaf objects, its
+        /// parts from its materials, its hole from its Storey Cutout or BuildingCutoutBox.
+        /// </summary>
+        [MenuItem("Assets/Create/Storey/Window or Door from Prefab", false, 31)]
+        static void FromPrefabs()
+        {
+            var made = new List<StoreyOpening>();
+            foreach (var go in Selection.objects.OfType<GameObject>())
+            {
+                string path = AssetDatabase.GetAssetPath(go);
+                if (string.IsNullOrEmpty(path)) continue;
+                var o = ScriptableObject.CreateInstance<StoreyOpening>();
+                o.prefab = go;
+                o.door = Door(go);
+                string dir = System.IO.Path.GetDirectoryName(path)!.Replace('\\', '/');
+                AssetDatabase.CreateAsset(o, AssetDatabase.GenerateUniqueAssetPath($"{dir}/{go.name} ({(o.door ? "door" : "window")}).asset"));
+                made.Add(o);
+            }
+            if (made.Count == 0) return;
+            Changed(); All();   // each takes its asset's GUID as its id
+            foreach (var o in made) { o.Bake(); EditorUtility.SetDirty(o); }
+            AssetDatabase.SaveAssets();
+            Selection.objects = made.ToArray();
+        }
+
+        [MenuItem("Assets/Create/Storey/Window or Door from Prefab", true)]
+        static bool CanMakeFromPrefabs() => Selection.objects.Any(x => x is GameObject && AssetDatabase.Contains(x));
+
+        /// <summary>A prefab that is likely a door: named so, or its Storey Cutout names leaf objects.</summary>
+        internal static bool Door(GameObject go)
+        {
+            var c = go.GetComponent<StoreyCutout>();
+            return go.name.IndexOf("door", StringComparison.OrdinalIgnoreCase) >= 0 || (c != null && c.leaf.Count > 0);
+        }
     }
 
 
     /// <summary>
-    /// A Storey Opening's inspector: setting a mesh names its parts from the model's materials and takes the hole's size
-    /// from its bounds; any change bakes it again. Says what it found, and what looks wrong with the pivot.
+    /// A Storey Opening's inspector: its prefab (or mesh), its parts' colours, and what it found: its hole, its triangles, and
+    /// what will look wrong or cost too much (docs/OPENINGS.md §3.5). Any change bakes it again. Check on a building tries it
+    /// on a block and lists faces that would flicker.
     /// </summary>
     [CustomEditor(typeof(StoreyOpening))]
     internal sealed class StoreyOpeningEditor : UnityEditor.Editor
     {
+        // the last Check on a building of each asset, until it is baked again
+        static readonly Dictionary<StoreyOpening, KindTrial.Result> trials = new Dictionary<StoreyOpening, KindTrial.Result>();
+
         public override void OnInspectorGUI()
         {
             var o = (StoreyOpening)target;
             StoreyOpenings.All();   // a new or copied one takes an id of its own first
-            var before = o.mesh;
+            var mesh0 = o.mesh; var prefab0 = o.prefab;
+            serializedObject.Update();
             EditorGUI.BeginChangeCheck();
-            DrawDefaultInspector();
+            Field("door");
+            Field("prefab");
+            if (o.prefab == null) Field("mesh");
+            Field(o.prefab != null ? "lod1Prefab" : "lod1Mesh");
+            Field("facesBack");
+            Field("stretch");
+            if (o.prefab == null) { Field("parts"); Field("size"); }
+            serializedObject.ApplyModifiedProperties();
             bool changed = EditorGUI.EndChangeCheck();
-            if (o.mesh != before && o.mesh != null) Fill(o);
-            if (changed || (o.mesh != null && OpeningKinds.Get(o.Id) == null)) { o.Bake(); EditorUtility.SetDirty(o); }
-            if (o.mesh == null) { EditorGUILayout.HelpBox("Give it a mesh: pivot at the bottom middle of the hole in the wall, +Y up, +Z out of the wall, in metres. Each submesh is one part.", MessageType.Info); return; }
-            var b = o.mesh.bounds;
-            int tris = 0; for (int s = 0; s < o.mesh.subMeshCount; s++) tris += o.mesh.GetTriangles(s).Length / 3;
-            EditorGUILayout.HelpBox($"{tris} triangles in {o.mesh.subMeshCount} part{(o.mesh.subMeshCount == 1 ? "" : "s")}; {b.size.x:0.00} × {b.size.y:0.00} m, {b.size.z:0.00} m deep. Every {(o.door ? "street door" : "window")} of a style that picks it gets one.", MessageType.None);
-            if (Mathf.Abs(b.min.y) > 0.05f || Mathf.Abs(b.center.x) > 0.05f)
-                EditorGUILayout.HelpBox("The pivot looks off: it should be at the bottom middle of the hole (the mesh's bounds start at y 0 and are centred on x 0).", MessageType.Warning);
-            if (o.mesh.subMeshCount > o.parts.Count)
-                EditorGUILayout.HelpBox("Some parts have no colour set: they take Frames.", MessageType.Warning);
-            if (GUILayout.Button(new GUIContent("Name the parts from the model again", "Guess each part's colour from its material's name, and the size from the mesh"))) { Undo.RecordObject(o, "Name the parts"); Fill(o); o.Bake(); EditorUtility.SetDirty(o); }
+            if (o.prefab != prefab0 && o.prefab != null && !o.door && StoreyOpenings.Door(o.prefab)) o.door = true;
+            if (o.prefab == null && o.mesh != mesh0 && o.mesh != null) Fill(o);
+            if (o.prefab != null) changed |= Parts(o);
+            bool made = o.prefab != null || o.mesh != null;
+            if (changed || (made && OpeningKinds.Get(o.Id) == null)) { o.Bake(); EditorUtility.SetDirty(o); trials.Remove(o); }
+            if (!made)
+            {
+                EditorGUILayout.HelpBox("Give it a prefab: every object under it with a mesh, where it is in the prefab, with a Storey Cutout on its root saying where the hole is. Or one mesh, its pivot at the bottom middle of the hole. Either way +Y up, +Z out of the wall, in metres.", MessageType.Info);
+                return;
+            }
+            var k = OpeningKinds.Get(o.Id) ?? o.ToKind();
+            var c = OpeningKinds.Check(k);
+            string what = o.prefab != null ? $"{o.objects} object{(o.objects == 1 ? "" : "s")}, {o.parts.Count} part{(o.parts.Count == 1 ? "" : "s")}" : $"{o.parts.Count} part{(o.parts.Count == 1 ? "" : "s")}";
+            string lod1 = k.lod1 != null ? $"; LOD1 {c.lod1Tris}" : "; LOD1 shows the plain pane";
+            EditorGUILayout.HelpBox($"{c.tris} triangles ({what}){lod1}. The hole is {o.size.x:0.00} × {o.size.y:0.00} m, from {o.holeFrom}. Every {(o.door ? "street door" : "window")} of a style that picks it gets one.", MessageType.None);
+            Warnings(o, k, c);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (o.prefab != null && GUILayout.Button(new GUIContent("Open Prefab", "Edit the prefab and its Storey Cutout; saving it bakes this again"))) AssetDatabase.OpenAsset(o.prefab);
+                if (GUILayout.Button(new GUIContent("Check on a building", "Build a 20 × 12 m block of six storeys with it, count its triangles against the generator's own, and look for faces that flicker"))) trials[o] = KindTrial.Run(k);
+                if (o.prefab == null && GUILayout.Button(new GUIContent("Name the parts again", "Guess each part's colour from its material's name, and the size from the mesh"))) { Undo.RecordObject(o, "Name the parts"); Fill(o); o.Bake(); EditorUtility.SetDirty(o); trials.Remove(o); }
+            }
+            if (trials.TryGetValue(o, out var t))
+            {
+                string flicker = t.overlaps.Count == 0 ? "No faces overlap." : $"{t.overlaps.Count} pair{(t.overlaps.Count == 1 ? "" : "s")} of faces overlap and flicker, the first at {t.overlaps[0].At}.";
+                EditorGUILayout.HelpBox($"On a 20 × 12 m block of six storeys: LOD0 {t.lod0:N0} triangles ({t.plainLod0:N0} with the generator's own), LOD1 {t.lod1:N0} ({t.plainLod1:N0}). {flicker}", t.overlaps.Count == 0 ? MessageType.Info : MessageType.Warning);
+            }
         }
 
-        /// <summary>The parts from the model's materials' names, the size from the mesh's bounds.</summary>
+        void Field(string name) => EditorGUILayout.PropertyField(serializedObject.FindProperty(name), true);
+
+        /// <summary>A prefab's parts, one a material: its colour, and on a door whether it is the leaf. Returns whether one changed.</summary>
+        static bool Parts(StoreyOpening o)
+        {
+            bool changed = false;
+            EditorGUILayout.LabelField(new GUIContent("Parts", "Each of the prefab's materials takes one of the style's colours: the materials themselves aren't used. Glass shows the window shader's rooms on shell storeys and is see-through on walk-in ones."), EditorStyles.boldLabel);
+            foreach (var p in o.parts)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    var colour = (ColorSlot)EditorGUILayout.EnumPopup(p.label, p.colour);
+                    bool leaf = o.door && GUILayout.Toggle(p.leaf, new GUIContent("Leaf", "Part of the door itself, wherever it is: left out where the doorway stays open. The Storey Cutout's leaf objects are, too."), EditorStyles.miniButton, GUILayout.Width(44));
+                    if (colour == p.colour && leaf == (o.door && p.leaf)) continue;
+                    Undo.RecordObject(o, "The part's colour");
+                    p.colour = colour; if (o.door) p.leaf = leaf;
+                    changed = true;
+                }
+            }
+            return changed;
+        }
+
+        static void Warnings(StoreyOpening o, OpeningKind k, OpeningKinds.Checked c)
+        {
+            foreach (var line in o.notes.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)) EditorGUILayout.HelpBox(line, MessageType.Info);
+            if (o.prefab != null && o.holeFrom == "the meshes' bounds")
+                EditorGUILayout.HelpBox("The hole is the meshes' bounds. Add a Storey Cutout to the prefab's root to say where it is, so what goes round it (shutters, a sill) stays outside it.", MessageType.Info);
+            if (o.prefab != null && o.prefab.GetComponent<StoreyCutout>() == null && StoreyOpeningBake.Legacy(o.prefab) != null)
+            {
+                EditorGUILayout.HelpBox("The hole is the prefab's BuildingCutoutBox, its Center the hole's middle as its gizmo draws it. Give the prefab a Storey Cutout to edit it with Storey's gizmo; take the BuildingCutoutBox off once the old generator is gone.", MessageType.Info);
+                if (GUILayout.Button("Give the prefab a Storey Cutout like it")) AddCutout(o);
+            }
+            if (o.wallFaces > 0)
+                EditorGUILayout.HelpBox($"{o.wallFaces} face{(o.wallFaces == 1 ? " lies" : "s lie")} on the wall's outer face round the hole, facing out: {(o.wallFaces == 1 ? "it flickers" : "they flicker")} against the wall. Move {(o.wallFaces == 1 ? "it" : "them")} a centimetre out.", MessageType.Warning);
+            if (c.behind)
+                EditorGUILayout.HelpBox("Something reaches behind the wall's back, 0.3 m in from its face: it shows inside the rooms.", MessageType.Warning);
+            if (c.uncovered > 0.01)
+                EditorGUILayout.HelpBox($"{c.uncovered:P0} of the hole is open: on a shell or filled storey that shows into the building. Fill it (glass, a panel), or fit the cutout to the window.", MessageType.Warning);
+            if (c.deepGlass)
+                EditorGUILayout.HelpBox($"Some glass sits deeper than {OpeningKinds.ShellReveal * 100:0.#} cm into the wall: on a shell or filled storey the reveal stops there, and the hole shows beside the glass.", MessageType.Warning);
+            if (!o.door && !c.glass)
+                EditorGUILayout.HelpBox("No part is Glass: its windows show no rooms behind them (docs/EDITOR.md §6.8).", MessageType.Info);
+            if (o.door && !c.leaf)
+                EditorGUILayout.HelpBox("No part is the leaf: on a walk-in storey the player walks through the closed door. Name the leaf objects in the prefab's Storey Cutout, or tick Leaf on a part.", MessageType.Warning);
+            if (c.tris > 140)
+                EditorGUILayout.HelpBox($"{c.tris} triangles: more than the generator's most dressed window (140), and a block of six storeys has about 156 windows.", MessageType.Warning);
+            if (k.lod1 != null && c.lod1Tris > 12)
+                EditorGUILayout.HelpBox($"LOD1 has {c.lod1Tris} triangles a window: most buildings on screen are at LOD1, where the plain pane is 2.", MessageType.Warning);
+        }
+
+        /// <summary>A Storey Cutout on the prefab's root, as its BuildingCutoutBox has it (that one stays, for the old generator).</summary>
+        static void AddCutout(StoreyOpening o)
+        {
+            string path = AssetDatabase.GetAssetPath(o.prefab);
+            var root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                var old = StoreyOpeningBake.Legacy(root);
+                var c = root.AddComponent<StoreyCutout>();
+                if (old is { } v) { c.size = v.size; c.center = v.center; }
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+
+        /// <summary>A mesh's parts from the model's materials' names, the size from the mesh's bounds.</summary>
         static void Fill(StoreyOpening o)
         {
             var m = o.mesh!; var names = new string[m.subMeshCount];
@@ -122,7 +274,7 @@ namespace Triband.Storey.Editor
                     var mats = r.sharedMaterials;
                     for (int i = 0; i < names.Length && i < mats.Length; i++) names[i] = mats[i] != null ? mats[i].name : "";
                 }
-            o.parts = names.Select(n => StoreyOpening.Guess(n ?? "")).ToList();
+            o.parts = names.Select((n, i) => { var p = StoreyOpening.Guess(n ?? ""); p.key = "#" + i; return p; }).ToList();
             o.size = new Vector2(Mathf.Max(0.1f, m.bounds.size.x), Mathf.Max(0.1f, m.bounds.max.y));
             o.door = o.door || names.Any(n => n != null && n.ToLowerInvariant().Contains("door"));
         }

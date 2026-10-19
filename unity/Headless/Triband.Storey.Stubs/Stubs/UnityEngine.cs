@@ -265,6 +265,8 @@ namespace UnityEngine
     {
         public static Matrix4x4 identity => default;
         public static Matrix4x4 TRS(Vector3 pos, Quaternion q, Vector3 s) => default;
+        public static Matrix4x4 Scale(Vector3 vector) => default;
+        public float this[int row, int column] { get => 0; set { } }
         public static Matrix4x4 operator *(Matrix4x4 a, Matrix4x4 b) => a;
         public Vector3 MultiplyPoint(Vector3 point) => point;
         public Vector3 MultiplyVector(Vector3 vector) => vector;
@@ -684,6 +686,16 @@ namespace UnityEngine
     public sealed class MeshFilter : Component
     {
         public Mesh sharedMesh { get; set; } = new Mesh();
+    }
+
+    public struct LOD
+    {
+        public Renderer[] renderers;
+    }
+
+    public sealed class LODGroup : Component
+    {
+        public LOD[] GetLODs() => System.Array.Empty<LOD>();
     }
 
     public sealed class Material : Object
