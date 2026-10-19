@@ -67,6 +67,15 @@ namespace Triband.Storey.Generate
         /// pediment: docs/OPENINGS.md §4.2).
         /// </summary>
         public double reachL, reachR, reachB, reachT;
+        /// <summary>
+        /// LOD1's mesh stays in front of the wall's face (shutters, a sill, a pediment), and what of it is over the hole in
+        /// front of LOD1's plain pane: found when it is registered. LOD1 lays it on the flat wall, with no cut; one that
+        /// reaches into the wall, or comes nearer it over the hole (where it would flicker against the flat wall), cuts the
+        /// wall (docs/OPENINGS.md §5).
+        /// </summary>
+        public bool lod1OnWall;
+        /// <summary>LOD1's mesh covers its hole, as seen from the street: found when it is registered. Where it doesn't, LOD1 draws the plain pane in the hole too.</summary>
+        public bool lod1Covers;
     }
 
     /// <summary>
@@ -85,6 +94,8 @@ namespace Triband.Storey.Generate
         {
             if (k.id.Length == 0) return;
             Reach(k);
+            k.lod1OnWall = k.lod1 != null && OnWall(k, k.lod1);
+            k.lod1Covers = k.lod1 != null && Uncovered(k, k.lod1) <= 0.01;
             foreach (var m in new[] { k.lod0, k.lod1 })
                 if (m != null)
                     foreach (var part in m.parts)
@@ -124,6 +135,32 @@ namespace Triband.Storey.Generate
             static double Mm(double v) => v < 1e-3 ? 0 : v;
             k.reachL = Mm(-x0); k.reachR = Mm(x1); k.reachB = Mm(-y0); k.reachT = Mm(y1 - k.h);
         }
+        /// <summary>
+        /// Whether kind <paramref name="k"/>'s mesh <paramref name="m"/> can lie on the flat wall: none of it more than a
+        /// millimetre into the wall, and what is over the hole (not wholly beside, under or over it) as far out as LOD1's
+        /// plain pane, clear of the wall behind it.
+        /// </summary>
+        static bool OnWall(OpeningKind k, OpeningKind.Mesh m)
+        {
+            const double E = 1e-3;
+            double hw = k.w / 2, h = k.h; var P = m.P;
+            foreach (var part in m.parts)
+            {
+                var t = part.tris;
+                for (int i = 0; i + 2 < t.Length; i += 3)
+                {
+                    if ((uint)t[i] >= (uint)P.Length || (uint)t[i + 1] >= (uint)P.Length || (uint)t[i + 2] >= (uint)P.Length) continue;
+                    P3 a = P[t[i]], b = P[t[i + 1]], c = P[t[i + 2]];
+                    double zmin = Math.Min(a.z, Math.Min(b.z, c.z));
+                    if (zmin < -E) return false;
+                    bool round = Math.Max(a.x, Math.Max(b.x, c.x)) <= -hw + E || Math.Min(a.x, Math.Min(b.x, c.x)) >= hw - E
+                        || Math.Max(a.y, Math.Max(b.y, c.y)) <= E || Math.Min(a.y, Math.Min(b.y, c.y)) >= h - E;
+                    if (!round && zmin < Lod1.PaneProud - E) return false;
+                }
+            }
+            return true;
+        }
+
         public static OpeningKind? Get(string? id) => id != null && all.TryGetValue(id, out var k) ? k : null;
         public static IEnumerable<OpeningKind> All => all.Values;
 
@@ -160,9 +197,6 @@ namespace Triband.Storey.Generate
             var m = k.lod0; var P = m.P;
             foreach (var part in m.parts) c.tris += part.tris.Length / 3;
             if (k.lod1 != null) foreach (var part in k.lod1.parts) c.lod1Tris += part.tris.Length / 3;
-            double w = Math.Max(0.05, k.w), h = Math.Max(0.05, k.h);
-            int nx = Math.Max(8, Math.Min(200, (int)Math.Ceiling(w / 0.02))), ny = Math.Max(8, Math.Min(200, (int)Math.Ceiling(h / 0.02)));
-            var covered = new bool[nx * ny];
             foreach (var part in m.parts)
             {
                 if (part.slot == ColorSlot.Glass) c.glass = true;
@@ -171,12 +205,34 @@ namespace Triband.Storey.Generate
                 for (int i = 0; i + 2 < t.Length; i += 3)
                 {
                     if ((uint)t[i] >= (uint)P.Length || (uint)t[i + 1] >= (uint)P.Length || (uint)t[i + 2] >= (uint)P.Length) continue;
-                    P3 a = P[t[i]], b = P[t[i + 1]], q = P[t[i + 2]];
-                    foreach (var p in new[] { a, b, q })
+                    foreach (var p in new[] { P[t[i]], P[t[i + 1]], P[t[i + 2]] })
                     {
                         if (p.z < -Dim.T_EXT - 0.005) c.behind = true;
                         if (part.slot == ColorSlot.Glass && p.z < -ShellReveal - 0.005) c.deepGlass = true;
                     }
+                }
+            }
+            c.uncovered = Uncovered(k, m);
+            return c;
+        }
+
+        /// <summary>
+        /// The share of <paramref name="k"/>'s hole mesh <paramref name="m"/> leaves open as seen from the street, 0 to 1: drawn
+        /// over a grid of about 2 cm, its faces turned to the street.
+        /// </summary>
+        static double Uncovered(OpeningKind k, OpeningKind.Mesh m)
+        {
+            var P = m.P;
+            double w = Math.Max(0.05, k.w), h = Math.Max(0.05, k.h);
+            int nx = Math.Max(8, Math.Min(200, (int)Math.Ceiling(w / 0.02))), ny = Math.Max(8, Math.Min(200, (int)Math.Ceiling(h / 0.02)));
+            var covered = new bool[nx * ny];
+            foreach (var part in m.parts)
+            {
+                var t = part.tris;
+                for (int i = 0; i + 2 < t.Length; i += 3)
+                {
+                    if ((uint)t[i] >= (uint)P.Length || (uint)t[i + 1] >= (uint)P.Length || (uint)t[i + 2] >= (uint)P.Length) continue;
+                    P3 a = P[t[i]], b = P[t[i + 1]], q = P[t[i + 2]];
                     var n = P3.Cross(b - a, q - a); double len = n.Length;
                     if (len < 1e-12 || n.z / len < 0.05) continue;   // edge on, or turned away from the street
                     double x0 = Math.Min(a.x, Math.Min(b.x, q.x)), x1 = Math.Max(a.x, Math.Max(b.x, q.x)), y0 = Math.Min(a.y, Math.Min(b.y, q.y)), y1 = Math.Max(a.y, Math.Max(b.y, q.y));
@@ -191,8 +247,7 @@ namespace Triband.Storey.Generate
                 }
             }
             int n0 = 0; foreach (bool v in covered) if (!v) n0++;
-            c.uncovered = (double)n0 / covered.Length;
-            return c;
+            return (double)n0 / covered.Length;
         }
 
         // the point (x, y) within triangle abc seen along Z, either winding (its edges count)

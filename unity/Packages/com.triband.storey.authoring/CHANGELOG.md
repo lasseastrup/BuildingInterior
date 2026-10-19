@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- A Storey Opening's inspector says how LOD1 places its LOD1: on the flat wall, or in a hole cut in the wall, and with the plain pane where it leaves the hole open. A window whose LOD1 reaches into the wall gets a note that LOD1 cuts the wall round every window.
 - A Storey Opening's **Fit**: *Stretch*, *Slice* or *Keep size* (it was the *Stretch* toggle). One made from a prefab starts as *Slice*. The Storey Cutout has *Borders* (the slice lines, drawn dotted in the Scene view) and *Keep shape*.
 - The Facade tab greys out *Window width* when the style's artist window keeps its own size, and says so.
 - Windows and doors from prefabs the Model Remapper coloured (docs/EDITOR.md §6.9): the bake reads each vertex's palette index from UV channel 3 (as the index + 0.1), and makes a part of each palette colour, named after the palette entry, which keeps that colour; a part named for glass takes the style's Glass. The palette's ids are found through `StoreyColorField.PaletteEntryAt`, which the Color Pipeline integration installs, so deleting a palette entry doesn't shift the colours.

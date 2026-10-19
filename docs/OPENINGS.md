@@ -1,6 +1,6 @@
 # Artist-made windows and doors from prefabs
 
-How an artist's window or door can be a prefab of several objects, as Flamingo's old BuildingGenerator takes them, while Storey keeps building every opening into the building's own meshes. **Status: steps 1, 5, 2 and 3 are built (docs/EDITOR.md §6.9); step 5 came second, as §9's answers asked.** §9 has the answers to the questions asked before step 1.
+How an artist's window or door can be a prefab of several objects, as Flamingo's old BuildingGenerator takes them, while Storey keeps building every opening into the building's own meshes. **Status: all five steps are built (docs/EDITOR.md §6.9); step 5 came second, as §9's answers asked.** §9 has the answers to the questions asked before step 1.
 
 ## 1. Where we are
 
@@ -139,6 +139,13 @@ A third fit, as 9-slice scaling works for sprites. Slice lines run along the cut
 With a LOD1 mesh, LOD1 cuts the wall at every window (`Lod1.Build`), about 12 triangles a window more than its flat pane. On the block above, LOD1 goes from 1,116 triangles to 3,036 even with a two-triangle LOD1 mesh, and most buildings on screen are at LOD1.
 
 So a LOD1 that stays in front of the wall's face (shutters, a sill, a pediment) goes on the flat wall, beside the flat pane, with no cut. The shader draws the pane's recess as it does for the generator's windows. A LOD1 that reaches into the reveal cuts the wall, as now. The bake knows which a kind is, so there's no setting.
+
+As built (`OpeningKind.lod1OnWall`, `lod1Covers`, found when a kind is registered):
+- What of the LOD1 is over the hole must stand at least as far out as the flat pane (3 cm). Nearer, it would flicker against the flat wall behind it, so the wall is cut for it.
+- Where a LOD1 leaves the hole open, the plain pane fills it, cut or not. One that covers the hole (its own glass, a door's leaf) has none. Before, a LOD1 with no glass showed a hole into the building.
+- *Check on a building* looks for faces that flicker at LOD1 too.
+
+On the block above, a two-triangle sill in front of the wall makes LOD1 1,448 triangles, against 1,140 for the generator's own windows. A two-triangle pane 5 cm in still makes it 3,038.
 
 ## 6. Colours of their own (step 5)
 

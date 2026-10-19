@@ -7,9 +7,9 @@ namespace Triband.Storey.Validate
 {
     /// <summary>
     /// An artist's window or door tried on a building (docs/OPENINGS.md §3.5): a 20 × 12 m brick block of six storeys with a
-    /// street door, built at LOD0 and LOD1 with the kind and with the generator's own, its LOD0 shell and walk-in checked
-    /// for faces that overlap (<see cref="CoplanarCheck"/>). For the inspector's Check on a building; the kind must be
-    /// registered. Storey's own.
+    /// street door, built at LOD0 and LOD1 with the kind and with the generator's own, its LOD0 shell and walk-in and its LOD1
+    /// (where a LOD1 in front of the wall lies on the flat wall) checked for faces that overlap (<see cref="CoplanarCheck"/>).
+    /// For the inspector's Check on a building; the kind must be registered. Storey's own.
     /// </summary>
     public static class KindTrial
     {
@@ -35,7 +35,10 @@ namespace Triband.Storey.Validate
                 var site = new Site(d.buildings);
                 var l0 = Lod0.Build(site, b);
                 if (check) r.overlaps.AddRange(CoplanarCheck.Run(l0.Op).Overlaps);
-                return (l0.Op.Tris + l0.Glass.Tris, walkIn ? 0 : Lod1.Build(site, b).Tris);
+                if (walkIn) return (l0.Op.Tris + l0.Glass.Tris, 0);
+                var l1 = Lod1.Build(site, b);
+                if (check) r.overlaps.AddRange(CoplanarCheck.Run(l1).Overlaps);
+                return (l0.Op.Tris + l0.Glass.Tris, l1.Tris);
             }
             (r.lod0, r.lod1) = Build(true, false, true);
             Build(true, true, true);

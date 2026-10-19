@@ -115,6 +115,101 @@ namespace Triband.Storey.Tests
             Assert.Equal(0, Count(Lod1.Build(s2, b2), ColorSlot.Frame));
         }
 
+        const string ShutterColour = "#3a5f2e";
+
+        /// <summary>
+        /// A LOD1 of shutters 40 cm wide either side of a 1 × 1.5 hole, <paramref name="out"/> from the wall, in a colour of their
+        /// own; and a quad over the hole at <paramref name="z"/> (glass, or a frame strip along its top) if asked.
+        /// </summary>
+        static OpeningKind.Mesh Shutters(double? z = null, bool glass = true, double @out = 0.02)
+        {
+            var m = new OpeningKind.Mesh();
+            var P = new List<P3>(); var f = new P3(0, 0, 1);
+            int Q(double x0, double x1, double y0, double y1, double d) { int at = P.Count; P.AddRange(new[] { new P3(x0, y0, d), new P3(x1, y0, d), new P3(x1, y1, d), new P3(x0, y1, d) }); return at; }
+            int[] Tri(params int[] at) => at.SelectMany(q => new[] { q, q + 1, q + 2, q, q + 2, q + 3 }).ToArray();
+            m.parts.Add(new OpeningKind.Part { slot = ColorSlot.Frame, own = ShutterColour, tris = Tri(Q(-0.95, -0.55, 0, 1.5, @out), Q(0.55, 0.95, 0, 1.5, @out)) });
+            if (z is double d) m.parts.Add(new OpeningKind.Part { slot = glass ? ColorSlot.Glass : ColorSlot.Frame, tris = Tri(glass ? Q(-0.5, 0.5, 0, 1.5, d) : Q(-0.5, 0.5, 1.4, 1.5, d)) });
+            m.P = P.ToArray(); m.N = Enumerable.Repeat(f, P.Count).ToArray();
+            return m;
+        }
+
+        /// <summary>LOD1 of a block whose windows are kind <paramref name="lod1"/>'s, and how many windows that is (the shutters it placed).</summary>
+        static (MeshBuilder lod1, int windows) Lod1Of(string id, OpeningKind.Mesh? lod1)
+        {
+            var k = Kind(id, false); k.lod1 = lod1;
+            OpeningKinds.Register(k);
+            var (b, s) = Block(false, st => st.windowKind = id);
+            var m = Lod1.Build(s, b);
+            var own = KindColors.SlotOf(ShutterColour)!.Value;
+            return (m, Count(m, own) / 8);
+        }
+
+        // the glass's vertices in flat panes on the wall (the shader draws their recess), and the rest
+        static (int flat, int other) Glass(MeshBuilder m)
+        {
+            int f = 0, o = 0;
+            for (int i = 0; i < m.Verts; i++)
+                if (m.C[i].slot == ColorSlot.Glass) { if (m.PaneUV.TryGetValue(i, out var p) && p.flat) f++; else o++; }
+            return (f, o);
+        }
+
+        [Fact]
+        public void ALod1InFrontOfTheWallLiesOnTheFlatWall()
+        {
+            var (none, _) = Lod1Of("t-lod1-none", null);
+            var plain = Glass(none);
+            // shutters only: on the flat wall, with the plain pane, and no cut (docs/OPENINGS.md §5)
+            var (front, n) = Lod1Of("t-lod1-front", Shutters());
+            var k = OpeningKinds.Get("t-lod1-front")!;
+            Assert.True(k.lod1OnWall); Assert.False(k.lod1Covers);
+            Assert.True(n > 20, $"{n} windows");
+            Assert.Equal(4 * n, plain.flat);
+            Assert.Equal(none.Tris + 4 * n, front.Tris);   // its four triangles a window, and nothing for a cut
+            Assert.Equal(plain, Glass(front));
+            // glass of its own standing 5 cm out, in front of where the plain pane goes: no cut, and no plain pane either
+            var (proud, n2) = Lod1Of("t-lod1-proud", Shutters(z: 0.05));
+            k = OpeningKinds.Get("t-lod1-proud")!;
+            Assert.True(k.lod1OnWall); Assert.True(k.lod1Covers);
+            Assert.Equal(n, n2);
+            Assert.Equal(none.Tris - 2 * n + 6 * n, proud.Tris);
+            Assert.Equal((0, plain.other + 4 * n), Glass(proud));
+        }
+
+        [Fact]
+        public void ALod1ReachingIntoTheWallCutsIt()
+        {
+            var (none, _) = Lod1Of("t-lod1-none2", null);
+            var plain = Glass(none);
+            // glass 5 cm into the wall: the wall is cut round every window, as before, and its glass fills the hole
+            var (deep, n) = Lod1Of("t-lod1-deep", Shutters(z: -0.05));
+            var k = OpeningKinds.Get("t-lod1-deep")!;
+            Assert.False(k.lod1OnWall); Assert.True(k.lod1Covers);
+            Assert.True(deep.Tris - (none.Tris + 4 * n) >= 8 * n, $"{deep.Tris} against {none.Tris} for {n} windows: the cuts");
+            Assert.Equal((0, plain.other + 4 * n), Glass(deep));   // its own glass, not the plain pane
+            // flush glass, 1 cm out over the hole: it would flicker against a flat wall behind it, so that is cut too
+            var (flush, nf) = Lod1Of("t-lod1-flush", Shutters(z: 0.01));
+            k = OpeningKinds.Get("t-lod1-flush")!;
+            Assert.False(k.lod1OnWall); Assert.True(k.lod1Covers);
+            Assert.Equal(deep.Tris, flush.Tris); Assert.Equal(n, nf);
+            // a frame strip 5 cm in and no glass: cut, and the plain pane fills the hole it leaves open, in the reveal
+            var (open, n2) = Lod1Of("t-lod1-open", Shutters(z: -0.05, glass: false));
+            k = OpeningKinds.Get("t-lod1-open")!;
+            Assert.False(k.lod1OnWall); Assert.False(k.lod1Covers);
+            Assert.Equal(n, n2);
+            Assert.Equal((0, plain.other + 4 * n), Glass(open));
+        }
+
+        [Fact]
+        public void CheckOnABuildingLooksAtLod1Too()
+        {
+            var k = Kind("t-lod1-trial", false); k.lod1 = Shutters(); OpeningKinds.Register(k);
+            var t = KindTrial.Run(k);
+            Assert.True(t.overlaps.Count == 0, string.Join("\n", t.overlaps.Take(5)));
+            // shutters lying on the wall's face: at LOD1, on the flat wall, they flicker against it
+            var flat = Kind("t-lod1-trial-flat", false); flat.lod1 = Shutters(@out: 0); OpeningKinds.Register(flat);
+            Assert.NotEmpty(KindTrial.Run(flat).overlaps);
+        }
+
         [Fact]
         public void ATriangleNamingAPointTheMeshHasntIsLeftOut()
         {

@@ -405,12 +405,13 @@ In the Facade tab, pick it under **Window** (next to *Windows*) or **Street door
 
 The inspector says how many objects, parts and triangles it has and where its hole came from, and warns of what will cost too much or look wrong:
 - more triangles than the generator's most dressed window (140, with arch heads, frames and glazing bars; a block of six storeys has about 156 windows), or a LOD1 of more than 12 (most buildings on screen are at LOD1, where the plain pane is 2);
+- a window's LOD1 that reaches into the wall, so LOD1 cuts the wall round every window (LODs, below);
 - faces on the wall's outer face round the hole, facing out: they flicker against the wall;
 - anything behind the wall's back: it shows inside the rooms;
 - a share of the hole left open (on a shell or filled storey it shows into the building), and glass deeper than 16.5 cm (a shell storey's reveal stops there);
 - a window without Glass (no rooms behind it), and a door without a leaf.
 
-*Check on a building* builds a 20 × 12 m block of six storeys with it, gives its triangles against the generator's own, and lists faces that overlap. *Open Prefab* opens the prefab; saving it bakes the asset again, as does reimporting anything it uses (a mesh, a material, a nested prefab, a variant's base). If Unity says a mesh isn't readable, tick *Read/Write* on its model.
+*Check on a building* builds a 20 × 12 m block of six storeys with it, gives its triangles against the generator's own, and lists faces that overlap, at LOD0 and LOD1. *Open Prefab* opens the prefab; saving it bakes the asset again, as does reimporting anything it uses (a mesh, a material, a nested prefab, a variant's base). If Unity says a mesh isn't readable, tick *Read/Write* on its model.
 
 **Fit** says how it goes into each opening:
 - **Stretch:** stretched to the opening, all of it. The style's *Windows* type, *Window width* and *Bay spacing* decide where openings are and how big. For a window that is only a window.
@@ -425,7 +426,13 @@ What it has round its hole (shutters, a sill, a flower box, a surround, a pedime
 - AC units go under it, vents between windows' dressings, awnings over it (and past shutters), and hand-placed details and brick patches keep clear of it.
 - Where two windows' dressing would meet, **Problems** says so, and which bays the window needs (*Bay spacing*).
 
-LODs: LOD0 places the window. LOD1 places its LOD1 (*LOD1 prefab*, the LOD Group's LOD 1, or *LOD1 mesh*) if it has one, and otherwise keeps its plain pane. LOD2 keeps its painted windows.
+LODs:
+- LOD0 places the window.
+- LOD1 places its LOD1 (*LOD1 prefab*, the LOD Group's LOD 1, or *LOD1 mesh*) if it has one. Otherwise it keeps its plain pane, flat on the wall, with the recess the shader draws.
+  - A LOD1 that stays in front of the wall's face (shutters, a sill, a pediment) lies on the flat wall too, at the cost of its own triangles. What of it is over the hole must stand at least 3 cm out, as far as the plain pane, or it would flicker against the flat wall behind it.
+  - Any other LOD1 gets a hole cut for it in LOD1's wall, about 12 triangles a window more. The inspector says which it is.
+  - Where a LOD1 leaves its hole open (shutters alone, a frame without glass), the plain pane fills it. One that covers it (its own glass, a door's leaf) has none.
+- LOD2 keeps its painted windows.
 
 The site lists the windows and doors its layout uses (*Openings*, kept by the editor when you save), so builds include them. The geometry is baked into the asset, and the prefab and mesh references are the editor's: they don't ship.
 
@@ -437,7 +444,7 @@ A style names its window and door by the asset's id, kept through renames and mo
 
 Facade details follow the same rule (§6.12).
 
-Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`, `Check`), `KindBake` (a prefab's objects into the opening's space, cut at slice lines), `KindPlace` (stretched, sliced, rigid), `KindColors` (colours of their own), `Validate.KindTrial` (Check on a building), `FacadeStyle.windowKind`/`doorKind` (layout keys `windowKind`, `doorKind`) (`OpeningKindTests`, `KindBakeTests`, `KindColorsTests`, `OpeningFitTests`, `SliceTests`); `AssetIds`, the id rule (`AssetIdsTests`). Unity: `StoreyOpening`, `StoreyCutout`, `StoreySite.openings`, `BuildingTable.SyncKindColors`. Editor: `StoreyOpenings`, `StoreyOpeningBake`, `StoreyCutoutEditor`, `StoreyPartColours`, `StoreyAssetIds`; `StoreyColorField.PaletteEntryAt`, installed by the Color Pipeline integration.
+Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`, `Check`), `KindBake` (a prefab's objects into the opening's space, cut at slice lines), `KindPlace` (stretched, sliced, rigid), `KindColors` (colours of their own), `Validate.KindTrial` (Check on a building), `OpeningKind.lod1OnWall`/`lod1Covers` (LOD1 on the flat wall, the plain pane in an open hole), `FacadeStyle.windowKind`/`doorKind` (layout keys `windowKind`, `doorKind`) (`OpeningKindTests`, `KindBakeTests`, `KindColorsTests`, `OpeningFitTests`, `SliceTests`); `AssetIds`, the id rule (`AssetIdsTests`). Unity: `StoreyOpening`, `StoreyCutout`, `StoreySite.openings`, `BuildingTable.SyncKindColors`. Editor: `StoreyOpenings`, `StoreyOpeningBake`, `StoreyCutoutEditor`, `StoreyPartColours`, `StoreyAssetIds`; `StoreyColorField.PaletteEntryAt`, installed by the Color Pipeline integration.
 
 **Checks:**
 1. Make a window from a model with Glass and Frame materials. Its parts list says Glass and Frame, and its size matches the model.
@@ -454,6 +461,7 @@ Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`, `Check`),
 12. Set *Fit* to *Keep size* on a window 0.9 m wide: every window's hole is 0.9 m, at LOD0, LOD1 and LOD2 alike, and *Window width* is greyed out.
 13. Give a window shutters 45 cm wide: the outermost windows' shutters stay clear of the corners; set *Bay spacing* so they would meet, and Problems lists it.
 14. Make a shuttered window *Slice* with 6 cm *Borders*, and a keystone under *Keep shape*. Pick it on the brick, stucco and warehouse presets: the shutters keep their width, the frame its thickness and the keystone its shape, whatever the windows' size; *Check on a building* finds no faces that flicker.
+15. Give that window a LOD1 of its shutters and sill only, in front of the wall's face. The inspector says LOD1 lies on the flat wall; zoom out to LOD1 and the shutters and sill show beside the plain pane. *Check on a building* gives LOD1 the generator's own count plus the LOD1's triangles for each window. Move the LOD1's sill 2 cm into the wall: the inspector says LOD1 now cuts the wall.
 
 ### 6.10 The site inspector's layout
 

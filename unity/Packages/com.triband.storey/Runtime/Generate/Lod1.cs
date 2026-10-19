@@ -9,7 +9,8 @@ namespace Triband.Storey.Generate
     /// per-vertex occlusion data (a lean mesh). A plain window is a pane just proud of a flat wall,
     /// and the shader draws the recess LOD0 cuts behind it, its reveals as the view shows them
     /// (StoreyWindow.hlsl): cutting the wall round every window made the walls four-fifths of LOD1.
-    /// Doors and artist-made windows keep their openings.
+    /// Doors keep their openings, and so do artist-made windows whose LOD1 reaches into the wall; one whose LOD1 stays in
+    /// front of it (shutters, a sill) lies on the flat wall with the plain pane (docs/OPENINGS.md §5).
     /// </summary>
     public static class Lod1
     {
@@ -58,16 +59,22 @@ namespace Triband.Storey.Generate
                         var ops = L0.Piece(all, party, pc.lo, pc.hi);
                         var stk = Derived.StyleAt(b, k);
                         var wk = OpeningKinds.Of(stk, false); var dk = OpeningKinds.Of(stk, true);
-                        // the wall is cut for doors and artist-made windows only; a plain window lies on it (recessed: all)
-                        var cut = recessed || wk?.lod1 != null ? ops : Doors(ops, L0.CutOps);
+                        // the wall is cut for doors, and round an artist's windows whose LOD1 reaches into it; a plain window lies on
+                        // it, as does an artist's whose LOD1 stays in front of it (recessed: all are cut)
+                        bool cutAll = recessed || wk?.lod1 != null && !wk.lod1OnWall;
+                        var cut = cutAll ? ops : Doors(ops, L0.CutOps);
                         Facade.WallPanel(op, F, new Miter(pc.S, pc.E), 0, T, y, h, cut, party ? pc.r!.pInner : C.wall, C.wall, L0.Panel.Set(inner: false, revealFrom: T * 0.45, threshold: k == 0));
                         foreach (var o in ops)
                         {
-                            // an artist's window or door with a LOD1 mesh takes the opening; without one, the plain pane
+                            // an artist's window or door with a LOD1 mesh, and the plain pane where it leaves the hole open
                             var kk = o.door ? (o.bare ? null : dk) : wk;
-                            if (kk?.lod1 != null) { OpeningKinds.Place(op, null, F, kk, kk.lod1, o.u0, o.u1, o.door ? y : y + o.y0, y + o.y1, C, true); continue; }
+                            if (kk?.lod1 != null)
+                            {
+                                OpeningKinds.Place(op, null, F, kk, kk.lod1, o.u0, o.u1, o.door ? y : y + o.y0, y + o.y1, C, true);
+                                if (kk.lod1Covers) continue;
+                            }
                             bool glazedDoor = o.door && Derived.StyleAt(b, k).doorType == DoorType.Glazed;
-                            bool flat = !recessed && !o.door;   // a plain window on the flat wall: the shader draws its recess, and LOD0's centre bar
+                            bool flat = !cutAll && !o.door;   // a window on the flat wall: the shader draws its recess, and LOD0's centre bar
                             Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, flat ? T + PaneProud : T * 0.45, o.door && !glazedDoor ? C.door : C.glassDark, false, flat, flat && wk == null && Facade.CentreBar(stk, o));
                             if (o.door && !o.bare && !glazedDoor && kk == null) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
                         }

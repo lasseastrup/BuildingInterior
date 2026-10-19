@@ -189,7 +189,8 @@ namespace Triband.Storey.Editor
             var k = OpeningKinds.Get(o.Id) ?? o.ToKind();
             var c = OpeningKinds.Check(k);
             string what = o.prefab != null ? $"{o.objects} object{(o.objects == 1 ? "" : "s")}, {o.parts.Count} part{(o.parts.Count == 1 ? "" : "s")}" : $"{o.parts.Count} part{(o.parts.Count == 1 ? "" : "s")}";
-            string lod1 = k.lod1 != null ? $"; LOD1 {c.lod1Tris}" : "; LOD1 shows the plain pane";
+            string lod1 = k.lod1 == null ? "; LOD1 shows the plain pane"
+                : $"; LOD1 {c.lod1Tris}{(o.door ? "" : k.lod1OnWall ? ", on the flat wall" : ", in a hole cut in the wall")}{(k.lod1Covers ? "" : $" with the plain {(o.door ? "door" : "pane")} where it leaves the hole open")}";
             string slices = (o.slice || !o.stretch) && o.borders != Vector4.zero ? $" Slice lines {o.borders.x:0.00}, {o.borders.y:0.00}, {o.borders.z:0.00} and {o.borders.w:0.00} m in from its sides." : "";
             EditorGUILayout.HelpBox($"{c.tris} triangles ({what}){lod1}. The hole is {o.size.x:0.00} × {o.size.y:0.00} m, from {o.holeFrom}.{slices} Every {(o.door ? "street door" : "window")} of a style that picks it gets one.", MessageType.None);
             Warnings(o, k, c);
@@ -270,6 +271,8 @@ namespace Triband.Storey.Editor
                 EditorGUILayout.HelpBox("No part is the leaf: on a walk-in storey the player walks through the closed door. Name the leaf objects in the prefab's Storey Cutout, or tick Leaf on a part.", MessageType.Warning);
             if (c.tris > 140)
                 EditorGUILayout.HelpBox($"{c.tris} triangles: more than the generator's most dressed window (140), and a block of six storeys has about 156 windows.", MessageType.Warning);
+            if (!o.door && k.lod1 != null && !k.lod1OnWall)
+                EditorGUILayout.HelpBox("LOD1 reaches into the wall, so LOD1 cuts the wall round every window: about 12 triangles a window more, and most buildings on screen are at LOD1. A LOD1 that stays in front of the wall's face (shutters, a sill, a pediment) lies on the flat wall with the plain pane, whose recess the shader draws.", MessageType.Info);
             if (k.lod1 != null && c.lod1Tris > 12)
                 EditorGUILayout.HelpBox($"LOD1 has {c.lod1Tris} triangles a window: most buildings on screen are at LOD1, where the plain pane is 2.", MessageType.Warning);
         }
