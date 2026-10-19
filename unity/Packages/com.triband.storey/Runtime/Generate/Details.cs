@@ -170,7 +170,7 @@ namespace Triband.Storey.Generate
             Item Mk(DetailKind kind, int i, double u, DetailData? man) => new Item { kind = kind, i = i, u = u, man = man };
             Item Over(DetailKind kind, int i, Opening o, DetailData? man)
             {
-                var it = Mk(kind, i, (o.u0 + o.u1) / 2, man); it.hasSpan = true; it.u0 = o.u0 - 0.25; it.u1 = o.u1 + 0.25; it.yt = o.y1 + 0.06; it.y = o.y1 + OverLift;
+                var it = Mk(kind, i, (o.u0 + o.u1) / 2, man); it.hasSpan = true; (it.u0, it.u1) = OverSpan(o); it.yt = o.Top + 0.06; it.y = o.Top + OverLift;
                 return it;
             }
             // neighbouring spans over openings meet in the middle
@@ -235,12 +235,12 @@ namespace Triband.Storey.Generate
                     for (int j = 0; j < ops.Count; j++)
                     {
                         var o = ops[j]; if (o.door || o.full || Hash01(b.id, "ac", k, i, j) >= R.ac) continue;
-                        double y = o.y0 - 0.62; if (y >= 0.25) { var it = Mk(ac, i, (o.u0 + o.u1) / 2, null); it.y = y; Push(it); }
+                        double y = o.Bottom - 0.62; if (y >= 0.25) { var it = Mk(ac, i, (o.u0 + o.u1) / 2, null); it.y = y; Push(it); }
                     }
                 if (R.vents > 0)
                 {
                     var gaps = new List<(double, double)>(); double prev = uS;
-                    foreach (var o in ops) { if (o.u0 - prev >= 1.0) gaps.Add((prev, o.u0)); prev = Math.Max(prev, o.u1); }
+                    foreach (var o in ops) { if (o.Left - prev >= 1.0) gaps.Add((prev, o.Left)); prev = Math.Max(prev, o.Right); }
                     if (uE - prev >= 1.0) gaps.Add((prev, uE));
                     for (int j = 0; j < gaps.Count; j++)
                         if (Hash01(b.id, "vent", k, i, j) < R.vents) { var it = Mk(vent, i, (gaps[j].Item1 + gaps[j].Item2) / 2, null); it.y = h - 0.95; Push(it); }
@@ -253,7 +253,7 @@ namespace Triband.Storey.Generate
                         {
                             // as an AC unit: its top 7 cm under the window
                             var o = ops[j]; if (o.door || o.full || Hash01(b.id, dk.id, k, i, j) >= p) continue;
-                            double y = o.y0 - 0.07 - dk.h; if (y >= 0.25) { var it = Mk(dk, i, (o.u0 + o.u1) / 2, null); it.y = y; PushClear(it); }
+                            double y = o.Bottom - 0.07 - dk.h; if (y >= 0.25) { var it = Mk(dk, i, (o.u0 + o.u1) / 2, null); it.y = y; PushClear(it); }
                         }
                     else if (dk.rule == Rule.BareWall)
                     {
@@ -262,9 +262,9 @@ namespace Triband.Storey.Generate
                         if (y < 0.15) continue;
                         for (int g = 0; g <= ops.Count; g++)   // the gaps before each opening, then after the last
                         {
-                            double c = g < ops.Count ? ops[g].u0 : uE;
+                            double c = g < ops.Count ? ops[g].Left : uE;
                             if (c - prev >= need && Hash01(b.id, dk.id, k, i, j++) < p) { var it = Mk(dk, i, (prev + c) / 2, null); it.y = y; PushClear(it); }
-                            if (g < ops.Count) prev = Math.Max(prev, ops[g].u1);
+                            if (g < ops.Count) prev = Math.Max(prev, ops[g].Right);
                         }
                     }
                     else if (dk.rule == Rule.OverOpenings && k == 0)
@@ -275,6 +275,12 @@ namespace Triband.Storey.Generate
             if (spans) Trim();
             return out_;
         }
+
+        /// <summary>
+        /// Where a detail over an opening spans: 25 cm past it each side, or 5 cm past an artist's window's dressing where that
+        /// reaches further (shutters).
+        /// </summary>
+        public static (double u0, double u1) OverSpan(Opening o) => (o.u0 - Math.Max(0.25, o.rl + 0.05), o.u1 + Math.Max(0.25, o.rr + 0.05));
 
         /// <summary>How high an item reaches on its storey (of height h), from its bottom to its top, for keeping clear of it.</summary>
         static (double lo, double hi) Rise(Item it, double h) => it.kind.anchor switch

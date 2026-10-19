@@ -542,7 +542,10 @@ namespace Triband.Storey.Editor
                 StoreyInspectorUI.Section("Windows and doors");
                 StyleEnum(e, k0, "Windows", st.windows, (s, x) => s.windows = x);
                 KindPopup(e, k0, "Window", st.windowKind, false);
-                StyleSlider(e, k0, "Window width", st.winW, 0.6, 2.4, 0.1, (s, x) => s.winW = x);
+                bool ownSize = Generate.OpeningKinds.Of(st, false) is Generate.OpeningKind wk && !wk.stretch;
+                using (new EditorGUI.DisabledScope(ownSize))
+                    StyleSlider(e, k0, "Window width", st.winW, 0.6, 2.4, 0.1, (s, x) => s.winW = x);
+                if (ownSize) EditorGUILayout.LabelField("The artist's window keeps its own size: its hole is as wide and high as it is.", StoreyInspectorUI.Caption);
                 StyleSlider(e, k0, "Bay spacing", st.bay, 1.4, 5, 0.1, (s, x) => s.bay = x);
                 WindowDetails(e, b, k0, st);
                 StoreyInspectorUI.Section("Walls");

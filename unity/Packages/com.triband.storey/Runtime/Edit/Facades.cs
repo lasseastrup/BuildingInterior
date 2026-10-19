@@ -150,10 +150,11 @@ namespace Triband.Storey.Edit
                 }
                 if (best == null) return new DetailSpot { error = artist ? "Click a window or door to put " + spec.name + " over it" : "Click a window or door to put an awning over it" };
                 var add = new DetailData { kind = kind, k = k, edge = ed.i, t = (best.u0 + best.u1) / 2 / L };
-                double ya = fb + best.y1 + Details.OverLift + spec.bottom;
-                if (artist) return new DetailSpot { add = add, ghost = Box((best.u0 + best.u1) / 2, ya, ya + spec.h, spec.stretch ? best.u1 - best.u0 + 0.5 : spec.w, spec.d) };
-                double yt = fb + best.y1 + 0.06;
-                return new DetailSpot { add = add, ghost = Box((best.u0 + best.u1) / 2, yt - 0.15, yt + 0.45, best.u1 - best.u0 + 0.5, 1.0) };
+                var (sa, sb) = Details.OverSpan(best);
+                double ya = fb + best.Top + Details.OverLift + spec.bottom;
+                if (artist) return new DetailSpot { add = add, ghost = Box((sa + sb) / 2, ya, ya + spec.h, spec.stretch ? sb - sa : spec.w, spec.d) };
+                double yt = fb + best.Top + 0.06;
+                return new DetailSpot { add = add, ghost = Box((sa + sb) / 2, yt - 0.15, yt + 0.45, sb - sa, 1.0) };
             }
             double half = spec.w / 2 + 0.15;
             if (L < 2 * half + 0.2) return new DetailSpot { error = "That wall is too short" };
@@ -169,7 +170,7 @@ namespace Triband.Storey.Edit
                 foreach (var st in steps)
                 {
                     var fs = Details.EdgeFrameAt(b, st.k, st.i); var o2 = Facade.Ops(site, b, st.k, st.i, fs.e.L, fs.uS, fs.uE);
-                    if (o2.Any(o => o.door && Math.Abs((o.u0 + o.u1) / 2 - st.u) < (o.u1 - o.u0) / 2 + st.reach))
+                    if (o2.Any(o => o.door && st.u + st.reach > o.Left && st.u - st.reach < o.Right))
                         return new DetailSpot { error = !escape ? spec.name + " can’t run across a door" : st.k < k ? "The ladder would come down over a door" : "A fire escape can’t run across a door" };
                 }
                 var last = run[run.Count - 1];
@@ -178,7 +179,7 @@ namespace Triband.Storey.Edit
             }
             if (artist && h - spec.h - 0.1 < 0.15) return new DetailSpot { error = spec.name + " is too tall for this storey" };
             y = Tiers.Clamp(y, 0.15, h - spec.h - 0.1);
-            if (ops.Any(o => u + spec.w / 2 > o.u0 - 0.05 && u - spec.w / 2 < o.u1 + 0.05 && y + spec.h > o.y0 - 0.05 && y < o.y1 + 0.05))
+            if (ops.Any(o => u + spec.w / 2 > o.Left - 0.05 && u - spec.w / 2 < o.Right + 0.05 && y + spec.h > o.Bottom - 0.05 && y < o.Top + 0.05))
                 return new DetailSpot { error = "That would sit across a window or door" };
             return new DetailSpot { add = new DetailData { kind = kind, k = k, edge = ed.i, t = u / L, y = Tiers.Fixed(y, 2) }, ghost = Box(u, fb + y, fb + y + spec.h, spec.w, spec.d) };
         }

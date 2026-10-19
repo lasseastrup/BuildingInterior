@@ -9,13 +9,7 @@ namespace Triband.Storey.Generate
     {
         public sealed class WinSpec { public double sp, w, y0, y1; public double? full; }
 
-        public static WinSpec? WindowSpec(WindowType kind, double h, FacadeStyle st, bool storefront = false)
-        {
-            var ws = RawSpec(kind, h, st, storefront);
-            // a band of the style's own height: windows (and their arched heads) stay under it
-            if (ws != null && st.bandH is double bh && st.bands) ws.y1 = Math.Min(ws.y1, h - bh - (st.head == HeadType.Arch ? 0.3 : 0.1));
-            return ws;
-        }
+        public static WinSpec? WindowSpec(WindowType kind, double h, FacadeStyle st, bool storefront = false) => Fit(RawSpec(kind, h, st, storefront), h, st, null);
 
         static WinSpec? RawSpec(WindowType kind, double h, FacadeStyle st, bool storefront)
         {
@@ -33,12 +27,67 @@ namespace Triband.Storey.Generate
         /// <summary>The ground floor's window spec: the style's own, none, or a storefront.</summary>
         public static WinSpec? GroundSpec(FacadeStyle st, double h)
         {
-            var ws = st.ground == GroundType.Match ? WindowSpec(st.windows, h, st) : st.ground == GroundType.Solid ? null : WindowSpec(st.windows, h, st, true);
+            var ws = st.ground == GroundType.Match ? RawSpec(st.windows, h, st, false) : st.ground == GroundType.Solid ? null : RawSpec(st.windows, h, st, true);
             // a plinth (or foundation) of the style's own height: the ground floor's windows start above it
-            if (ws != null && (st.plinthH.HasValue || st.foundation.HasValue))
-                ws.y0 = Math.Max(ws.y0, Math.Max(st.plinthH ?? 0.45, st.foundation.HasValue ? Math.Max(0.02, st.foundationH ?? 0.2) : 0) + 0.15);
+            double? plinth = st.plinthH.HasValue || st.foundation.HasValue ? Math.Max(st.plinthH ?? 0.45, st.foundation.HasValue ? Math.Max(0.02, st.foundationH ?? 0.2) : 0) : (double?)null;
+            return Fit(ws, h, st, plinth);
+        }
+
+        /// <summary>
+        /// A window spec finished for its style (docs/OPENINGS.md §4.1, §4.2). An artist's window that keeps its size
+        /// (<see cref="OpeningKind.stretch"/> off) makes the hole its own size, the style still deciding where it goes and its
+        /// sill's height; and its dressing stays clear of the floor, of a plinth (<paramref name="plinth"/>: its top, on the
+        /// ground floor), of the storey's top and of a band. The generator's own windows, and their arched heads, stay under a
+        /// band, and over a plinth.
+        /// </summary>
+        static WinSpec? Fit(WinSpec? ws, double h, FacadeStyle st, double? plinth)
+        {
+            if (ws == null) return null;
+            var k = OpeningKinds.Of(st, false);
+            double sy = k != null && k.stretch ? (ws.y1 - ws.y0) / Math.Max(1e-3, k.h) : 1, rb = (k?.reachB ?? 0) * sy, rt = (k?.reachT ?? 0) * sy;
+            if (plinth is double p) ws.y0 = Math.Max(ws.y0, p + Math.Max(0.15, rb + 0.05));
+            if (k != null)
+            {
+                ws.y0 = Math.Max(ws.y0, rb + 0.05);
+                if (!k.stretch) { ws.full = null; ws.w = k.w; ws.y1 = ws.y0 + k.h; }
+                ws.y1 = Math.Min(ws.y1, h - Math.Max(0.1, rt + 0.05));
+            }
+            // a band of the style's own height: windows (and their heads) stay under it
+            if (st.bandH is double bh && st.bands) ws.y1 = Math.Min(ws.y1, h - bh - (k != null ? Math.Max(0.1, rt + 0.05) : st.head == HeadType.Arch ? 0.3 : 0.1));
             return ws;
         }
+
+        /// <summary>
+        /// Where windows are laid out along a wall: the span (<see cref="Span"/>) less how far an artist's window reaches past
+        /// its hole each side, so its dressing keeps the span's 14 cm from a neighbouring wall too. LOD2 paints its windows from
+        /// the same span.
+        /// </summary>
+        public static (double, double) WindowSpan(OpeningKind? wk, double uS, double uE) => (uS + (wk?.reachL ?? 0), uE - (wk?.reachR ?? 0));
+
+        /// <summary>A street door's top: 2.6 m, or an artist's door's own height when it keeps its size; with its dressing, under the storey's top and a band (<paramref name="band"/>: its height).</summary>
+        static double DoorTop(OpeningKind? dk, double h, double? band)
+        {
+            double top = dk != null && !dk.stretch ? Math.Min(dk.h, h - 0.4) : Math.Min(2.6, h - 0.4);
+            if (dk == null) return band is double b0 ? Math.Min(top, h - b0 - 0.08) : top;
+            double over = Math.Max(0.08, dk.reachT + 0.05);   // its posts stand 8 cm over a generated door (Dress)
+            top = Math.Min(top, h - Math.Max(0.1, dk.reachT + 0.05));
+            return band is double b ? Math.Min(top, h - b - over) : top;
+        }
+
+        /// <summary>An opening's dressing: how far the artist's window or door in it reaches past it, as it is fitted there.</summary>
+        public static void Dressing(Opening o, OpeningKind? k)
+        {
+            if (k == null) { o.rl = o.rr = o.rb = o.rt = 0; return; }
+            double sx = k.stretch ? (o.u1 - o.u0) / Math.Max(1e-3, k.w) : 1, sy = k.stretch ? (o.y1 - o.y0) / Math.Max(1e-3, k.h) : 1;
+            o.rl = k.reachL * sx; o.rr = k.reachR * sx; o.rb = k.reachB * sy; o.rt = k.reachT * sy;
+        }
+
+        /// <summary>
+        /// Whether a window from <paramref name="u0"/> to <paramref name="u1"/>, its dressing reaching <paramref name="l"/> and
+        /// <paramref name="r"/> past it, comes too near a door: 30 cm between them, and 10 cm between their dressings.
+        /// </summary>
+        public static bool NearDoor(Opening door, double u0, double u1, double l, double r) =>
+            u1 > door.u0 - Math.Max(0.3, r + door.rl + 0.1) && u0 < door.u1 + Math.Max(0.3, l + door.rr + 0.1);
 
         public static (int n, double bay) BayLayout(FacadeStyle st, double uS, double uE)
         {
@@ -102,17 +151,23 @@ namespace Triband.Storey.Generate
         public static List<Opening> Ops(Site site, BuildingData b, int k, int i, double L, double uS, double uE, List<Opening> ops, OpeningPool? pool)
         {
             var st = Derived.StyleAt(b, k); double h = Derived.FloorH(b, k), spn = uE - uS;
+            var wk = OpeningKinds.Of(st, false); var dk = OpeningKinds.Of(st, true);
             // a band of the style's own height: doors stay under it as windows do (WindowSpec), their posts too (Dress: 8 cm
             // above the door, standing out as far as a band does by default, so they would lie in its face)
-            double under = st.bandH is double bh && st.bands ? h - bh - 0.08 : double.MaxValue;
+            double? band = st.bandH is double bh && st.bands ? bh : (double?)null;
+            double under = band is double b0 ? h - b0 - 0.08 : double.MaxValue;
             ops.Clear();
             Opening New() => pool != null ? pool.Take() : new Opening();
+            // a door's dressing keeps the span's 14 cm from a neighbouring wall, as a window's does
+            double sl = Math.Max(0.3, dk?.reachL ?? 0), sr = Math.Max(0.3, dk?.reachR ?? 0);
             foreach (var e in b.entrances)
             {
-                if (e.k != k || e.edge != i || spn <= Dim.DOOR_EXT + 0.6 || !DoorOpen(site, b, e)) continue;
-                double c = Math.Max(uS + Dim.DOOR_EXT / 2 + 0.3, Math.Min(uE - Dim.DOOR_EXT / 2 - 0.3, e.t * L));
+                if (e.k != k || e.edge != i || spn <= Dim.DOOR_EXT + sl + sr || !DoorOpen(site, b, e)) continue;
+                double c = Math.Max(uS + Dim.DOOR_EXT / 2 + sl, Math.Min(uE - Dim.DOOR_EXT / 2 - sr, e.t * L));
                 var land = k > 0 && !TerraceAt(b, k, i, e.t) ? LandingAt(site, b, k, i, e.t) : null;
-                ops.Add(New().Set(c - Dim.DOOR_EXT / 2, c + Dim.DOOR_EXT / 2, 0, Math.Min(Math.Min(2.6, h - 0.4), under), door: true, thr: land != null && land.y < Derived.FloorBase(b, k) - 0.02));
+                var o = New().Set(c - Dim.DOOR_EXT / 2, c + Dim.DOOR_EXT / 2, 0, DoorTop(dk, h, band), door: true, thr: land != null && land.y < Derived.FloorBase(b, k) - 0.02);
+                Dressing(o, dk);
+                ops.Add(o);
             }
             foreach (var (bk, bi, bt) in Bridges.Doors(site, b))
             {
@@ -130,19 +185,22 @@ namespace Triband.Storey.Generate
             if (!blank.Contains(i))
             {
                 var ws = k == 0 ? GroundSpec(st, h) : WindowSpec(st.windows, h, st);
-                var (n, bay) = BayLayout(st, uS, uE);
+                var (wS, wE) = WindowSpan(wk, uS, uE);
+                var (n, bay) = BayLayout(st, wS, wE);
                 if (ws != null && ws.y1 - ws.y0 > 0.4 && n > 0)
                 {
                     for (int j = 0; j < n; j++)
                     {
-                        double c = uS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : Math.Min(ws.w, bay - 0.5);
+                        double c = wS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : Math.Min(ws.w, bay - 0.5);
                         if (ww < 0.45) continue;
-                        double u0 = c - ww / 2, u1 = c + ww / 2;
+                        double u0 = c - ww / 2, u1 = c + ww / 2, sx = wk != null && wk.stretch ? ww / Math.Max(1e-3, wk.w) : 1;
                         bool blocked = false;
-                        foreach (var o in ops) if (o.door && u1 > o.u0 - 0.3 && u0 < o.u1 + 0.3) blocked = true;
+                        foreach (var o in ops) if (o.door && NearDoor(o, u0, u1, (wk?.reachL ?? 0) * sx, (wk?.reachR ?? 0) * sx)) blocked = true;
                         if (shaftHere != null) foreach (var f in shaftHere) if (u1 > f.s0 - 0.1 && u0 < f.s1 + 0.1) blocked = true;
                         if (blocked) continue;
-                        ops.Add(New().Set(u0, u1, ws.y0, ws.y1, full: ws.full != null));
+                        var w = New().Set(u0, u1, ws.y0, ws.y1, full: ws.full != null);
+                        Dressing(w, wk);
+                        ops.Add(w);
                     }
                 }
             }
@@ -243,7 +301,7 @@ namespace Triband.Storey.Generate
                     double pu = u0 + R() * Math.Max(0, u1 - u0 - pw), pv = y0 + R() * Math.Max(0, y1 - y0 - ph);
                     bool clear = true;
                     foreach (var o in ops)
-                        if (pu < o.u1 + 0.12 && pu + pw > o.u0 - 0.12 && pv < y + o.y1 + 0.45 && pv + ph > y + o.y0 - 0.15) { clear = false; break; }
+                        if (pu < o.Right + 0.12 && pu + pw > o.Left - 0.12 && pv < y + o.Top + 0.45 && pv + ph > y + o.Bottom - 0.15) { clear = false; break; }
                     foreach (var q0 in placed) if (pu < q0.u1 + 0.1 && pu + pw > q0.u0 - 0.1 && pv < q0.v1 + 0.1 && pv + ph > q0.v0 - 0.1) { clear = false; break; }
                     if (!clear) continue;
                     placed.Add((pu, pv, pu + pw, pv + ph));

@@ -130,23 +130,33 @@ namespace Triband.Storey.Generate
         public static List<Opening> Ops(BuildingData b, VoidData v, int k, int i, double L, double uS, double uE)
         {
             var st = Derived.StyleAt(b, k); double h = Derived.FloorH(b, k), spn = uE - uS;
+            var wk = OpeningKinds.Of(st, false); var dk = OpeningKinds.Of(st, true);
             var ops = new List<Opening>();
             var (de, dt) = Door(v);
-            if (k == v.bottom && i == de && spn > Dim.DOOR_EXT + 0.6)
+            double sl = Math.Max(0.3, dk?.reachL ?? 0), sr = Math.Max(0.3, dk?.reachR ?? 0);
+            if (k == v.bottom && i == de && spn > Dim.DOOR_EXT + sl + sr)
             {
-                double c = Math.Max(uS + Dim.DOOR_EXT / 2 + 0.3, Math.Min(uE - Dim.DOOR_EXT / 2 - 0.3, dt * L));
-                ops.Add(new Opening { u0 = c - Dim.DOOR_EXT / 2, u1 = c + Dim.DOOR_EXT / 2, y0 = 0, y1 = Math.Min(2.6, h - 0.4), door = true });
+                double c = Math.Max(uS + Dim.DOOR_EXT / 2 + sl, Math.Min(uE - Dim.DOOR_EXT / 2 - sr, dt * L));
+                double top = dk != null && !dk.stretch ? Math.Min(dk.h, h - 0.4) : Math.Min(2.6, h - 0.4);
+                if (dk != null) top = Math.Min(top, h - Math.Max(0.1, dk.reachT + 0.05));
+                var d = new Opening { u0 = c - Dim.DOOR_EXT / 2, u1 = c + Dim.DOOR_EXT / 2, y0 = 0, y1 = top, door = true };
+                Facade.Dressing(d, dk);
+                ops.Add(d);
             }
             var ws = Facade.WindowSpec(st.windows, h, st);
-            var (n, bay) = Facade.BayLayout(st, uS, uE);
+            var (wS, wE) = Facade.WindowSpan(wk, uS, uE);
+            var (n, bay) = Facade.BayLayout(st, wS, wE);
             if (ws != null && ws.y1 - ws.y0 > 0.4 && n > 0)
                 for (int j = 0; j < n; j++)
                 {
-                    double c = uS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : Math.Min(ws.w, bay - 0.5);
+                    double c = wS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : Math.Min(ws.w, bay - 0.5);
                     if (ww < 0.45) continue;
-                    double u0 = c - ww / 2, u1 = c + ww / 2; bool blocked = false;
-                    foreach (var o in ops) if (o.door && u1 > o.u0 - 0.3 && u0 < o.u1 + 0.3) blocked = true;
-                    if (!blocked) ops.Add(new Opening { u0 = u0, u1 = u1, y0 = ws.y0, y1 = ws.y1, full = ws.full != null });
+                    double u0 = c - ww / 2, u1 = c + ww / 2, sx = wk != null && wk.stretch ? ww / Math.Max(1e-3, wk.w) : 1; bool blocked = false;
+                    foreach (var o in ops) if (o.door && Facade.NearDoor(o, u0, u1, (wk?.reachL ?? 0) * sx, (wk?.reachR ?? 0) * sx)) blocked = true;
+                    if (blocked) continue;
+                    var w = new Opening { u0 = u0, u1 = u1, y0 = ws.y0, y1 = ws.y1, full = ws.full != null };
+                    Facade.Dressing(w, wk);
+                    ops.Add(w);
                 }
             ops.Sort((p, q) => p.u0.CompareTo(q.u0));
             return ops;

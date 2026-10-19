@@ -185,6 +185,44 @@ namespace Triband.Storey.Validate
                 if (!s.B.interior || Derived.Filled(s.B, br.toK)) o.Add(P(b, br.k, Severity.Warning, "bridge-shell", $"A bridge leads into {s.B.name}'s {Floor(s.B, br.toK)}, which has nothing inside", br.at.x, br.at.z));
                 if (!b.interior || Derived.Filled(b, br.k)) o.Add(P(b, br.k, Severity.Warning, "bridge-shell", $"A bridge leaves from {Floor(b, br.k)}, which has nothing inside", br.at.x, br.at.z));
             }
+            Dressings(site, b, o);
+        }
+
+        /// <summary>
+        /// An artist's window whose dressing (shutters, a surround) meets the next window's on a wall: the style's bays are too
+        /// close for it (docs/OPENINGS.md §4.2). One problem a tier, where it first happens on the tier's first storey (and on
+        /// the ground floor's first above it, whose windows can differ).
+        /// </summary>
+        static void Dressings(Site site, BuildingData b, List<Problem> o)
+        {
+            int N = b.floors.Count;
+            foreach (var t in Tiers.Of(b))
+            {
+                var st = Derived.StyleAt(b, t.k0); var wk = OpeningKinds.Of(st, false);
+                if (wk == null || wk.reachL + wk.reachR <= 0) continue;
+                bool found = false;
+                foreach (int k in t.k0 == 0 && t.k1 > 1 ? new[] { 0, 1 } : new[] { t.k0 })
+                {
+                    if (found || k >= N) break;
+                    int n = Derived.OutlineAt(b, k).Count;
+                    for (int i = 0; i < n && !found; i++)
+                    {
+                        var f = Details.EdgeFrameAt(b, k, i);
+                        Opening? prev = null;
+                        foreach (var w in Facade.Ops(site, b, k, i, f.e.L, f.uS, f.uE))
+                        {
+                            if (w.door) { prev = null; continue; }
+                            if (prev != null && prev.Right + 0.02 > w.Left)
+                            {
+                                var at = f.e.F.At2((prev.u1 + w.u0) / 2, Dim.T_EXT);
+                                o.Add(P(b, k, Severity.Warning, "dressing", $"“{wk.name}” on {Floor(b, k)} meets the next window: what it has round its hole needs bays of at least {prev.Right - prev.Left + 0.1:0.0} m, and these are {w.u0 - prev.u0:0.0} m apart", at.x - b.pos.x, at.z - b.pos.z));
+                                found = true; break;
+                            }
+                            prev = w;
+                        }
+                    }
+                }
+            }
         }
 
         static string Kind(CoreData s) => s.type == CoreType.Lift ? "The lift" : "The stairs";

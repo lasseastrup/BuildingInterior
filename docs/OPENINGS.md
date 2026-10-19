@@ -1,6 +1,6 @@
 # Artist-made windows and doors from prefabs
 
-How an artist's window or door can be a prefab of several objects, as Flamingo's old BuildingGenerator takes them, while Storey keeps building every opening into the building's own meshes. **Status: steps 1 and 5 are built (docs/EDITOR.md §6.9); step 5 came second, as §9's answers asked.** §9 has the answers to the questions asked before step 1.
+How an artist's window or door can be a prefab of several objects, as Flamingo's old BuildingGenerator takes them, while Storey keeps building every opening into the building's own meshes. **Status: steps 1, 5 and 2 are built (docs/EDITOR.md §6.9); step 5 came second, as §9's answers asked.** §9 has the answers to the questions asked before step 1.
 
 ## 1. Where we are
 
@@ -103,7 +103,7 @@ Doors keep the standard doorway (1.6 m, `Dim.DOOR_EXT`), which the entrance tool
 
 ### 4.2 Dressing outside the hole (step 2)
 
-When it's baked, the kind measures how far it reaches past its hole: left, right, below, above and out. `Opening` carries that reach, set from the style's kind where openings are laid out (`Facade.Ops`, and courtyard walls in `Courtyards`), and everything that keeps clear of windows uses it instead of the hole:
+When it's registered, the kind measures how far it reaches past its hole: left, right, below and above. `Opening` carries that reach, set from the style's kind where openings are laid out (`Facade.Ops`, and courtyard walls in `Courtyards`), and everything that keeps clear of windows uses it instead of the hole:
 - the 14 cm windows keep from a neighbouring wall (`Facade.Span`), so shutters don't go through a corner;
 - the wall between neighbours: where two windows' dressing would meet, a Problem (docs/EDITOR.md §6.5) names the style and the bay spacing it needs;
 - a band, which `WindowSpec` keeps windows under, and a plinth, which ground-floor windows start above;

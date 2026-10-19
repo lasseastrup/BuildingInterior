@@ -71,7 +71,7 @@ namespace Triband.Storey.Unity
         public List<Part> parts = new List<Part>();
         [Tooltip("The hole in the wall it fills, in metres: a prefab's from its Storey Cutout, a mesh's from its bounds when it is set.")]
         public Vector2 size = new Vector2(1.2f, 1.6f);
-        [Tooltip("Stretch the mesh to each opening; off, it keeps its size, centred on the opening's bottom (set the style's window width to match).")]
+        [Tooltip("Stretch it to each opening. Off (Keep size), the hole takes its own size: the style still decides where windows go and their sill's height. A door keeps the standard doorway's width (1.6 m) and takes its own height.")]
         public bool stretch = true;
 
         [SerializeField, HideInInspector] Baked lod0 = new Baked(), lod1 = new Baked();

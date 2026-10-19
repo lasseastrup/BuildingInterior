@@ -242,7 +242,9 @@ namespace Triband.Storey.Generate
                 }
                 for (int i = 0; i < n; i++)
                 {
-                    var e = Geo.EdgeInfo(g.Wp, i, g.ccw); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L); var (uS, uE) = Facade.Span(m, e.L);
+                    var e = Geo.EdgeInfo(g.Wp, i, g.ccw); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L); var (sS, sE) = Facade.Span(m, e.L);
+                    // the windows' span, as Facade.Ops lays them out (narrowed by an artist's window's dressing)
+                    var (uS, uE) = Facade.WindowSpan(OpeningKinds.Of(st, false), sS, sE);
                     double bay = blank.Contains(i) ? 0 : Facade.BayLayout(st, uS, uE).bay;
                     double yc = Derived.FloorBase(b, t.k0);
                     var c0 = Party.CornerCut(site, b, t.k0, i, false, yc, false, out double c0Top); var c1 = Party.CornerCut(site, b, t.k0, i, true, yc, false, out double c1Top);

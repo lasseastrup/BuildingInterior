@@ -45,6 +45,12 @@ namespace Triband.Storey.Generate
         public Mesh lod0 = new Mesh();
         /// <summary>LOD1's mesh; null keeps LOD1's plain pane.</summary>
         public Mesh? lod1;
+        /// <summary>
+        /// How far it reaches past its hole, in its own space, left, right, below and above (metres; 0 for none): found from
+        /// LOD0's mesh when it is registered. What keeps clear of windows keeps clear of its dressing (shutters, a sill, a
+        /// pediment: docs/OPENINGS.md §4.2).
+        /// </summary>
+        public double reachL, reachR, reachB, reachT;
     }
 
     /// <summary>
@@ -62,6 +68,7 @@ namespace Triband.Storey.Generate
         public static void Register(OpeningKind k)
         {
             if (k.id.Length == 0) return;
+            Reach(k);
             foreach (var m in new[] { k.lod0, k.lod1 })
                 if (m != null)
                     foreach (var part in m.parts)
@@ -72,6 +79,21 @@ namespace Triband.Storey.Generate
             all[k.id] = k; Version++;
         }
         public static void Remove(string id) { if (all.TryRemove(id, out _)) Version++; }
+
+        /// <summary>How far a kind's LOD0 reaches past its hole (<see cref="OpeningKind.reachL"/> and the rest); under a millimetre is none.</summary>
+        static void Reach(OpeningKind k)
+        {
+            var m = k.lod0; double x0 = 0, x1 = 0, y0 = 0, y1 = k.h;
+            foreach (var part in m.parts)
+                foreach (int i in part.tris)
+                {
+                    if ((uint)i >= (uint)m.P.Length) continue;
+                    var p = m.P[i];
+                    x0 = Math.Min(x0, p.x + k.w / 2); x1 = Math.Max(x1, p.x - k.w / 2); y0 = Math.Min(y0, p.y); y1 = Math.Max(y1, p.y);
+                }
+            static double Mm(double v) => v < 1e-3 ? 0 : v;
+            k.reachL = Mm(-x0); k.reachR = Mm(x1); k.reachB = Mm(-y0); k.reachT = Mm(y1 - k.h);
+        }
         public static OpeningKind? Get(string? id) => id != null && all.TryGetValue(id, out var k) ? k : null;
         public static IEnumerable<OpeningKind> All => all.Values;
 

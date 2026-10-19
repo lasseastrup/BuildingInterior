@@ -272,6 +272,7 @@ What it finds:
 - **Courtyards and atria** that no longer fit.
 - **Bridges** that no longer meet, or that lead into or out of a storey with nothing inside.
 - **Buildings that overlap.**
+- **Artist windows** whose dressing (shutters, a surround) meets the next window's: the bays it needs (§6.9).
 
 It runs on a worker thread, on its own copy of the layout, so the editor never waits for it.
 - **The first check** covers the whole layout.
@@ -410,7 +411,13 @@ The inspector says how many objects, parts and triangles it has and where its ho
 
 *Check on a building* builds a 20 × 12 m block of six storeys with it, gives its triangles against the generator's own, and lists faces that overlap. *Open Prefab* opens the prefab; saving it bakes the asset again, as does reimporting anything it uses (a mesh, a material, a nested prefab, a variant's base). If Unity says a mesh isn't readable, tick *Read/Write* on its model.
 
-The window is stretched to each opening, so the style's *Windows* type, *Window width* and *Bay spacing* still decide where openings are and how big. Turn off *Stretch* to keep its own size, centred on the opening's bottom; then set *Window width* to match. Heads, sills, frames, glazing bars, canopies and glazed doors aren't drawn where an artist's window is: it is the whole window or door.
+The window is stretched to each opening, so the style's *Windows* type, *Window width* and *Bay spacing* still decide where openings are and how big. Turn off *Stretch* (Keep size) and the hole takes the window's own size, as in the old solution: the style still decides where windows go (its bays) and their sill's height, and *Window width* doesn't apply (the Facade tab greys it out). LOD2's painted windows take the same size. A street door keeps the standard doorway's width (1.6 m, which the entrance tools assume) and takes its own height. Heads, sills, frames, glazing bars, canopies and glazed doors aren't drawn where an artist's window is: it is the whole window or door.
+
+What it has round its hole (shutters, a sill, a flower box, a surround, a pediment) is kept clear, as far as it reaches past the hole:
+- Windows keep it 14 cm from a neighbouring wall, as they keep their holes, and 10 cm from a door's (their holes stay 30 cm apart).
+- It stays 5 cm above the floor and above a plinth (ground-floor windows start 15 cm over a plinth, or as far as their sill needs), and 5 cm under a band and the storey's top.
+- AC units go under it, vents between windows' dressings, awnings over it (and past shutters), and hand-placed details and brick patches keep clear of it.
+- Where two windows' dressing would meet, **Problems** says so, and which bays the window needs (*Bay spacing*).
 
 LODs: LOD0 places the window. LOD1 places its LOD1 (*LOD1 prefab*, the LOD Group's LOD 1, or *LOD1 mesh*) if it has one, and otherwise keeps its plain pane. LOD2 keeps its painted windows.
 
@@ -438,6 +445,8 @@ Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`, `Check`),
 9. Add a Storey Cutout to a prefab: it fits the meshes, and the Scene view draws the hole. Move a nested sill prefab and save: the buildings update.
 10. Give a door prefab a leaf object: on a walk-in building the leaf is gone, the frame stays.
 11. Make a window from a prefab the Model Remapper coloured: its parts are its palette colours, and buildings show them whatever their style. Give one part a style colour: it follows the building's style. Change that palette entry in Color Pipeline: the windows change colour without a rebuild.
+12. Turn off *Stretch* on a window 0.9 m wide: every window's hole is 0.9 m, at LOD0, LOD1 and LOD2 alike, and *Window width* is greyed out.
+13. Give a window shutters 45 cm wide: the outermost windows' shutters stay clear of the corners; set *Bay spacing* so they would meet, and Problems lists it.
 
 ### 6.10 The site inspector's layout
 
