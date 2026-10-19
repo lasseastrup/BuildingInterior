@@ -44,7 +44,7 @@ namespace Triband.Storey.Generate
         {
             if (ws == null) return null;
             var k = OpeningKinds.Of(st, false);
-            double sy = k != null && k.stretch ? (ws.y1 - ws.y0) / Math.Max(1e-3, k.h) : 1, rb = (k?.reachB ?? 0) * sy, rt = (k?.reachT ?? 0) * sy;
+            double sy = k != null && OpeningKinds.Stretched(k) ? (ws.y1 - ws.y0) / Math.Max(1e-3, k.h) : 1, rb = (k?.reachB ?? 0) * sy, rt = (k?.reachT ?? 0) * sy;
             if (plinth is double p) ws.y0 = Math.Max(ws.y0, p + Math.Max(0.15, rb + 0.05));
             if (k != null)
             {
@@ -78,7 +78,8 @@ namespace Triband.Storey.Generate
         public static void Dressing(Opening o, OpeningKind? k)
         {
             if (k == null) { o.rl = o.rr = o.rb = o.rt = 0; return; }
-            double sx = k.stretch ? (o.u1 - o.u0) / Math.Max(1e-3, k.w) : 1, sy = k.stretch ? (o.y1 - o.y0) / Math.Max(1e-3, k.h) : 1;
+            bool whole = OpeningKinds.Stretched(k);   // sliced, what is round the hole keeps its size
+            double sx = whole ? (o.u1 - o.u0) / Math.Max(1e-3, k.w) : 1, sy = whole ? (o.y1 - o.y0) / Math.Max(1e-3, k.h) : 1;
             o.rl = k.reachL * sx; o.rr = k.reachR * sx; o.rb = k.reachB * sy; o.rt = k.reachT * sy;
         }
 
@@ -193,7 +194,7 @@ namespace Triband.Storey.Generate
                     {
                         double c = wS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : Math.Min(ws.w, bay - 0.5);
                         if (ww < 0.45) continue;
-                        double u0 = c - ww / 2, u1 = c + ww / 2, sx = wk != null && wk.stretch ? ww / Math.Max(1e-3, wk.w) : 1;
+                        double u0 = c - ww / 2, u1 = c + ww / 2, sx = wk != null && OpeningKinds.Stretched(wk) ? ww / Math.Max(1e-3, wk.w) : 1;
                         bool blocked = false;
                         foreach (var o in ops) if (o.door && NearDoor(o, u0, u1, (wk?.reachL ?? 0) * sx, (wk?.reachR ?? 0) * sx)) blocked = true;
                         if (shaftHere != null) foreach (var f in shaftHere) if (u1 > f.s0 - 0.1 && u0 < f.s1 + 0.1) blocked = true;

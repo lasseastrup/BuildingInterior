@@ -60,6 +60,13 @@ namespace Triband.Storey.Editor
             foreach (var (x, y) in new[] { (x0, y0), (x1, y0), (x1, y1), (x0, y1) }) Handles.DrawDottedLine(P(x, y, z), P(x, y, back), 4);
             Handles.color = new Color(1f, 1f, 1f, 0.3f);
             Handles.DrawAAPolyLine(1, P(x0 - m, y0 - m, z), P(x1 + m, y0 - m, z), P(x1 + m, y1 + m, z), P(x0 - m, y1 + m, z), P(x0 - m, y0 - m, z));
+            // the slice lines, dotted across the wall round the hole: what lies between them stretches
+            Handles.color = new Color(1f, 0.75f, 0.1f, 0.9f);
+            var bd = c.borders;
+            if (bd.x > 0) Handles.DrawDottedLine(P(x0 + bd.x, y0 - m, z), P(x0 + bd.x, y1 + m, z), 3);
+            if (bd.y > 0) Handles.DrawDottedLine(P(x1 - bd.y, y0 - m, z), P(x1 - bd.y, y1 + m, z), 3);
+            if (bd.z > 0) Handles.DrawDottedLine(P(x0 - m, y0 + bd.z, z), P(x1 + m, y0 + bd.z, z), 3);
+            if (bd.w > 0) Handles.DrawDottedLine(P(x0 - m, y1 - bd.w, z), P(x1 + m, y1 - bd.w, z), 3);
             Handles.matrix = was;
         }
     }

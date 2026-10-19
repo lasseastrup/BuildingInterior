@@ -379,9 +379,10 @@ An artist can make a window or a street door as a prefab of several objects, or 
    - While the root is selected, the Scene view draws the hole, the reveal to the wall's back, and the wall's face round it.
    - A prefab with Flamingo's **BuildingCutoutBox** needs nothing: its *Size* and *Center* are read, *Center* as the middle of the hole, as its gizmo draws it. The inspector offers to give the prefab a Storey Cutout like it; take the BuildingCutoutBox off once the old generator is gone.
 3. For a door, list the objects that are the door itself under *Leaf*. They are left out, with everything under them, on a walk-in ground floor, where the player walks through the doorway.
-4. Select the prefabs and choose *Assets › Create › Storey › Window or Door from Prefab*. Each gets a Storey Opening asset beside it. It is a door if its name says so or it has leaf objects.
-5. Check its **Parts**: one for each material in the prefab, each taking one of the style's colours, guessed from the material's name (*Glass*, *Frame*, *Sill* or *Trim*, *Door* or *Leaf*, *Handle* or *Metal*, *Wall*). The materials themselves aren't used. On a door, *Leaf* makes a part the leaf wherever it is.
-6. A part can keep a colour of its own instead: pick *Its own colour* and a palette colour (Color Pipeline's picker). It keeps that colour whatever the style, and follows palette edits and a building's remap like the style's colours. Glass always takes the style's, because it is the window shader's.
+4. For **Slice** (below): set *Borders*, the slice lines in from the hole's left, right, bottom and top, as thick as the frame's members, so they keep their thickness. List objects that must never stretch (a keystone, a lamp, a house number) under *Keep shape*. The Scene view draws the slice lines dotted.
+5. Select the prefabs and choose *Assets › Create › Storey › Window or Door from Prefab*. Each gets a Storey Opening asset beside it, fitted by *Slice*. It is a door if its name says so or it has leaf objects.
+6. Check its **Parts**: one for each material in the prefab, each taking one of the style's colours, guessed from the material's name (*Glass*, *Frame*, *Sill* or *Trim*, *Door* or *Leaf*, *Handle* or *Metal*, *Wall*). The materials themselves aren't used. On a door, *Leaf* makes a part the leaf wherever it is.
+7. A part can keep a colour of its own instead: pick *Its own colour* and a palette colour (Color Pipeline's picker). It keeps that colour whatever the style, and follows palette edits and a building's remap like the style's colours. Glass always takes the style's, because it is the window shader's.
 
 **Prefabs coloured by Color Pipeline's Model Remapper** (one material, each vertex's palette index in UV channel 3): their parts are one for each palette colour, named after the palette entry, and each keeps that colour. So they look as they did in the old solution. A part named for glass takes the style's Glass instead. Any part can be given a style colour, so that the building's style colours it.
 
@@ -411,7 +412,12 @@ The inspector says how many objects, parts and triangles it has and where its ho
 
 *Check on a building* builds a 20 × 12 m block of six storeys with it, gives its triangles against the generator's own, and lists faces that overlap. *Open Prefab* opens the prefab; saving it bakes the asset again, as does reimporting anything it uses (a mesh, a material, a nested prefab, a variant's base). If Unity says a mesh isn't readable, tick *Read/Write* on its model.
 
-The window is stretched to each opening, so the style's *Windows* type, *Window width* and *Bay spacing* still decide where openings are and how big. Turn off *Stretch* (Keep size) and the hole takes the window's own size, as in the old solution: the style still decides where windows go (its bays) and their sill's height, and *Window width* doesn't apply (the Facade tab greys it out). LOD2's painted windows take the same size. A street door keeps the standard doorway's width (1.6 m, which the entrance tools assume) and takes its own height. Heads, sills, frames, glazing bars, canopies and glazed doors aren't drawn where an artist's window is: it is the whole window or door.
+**Fit** says how it goes into each opening:
+- **Stretch:** stretched to the opening, all of it. The style's *Windows* type, *Window width* and *Bay spacing* decide where openings are and how big. For a window that is only a window.
+- **Slice** (made from a prefab, it starts so): fitted as 9-slice scaling fits a sprite. What lies between the slice lines stretches; what lies outside them keeps its size and moves with the hole's sides. So shutters keep their width and follow the hole's sides, a sill or a flower box gets longer but not taller, a pediment keeps its height, a frame's members keep their thickness (with *Borders* as thick as they are), and *Keep shape* objects move unscaled. Triangles crossing a slice line are cut there when baked, so a curve bends only at the lines. One prefab then fits every window type and width a style has.
+- **Keep size:** the hole takes the window's own size, as in the old solution. The style still decides where windows go (its bays) and their sill's height, and *Window width* doesn't apply (the Facade tab greys it out). Where an opening has to give (a bay too narrow, a band), the window is sliced into it. LOD2's painted windows take the same size. A street door keeps the standard doorway's width (1.6 m, which the entrance tools assume), takes its own height, and is sliced into the doorway's width.
+
+Heads, sills, frames, glazing bars, canopies and glazed doors aren't drawn where an artist's window is: it is the whole window or door.
 
 What it has round its hole (shutters, a sill, a flower box, a surround, a pediment) is kept clear, as far as it reaches past the hole:
 - Windows keep it 14 cm from a neighbouring wall, as they keep their holes, and 10 cm from a door's (their holes stay 30 cm apart).
@@ -431,7 +437,7 @@ A style names its window and door by the asset's id, kept through renames and mo
 
 Facade details follow the same rule (§6.12).
 
-Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`, `Check`), `KindBake` (a prefab's objects into the opening's space), `KindColors` (colours of their own), `Validate.KindTrial` (Check on a building), `FacadeStyle.windowKind`/`doorKind` (layout keys `windowKind`, `doorKind`) (`OpeningKindTests`, `KindBakeTests`, `KindColorsTests`); `AssetIds`, the id rule (`AssetIdsTests`). Unity: `StoreyOpening`, `StoreyCutout`, `StoreySite.openings`, `BuildingTable.SyncKindColors`. Editor: `StoreyOpenings`, `StoreyOpeningBake`, `StoreyCutoutEditor`, `StoreyPartColours`, `StoreyAssetIds`; `StoreyColorField.PaletteEntryAt`, installed by the Color Pipeline integration.
+Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`, `Check`), `KindBake` (a prefab's objects into the opening's space, cut at slice lines), `KindPlace` (stretched, sliced, rigid), `KindColors` (colours of their own), `Validate.KindTrial` (Check on a building), `FacadeStyle.windowKind`/`doorKind` (layout keys `windowKind`, `doorKind`) (`OpeningKindTests`, `KindBakeTests`, `KindColorsTests`, `OpeningFitTests`, `SliceTests`); `AssetIds`, the id rule (`AssetIdsTests`). Unity: `StoreyOpening`, `StoreyCutout`, `StoreySite.openings`, `BuildingTable.SyncKindColors`. Editor: `StoreyOpenings`, `StoreyOpeningBake`, `StoreyCutoutEditor`, `StoreyPartColours`, `StoreyAssetIds`; `StoreyColorField.PaletteEntryAt`, installed by the Color Pipeline integration.
 
 **Checks:**
 1. Make a window from a model with Glass and Frame materials. Its parts list says Glass and Frame, and its size matches the model.
@@ -445,8 +451,9 @@ Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`, `Check`),
 9. Add a Storey Cutout to a prefab: it fits the meshes, and the Scene view draws the hole. Move a nested sill prefab and save: the buildings update.
 10. Give a door prefab a leaf object: on a walk-in building the leaf is gone, the frame stays.
 11. Make a window from a prefab the Model Remapper coloured: its parts are its palette colours, and buildings show them whatever their style. Give one part a style colour: it follows the building's style. Change that palette entry in Color Pipeline: the windows change colour without a rebuild.
-12. Turn off *Stretch* on a window 0.9 m wide: every window's hole is 0.9 m, at LOD0, LOD1 and LOD2 alike, and *Window width* is greyed out.
+12. Set *Fit* to *Keep size* on a window 0.9 m wide: every window's hole is 0.9 m, at LOD0, LOD1 and LOD2 alike, and *Window width* is greyed out.
 13. Give a window shutters 45 cm wide: the outermost windows' shutters stay clear of the corners; set *Bay spacing* so they would meet, and Problems lists it.
+14. Make a shuttered window *Slice* with 6 cm *Borders*, and a keystone under *Keep shape*. Pick it on the brick, stucco and warehouse presets: the shutters keep their width, the frame its thickness and the keystone its shape, whatever the windows' size; *Check on a building* finds no faces that flicker.
 
 ### 6.10 The site inspector's layout
 

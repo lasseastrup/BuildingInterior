@@ -78,6 +78,9 @@ namespace Triband.Storey.Editor
                 hole1 = hole;
                 if (o.lod1Prefab != null) { g1 = FromPrefab(o.lod1Prefab, 0); hole1 = HoleOf(o.lod1Prefab)?.hole ?? hole; }
                 else if (Levels(o.prefab) > 1) g1 = FromPrefab(o.prefab, 1);
+                var cutout = o.prefab.GetComponent<StoreyCutout>();   // a prefab's slice lines are its cutout's, the root's scale applied
+                var sc = o.prefab.transform.localScale; float ax = Mathf.Abs(sc.x), ay = Mathf.Abs(sc.y);
+                o.borders = cutout != null ? new Vector4(cutout.borders.x * ax, cutout.borders.y * ax, cutout.borders.z * ay, cutout.borders.w * ay) : Vector4.zero;
             }
             else if (o.mesh != null)
             {
@@ -87,8 +90,11 @@ namespace Triband.Storey.Editor
                 if (o.lod1Mesh != null) g1 = FromMesh(o.lod1Mesh);
             }
             else { g = new Gathered(); hole = hole1 = new KindBake.Hole(0, o.size.y / 2, o.size.x, o.size.y); from = "Size"; }
-            var made = KindBake.Bake(g.sources, hole, o.facesBack);
-            var lod1Made = g1 != null ? KindBake.Bake(g1.sources, hole1, o.facesBack) : null;
+            // sliced (and kept to its size, which slices where an opening had to give): cut along the slice lines
+            bool sliced = o.slice || !o.stretch;
+            KindBake.Cuts? Cuts(KindBake.Hole at) => sliced ? new KindBake.Cuts(at.w, at.h, o.borders.x, o.borders.y, o.borders.z, o.borders.w) : (KindBake.Cuts?)null;
+            var made = KindBake.Bake(g.sources, hole, o.facesBack, Cuts(hole));
+            var lod1Made = g1 != null ? KindBake.Bake(g1.sources, hole1, o.facesBack, Cuts(hole1)) : null;
             var labels = new Dictionary<string, string>(g.labels, StringComparer.Ordinal);
             var owns = new Dictionary<string, string>(g.owns, StringComparer.Ordinal);
             var keys = new List<string>(g.keys);
@@ -138,6 +144,7 @@ namespace Triband.Storey.Editor
             var g = new Gathered();
             var cutout = root.GetComponent<StoreyCutout>();
             var leaves = new HashSet<Transform>(cutout != null ? cutout.leaf.Where(t => t != null) : Enumerable.Empty<Transform>());
+            var keeps = cutout != null ? cutout.keepShape.Where(t => t != null).ToList() : new List<Transform>();
             HashSet<Renderer>? here = null, elsewhere = null;
             var group = root.GetComponent<LODGroup>();
             if (group != null)
@@ -148,19 +155,20 @@ namespace Triband.Storey.Editor
             }
             var toRoot = Matrix4x4.Scale(root.transform.localScale) * root.transform.worldToLocalMatrix;
             int inactive = 0;
-            void Walk(Transform t, bool leaf)
+            void Walk(Transform t, bool leaf, int keep)
             {
                 if (!t.gameObject.activeSelf) { inactive++; return; }
                 if (t.gameObject.tag == "EditorOnly") return;
                 leaf |= leaves.Contains(t);
+                int k = keeps.IndexOf(t); if (k >= 0) keep = k;   // under the nearest object that keeps its shape
                 var f = t.GetComponent<MeshFilter>(); var r = t.GetComponent<MeshRenderer>();
                 if (f != null && r != null && f.sharedMesh != null && r.enabled && (here == null || here.Contains(r) || !elsewhere!.Contains(r)))
-                    Add(g, f.sharedMesh, r.sharedMaterials, toRoot * t.localToWorldMatrix, leaf, t.name);
+                    Add(g, f.sharedMesh, r.sharedMaterials, toRoot * t.localToWorldMatrix, leaf, t.name).keep = keep;
                 foreach (var c in t.GetComponents<Component>())
                     if (c != null && !Quiet(c)) g.notes.Add($"{c.GetType().Name} on {t.name} isn't carried over: Storey builds only the meshes.");
-                for (int i = 0; i < t.childCount; i++) Walk(t.GetChild(i), leaf);
+                for (int i = 0; i < t.childCount; i++) Walk(t.GetChild(i), leaf, keep);
             }
-            Walk(root.transform, false);
+            Walk(root.transform, false, -1);
             if (inactive > 0) g.notes.Add($"{inactive} inactive object{(inactive == 1 ? " is" : "s are")} left out, with what is under {(inactive == 1 ? "it" : "them")}.");
             return g;
         }
@@ -190,7 +198,7 @@ namespace Triband.Storey.Editor
             return g;
         }
 
-        static void Add(Gathered g, Mesh mesh, Material[] mats, Matrix4x4 m, bool leaf, string objectName)
+        static KindBake.Source Add(Gathered g, Mesh mesh, Material[] mats, Matrix4x4 m, bool leaf, string objectName)
         {
             var s = Source(mesh, m, leaf);
             var colours = PaletteColours(mesh);
@@ -215,6 +223,7 @@ namespace Triband.Storey.Editor
             if (mats.Length > mesh.subMeshCount) g.notes.Add($"{objectName} has more materials than its mesh has submeshes: the extra ones are left out.");
             if (!mesh.isReadable) g.notes.Add($"{mesh.name} isn't readable: if Unity says so, tick Read/Write on its model.");
             g.sources.Add(s); g.objects++;
+            return s;
         }
 
         /// <summary>

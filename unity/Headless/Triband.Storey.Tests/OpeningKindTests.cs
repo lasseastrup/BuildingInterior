@@ -177,19 +177,30 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
-        public void AnArtistsWindowMakesNoGarbageWherePlaced()
+        public void AnArtistsWindowMakesNoGarbageWherePlaced() => NoGarbage(Kind100("t-win100"));
+
+        [Fact]
+        public void ASlicedWindowMakesNoGarbageWherePlaced()
+        {
+            // sliced (docs/OPENINGS.md §4.3), with borders and its frame keeping its shape: the same, nothing a placement
+            var k = Kind100("t-win100-sliced"); k.slice = true; k.borderL = k.borderR = k.borderB = k.borderT = 0.06;
+            k.lod0.parts[0].anchor = new P3(0, 1.45, 0.03);
+            NoGarbage(k);
+        }
+
+        void NoGarbage(OpeningKind kind)
         {
             // docs/PERFORMANCE.md §8.1: a kind's parts are made ready once, and each placement goes straight into the builder.
             // Placing one made two arrays of its points, and for each part a map, two lists and their copies (walk-in
             // glass two more): 7.2 MB a plain LOD0 build with a 100-vertex window
-            OpeningKinds.Register(Kind100("t-win100"));
+            OpeningKinds.Register(kind);
             foreach (bool walkIn in new[] { false, true })
             {
                 var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document; TestCity.Generate(d, 120, walkIn);
                 var site = new Site(d.buildings); var some = d.buildings.Where((x, i) => i % 4 == 0).ToList();
                 (double ms, long bytes) Run(bool artist, int lod)
                 {
-                    foreach (var b in some) b.style.windowKind = artist ? "t-win100" : null;
+                    foreach (var b in some) b.style.windowKind = artist ? kind.id : null;
                     long bytes = 0; var sw = new System.Diagnostics.Stopwatch();
                     for (int pass = 0; pass < 2; pass++)   // the first warms the pools
                         foreach (var b in some)

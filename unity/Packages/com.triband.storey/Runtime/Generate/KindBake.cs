@@ -23,6 +23,8 @@ namespace Triband.Storey.Generate
             public List<Sub> subs = new List<Sub>();
             /// <summary>Under one of a door's leaf objects: left out where the doorway stays open.</summary>
             public bool leaf;
+            /// <summary>Under one of the objects that keep their shape (the Storey Cutout's Keep shape): its number; −1 for none.</summary>
+            public int keep = -1;
         }
 
         /// <summary>A submesh: its triangles, and the part they go to (<see cref="keys"/>, one a triangle, when that differs by triangle).</summary>
@@ -43,12 +45,30 @@ namespace Triband.Storey.Generate
             public Hole(double cx, double cy, double w, double h, double wallZ = 0) { this.cx = cx; this.cy = cy; this.w = w; this.h = h; this.wallZ = wallZ; }
         }
 
-        /// <summary>A part made: its key, whether it is a leaf object's, and its triangles (into <see cref="Result.P"/>).</summary>
+        /// <summary>
+        /// A part made: its key, whether it is a leaf object's, the object that keeps its shape it is under (with that object's
+        /// anchor: the middle of its bounds), and its triangles (into <see cref="Result.P"/>).
+        /// </summary>
         public sealed class Part
         {
             public string key = "";
             public bool leaf;
+            public int keep = -1;
+            public P3? anchor;
             public readonly List<int> tris = new List<int>();
+        }
+
+        /// <summary>
+        /// Slice lines in the opening's space (docs/OPENINGS.md §4.3): across at <see cref="xL"/> and <see cref="xR"/>, up at
+        /// <see cref="yB"/> and <see cref="yT"/>. A triangle crossing one is cut along it, so what is stretched and what isn't
+        /// meet there, and the pieces' points on a line are set a hundredth of a millimetre to their own side of it, so that
+        /// each takes its own side's normal when placed.
+        /// </summary>
+        public struct Cuts
+        {
+            public double xL, xR, yB, yT;
+            /// <summary>The slice lines of a hole <paramref name="w"/> × <paramref name="h"/>, the borders in from its sides.</summary>
+            public Cuts(double w, double h, double left, double right, double bottom, double top) { xL = -w / 2 + left; xR = w / 2 - right; yB = bottom; yT = h - top; }
         }
 
         public sealed class Result
@@ -71,13 +91,28 @@ namespace Triband.Storey.Generate
 
         /// <summary>
         /// The sources into the opening's space, in parts. <paramref name="facesBack"/>: the prefab was made facing −Z, and is
-        /// turned round (half a turn about +Y). Parts come in the order their keys are first met.
+        /// turned round (half a turn about +Y). <paramref name="cuts"/>: the slice lines, for a kind that is sliced; an object
+        /// that keeps its shape isn't cut. Parts come in the order their keys are first met.
         /// </summary>
-        public static Result Bake(IReadOnlyList<Source> sources, Hole hole, bool facesBack)
+        public static Result Bake(IReadOnlyList<Source> sources, Hole hole, bool facesBack, Cuts? cuts = null)
         {
             var r = new Result { min = new P3(double.MaxValue, double.MaxValue, double.MaxValue), max = new P3(double.MinValue, double.MinValue, double.MinValue) };
-            var at = new Dictionary<(string key, bool leaf), Part>();
+            var at = new Dictionary<(string key, bool leaf, int keep), Part>();
             var weld = new Dictionary<(Part part, P3 p, P3 n), int>(new WeldKey());
+            // a triangle (in the opening's space) into its part, unless the wall buries it
+            void Emit(string key, Source s, P3 A, P3 nA, P3 B, P3 nB, P3 C, P3 nC, bool flat, bool counted)
+            {
+                var cr = P3.Cross(B - A, C - A); double area = cr.Length;
+                if (area < 1e-10) { if (counted) r.degenerate++; return; }
+                var fn = cr * (1 / area);
+                switch (Where(A, B, C, fn, hole.w, hole.h))
+                {
+                    case Place.Hidden: r.hidden++; return;
+                    case Place.OnWall: r.onWall++; break;
+                }
+                if (!at.TryGetValue((key, s.leaf, s.keep), out var part)) { part = new Part { key = key, leaf = s.leaf, keep = s.keep }; at[(key, s.leaf, s.keep)] = part; r.parts.Add(part); }
+                part.tris.Add(Vertex(r, weld, part, A, flat ? fn : nA)); part.tris.Add(Vertex(r, weld, part, B, flat ? fn : nB)); part.tris.Add(Vertex(r, weld, part, C, flat ? fn : nC));
+            }
             double ox = hole.cx, oy = hole.cy - hole.h / 2, oz = hole.wallZ, turn = facesBack ? -1 : 1;
             var pts = new List<P3>(); var nrm = new List<P3>();
             foreach (var s in sources)
@@ -104,24 +139,106 @@ namespace Triband.Storey.Generate
                     {
                         int a = t[i], b = mirrored ? t[i + 2] : t[i + 1], c = mirrored ? t[i + 1] : t[i + 2];
                         if ((uint)a >= (uint)pts.Count || (uint)b >= (uint)pts.Count || (uint)c >= (uint)pts.Count) { r.degenerate++; continue; }   // a point the mesh hasn't
-                        P3 A = pts[a], B = pts[b], C = pts[c];
-                        var cr = P3.Cross(B - A, C - A); double area = cr.Length;
-                        if (area < 1e-10) { r.degenerate++; continue; }
-                        var fn = cr * (1 / area);
-                        switch (Where(A, B, C, fn, hole.w, hole.h))
-                        {
-                            case Place.Hidden: r.hidden++; continue;
-                            case Place.OnWall: r.onWall++; break;
-                        }
                         string key = sub.keys != null && i / 3 < sub.keys.Length ? sub.keys[i / 3] : sub.key;
-                        if (!at.TryGetValue((key, s.leaf), out var part)) { part = new Part { key = key, leaf = s.leaf }; at[(key, s.leaf)] = part; r.parts.Add(part); }
-                        part.tris.Add(Vertex(r, weld, part, A, flat ? fn : nrm[a])); part.tris.Add(Vertex(r, weld, part, B, flat ? fn : nrm[b])); part.tris.Add(Vertex(r, weld, part, C, flat ? fn : nrm[c]));
+                        P3 A = pts[a], B = pts[b], C = pts[c], nA = flat ? default : nrm[a], nB = flat ? default : nrm[b], nC = flat ? default : nrm[c];
+                        if (cuts is Cuts k && s.keep < 0 && Crosses(A, B, C, k))
+                        {
+                            if (P3.Cross(B - A, C - A).Length < 1e-10) { r.degenerate++; continue; }
+                            foreach (var (pa, pb, pc) in Cut((A, nA), (B, nB), (C, nC), k))
+                            {
+                                var mid = (pa.p + pb.p + pc.p) * (1.0 / 3);
+                                Emit(key, s, Nudge(pa.p, mid, k), pa.n, Nudge(pb.p, mid, k), pb.n, Nudge(pc.p, mid, k), pc.n, flat, false);
+                            }
+                        }
+                        else if (cuts is Cuts k2 && s.keep < 0) { var mid = (A + B + C) * (1.0 / 3); Emit(key, s, Nudge(A, mid, k2), nA, Nudge(B, mid, k2), nB, Nudge(C, mid, k2), nC, flat, true); }
+                        else Emit(key, s, A, nA, B, nB, C, nC, flat, true);
                     }
                 }
             }
+            // each object that keeps its shape is anchored at the middle of its bounds
+            var anchors = new Dictionary<int, (P3 lo, P3 hi)>();
+            foreach (var part in r.parts)
+            {
+                if (part.keep < 0) continue;
+                foreach (int i in part.tris)
+                {
+                    var p = r.P[i];
+                    anchors[part.keep] = anchors.TryGetValue(part.keep, out var bb)
+                        ? (new P3(Math.Min(bb.lo.x, p.x), Math.Min(bb.lo.y, p.y), Math.Min(bb.lo.z, p.z)), new P3(Math.Max(bb.hi.x, p.x), Math.Max(bb.hi.y, p.y), Math.Max(bb.hi.z, p.z)))
+                        : (p, p);
+                }
+            }
+            foreach (var part in r.parts) if (part.keep >= 0 && anchors.TryGetValue(part.keep, out var b)) part.anchor = (b.lo + b.hi) * 0.5;
             r.deepest = r.P.Count > 0 ? r.min.z : 0;
             if (r.P.Count == 0) r.min = r.max = new P3(0, 0, 0);
             return r;
+        }
+
+        /// <summary>How near a slice line a point must be to count as on it, metres; and how far to its side a point on it is set.</summary>
+        const double OnCut = 1e-6;
+        /// <summary>How far a point on a slice line is set to its triangle's side, so it takes that side's normal (KindPlace puts it back on the line).</summary>
+        internal const double Aside = 1e-5;
+
+        /// <summary>Whether a triangle has points on both sides of a slice line.</summary>
+        static bool Crosses(P3 a, P3 b, P3 c, Cuts k)
+        {
+            bool Across(double pa, double pb, double pc, double at) =>
+                Math.Min(pa, Math.Min(pb, pc)) < at - OnCut && Math.Max(pa, Math.Max(pb, pc)) > at + OnCut;
+            return Across(a.x, b.x, c.x, k.xL) || Across(a.x, b.x, c.x, k.xR) || Across(a.y, b.y, c.y, k.yB) || Across(a.y, b.y, c.y, k.yT);
+        }
+
+        /// <summary>A triangle cut along the slice lines into pieces, each within one stretch between them, fanned into triangles wound as it was.</summary>
+        static IEnumerable<((P3 p, P3 n) a, (P3 p, P3 n) b, (P3 p, P3 n) c)> Cut((P3 p, P3 n) A, (P3 p, P3 n) B, (P3 p, P3 n) C, Cuts k)
+        {
+            var polys = new List<List<(P3 p, P3 n)>> { new List<(P3 p, P3 n)> { A, B, C } };
+            foreach (var (axis, line) in new[] { (0, k.xL), (0, k.xR), (1, k.yB), (1, k.yT) })
+            {
+                var next = new List<List<(P3 p, P3 n)>>();
+                foreach (var poly in polys)
+                {
+                    var (lo, hi) = Split(poly, axis, line);
+                    if (lo.Count >= 3) next.Add(lo);
+                    if (hi.Count >= 3) next.Add(hi);
+                }
+                polys = next;
+            }
+            foreach (var poly in polys) for (int i = 1; i + 1 < poly.Count; i++) yield return (poly[0], poly[i], poly[i + 1]);
+        }
+
+        /// <summary>A convex polygon split by a line across (<paramref name="axis"/> 0: x = line; 1: y = line), each side kept in order; a point on the line goes to both.</summary>
+        static (List<(P3 p, P3 n)> lo, List<(P3 p, P3 n)> hi) Split(List<(P3 p, P3 n)> poly, int axis, double line)
+        {
+            var lo = new List<(P3 p, P3 n)>(); var hi = new List<(P3 p, P3 n)>();
+            double D((P3 p, P3 n) v) => (axis == 0 ? v.p.x : v.p.y) - line;
+            bool below = false, above = false;
+            foreach (var v in poly) { double d = D(v); if (d < -OnCut) below = true; if (d > OnCut) above = true; }
+            if (!below || !above) { (above ? hi : lo).AddRange(poly); return (lo, hi); }
+            for (int i = 0; i < poly.Count; i++)
+            {
+                var a = poly[i]; var b = poly[(i + 1) % poly.Count];
+                double da = D(a), db = D(b);
+                if (da <= OnCut) lo.Add(a);
+                if (da >= -OnCut) hi.Add(a);
+                if ((da < -OnCut && db > OnCut) || (da > OnCut && db < -OnCut))
+                {
+                    double t = da / (da - db);
+                    var n = a.n + (b.n - a.n) * t;
+                    var m = (a.p + (b.p - a.p) * t, n.Length > 1e-12 ? n.Normalized : a.n);
+                    lo.Add(m); hi.Add(m);
+                }
+            }
+            return (lo, hi);
+        }
+
+        /// <summary>A point on a slice line set a hundredth of a millimetre to the side of it its triangle (<paramref name="mid"/>) is on.</summary>
+        static P3 Nudge(P3 v, P3 mid, Cuts k)
+        {
+            double x = v.x, y = v.y;
+            foreach (double line in new[] { k.xL, k.xR })
+                if (Math.Abs(x - line) <= OnCut && Math.Abs(mid.x - line) > OnCut) x = line + (mid.x > line ? Aside : -Aside);
+            foreach (double line in new[] { k.yB, k.yT })
+                if (Math.Abs(y - line) <= OnCut && Math.Abs(mid.y - line) > OnCut) y = line + (mid.y > line ? Aside : -Aside);
+            return new P3(x, y, v.z);
         }
 
         /// <summary>

@@ -1,6 +1,6 @@
 # Artist-made windows and doors from prefabs
 
-How an artist's window or door can be a prefab of several objects, as Flamingo's old BuildingGenerator takes them, while Storey keeps building every opening into the building's own meshes. **Status: steps 1, 5 and 2 are built (docs/EDITOR.md §6.9); step 5 came second, as §9's answers asked.** §9 has the answers to the questions asked before step 1.
+How an artist's window or door can be a prefab of several objects, as Flamingo's old BuildingGenerator takes them, while Storey keeps building every opening into the building's own meshes. **Status: steps 1, 5, 2 and 3 are built (docs/EDITOR.md §6.9); step 5 came second, as §9's answers asked.** §9 has the answers to the questions asked before step 1.
 
 ## 1. Where we are
 

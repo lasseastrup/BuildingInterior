@@ -117,6 +117,7 @@ namespace Triband.Storey.Editor
                 var o = ScriptableObject.CreateInstance<StoreyOpening>();
                 o.prefab = go;
                 o.door = Door(go);
+                o.slice = true;   // what is round its hole keeps its size
                 string dir = System.IO.Path.GetDirectoryName(path)!.Replace('\\', '/');
                 AssetDatabase.CreateAsset(o, AssetDatabase.GenerateUniqueAssetPath($"{dir}/{go.name} ({(o.door ? "door" : "window")}).asset"));
                 made.Add(o);
@@ -163,10 +164,18 @@ namespace Triband.Storey.Editor
             if (o.prefab == null) Field("mesh");
             Field(o.prefab != null ? "lod1Prefab" : "lod1Mesh");
             Field("facesBack");
-            Field("stretch");
-            if (o.prefab == null) { Field("parts"); Field("size"); }
             serializedObject.ApplyModifiedProperties();
             bool changed = EditorGUI.EndChangeCheck();
+            changed |= Fit(o);
+            serializedObject.Update();
+            EditorGUI.BeginChangeCheck();
+            if (o.prefab == null)
+            {
+                Field("parts"); Field("size");
+                if (o.slice || !o.stretch) Field("borders");
+            }
+            serializedObject.ApplyModifiedProperties();
+            changed |= EditorGUI.EndChangeCheck();
             if (o.prefab != prefab0 && o.prefab != null && !o.door && StoreyOpenings.Door(o.prefab)) o.door = true;
             if (o.prefab == null && o.mesh != mesh0 && o.mesh != null) Fill(o);
             if (o.prefab != null) changed |= Parts(o);
@@ -181,7 +190,8 @@ namespace Triband.Storey.Editor
             var c = OpeningKinds.Check(k);
             string what = o.prefab != null ? $"{o.objects} object{(o.objects == 1 ? "" : "s")}, {o.parts.Count} part{(o.parts.Count == 1 ? "" : "s")}" : $"{o.parts.Count} part{(o.parts.Count == 1 ? "" : "s")}";
             string lod1 = k.lod1 != null ? $"; LOD1 {c.lod1Tris}" : "; LOD1 shows the plain pane";
-            EditorGUILayout.HelpBox($"{c.tris} triangles ({what}){lod1}. The hole is {o.size.x:0.00} × {o.size.y:0.00} m, from {o.holeFrom}. Every {(o.door ? "street door" : "window")} of a style that picks it gets one.", MessageType.None);
+            string slices = (o.slice || !o.stretch) && o.borders != Vector4.zero ? $" Slice lines {o.borders.x:0.00}, {o.borders.y:0.00}, {o.borders.z:0.00} and {o.borders.w:0.00} m in from its sides." : "";
+            EditorGUILayout.HelpBox($"{c.tris} triangles ({what}){lod1}. The hole is {o.size.x:0.00} × {o.size.y:0.00} m, from {o.holeFrom}.{slices} Every {(o.door ? "street door" : "window")} of a style that picks it gets one.", MessageType.None);
             Warnings(o, k, c);
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -197,6 +207,24 @@ namespace Triband.Storey.Editor
         }
 
         void Field(string name) => EditorGUILayout.PropertyField(serializedObject.FindProperty(name), true);
+
+        static readonly GUIContent[] Fits =
+        {
+            new GUIContent("Stretch", "Stretched to each opening, all of it: for a window that is only a window"),
+            new GUIContent("Slice", "Sliced into each opening: what lies between the slice lines stretches; what lies outside them (shutters, a sill, a frame's members) keeps its size and moves with the hole's sides"),
+            new GUIContent("Keep size", "The hole takes its own size; the style decides where windows go and their sill's height. Sliced where an opening has to give (a narrow bay, a band)"),
+        };
+
+        /// <summary>How it is fitted to each opening: stretched, sliced, or kept to its size. Returns whether it changed.</summary>
+        static bool Fit(StoreyOpening o)
+        {
+            int at = !o.stretch ? 2 : o.slice ? 1 : 0;
+            int pick = EditorGUILayout.Popup(new GUIContent("Fit", "How it is fitted to each opening"), at, Fits);
+            if (pick == at) return false;
+            Undo.RecordObject(o, "How it fits");
+            o.stretch = pick != 2; o.slice = pick == 1;
+            return true;
+        }
 
         /// <summary>
         /// A prefab's parts, one a material (or a Model Remapper colour): a style's colour or its own, and on a door whether

@@ -22,6 +22,11 @@ namespace Triband.Storey.Generate
             public string? own;
             // own's slot (KindColors), found when the kind is registered
             internal ColorSlot? ownSlot;
+            /// <summary>
+            /// A part that keeps its shape (a keystone, a lamp, a house number): it goes where this point of its own goes,
+            /// unscaled, whatever the fit (docs/OPENINGS.md §4.3). Null: it is fitted with the rest.
+            /// </summary>
+            public P3? anchor;
             /// <summary>A door's leaf (the door itself): left out where the doorway stays open, on a walk-in storey.</summary>
             public bool leaf;
             public int[] tris = Array.Empty<int>();
@@ -40,8 +45,19 @@ namespace Triband.Storey.Generate
         public bool door;
         /// <summary>The hole in the wall the mesh fills: width and height, in metres.</summary>
         public double w = 1, h = 1.5;
-        /// <summary>Stretch the mesh to each opening (true), or keep its size, centred across the opening on its bottom.</summary>
+        /// <summary>
+        /// Fit it to each opening (true), or keep its size (false): the hole is then its own size (Facade.WindowSpec), and where
+        /// an opening had to give (a narrow bay, a band) it is sliced into it (docs/OPENINGS.md §4.1).
+        /// </summary>
         public bool stretch = true;
+        /// <summary>
+        /// Fitted by slicing, not stretching (docs/OPENINGS.md §4.3): what lies between the slice lines (the borders in from
+        /// the hole's sides) is stretched to fit, and what lies outside them (shutters, a sill, a frame's members) moves with
+        /// the hole's sides, unscaled.
+        /// </summary>
+        public bool slice;
+        /// <summary>The slice lines, in from the hole's left, right, bottom and top, metres: what lies within them keeps its size.</summary>
+        public double borderL, borderR, borderB, borderT;
         public Mesh lod0 = new Mesh();
         /// <summary>LOD1's mesh; null keeps LOD1's plain pane.</summary>
         public Mesh? lod1;
@@ -79,6 +95,20 @@ namespace Triband.Storey.Generate
             all[k.id] = k; Version++;
         }
         public static void Remove(string id) { if (all.TryRemove(id, out _)) Version++; }
+
+        /// <summary>
+        /// Where kind <paramref name="k"/> goes in an opening (u0..u1 along the wall, y0..y1 up): stretched to it, or sliced into
+        /// it (Slice, and Keep size, which is the opening's size but where the opening had to give).
+        /// </summary>
+        internal static KindPlace At(Frame F, OpeningKind k, double u0, double u1, double y0, double y1)
+        {
+            double W = u1 - u0, H = y1 - y0;
+            if (k.stretch && !k.slice) return new KindPlace(F, (u0 + u1) / 2, y0, W / Math.Max(1e-3, k.w), H / Math.Max(1e-3, k.h));
+            return KindPlace.Sliced(F, (u0 + u1) / 2, y0, k.w, k.h, W, H, k.borderL, k.borderR, k.borderB, k.borderT);
+        }
+
+        /// <summary>Stretched with the opening, as a whole: a kind fitted by stretching, not slicing.</summary>
+        public static bool Stretched(OpeningKind k) => k.stretch && !k.slice;
 
         /// <summary>How far a kind's LOD0 reaches past its hole (<see cref="OpeningKind.reachL"/> and the rest); under a millimetre is none.</summary>
         static void Reach(OpeningKind k)
@@ -182,12 +212,12 @@ namespace Triband.Storey.Generate
         /// </summary>
         public static void Place(MeshBuilder op, MeshBuilder? gl, Frame F, OpeningKind k, OpeningKind.Mesh m, double u0, double u1, double y0, double y1, Palette C, bool shell)
         {
-            double sx = k.stretch ? (u1 - u0) / Math.Max(1e-3, k.w) : 1, sy = k.stretch ? (y1 - y0) / Math.Max(1e-3, k.h) : 1;
-            var at = new KindPlace(F, (u0 + u1) / 2, y0, sx, sy);
+            var fitted = At(F, k, u0, u1, y0, y1);
             foreach (var whole in m.parts)
             {
                 if (whole.leaf && !shell) continue;
                 var part = KindPart.Of(m.P, m.N, whole.tris, ref whole.ready);
+                var at = whole.anchor is P3 a ? fitted.Rigid(a) : fitted;
                 if (whole.slot == ColorSlot.Glass)
                 {
                     if (shell || gl == null)

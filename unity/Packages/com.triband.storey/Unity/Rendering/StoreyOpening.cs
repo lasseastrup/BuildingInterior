@@ -43,9 +43,10 @@ namespace Triband.Storey.Unity
             public Vector3[] p = Array.Empty<Vector3>(), n = Array.Empty<Vector3>();
             public int[] counts = Array.Empty<int>();   // triangles' indices per part, one after the other in tris
             public int[] tris = Array.Empty<int>();
-            // KindBake's (baked 1): each part's row key, and 1 where it is a leaf object's
+            // KindBake's (baked 1): each part's row key; 1 where it is a leaf object's, 2 where it keeps its shape, round its anchor
             public string[] keys = Array.Empty<string>();
             public int[] flags = Array.Empty<int>();
+            public Vector3[] anchors = Array.Empty<Vector3>();
         }
 
         [SerializeField, HideInInspector] string id = "";
@@ -71,8 +72,12 @@ namespace Triband.Storey.Unity
         public List<Part> parts = new List<Part>();
         [Tooltip("The hole in the wall it fills, in metres: a prefab's from its Storey Cutout, a mesh's from its bounds when it is set.")]
         public Vector2 size = new Vector2(1.2f, 1.6f);
-        [Tooltip("Stretch it to each opening. Off (Keep size), the hole takes its own size: the style still decides where windows go and their sill's height. A door keeps the standard doorway's width (1.6 m) and takes its own height.")]
+        [Tooltip("Fit it to each opening. Off (Keep size), the hole takes its own size: the style still decides where windows go and their sill's height. A door keeps the standard doorway's width (1.6 m) and takes its own height.")]
         public bool stretch = true;
+        [Tooltip("Fitted by slicing, not stretching: what lies between the slice lines stretches; what lies outside them (shutters, a sill, a frame's members) keeps its size and moves with the hole's sides.")]
+        public bool slice;
+        [Tooltip("The slice lines, in from the hole's left, right, bottom and top (x, y, z, w), metres: a prefab's from its Storey Cutout.")]
+        public Vector4 borders;
 
         [SerializeField, HideInInspector] Baked lod0 = new Baked(), lod1 = new Baked();
 #pragma warning disable CS0649   // a player's are never assigned in code: Bake (editor) sets them, the asset brings them
@@ -145,10 +150,17 @@ namespace Triband.Storey.Unity
 
         static Baked From(KindBake.Result r)
         {
-            var b = new Baked { p = new Vector3[r.P.Count], n = new Vector3[r.P.Count], counts = new int[r.parts.Count], keys = new string[r.parts.Count], flags = new int[r.parts.Count] };
+            int n = r.parts.Count;
+            var b = new Baked { p = new Vector3[r.P.Count], n = new Vector3[r.P.Count], counts = new int[n], keys = new string[n], flags = new int[n], anchors = new Vector3[n] };
             for (int i = 0; i < r.P.Count; i++) { b.p[i] = V(r.P[i]); b.n[i] = V(r.N[i]); }
             var all = new List<int>();
-            for (int s = 0; s < r.parts.Count; s++) { var part = r.parts[s]; b.counts[s] = part.tris.Count; b.keys[s] = part.key; b.flags[s] = part.leaf ? 1 : 0; all.AddRange(part.tris); }
+            for (int s = 0; s < n; s++)
+            {
+                var part = r.parts[s];
+                b.counts[s] = part.tris.Count; b.keys[s] = part.key; all.AddRange(part.tris);
+                b.flags[s] = (part.leaf ? 1 : 0) | (part.anchor != null ? 2 : 0);
+                if (part.anchor is P3 a) b.anchors[s] = V(a);
+            }
             b.tris = all.ToArray();
             return b;
         }
@@ -171,7 +183,8 @@ namespace Triband.Storey.Unity
         /// <summary>The engine-free kind the generator places.</summary>
         public OpeningKind ToKind() => new OpeningKind
         {
-            id = id, name = name, door = door, w = Mathf.Max(0.05f, size.x), h = Mathf.Max(0.05f, size.y), stretch = stretch,
+            id = id, name = name, door = door, w = Mathf.Max(0.05f, size.x), h = Mathf.Max(0.05f, size.y), stretch = stretch, slice = slice,
+            borderL = Mathf.Max(0, borders.x), borderR = Mathf.Max(0, borders.y), borderB = Mathf.Max(0, borders.z), borderT = Mathf.Max(0, borders.w),
             lod0 = ToMesh(lod0), lod1 = hasLod1 ? ToMesh(lod1) : null,
         };
 
@@ -192,7 +205,8 @@ namespace Triband.Storey.Unity
                 var row = Row(b, s);
                 var t = new int[b.counts[s]]; Array.Copy(b.tris, at, t, 0, t.Length); at += t.Length;
                 bool leafObject = s < b.flags.Length && (b.flags[s] & 1) != 0;
-                m.parts.Add(new OpeningKind.Part { slot = row?.colour ?? ColorSlot.Frame, own = string.IsNullOrEmpty(row?.own) ? null : row!.own, leaf = door && (leafObject || row?.leaf == true), tris = t });
+                P3? anchor = s < b.flags.Length && (b.flags[s] & 2) != 0 && s < b.anchors.Length ? new P3(b.anchors[s].x, b.anchors[s].y, b.anchors[s].z) : (P3?)null;
+                m.parts.Add(new OpeningKind.Part { slot = row?.colour ?? ColorSlot.Frame, own = string.IsNullOrEmpty(row?.own) ? null : row!.own, leaf = door && (leafObject || row?.leaf == true), anchor = anchor, tris = t });
             }
             return m;
         }

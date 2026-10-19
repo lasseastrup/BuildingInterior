@@ -151,7 +151,7 @@ namespace Triband.Storey.Generate
                 {
                     double c = wS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : Math.Min(ws.w, bay - 0.5);
                     if (ww < 0.45) continue;
-                    double u0 = c - ww / 2, u1 = c + ww / 2, sx = wk != null && wk.stretch ? ww / Math.Max(1e-3, wk.w) : 1; bool blocked = false;
+                    double u0 = c - ww / 2, u1 = c + ww / 2, sx = wk != null && OpeningKinds.Stretched(wk) ? ww / Math.Max(1e-3, wk.w) : 1; bool blocked = false;
                     foreach (var o in ops) if (o.door && Facade.NearDoor(o, u0, u1, (wk?.reachL ?? 0) * sx, (wk?.reachR ?? 0) * sx)) blocked = true;
                     if (blocked) continue;
                     var w = new Opening { u0 = u0, u1 = u1, y0 = ws.y0, y1 = ws.y1, full = ws.full != null };
