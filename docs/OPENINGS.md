@@ -35,7 +35,7 @@ The mesh is copied into the asset (`Bake`), and the generator builds a copy into
 
 1. **Openings stay built into the building's meshes.** A prefab is where the geometry comes from. It is flattened into the Storey Opening asset at edit time and never instantiated. A 20 × 12 m block of six storeys has 156 windows, and a street has thousands. Instancing them would undo what the design rests on: one or two draws a building, occlusion and Sink decided per vertex from the wall a window is on, the LOD cross-fades, and colours by colour row (SPEC §4.4, §4.6, §6.4). The few objects that must stay objects take the props' path (docs/PROPS.md, §7).
 2. **The Storey Opening asset stays the catalogue entry**: the id a style names, and what a site lists and a build ships. It gains a *Prefab* field beside *Mesh*, editor-only as *Mesh* is, so neither the prefab nor its meshes and materials ship. Its baked copy keeps today's format, so in step 1 the generator, the build threads and the runtime side don't change.
-3. **The hole is authored on the prefab**, as before, with a component of Storey's own (**Storey Cutout**, §3.2). It also reads Flamingo's `BuildingCutoutBox`, so the old prefabs work as they are.
+3. **The hole is authored on the prefab**, as before, with a component of Storey's own (**Storey Cutout**, §3.2). Storey's packages know nothing of Flamingo's `BuildingCutoutBox`: the old prefabs are given a Storey Cutout once, by a script in the game's project (§3.2).
 4. **Colours stay palette colours.** Each material is a part that takes one of the style's colours, and from step 5 can keep a palette colour of its own (§6).
 5. **The geometry work is engine-free** (`Triband.Storey`) and tested headlessly, as the rest of the generator is. The Unity side only gathers meshes, matrices and materials.
 
@@ -51,7 +51,7 @@ The mesh is copied into the asset (`Bake`), and the generator builds a copy into
 
 ### 3.2 Storey Cutout
 
-A component for the prefab's root (*Add Component › Storey › Storey Cutout*), Storey's `BuildingCutoutBox`:
+A component for the prefab's root (*Add Component › Storey › Storey Cutout*):
 
 | Field | What it is |
 |---|---|
@@ -65,8 +65,42 @@ A component for the prefab's root (*Add Component › Storey › Storey Cutout*)
 - **Fit to the meshes:** the bounds of every mesh in the root's space, from the meshes' own vertices. The old component's `Reset` takes the first renderer it finds and its world-space `Renderer.bounds`, so a prefab of several objects, or one not at the origin, gets the wrong box.
 - **Fit to the selection:** the bounds of the selected objects (the frame, say), which is what a window with shutters wants.
 - **Without a cutout**, the bounds of every mesh are the hole. That's right for a prefab that is only the window.
-- **Flamingo's `BuildingCutoutBox`** is read by its type's name, through its serialised `_size` and `_center`. So Storey needn't reference Flamingo's assembly, and the prefabs keep working for the old generator while it is still in use. *Convert to Storey Cutout* replaces it once that generator is gone.
-- **What `Center` means** needs checking (§9). The old component's comment says (0, 0) puts the hole's bottom on the pivot, but its code (the bounds' centre, and the gizmo) treats `Center` as the middle. Converting takes the code's meaning, unless the old generator reads it the other way.
+- **Flamingo's `BuildingCutoutBox`** isn't read: Storey's packages know nothing of the old generator. The old prefabs keep theirs while that generator uses them, and are given a Storey Cutout once by the script below, which belongs in the game's project, where both components are.
+- **What `Center` means** needs checking (§9). The old component's comment says (0, 0) puts the hole's bottom on the pivot, but its code (the bounds' centre, and the gizmo) treats `Center` as the middle. The script takes the code's meaning, unless the old generator reads it the other way.
+
+The script, as `Assets/Editor/StoreyCutoutsFromBuildingCutoutBoxes.cs` (an assembly definition there would reference Flamingo's BuildingGenerator assembly and `Triband.Storey.Unity`). Select the old prefabs and choose *Assets › Storey Cutouts from BuildingCutoutBoxes*. A prefab that already has a Storey Cutout is left as it is, and its BuildingCutoutBox stays for the old generator.
+
+```csharp
+using System.Linq;
+using Triband.Flamingo.BuildingGenerator;
+using Triband.Storey.Unity;
+using UnityEditor;
+using UnityEngine;
+
+static class StoreyCutoutsFromBuildingCutoutBoxes
+{
+    [MenuItem("Assets/Storey Cutouts from BuildingCutoutBoxes")]
+    static void Convert()
+    {
+        foreach (var go in Selection.objects.OfType<GameObject>())
+        {
+            string path = AssetDatabase.GetAssetPath(go);
+            if (string.IsNullOrEmpty(path)) continue;
+            var root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                var old = root.GetComponent<BuildingCutoutBox>();
+                if (old == null || root.GetComponent<StoreyCutout>() != null) continue;
+                var cut = root.AddComponent<StoreyCutout>();
+                cut.size = old.Size;
+                cut.center = old.Center;   // the hole's middle, as the old gizmo draws it
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+    }
+}
+```
 
 ### 3.3 Parts: one per material
 
@@ -80,7 +114,7 @@ A component for the prefab's root (*Add Component › Storey › Storey Cutout*)
 
 ### 3.5 Making one, and its inspector
 
-- **Create › Storey › Window or Door from Prefab**, on one or many selected prefabs, makes an asset beside each. Its door is guessed from the name and the leaf, and its parts and cutout are read. A whole library of old prefabs converts in one go.
+- **Create › Storey › Window or Door from Prefab**, on one or many selected prefabs, makes an asset beside each. Its door is guessed from the name and the leaf, and its parts and cutout are read. Once the old prefabs have their Storey Cutouts (§3.2), a whole library of them converts in one go.
 - **The inspector** says what it found (objects, parts, triangles at LOD0 and LOD1) and what will cost too much or look wrong:
   - **Triangles on a building:** its triangles times the windows of the 20 × 12 m block above (156), beside what the generator's own windows cost there: 22 triangles each, or 140 with arch heads, frames and 2 × 3 glazing bars (measured headlessly). A starting budget is about 140 at LOD0, so a building is no heavier than with the generator's dressed windows. Tune it with the device runs (docs/PLAY.md, slice 5.5).
   - **Behind the wall:** anything deeper than the wall's back shows inside the rooms.
@@ -183,7 +217,7 @@ Steps 1 and 2 together give artists what the old solution gives them. Step 5 mov
 | `Runtime/Generate/Types.cs`, `Facade.cs`, `Courtyards.cs`, `Lod1.cs`, `Details.cs`, `Edit/Facades.cs`, `Validate/Problems.cs` | `Opening`'s reach, Keep-size specs, LOD1 on the flat wall, the clearances, the Problem. |
 | `Unity/Rendering/StoreyOpening.cs` | *Prefab* (editor-only, beside *Mesh*), parts by material, the fit. |
 | `Unity/Rendering/StoreyCutout.cs` (new) | The component: data only, so `PackageLayoutTests`' rules hold. |
-| `com.triband.storey.authoring/Editor/StoreyOpenings.cs` | Gathering a prefab, reading `BuildingCutoutBox`, baking again by dependencies, the inspector, *from Prefab*, the cutout's gizmo and buttons (`[DrawGizmo]`). |
+| `com.triband.storey.authoring/Editor/StoreyOpenings.cs` | Gathering a prefab, baking again by dependencies, the inspector, *from Prefab*, the cutout's gizmo and buttons (`[DrawGizmo]`). |
 | `Headless/Triband.Storey.Stubs` | The engine members used: `MeshFilter.sharedMesh`, `LODGroup.GetLODs`, `AssetDatabase.GetDependencies`, and so on. |
 | Tests | `KindBakeTests` (new), `OpeningKindTests`, the clearances in `DetailKindTests` and `FacadeDetailTests` (brick patches), `ProblemTests`. |
 | Docs | docs/EDITOR.md §6.9, SPEC §4.4's mapping, the packages' CHANGELOGs. |
@@ -194,5 +228,5 @@ Answered when the plan was approved:
 
 1. **Textures:** the old prefabs use none, so §7's first point stays out.
 2. **Colours:** the old prefabs are coloured by the Model Remapper. So step 5 comes second, before the hole and the dressing: without it they would take the style's colours alone.
-3. **The old cutout:** not known. `Center` is read as the hole's middle, as the component's own gizmo and its fit to the bounds have it (step 1), and the style decides the sill height. If an old prefab's hole sits half its height too low or too high, its `Center` was meant as the bottom: fix it in the Storey Cutout the inspector offers.
+3. **The old cutout:** not known. The conversion script (§3.2) takes `Center` as the hole's middle, as the component's own gizmo and its fit to the bounds have it, and the style decides the sill height. If an old prefab's hole sits half its height too low or too high, its `Center` was meant as the bottom: fix it in its Storey Cutout.
 4. **What else is on them:** only meshes, and one prefab per style. So nothing is instanced, and a style keeps one window and one door.

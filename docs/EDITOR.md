@@ -377,7 +377,7 @@ An artist can make a window or a street door as a prefab of several objects, or 
    - *Size* and *Center* are in the root's X and Y, so the pivot can be anywhere. *Wall face* is where the wall's outer face is along Z; the wall is 0.3 m thick (`Dim.T_EXT`), behind it.
    - Adding it fits the hole to the meshes. *Fit to* fits it to one object's meshes instead (the frame, so shutters and a sill stay outside the hole).
    - While the root is selected, the Scene view draws the hole, the reveal to the wall's back, and the wall's face round it.
-   - A prefab with Flamingo's **BuildingCutoutBox** needs nothing: its *Size* and *Center* are read, *Center* as the middle of the hole, as its gizmo draws it. The inspector offers to give the prefab a Storey Cutout like it; take the BuildingCutoutBox off once the old generator is gone.
+   - Without one, the meshes' bounds are the hole.
 3. For a door, list the objects that are the door itself under *Leaf*. They are left out, with everything under them, on a walk-in ground floor, where the player walks through the doorway.
 4. For **Slice** (below): set *Borders*, the slice lines in from the hole's left, right, bottom and top, as thick as the frame's members, so they keep their thickness. List objects that must never stretch (a keystone, a lamp, a house number) under *Keep shape*. The Scene view draws the slice lines dotted.
 5. Select the prefabs and choose *Assets › Create › Storey › Window or Door from Prefab*. Each gets a Storey Opening asset beside it, fitted by *Slice*. It is a door if its name says so or it has leaf objects.
@@ -454,7 +454,7 @@ Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`, `Check`),
 5. Change the model in your DCC tool and reimport it: the buildings update.
 6. Duplicate the window and give the copy another mesh. Pick the copy under Window: buildings show the copy, and those that picked the original still show the original.
 7. Enter Play mode, and make a build: the windows and doors are there.
-8. Select three of Flamingo's window prefabs (with BuildingCutoutBox) and choose *Window or Door from Prefab*. Each asset's hole matches its BuildingCutoutBox gizmo, its parts are its materials, and *Check on a building* finds no faces that flicker.
+8. Give three window prefabs a Storey Cutout and choose *Window or Door from Prefab*. Each asset's hole matches its cutout's gizmo, its parts are its materials, and *Check on a building* finds no faces that flicker.
 9. Add a Storey Cutout to a prefab: it fits the meshes, and the Scene view draws the hole. Move a nested sill prefab and save: the buildings update.
 10. Give a door prefab a leaf object: on a walk-in building the leaf is gone, the frame stays.
 11. Make a window from a prefab the Model Remapper coloured: its parts are its palette colours, and buildings show them whatever their style. Give one part a style colour: it follows the building's style. Change that palette entry in Color Pipeline: the windows change colour without a rebuild.

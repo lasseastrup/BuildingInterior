@@ -47,13 +47,6 @@ namespace UnityEditor
         public static bool Contains(Object obj) => false;
     }
 
-    public static class PrefabUtility
-    {
-        public static GameObject LoadPrefabContents(string assetPath) => new GameObject("");
-        public static GameObject SaveAsPrefabAsset(GameObject instanceRoot, string assetPath) => instanceRoot;
-        public static void UnloadPrefabContents(GameObject contentsRoot) { }
-    }
-
     public sealed class ActiveEditorTracker
     {
         public static ActiveEditorTracker sharedTracker => new ActiveEditorTracker();
@@ -185,15 +178,11 @@ namespace UnityEditor
     public class SerializedProperty
     {
         public string name => "";
-        public Vector2 vector2Value { get => default; set { } }
         public bool NextVisible(bool enterChildren) => false;
     }
 
-    public class SerializedObject : System.IDisposable
+    public class SerializedObject
     {
-        public SerializedObject() { }
-        public SerializedObject(Object obj) { }
-        public void Dispose() { }
         public void Update() { }
         public bool ApplyModifiedProperties() => false;
         public SerializedProperty FindProperty(string path) => new SerializedProperty();

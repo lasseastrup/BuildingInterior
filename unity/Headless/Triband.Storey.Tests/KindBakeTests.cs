@@ -69,7 +69,7 @@ namespace Triband.Storey.Tests
         [Fact]
         public void ObjectsGoThroughTheirMatricesIntoTheHolesSpace()
         {
-            // the prefab's pivot at the hole's middle (as a BuildingCutoutBox centred on it), 1.2 × 1.6: the glass object moved
+            // the prefab's pivot at the hole's middle (a cutout centred on it), 1.2 × 1.6: the glass object moved
             // back 5 cm, a sill object under the hole moved down to its bottom
             var hole = new KindBake.Hole(0, 0, 1.2, 1.6);
             var r = KindBake.Bake(new[]

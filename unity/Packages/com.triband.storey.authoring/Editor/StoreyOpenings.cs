@@ -104,7 +104,7 @@ namespace Triband.Storey.Editor
 
         /// <summary>
         /// A window or door for each prefab selected, beside it: its door guessed from its name and its leaf objects, its
-        /// parts from its materials, its hole from its Storey Cutout or BuildingCutoutBox.
+        /// parts from its materials, its hole from its Storey Cutout (or its meshes' bounds).
         /// </summary>
         [MenuItem("Assets/Create/Storey/Window or Door from Prefab", false, 31)]
         static void FromPrefabs()
@@ -252,11 +252,6 @@ namespace Triband.Storey.Editor
             foreach (var line in o.notes.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)) EditorGUILayout.HelpBox(line, MessageType.Info);
             if (o.prefab != null && o.holeFrom == "the meshes' bounds")
                 EditorGUILayout.HelpBox("The hole is the meshes' bounds. Add a Storey Cutout to the prefab's root to say where it is, so what goes round it (shutters, a sill) stays outside it.", MessageType.Info);
-            if (o.prefab != null && o.prefab.GetComponent<StoreyCutout>() == null && StoreyOpeningBake.Legacy(o.prefab) != null)
-            {
-                EditorGUILayout.HelpBox("The hole is the prefab's BuildingCutoutBox, its Center the hole's middle as its gizmo draws it. Give the prefab a Storey Cutout to edit it with Storey's gizmo; take the BuildingCutoutBox off once the old generator is gone.", MessageType.Info);
-                if (GUILayout.Button("Give the prefab a Storey Cutout like it")) AddCutout(o);
-            }
             if (o.wallFaces > 0)
                 EditorGUILayout.HelpBox($"{o.wallFaces} face{(o.wallFaces == 1 ? " lies" : "s lie")} on the wall's outer face round the hole, facing out: {(o.wallFaces == 1 ? "it flickers" : "they flicker")} against the wall. Move {(o.wallFaces == 1 ? "it" : "them")} a centimetre out.", MessageType.Warning);
             if (c.behind)
@@ -275,21 +270,6 @@ namespace Triband.Storey.Editor
                 EditorGUILayout.HelpBox("LOD1 reaches into the wall, so LOD1 cuts the wall round every window: about 12 triangles a window more, and most buildings on screen are at LOD1. A LOD1 that stays in front of the wall's face (shutters, a sill, a pediment) lies on the flat wall with the plain pane, whose recess the shader draws.", MessageType.Info);
             if (k.lod1 != null && c.lod1Tris > 12)
                 EditorGUILayout.HelpBox($"LOD1 has {c.lod1Tris} triangles a window: most buildings on screen are at LOD1, where the plain pane is 2.", MessageType.Warning);
-        }
-
-        /// <summary>A Storey Cutout on the prefab's root, as its BuildingCutoutBox has it (that one stays, for the old generator).</summary>
-        static void AddCutout(StoreyOpening o)
-        {
-            string path = AssetDatabase.GetAssetPath(o.prefab);
-            var root = PrefabUtility.LoadPrefabContents(path);
-            try
-            {
-                var old = StoreyOpeningBake.Legacy(root);
-                var c = root.AddComponent<StoreyCutout>();
-                if (old is { } v) { c.size = v.size; c.center = v.center; }
-                PrefabUtility.SaveAsPrefabAsset(root, path);
-            }
-            finally { PrefabUtility.UnloadPrefabContents(root); }
         }
 
         /// <summary>A mesh's parts from the model's materials' names, the size from the mesh's bounds.</summary>

@@ -11,7 +11,7 @@ namespace Triband.Storey.Editor
 {
     /// <summary>
     /// A Storey Opening's bake (docs/OPENINGS.md §3): its prefab's objects (or its mesh) gathered with their matrices and
-    /// materials, the hole read from the prefab's Storey Cutout (or a BuildingCutoutBox, or the meshes' bounds), and
+    /// materials, the hole read from the prefab's Storey Cutout (or the meshes' bounds), and
     /// <see cref="KindBake"/> run over them; its parts list kept to the materials found. Installed as the asset's baker as
     /// the editor loads.
     /// </summary>
@@ -62,11 +62,8 @@ namespace Triband.Storey.Editor
         /// <summary>The UV channel Color Pipeline's Model Remapper writes a vertex's palette index into (as index + 0.1), and its lit shader reads (uv3.x).</summary>
         const int RemapperUV = 3;
 
-        /// <summary>The components a prefab of a window may have without a note: what it is drawn with, and the cutouts.</summary>
-        static bool Quiet(Component c) => c is Transform || c is MeshFilter || c is MeshRenderer || c is StoreyCutout || c is LODGroup || c.GetType().Name == LegacyCutout;
-
-        /// <summary>Flamingo's BuildingGenerator's cutout component, read by name: Storey can't reference its assembly.</summary>
-        const string LegacyCutout = "BuildingCutoutBox";
+        /// <summary>The components a prefab of a window may have without a note: what it is drawn with, and its cutout.</summary>
+        static bool Quiet(Component c) => c is Transform || c is MeshFilter || c is MeshRenderer || c is StoreyCutout || c is LODGroup;
 
         static void Bake(StoreyOpening o)
         {
@@ -287,31 +284,12 @@ namespace Triband.Storey.Editor
             return list;
         }
 
-        /// <summary>
-        /// A prefab's hole in its root's space, the root's scale applied: its Storey Cutout's, or Flamingo's
-        /// BuildingCutoutBox's (its <c>_size</c> and <c>_center</c>, the middle of the hole, as its own gizmo draws it, its
-        /// Z 0 on the wall's face), with where it came from; null without either.
-        /// </summary>
+        /// <summary>A prefab's hole in its root's space, the root's scale applied: its Storey Cutout's, with where it came from; null without one.</summary>
         internal static (KindBake.Hole hole, string from)? HoleOf(GameObject root)
         {
             var sc = root.transform.localScale;
             var c = root.GetComponent<StoreyCutout>();
             if (c != null) return (new KindBake.Hole(c.center.x * sc.x, c.center.y * sc.y, Mathf.Abs(c.size.x * sc.x), Mathf.Abs(c.size.y * sc.y), c.wallFace * sc.z), "its Storey Cutout");
-            if (Legacy(root) is { } old) return (new KindBake.Hole(old.center.x * sc.x, old.center.y * sc.y, Mathf.Abs(old.size.x * sc.x), Mathf.Abs(old.size.y * sc.y)), "its " + LegacyCutout);
-            return null;
-        }
-
-        /// <summary>Flamingo's BuildingCutoutBox on a prefab's root: its size and middle; null when it has none.</summary>
-        internal static (Vector2 size, Vector2 center)? Legacy(GameObject root)
-        {
-            foreach (var mb in root.transform.GetComponents<MonoBehaviour>())
-            {
-                if (mb == null || mb.GetType().Name != LegacyCutout) continue;   // a missing script's is null
-                using var so = new SerializedObject(mb);
-                var size = so.FindProperty("_size"); var center = so.FindProperty("_center");
-                if (size == null || center == null) continue;
-                return (size.vector2Value, center.vector2Value);
-            }
             return null;
         }
     }

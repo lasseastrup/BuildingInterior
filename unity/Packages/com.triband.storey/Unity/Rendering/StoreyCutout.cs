@@ -5,8 +5,8 @@ using UnityEngine;
 namespace Triband.Storey.Unity
 {
     /// <summary>
-    /// The hole an artist's window or door fills, on the root of its prefab (docs/OPENINGS.md §3.2): Storey's own
-    /// BuildingCutoutBox. The hole's size and middle are in the root's X and Y, so the pivot can be anywhere, and
+    /// The hole an artist's window or door fills, on the root of its prefab (docs/OPENINGS.md §3.2). The hole's size and
+    /// middle are in the root's X and Y, so the pivot can be anywhere, and
     /// <see cref="wallFace"/> says where the wall's outer face is along Z. <see cref="leaf"/> lists the objects that are a
     /// door's leaf. Sliced into an opening of another size (docs/OPENINGS.md §4.3), what lies within <see cref="borders"/> of
     /// the hole's sides keeps its size, and <see cref="keepShape"/>'s objects keep their shape. A Storey Opening made from

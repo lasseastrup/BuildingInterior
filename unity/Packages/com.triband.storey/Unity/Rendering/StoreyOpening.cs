@@ -12,9 +12,8 @@ namespace Triband.Storey.Unity
     /// Window or Door from Prefab</i>, or create one with <i>Assets › Create › Storey › Window or Door</i> and give it a
     /// prefab or a mesh.
     ///
-    /// A prefab: every object under it with a mesh, where it is in the prefab (docs/OPENINGS.md §3); its Storey Cutout (or
-    /// a BuildingCutoutBox) says where the hole is, so its pivot can be anywhere. A mesh: its pivot at the bottom middle of
-    /// the hole. Either way +Y up, +Z out of the wall (Z 0 on the wall's outer face, negative into the reveal), metres.
+    /// A prefab: every object under it with a mesh, where it is in the prefab (docs/OPENINGS.md §3); its Storey Cutout says
+    /// where the hole is, so its pivot can be anywhere. A mesh: its pivot at the bottom middle of the hole. Either way +Y up, +Z out of the wall (Z 0 on the wall's outer face, negative into the reveal), metres.
     /// Each part (a prefab's material, a mesh's submesh) takes one of the style's colours (<see cref="parts"/>): the
     /// materials themselves aren't used, as the building's colours come from the palette. The geometry is baked in when it
     /// is set (<c>Bake</c>), and the prefab and mesh references are the editor's: they don't ship in a build.
