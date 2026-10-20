@@ -520,7 +520,7 @@ namespace Triband.Storey.Unity
         // every prop graph is alpha-tested (it clips for the occlusion), so on Apple GPUs every prop draw was a discarding
         // one, the cost the buildings' steady variant avoids. A graph with the STOREY_STEADY keyword gets a copy of each
         // material with it on, its alpha clip off where a material may turn it off, in the opaque queue
-        sealed class Copy { public Material source = null!, copy = null!; public UnityEngine.Rendering.LocalKeyword steady, clip; }
+        sealed class Copy { public Material source = null!, copy = null!; }
         static readonly Dictionary<Material, Copy?> copyOf = new Dictionary<Material, Copy?>();
         static readonly List<Copy> copies = new List<Copy>();
         static readonly List<Material> current = new List<Material>();
@@ -545,8 +545,8 @@ namespace Triband.Storey.Unity
                 bool baked = !clip.isValid && m.renderQueue >= (int)UnityEngine.Rendering.RenderQueue.AlphaTest;
                 if (steady.isValid && !baked)
                 {
-                    c = new Copy { source = m, copy = new Material(m) { name = m.name + " (steady)", hideFlags = HideFlags.HideAndDontSave }, steady = steady, clip = clip };
-                    SteadyOn(c);
+                    c = new Copy { source = m, copy = new Material(m) { name = m.name + " (steady)", hideFlags = HideFlags.HideAndDontSave } };
+                    SteadyOn(c.copy);
                     copies.Add(c);
                 }
             }
@@ -554,11 +554,20 @@ namespace Triband.Storey.Unity
             return c?.copy;
         }
 
-        static void SteadyOn(Copy c)
+        /// <summary>
+        /// The steady variant on copy <paramref name="m"/>, its alpha clip off, in the opaque queue. The keywords are looked up
+        /// again each time, in the shader the copy has now: a graph reimported in the editor, or another picked for the
+        /// material, has keywords of its own, and Unity refuses one from before ("comes from a different shader").
+        /// </summary>
+        static void SteadyOn(Material m)
         {
-            var m = c.copy;
-            m.SetKeyword(c.steady, true);
-            if (c.clip.isValid) m.SetKeyword(c.clip, false);
+            if (m.shader != null)
+            {
+                var space = m.shader.keywordSpace;
+                var steady = space.FindKeyword("STOREY_STEADY"); var clip = space.FindKeyword("_ALPHATEST_ON");
+                if (steady.isValid) m.SetKeyword(steady, true);
+                if (clip.isValid) m.SetKeyword(clip, false);
+            }
             if (m.HasProperty(AlphaClip)) m.SetFloat(AlphaClip, 0);
             m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
         }
@@ -570,9 +579,10 @@ namespace Triband.Storey.Unity
             foreach (var c in copies)
             {
                 if (c.source == null || c.copy == null) continue;
+                if (c.source.shader != null && c.copy.shader != c.source.shader) c.copy.shader = c.source.shader;
                 c.copy.CopyMatchingPropertiesFromMaterial(c.source);
                 c.copy.shaderKeywords = c.source.shaderKeywords;
-                SteadyOn(c);
+                SteadyOn(c.copy);
             }
         }
 

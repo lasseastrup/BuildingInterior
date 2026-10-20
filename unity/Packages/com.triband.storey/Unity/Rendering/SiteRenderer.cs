@@ -27,7 +27,6 @@ namespace Triband.Storey.Unity
         readonly Material opaque, glass, massing;
         // the opaque and massing materials' steady copies (STOREY_STEADY on: no discard), null when the shader has no such variant
         readonly Material? opaqueSteady, massingSteady;
-        readonly UnityEngine.Rendering.LocalKeyword opaqueKw, massingKw;
         readonly HideFlags flags;
         readonly BuildingTable table = BuildingTable.Acquire();   // shared by every site (docs/CITY.md §5)
         int blockStart = -1, blockSize;   // this site's building indices there: the layout's buildings in order
@@ -130,21 +129,33 @@ namespace Triband.Storey.Unity
         {
             this.parent = parent; layer = parent.gameObject.layer; this.opaque = opaque; this.glass = glass; this.massing = massing; this.flags = flags;
             if (auto != null) lods = new LodManager(auto);
-            opaqueSteady = SteadyCopy(opaque, out opaqueKw); massingSteady = SteadyCopy(massing, out massingKw);
+            opaqueSteady = SteadyCopy(opaque); massingSteady = SteadyCopy(massing);
         }
 
         /// <summary>A copy of <paramref name="m"/> drawing with the steady variant; null when its shader has none (a project's own).</summary>
-        static Material? SteadyCopy(Material m, out UnityEngine.Rendering.LocalKeyword kw)
+        static Material? SteadyCopy(Material m)
         {
-            kw = default;
-            if (m.shader == null) return null;
-            kw = m.shader.keywordSpace.FindKeyword("STOREY_STEADY");
-            if (!kw.isValid) return null;
+            if (m.shader == null || !m.shader.keywordSpace.FindKeyword("STOREY_STEADY").isValid) return null;
+            var c = new Material(m) { name = m.name + " (steady)", hideFlags = HideFlags.HideAndDontSave };
+            Follow(c, m);
+            return c;
+        }
+
+        /// <summary>
+        /// Steady copy <paramref name="c"/> made like its material <paramref name="m"/> again: its shader, properties and
+        /// keywords, then the steady variant, in the opaque queue. The keyword is looked up again each time, in the shader
+        /// the copy has now: a shader reimported in the editor, or another picked for the material, has keywords of its own,
+        /// and Unity refuses one from before ("comes from a different shader").
+        /// </summary>
+        static void Follow(Material c, Material m)
+        {
+            if (m.shader != null && c.shader != m.shader) c.shader = m.shader;
+            c.CopyMatchingPropertiesFromMaterial(m);
+            var kw = c.shader != null ? c.shader.keywordSpace.FindKeyword("STOREY_STEADY") : default;
+            if (kw.isValid) c.SetKeyword(kw, true);
             // the shaders sit in the AlphaTest queue for their discarding variant; the steady copy draws with the opaque
             // geometry before it (docs/PERFORMANCE.md §7.6)
-            var c = new Material(m) { name = m.name + " (steady)", hideFlags = HideFlags.HideAndDontSave, renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry };
-            c.SetKeyword(kw, true);
-            return c;
+            c.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
         }
 
         int steadySynced = -1;
@@ -177,9 +188,8 @@ namespace Triband.Storey.Unity
             if (copies && (!Application.isPlaying || Time.frameCount - steadySynced >= 30))
             {
                 steadySynced = Time.frameCount; synced = true;
-                const int geometry = (int)UnityEngine.Rendering.RenderQueue.Geometry;
-                if (opaqueSteady != null) { opaqueSteady.CopyMatchingPropertiesFromMaterial(opaque); opaqueSteady.SetKeyword(opaqueKw, true); opaqueSteady.renderQueue = geometry; }
-                if (massingSteady != null) { massingSteady.CopyMatchingPropertiesFromMaterial(massing); massingSteady.SetKeyword(massingKw, true); massingSteady.renderQueue = geometry; }
+                if (opaqueSteady != null) Follow(opaqueSteady, opaque);
+                if (massingSteady != null) Follow(massingSteady, massing);
             }
             // their cull mode, set again after the sync, which copies the material's (every face)
             if (copies && (synced || steadyCulled != CullSteadyBackFaces))

@@ -144,8 +144,16 @@ namespace Triband.Storey.Tests
             foreach (var dir in new[] { Shaders, Path.Combine(Path.GetDirectoryName(package)!, "Samples~", "ColorPaletteLit") })
                 foreach (var name in new[] { "StoreyOpaque.shader", "StoreyMassing.shader" })
                     Assert.Matches(new Regex("Tags\\s*\\{[^}]*\"Queue\"\\s*=\\s*\"AlphaTest\""), File.ReadAllText(Path.Combine(dir, name)));
+            // the copies are made and synced through one method, which puts them at Geometry after copying their material's
+            // properties (its queue among them), and nothing else sets a queue
             var renderer = File.ReadAllText(Path.Combine(package, "Rendering", "SiteRenderer.cs"));
-            Assert.Equal(3, Regex.Matches(renderer, @"renderQueue = (\(int\)UnityEngine\.Rendering\.RenderQueue\.Geometry|geometry)").Count);
+            int at = renderer.IndexOf("static void Follow(Material c, Material m)", StringComparison.Ordinal);
+            Assert.True(at >= 0, "SiteRenderer.Follow");
+            string follow = renderer.Substring(at, renderer.IndexOf("\n        }", at, StringComparison.Ordinal) - at);
+            int copy = follow.IndexOf("CopyMatchingPropertiesFromMaterial", StringComparison.Ordinal), queue = follow.IndexOf("renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry", StringComparison.Ordinal);
+            Assert.True(copy >= 0 && queue > copy, "Follow puts the copy at Geometry after copying its material's properties");
+            Assert.Equal(3, Regex.Matches(renderer, @"\bFollow\((c, m|opaqueSteady, opaque|massingSteady, massing)\)").Count);   // made, and both synced
+            Assert.Single(Regex.Matches(renderer, @"\brenderQueue\s*="));
         }
 
         [Fact]

@@ -598,6 +598,18 @@ namespace Triband.Storey.Tests
             }
         }
 
+        /// <summary>
+        /// A shader keyword is only ever a local, looked up in the shader a material has when it is set: kept, it outlives its
+        /// shader's keywords once the shader is reimported in the editor or another is picked, and Unity refuses it wherever
+        /// it is set ("Local keyword … comes from a different shader"). Naming the type is how one gets kept.
+        /// </summary>
+        [Fact]
+        public void NoShaderKeywordIsKept()
+        {
+            foreach (var f in Directory.GetFiles(Path.Combine(Layout.UnityRoot, "Packages"), "*.cs", SearchOption.AllDirectories))
+                Assert.False(Regex.IsMatch(Code(File.ReadAllText(f)), @"\bLocalKeyword\b"), $"{Path.GetFileName(f)} keeps a LocalKeyword: look it up where it is set (var kw = material.shader.keywordSpace.FindKeyword(…))");
+        }
+
         private static string Code(string text)
         {
             var code = new System.Text.StringBuilder(text.Length);

@@ -706,7 +706,7 @@ namespace UnityEngine
         public Material() { }
         public Material(Shader shader) { }
         public Material(Material source) { }
-        public Shader shader => null;
+        public Shader shader { get; set; }
         public void SetColor(string name, Color value) { }
         public void SetKeyword(in UnityEngine.Rendering.LocalKeyword keyword, bool value) { }
         public void CopyMatchingPropertiesFromMaterial(Material mat) { }
