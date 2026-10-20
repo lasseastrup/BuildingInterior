@@ -667,7 +667,7 @@ namespace Triband.Storey.Editor
                 }
         }
 
-        /// <summary>The style's window and door details (docs/EDITOR.md §6.7): heads, glazing bars, frames, and on the base the street doors.</summary>
+        /// <summary>The style's window details (docs/EDITOR.md §6.7): heads, glazing bars, frames; and on the base its street door.</summary>
         void WindowDetails(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
         {
             bool artist = Generate.OpeningKinds.Of(st, false) != null;
@@ -693,7 +693,6 @@ namespace Triband.Storey.Editor
             if (k0 == 0)
             {
                 KindPopup(e, k0, "Street door", st.doorKind, true);
-                if (Generate.OpeningKinds.Get(st.doorKind) == null) StyleEnum(e, k0, "Street doors", st.doorType, (s, x) => s.doorType = x);
             }
         }
 
@@ -759,14 +758,14 @@ namespace Triband.Storey.Editor
         void KindPopup(StoreyEdit e, int k0, string label, string? current, bool door)
         {
             var kinds = StoreyOpenings.All().Where(o => o.door == door).ToList();
-            var names = new List<string> { door ? "The style's own" : "Generated" };
+            var names = new List<string> { door ? "Plain" : "Generated" };
             names.AddRange(kinds.Select(o => o.name));
             if (kinds.Count == 0) names.Add(door ? "(make one: Create ▸ Storey ▸ Window or Door)" : "(make one: Create ▸ Storey ▸ Window or Door)");
             int at = current == null ? 0 : kinds.FindIndex(o => o.Id == current) + 1;
             if (current != null && at == 0) { names.Add("Missing: " + current.Substring(0, Math.Min(8, current.Length))); at = names.Count - 1; }
-            int pick = EditorGUILayout.Popup(new GUIContent(label, door ? "Street doors: the style's own (Canopy or Glazed), or one an artist made" : "What fills each opening: the generator's own window, or one an artist made"), at, names.Select(n => new GUIContent(n)).ToArray());
+            int pick = EditorGUILayout.Popup(new GUIContent(label, door ? "Street doors: a plain one (a flat panel set into the wall, in the Doors colour), or one an artist made" : "What fills each opening: the generator's own window, or one an artist made"), at, names.Select(n => new GUIContent(n)).ToArray());
             if (pick == at) return;
-            if (pick == 0) { e.ApplyTo(label + ": generated", bb => { var s = Styles.Edited(bb, k0); if (door) s.doorKind = null; else s.windowKind = null; return true; }); return; }
+            if (pick == 0) { e.ApplyTo(label + (door ? ": plain" : ": generated"), bb => { var s = Styles.Edited(bb, k0); if (door) s.doorKind = null; else s.windowKind = null; return true; }); return; }
             if (pick - 1 >= kinds.Count) return;
             var k = kinds[pick - 1]; string id = k.Id;
             e.ApplyTo(label + ": " + k.name, bb => { var s = Styles.Edited(bb, k0); if (door) s.doorKind = id; else s.windowKind = id; return true; });

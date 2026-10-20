@@ -216,16 +216,17 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>
-        /// What dresses a facade's openings in LOD0: door frames and canopies, window sills, heads and mullions, and the
-        /// panes (see-through glass in <paramref name="gl"/>; opaque panes and closed doors on a <paramref name="shell"/> storey).
-        /// The style's own details (<see cref="FacadeStyle.head"/>, panes, frames, glazed doors) change what is drawn; without
-        /// them it is the prototype's.
+        /// What dresses a facade's openings in LOD0: window sills, heads and mullions, and the panes (see-through glass in
+        /// <paramref name="gl"/>; opaque panes on a <paramref name="shell"/> storey); and doors, a plain panel at the back of
+        /// the recess on a shell storey and the doorway open on a walk-in one (docs/EDITOR.md §6.7). The style's own details
+        /// (<see cref="FacadeStyle.head"/>, panes, frames) change what is drawn on windows; without them, windows are the
+        /// prototype's. The prototype's doors have a surround and a canopy, which Storey's leave out.
         /// </summary>
         public static void Dress(MeshBuilder op, MeshBuilder gl, Frame F, List<Opening> ops, double y, Palette C, bool shell, FacadeStyle? st = null)
         {
             if (op.ShapeOnly) return;   // faces only: no walls numbered, no segments
             double T = Dim.T_EXT;
-            bool frames = st != null && st.frames, arch = st != null && st.head == HeadType.Arch, glazed = st != null && st.doorType == DoorType.Glazed;
+            bool frames = st != null && st.frames, arch = st != null && st.head == HeadType.Arch;
             bool bars = st != null && (st.paneCols > 1 || st.paneRows > 1);
             bool sills = st == null || st.sills, heads = st == null || st.heads;
             var trim = frames ? C.frame : C.trim;
@@ -237,12 +238,8 @@ namespace Triband.Storey.Generate
                 if (!o.door && wk != null) { OpeningKinds.Place(op, gl, F, wk, wk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell); continue; }
                 if (o.door)
                 {
-                    op.OBox(F, o.u0 - 0.08, o.u0, y, y + o.y1 + 0.08, T, T + 0.06, trim, trim, Skip.In | Skip.Bot);
-                    op.OBox(F, o.u1, o.u1 + 0.08, y, y + o.y1 + 0.08, T, T + 0.06, trim, trim, Skip.In | Skip.Bot);
-                    if (!o.bare && !glazed) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
-                    else if (arch && heads && !o.bare) Hood(op, F, o.u0 - 0.08 - HoodOver, o.u1 + 0.08 + HoodOver, y + o.y1 + 0.08, trim);
-                    if (glazed && !o.bare) GlazedDoor(op, gl, F, o, y, C, shell);
-                    else if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, T * 0.45, C.door, false);
+                    // the generator's door: the wall's recess, with a flat panel at its back where the doorway is closed
+                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, T * 0.45, C.door, false);
                     else op.SeeThrough++;
                 }
                 else
@@ -389,28 +386,6 @@ namespace Triband.Storey.Generate
                 for (int i = 0; i < cols; i++)
                     op.OBox(F, i == 0 ? ua : xs[i] + h, i == cols - 1 ? ub : xs[i + 1] - h, yj - h, yj + h, wa, wb, c, null, Skip.UStart | Skip.UEnd);
             }
-        }
-
-        /// <summary>
-        /// Glazed double doors in a door opening: a frame, a transom bar half a metre under the head with a fanlight above.
-        /// Closed (a <paramref name="shell"/> storey): two glazed leaves with a centre stile, bottom rails and pull handles.
-        /// Open (a walk-in storey, which the player walks through): the frame, transom and fanlight only.
-        /// </summary>
-        public static void GlazedDoor(MeshBuilder op, MeshBuilder? gl, Frame F, Opening o, double y, Palette C, bool shell)
-        {
-            double T = Dim.T_EXT, wa = T * 0.3, wb = T * 0.6, fw = 0.08, top = y + o.y1, yt = top - 0.5, um = (o.u0 + o.u1) / 2;
-            op.OBox(F, o.u0, o.u0 + fw, y, top, wa, wb, C.frame, null, Skip.UStart | Skip.Top | Skip.Bot);
-            op.OBox(F, o.u1 - fw, o.u1, y, top, wa, wb, C.frame, null, Skip.UEnd | Skip.Top | Skip.Bot);
-            op.OBox(F, o.u0 + fw, o.u1 - fw, top - fw, top, wa, wb, C.frame, null, Skip.Top | Skip.UStart | Skip.UEnd);
-            op.OBox(F, o.u0 + fw, o.u1 - fw, yt - 0.04, yt + 0.04, wa, wb, C.frame, null, Skip.UStart | Skip.UEnd);
-            if (shell || gl == null) Facade.Pane(op, F, o.u0 + fw, o.u1 - fw, yt + 0.04, top - fw, T * 0.45, C.glassDark, false);
-            else Facade.Pane(gl, F, o.u0 + fw, o.u1 - fw, yt + 0.04, top - fw, T * 0.45, C.glass, true);
-            if (!shell) return;
-            op.OBox(F, um - 0.04, um + 0.04, y, yt - 0.04, wa, wb, C.frame, null, Skip.Top | Skip.Bot);
-            op.OBox(F, o.u0 + fw, um - 0.04, y, y + 0.15, wa, wb, C.frame, null, Skip.Bot | Skip.UStart | Skip.UEnd);
-            op.OBox(F, um + 0.04, o.u1 - fw, y, y + 0.15, wa, wb, C.frame, null, Skip.Bot | Skip.UStart | Skip.UEnd);
-            Facade.Pane(op, F, o.u0 + fw, o.u1 - fw, y + 0.15, yt - 0.04, T * 0.45, C.glassDark, false);
-            foreach (double hu in new[] { um - 0.12, um + 0.1 }) op.OBox(F, hu, hu + 0.02, y + 0.9, y + 1.35, wb, wb + 0.05, C.metal, null, Skip.In);
         }
 
         /// <summary>Stretches between doors (walls to collide with).</summary>

@@ -8,8 +8,8 @@ using Xunit;
 namespace Triband.Storey.Tests
 {
     /// <summary>
-    /// The facade details from the artist's brick building: arched heads, pane grids, frames, bands, glazed doors, plinth,
-    /// foundation and brick patches (<see cref="FacadeStyle"/>). Storey's own; a style without them builds as the prototype's.
+    /// The facade details from the artist's brick building: arched heads, pane grids, frames, bands, plinth, foundation
+    /// and brick patches (<see cref="FacadeStyle"/>). Storey's own; a style without them builds as the prototype's.
     /// </summary>
     public class FacadeDetailTests
     {
@@ -17,7 +17,7 @@ namespace Triband.Storey.Tests
         {
             var st = Styles.Preset("brick").Clone();
             st.head = HeadType.Arch; st.paneCols = 2; st.paneRows = 3; st.frames = true; st.bandH = 0.65; st.bandDepth = 0.02; st.bandWall = true;
-            st.doorType = DoorType.Glazed; st.plinthH = 0.8; st.foundation = 0.5; st.foundationH = 0.2; st.bricks = 0.6; st.ground = GroundType.Match;
+            st.plinthH = 0.8; st.foundation = 0.5; st.foundationH = 0.2; st.bricks = 0.6; st.ground = GroundType.Match;
             return st;
         }
 
@@ -49,7 +49,7 @@ namespace Triband.Storey.Tests
         {
             var plain = Styles.Preset("brick").Clone(); plain.ground = GroundType.Match;
             var (_, b0, s0) = Block(plain); int t0 = Lod0.Build(s0, b0).Op.Tris;
-            foreach (Action<FacadeStyle> f in new Action<FacadeStyle>[] { s => s.head = HeadType.Arch, s => { s.paneCols = 2; s.paneRows = 3; }, s => s.frames = true, s => s.doorType = DoorType.Glazed, s => s.foundation = 0.5, s => s.bricks = 0.5 })
+            foreach (Action<FacadeStyle> f in new Action<FacadeStyle>[] { s => s.head = HeadType.Arch, s => { s.paneCols = 2; s.paneRows = 3; }, s => s.frames = true, s => s.foundation = 0.5, s => s.bricks = 0.5 })
             {
                 var st = plain.Clone(); f(st);
                 var (_, b, s) = Block(st);
@@ -130,10 +130,59 @@ namespace Triband.Storey.Tests
             var back = PrototypeJson.ReadStyle(PrototypeJson.WriteStyle(st));
             Assert.Equal(PrototypeJson.WriteStyle(st), PrototypeJson.WriteStyle(back));
             Assert.Equal((2, 3), (back.paneCols, back.paneRows));
-            Assert.Equal(HeadType.Arch, back.head); Assert.Equal(DoorType.Glazed, back.doorType);
+            Assert.Equal(HeadType.Arch, back.head);
             // a prototype style writes none of them
             var p = PrototypeJson.WriteStyle(Styles.Preset("brick"));
-            foreach (var key in new[] { "head", "panes", "frames", "bandH", "doorType", "plinthH", "foundation", "bricks", "frame", "plinth" }) Assert.DoesNotContain($"\"{key}\"", p);
+            foreach (var key in new[] { "head", "panes", "frames", "bandH", "plinthH", "foundation", "bricks", "frame", "plinth" }) Assert.DoesNotContain($"\"{key}\"", p);
+        }
+
+        /// <summary>
+        /// The generator's street door is a flat panel at the back of the wall's recess, in the Doors colour, with nothing
+        /// round it (docs/EDITOR.md §6.7): no surround, canopy or hood, whatever the style's window details. On a walk-in
+        /// storey the doorway stays open. LOD1 has the panel and no canopy either.
+        /// </summary>
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void TheGeneratorsDoorIsAPanelInItsRecess(bool interior)
+        {
+            var st = Styles.Preset("brick").Clone(); st.head = HeadType.Arch; st.frames = true;
+            var (_, b, site) = Block(st, interior);
+            var f = Details.EdgeFrameAt(b, 0, 0);
+            var door = Facade.Ops(site, b, 0, 0, f.e.L, f.uS, f.uE).Single(o => o.door);
+            var op = MeshBuilder.Make(); var gl = MeshBuilder.Make();
+            Facade.Dress(op, gl, f.e.F, new System.Collections.Generic.List<Opening> { door }, 0, new Lod0.Shared(site, b).At(0).C, !interior, st);
+            double T = Dim.T_EXT;
+            if (interior) Assert.Equal(0, op.Verts + gl.Verts);   // the doorway open
+            else
+            {
+                Assert.Equal((4, 0), (op.Verts, gl.Verts));   // one quad
+                for (int i = 0; i < op.Verts; i++)
+                {
+                    var p = op.P[i]; double u = (p.x - f.e.F.O.x) * f.e.F.u.x + (p.z - f.e.F.O.z) * f.e.F.u.z, w = (p.x - f.e.F.O.x) * f.e.F.w.x + (p.z - f.e.F.O.z) * f.e.F.w.z;
+                    Assert.Equal(ColorSlot.Door, op.C[i].slot);
+                    Assert.InRange(w, T * 0.45 - 1e-9, T * 0.45 + 1e-9);   // at the back of the recess
+                    Assert.InRange(u, door.u0 - 1e-9, door.u1 + 1e-9);
+                }
+            }
+            op.Recycle(); gl.Recycle();
+            // LOD1: nothing stands out from the ground floor's walls, whose outer faces are T outside the footprint, further
+            // than the band's 6 cm (the prototype's canopy stood 1.1 m out)
+            var m1 = Lod1.Build(site, b); double top = Derived.FloorBase(b, 1), o = T + 0.15;
+            for (int i = 0; i < m1.Verts; i++)
+            {
+                var p = m1.P[i];
+                if (p.y > 0.05 && p.y < top - 0.05) Assert.True(p.z > -o && p.z < 10 + o && p.x > -o && p.x < 14 + o, $"something stands out of the wall at {p}");
+            }
+        }
+
+        /// <summary>A layout saved when street doors were Canopy or Glazed reads as before: the key is dropped, and not reported.</summary>
+        [Fact]
+        public void AnOldLayoutsDoorTypeIsDropped()
+        {
+            var r = PrototypeJson.Read("{\"v\":2,\"buildings\":[{\"id\":\"a\",\"style\":{\"doorType\":\"glazed\"}}]}");
+            Assert.Empty(r.Unknown);
+            Assert.DoesNotContain("doorType", PrototypeJson.Write(r.Document));
         }
 
         [Fact]

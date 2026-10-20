@@ -180,11 +180,7 @@ namespace Triband.Storey.Generate
                 if (lod1)
                 {
                     Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.wall, new Facade.PanelOpt { inner = false, revealFrom = T * 0.45, threshold = k == v.bottom });
-                    foreach (var o in ops)
-                    {
-                        Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, o.door ? C.door : C.glassDark, false);
-                        if (o.door) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
-                    }
+                    foreach (var o in ops) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, o.door ? C.door : C.glassDark, false);
                 }
                 else
                 {

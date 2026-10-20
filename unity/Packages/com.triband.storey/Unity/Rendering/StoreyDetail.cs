@@ -13,8 +13,8 @@ namespace Triband.Storey.Unity
     ///
     /// The mesh: +Y up, +Z out of the wall (Z 0 on the wall's outer face), metres, with its pivot where it meets the
     /// wall: on a wall, the bottom middle of its back; up the wall, the same, at each storey's floor; over an opening,
-    /// the middle of its back, which goes 25 cm above the opening's top (clear of a window's head and a door's canopy;
-    /// an awning can hang below it). Each submesh is a part in one of the style's colours (<see cref="parts"/>): its
+    /// the middle of its back, which goes 25 cm above the opening's top (clear of a window's head; an awning can hang
+    /// below it). Each submesh is a part in one of the style's colours (<see cref="parts"/>): its
     /// material isn't used, as the building's colours come from the palette. The mesh is copied in when it is set
     /// (<c>Bake</c>), so it needn't be readable, and the mesh references are the editor's: they don't ship in a build.
     /// </summary>

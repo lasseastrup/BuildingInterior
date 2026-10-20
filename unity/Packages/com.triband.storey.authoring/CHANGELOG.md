@@ -33,6 +33,7 @@
 - The automatic LOD picks for the Scene view's camera, and the editor updates when that camera moves. The LOD stats are shown in the Scene view for a selected site (`StoreyLodEditor`).
 
 ### Changed
+- The Facade tab's *Street door* is *Plain* or a door an artist made. Its *Street doors* field (*Canopy* or *Glazed*) is gone.
 - The Facade tab's *Windows and doors* says which setting does what. *Window* (what fills each opening) comes first. The window type is now *Openings* (where the openings are and how big), with a tooltip for each type. *Window width* is greyed out where it does nothing: Ribbon, Curtain and None openings, and an artist's window that keeps its own size. For such a window, *Openings* offers only *The window's own size* or *None*, followed by *Sill height*.
 - `StoreyShaderStripping` runs after URP's own stripping (`callbackOrder` 1000; it was 0, as URP's, so its counts could include what URP then left out). Its line after a player build gives each Storey shader's fragment and vertex programs compiled, and the keywords in the fragment programs with how many each is in, the Color Palette Lit sample's shaders too.
 - The Test City menu (Make 300, 1,000 or 3,000 Buildings, the walk-in ones and Remove Test City) is the Storey Test City window. Making a city no longer asks first: Undo takes it back.

@@ -202,7 +202,7 @@ namespace Triband.Storey.Editor
         }
 
         static string Pivot(Details.Anchor a) => a == Details.Anchor.Opening
-            ? "Give it a mesh with its pivot at the middle of its back, where it meets the wall: +Y up, +Z out of the wall, in metres. The pivot goes 25 cm above the opening's top, clear of a window's head and a door's canopy; an awning can hang below it."
+            ? "Give it a mesh with its pivot at the middle of its back, where it meets the wall: +Y up, +Z out of the wall, in metres. The pivot goes 25 cm above the opening's top, clear of a window's head; an awning can hang below it."
             : "Give it a mesh with its pivot at the bottom middle of its back, where it meets the wall: +Y up, +Z out of the wall, in metres.";
 
         /// <summary>The parts from the model's materials' names, the size from the mesh's bounds.</summary>

@@ -118,6 +118,45 @@ namespace Triband.Storey.Tests
         /// <summary>The prototype's triangles: all but the faces only Unity draws.</summary>
         static int PrototypeTris(MeshBuilder gb) => gb.Tris - gb.BackingTris.Sum(r => r.end - r.start);
 
+        /// <summary>
+        /// What the prototype draws at each street door and Storey's plain doors leave out (docs/EDITOR.md §6.7): a surround
+        /// of two jambs and a canopy in LOD0, the canopy in LOD1. Drawn here as the prototype draws them, to go with the
+        /// port's faces, so every other face is still judged against the prototype's.
+        /// </summary>
+        static MeshBuilder PrototypeDoors(Site site, BuildingData b, int lod)
+        {
+            var m = MeshBuilder.Make(); double T = Dim.T_EXT; var L0 = new Lod0.Shared(site, b);
+            for (int k = 0; k < b.floors.Count; k++)
+            {
+                var C = L0.At(k).C; double y = Derived.FloorBase(b, k);
+                for (int i = 0; i < Derived.OutlineAt(b, k).Count; i++)
+                {
+                    var f = Details.EdgeFrameAt(b, k, i); var F = f.e.F;
+                    foreach (var o in Facade.Ops(site, b, k, i, f.e.L, f.uS, f.uE))
+                    {
+                        if (!o.door || o.bare) continue;
+                        if (lod == 0)
+                        {
+                            m.OBox(F, o.u0 - 0.08, o.u0, y, y + o.y1 + 0.08, T, T + 0.06, C.trim, C.trim, Skip.In | Skip.Bot);
+                            m.OBox(F, o.u1, o.u1 + 0.08, y, y + o.y1 + 0.08, T, T + 0.06, C.trim, C.trim, Skip.In | Skip.Bot);
+                        }
+                        m.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
+                    }
+                }
+            }
+            return m;
+        }
+
+        /// <summary>The port's census with the prototype's door dressing (<see cref="PrototypeDoors"/>) added.</summary>
+        static Dictionary<string, Bucket> WithPrototypeDoors(Dictionary<string, Bucket> got, Site site, BuildingData b, int lod, ColorResolver colors)
+        {
+            var doors = PrototypeDoors(site, b, lod);
+            foreach (var (key, x) in CensusOf(doors, colors))
+                got[key] = got.TryGetValue(key, out var e) ? new Bucket(key, e.Area + x.Area, e.Tris + x.Tris) : x;
+            doors.Recycle();
+            return got;
+        }
+
         static Dictionary<string, Bucket> CensusOf(MeshBuilder gb, ColorResolver colors)
         {
             var B = new Dictionary<string, Bucket>(StringComparer.Ordinal); var backing = Backing(gb);
@@ -156,6 +195,7 @@ namespace Triband.Storey.Tests
 
             var colors = new ColorResolver(site);
             var got = lod == 0 ? CensusOf(Lod0.Build(site, b).Op, colors) : lod == 1 ? CensusOf(Lod1.Build(site, b, recessed: true), colors) : CensusOf(Lod2.Build(site, b), colors);
+            if (lod < 2) got = WithPrototypeDoors(got, site, b, lod, colors);
             var want = lod < 2 ? CensusOf(e) : Census2Of(e);
             var tol = Census[lod].Value.RootElement.GetProperty("tolerance");
             double abs = tol.GetProperty("area").GetDouble(), rel = tol.GetProperty("areaRelative").GetDouble();
@@ -178,6 +218,7 @@ namespace Triband.Storey.Tests
             var b = doc.buildings[i];
             int want = Expected(file, i, lod).GetProperty("tris").GetInt32();
             int got = lod == 0 ? PrototypeTris(Lod0.Build(site, b).Op) : lod == 1 ? PrototypeTris(Lod1.Build(site, b, recessed: true)) : Lod2.Build(site, b) is var m2 ? m2.Tris - m2.BackingTris.Sum(r => r.end - r.start) : 0;
+            if (lod < 2) { var doors = PrototypeDoors(site, b, lod); got += PrototypeTris(doors); doors.Recycle(); }
             Assert.InRange(got, want * 0.9, want * 1.1);
         }
 

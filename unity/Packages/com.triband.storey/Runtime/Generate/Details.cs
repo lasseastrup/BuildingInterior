@@ -26,7 +26,7 @@ namespace Triband.Storey.Generate
 
         /// <summary>
         /// How far above an opening's top an artist's detail over it has its pivot: clear of a window's head (6 cm, or an
-        /// arched hood's 17 cm over a usual window) and of a door's canopy (10 to 24 cm above the door).
+        /// arched hood's 17 cm over a usual window).
         /// </summary>
         public const double OverLift = 0.25;
 

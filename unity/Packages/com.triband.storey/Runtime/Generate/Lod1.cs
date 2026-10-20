@@ -5,7 +5,7 @@ namespace Triband.Storey.Generate
 {
     /// <summary>
     /// LOD1: exterior shell only. Outer faces with opaque windows, doors, floor bands, plinth,
-    /// canopies, parapet and stair/lift bulkheads. No interior, frames or transparency, and no
+    /// parapet and stair/lift bulkheads. No interior, frames or transparency, and no
     /// per-vertex occlusion data (a lean mesh). A plain window is a pane just proud of a flat wall,
     /// and the shader draws the recess LOD0 cuts behind it, its reveals as the view shows them
     /// (StoreyWindow.hlsl): cutting the wall round every window made the walls four-fifths of LOD1.
@@ -73,10 +73,8 @@ namespace Triband.Storey.Generate
                                 OpeningKinds.Place(op, null, F, kk, kk.lod1, o.u0, o.u1, o.door ? y : y + o.y0, y + o.y1, C, true);
                                 if (kk.lod1Covers) continue;
                             }
-                            bool glazedDoor = o.door && Derived.StyleAt(b, k).doorType == DoorType.Glazed;
                             bool flat = !cutAll && !o.door;   // a window on the flat wall: the shader draws its recess, and LOD0's centre bar
-                            Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, flat ? T + PaneProud : T * 0.45, o.door && !glazedDoor ? C.door : C.glassDark, false, flat, flat && wk == null && Facade.CentreBar(stk, o));
-                            if (o.door && !o.bare && !glazedDoor && kk == null) op.OBox(F, o.u0 - 0.35, o.u1 + 0.35, y + o.y1 + 0.1, y + o.y1 + 0.24, T, T + 1.1, C.trim, C.trim, Skip.In);
+                            Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, flat ? T + PaneProud : T * 0.45, o.door ? C.door : C.glassDark, false, flat, flat && wk == null && Facade.CentreBar(stk, o));
                         }
                         if (!party) L0.PieceStrips(op, k, F, m, pc, ops, y, h, C);
                     }

@@ -161,8 +161,8 @@ namespace Triband.Storey.Edit
             u = Tiers.Clamp(u, half, L - half);
             if (spec.anchor == Details.Anchor.Tier)
             {
-                // not across a door (and a fire escape's stair not across its canopy) on any storey it climbs past, nor a fire
-                // escape's drop ladder coming down over one
+                // not across a door (a fire escape's stair 35 cm clear of it, as the prototype's) on any storey it climbs past, nor
+                // a fire escape's drop ladder coming down over one
                 bool escape = kind == DetailKinds.Escape;
                 var run = Details.EscapeRun(b, k, ed.i, u, Details.RunHalf(spec));
                 var steps = run.Select(r => (r.k, r.i, r.u, reach: spec.w / 2 + (escape ? 0.35 : 0.05))).ToList();

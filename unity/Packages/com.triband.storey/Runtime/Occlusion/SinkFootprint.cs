@@ -7,7 +7,7 @@ namespace Triband.Storey.Occlusion
     /// <summary>
     /// Sink's footprint (SPEC §5.1): what stands in for a building in the way once it has collapsed. The outline of
     /// the storey at the player's height as a flat near-black fill 2 cm above its floor, ringed by a low rim of its
-    /// outer wall in the wall's colour, with no doors, canopies or interior. Never along a party wall: that stands while
+    /// outer wall in the wall's colour, with no doors or interior. Never along a party wall: that stands while
     /// the neighbour does, or both sides sank and their outlines merge. A port of the prototype's <c>buildLid</c>.
     /// Built once per building version and storey, in a builder of the shared ones (<see cref="MeshBuilder.Make"/>): give
     /// it back once uploaded (<see cref="MeshBuilder.Recycle"/>). A fresh builder made 83 KB of garbage for 60 vertices.

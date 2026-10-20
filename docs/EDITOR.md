@@ -328,20 +328,20 @@ Engine-free: `Buildings.AsTemplate`, `Buildings.FromTemplate`, `Setbacks.ApplyFo
 - **Glazing bars:** *Panes across* × *Panes up* (2 × 3 like the artist's) divides every window into panes.
 - **Frames:** a frame all round each window and door, in the new *Frames* colour. Sills and heads take that colour too.
 - **Band:** its height (*Band height*), how far it stands out (*Band stands out*, at least 1 cm), and *Band in a wall shade* instead of the trim colour. Windows and their arched heads, and doors with their posts, stay under a band you've set.
-- **Street doors** (base): *Canopy*, as before, or *Glazed*: double doors with a frame, a transom bar and a fanlight above it, and no canopy. On a filled or shell storey the doors are closed: two glazed leaves with a centre stile, bottom rails and pull handles. On a walk-in storey the doorway stays open, because the player walks through it; the frame, transom and fanlight still show.
+- **Street door** (base): *Plain*, a flat panel in the *Doors* colour at the back of the wall's recess, with nothing round it (no surround, canopy or hood). On a walk-in storey the doorway stays open, because the player walks through it. Or a door an artist made (§6.9). Layouts saved when street doors were *Canopy* or *Glazed* read as before, with plain doors.
 - **Plinth height** (base), and the new optional *Plinth* colour (unset, it's a shade of the wall, as before). Ground-floor windows start above a plinth you've set.
 - **Foundation** (base): a band along the foot of the ground floor, under the doors too, in the new *Foundation* colour. *Below ground* sets how deep it goes (for terrain that isn't flat), *Above ground* how much of it shows, and *Stands out* how far it reaches out from the wall (0.01 to 1 m; 8 cm by default).
 - **Brick patches:** small groups of bricks laid on the walls, about one group per 2.5 m² at 1. They keep clear of openings, heads, the band and the plinth, and come back in the same places on every rebuild.
 
 LODs:
 - LOD0 has all of these.
-- LOD1, the lean shell, has the band, plinth and foundation, and its glazed doors are dark glass with no canopy.
+- LOD1, the lean shell, has the band, plinth and foundation, and the plain door's panel.
 - LOD2's shader follows the band's height and colour.
 
-Layout keys: `head`, `panes`, `frames`, `bandH`, `bandDepth`, `bandWall`, `doorType`, `plinthH`, `foundation`, `foundationH`, `foundationOut`, `bricks`, plus the colours `frame`, `foundationColor` and `plinth` (`FacadeDetailTests`).
+Layout keys: `head`, `panes`, `frames`, `bandH`, `bandDepth`, `bandWall`, `plinthH`, `foundation`, `foundationH`, `foundationOut`, `bricks`, plus the colours `frame`, `foundationColor` and `plinth` (`FacadeDetailTests`).
 
 **Checks:**
-1. Arch heads, 2 × 3 panes, Frames, Band 0.65 m in a wall shade, Glazed doors, Plinth 0.8 m with a grey Plinth colour, Foundation, Brick patches 0.6: the building looks like the artist's.
+1. Arch heads, 2 × 3 panes, Frames, Band 0.65 m in a wall shade, Plinth 0.8 m with a grey Plinth colour, Foundation, Brick patches 0.6: the building looks like the artist's.
 2. Set Foundation *Below ground* to 1 m and lower the ground (or lift the site): the foundation shows down to it.
 
 ### 6.8 Windows
@@ -401,7 +401,7 @@ Either way, *Faces back* turns round one made facing −Z, and the parts take th
 - **Leaf** marks the door itself, left out on a walk-in ground floor.
 - **Its own colour** keeps a palette colour whatever the style. A project can have 232 such colours across its windows, doors and facade details (`KindColors`). Past that, a part takes its style colour.
 
-In the Facade tab, pick it under **Window**, first under *Windows and doors*, or **Street door** (with the other details). *Generated* goes back to the generator's own. *Window* is what fills each opening; *Openings* is where the openings are and how big (*Punched*, *Tall*, *Ribbon*, *Curtain* or *None*, each described in its tooltip).
+In the Facade tab, pick it under **Window**, first under *Windows and doors*, or **Street door** (with the other details). *Generated* (*Plain* for a street door) goes back to the generator's own. *Window* is what fills each opening; *Openings* is where the openings are and how big (*Punched*, *Tall*, *Ribbon*, *Curtain* or *None*, each described in its tooltip).
 
 The inspector says how many objects, parts and triangles it has and where its hole came from, and warns of what will cost too much or look wrong:
 - more triangles than the generator's most dressed window (140, with arch heads, frames and glazing bars; a block of six storeys has about 156 windows), or a LOD1 of more than 12 (most buildings on screen are at LOD1, where the plain pane is 2);
@@ -418,7 +418,7 @@ The inspector says how many objects, parts and triangles it has and where its ho
 - **Slice** (made from a prefab, it starts so): fitted as 9-slice scaling fits a sprite. What lies between the slice lines stretches; what lies outside them keeps its size and moves with the hole's sides. So shutters keep their width and follow the hole's sides, a sill or a flower box gets longer but not taller, a pediment keeps its height, a frame's members keep their thickness (with *Borders* as thick as they are), and *Keep shape* objects move unscaled. Triangles crossing a slice line are cut there when baked, so a curve bends only at the lines. One prefab then fits every window type and width a style has.
 - **Keep size:** the hole takes the window's own size, as in the old solution. The style still decides where windows go: *Bay spacing* across, and *Sill height* how far above each floor they sit. *Openings* then offers only *The window's own size* or *None*, and *Window width* doesn't apply (the Facade tab greys it out). *Sill height* starts at the sill of the style's window type (Punched 90 cm, Tall 40 cm, Ribbon 95 cm, Curtain 10 cm). Over a plinth, the ground floor's windows stay 15 cm above it, and a sill so high that 40 cm or less of the window fits under the storey's top leaves that storey without windows, at every LOD. Where an opening has to give (a bay too narrow, a band), the window is sliced into it. LOD2's painted windows take the same size. A street door keeps the standard doorway's width (1.6 m, which the entrance tools assume), takes its own height, and is sliced into the doorway's width.
 
-Heads, sills, frames, glazing bars, canopies and glazed doors aren't drawn where an artist's window is: it is the whole window or door.
+Heads, sills, frames and glazing bars aren't drawn where an artist's window is: it is the whole window or door.
 
 What it has round its hole (shutters, a sill, a flower box, a surround, a pediment) is kept clear, as far as it reaches past the hole:
 - Windows keep it 14 cm from a neighbouring wall, as they keep their holes, and 10 cm from a door's (their holes stay 30 cm apart).
@@ -473,7 +473,7 @@ The site's inspector reads top to bottom in the order you work: which layout, wh
 4. **Shape / Facade / Interior**: three large buttons, each with an icon and a line saying what it's for. The selected one is tinted, with an accent bar along its bottom. On a narrow inspector the line moves under the bar.
 5. The mode's settings in named groups, each a header with a hairline and space above it, not a box:
    - **Shape:** *Placement* (elevation, Snap to ground), *Outline* (setbacks, presets), *Corners*, *Courtyards and atria* (folded until the building has one), *Storey heights*.
-   - **Facade:** *Style for* (with setbacks), *Style* (preset), *Windows and doors* (window, openings, sill height for an artist's window of its own size, width for Punched and Tall openings, bay spacing, sills, heads, glazing bars, frames, street doors), *Walls* (ground floor, bands, plinth, foundation, brick patches), *Colours* (*More colours* folded), *Roof*, *Details by rule* (folded), *Place on walls* (rows of four: Entrance, Blank wall, every Facade Detail, Bridge), *Bridges*.
+   - **Facade:** *Style for* (with setbacks), *Style* (preset), *Windows and doors* (window, openings, sill height for an artist's window of its own size, width for Punched and Tall openings, bay spacing, sills, heads, glazing bars, frames, street door: plain or an artist's), *Walls* (ground floor, bands, plinth, foundation, brick patches), *Colours* (*More colours* folded), *Roof*, *Details by rule* (folded), *Place on walls* (rows of four: Entrance, Blank wall, every Facade Detail, Bridge), *Bridges*.
    - **Interior:** *Inside* (walk-in or shell), *Floor*, *Tools*, the selection, *This storey's height*, *Interior colours* (folded).
 6. **Site settings** (folded): materials, the LOD shown, colliders, and the artist's windows, doors and facade details the layout uses.
 
@@ -521,7 +521,7 @@ The details in Facade ▸ *Place on walls* are **Facade Detail** assets. Storey'
 3. Pick where it **Goes**:
    - **On a wall**: where it's clicked, at the height clicked, kept clear of windows and doors. Its pivot is the bottom middle of its back.
    - **Up the wall**: on every storey from the one clicked up to where the wall steps back, as the fire escape climbs. The pivot is as on a wall, at each storey's floor. A door on any storey it climbs refuses it. *Stretch* fits it to each storey's height. Leave out its top and bottom faces then (a pipe needs no caps): they'd lie on the floor band's top and flicker, and the inspector warns of them.
-   - **Over an opening**: over a ground-floor window or door, as the awning. Its pivot is the middle of its back, and goes 25 cm above the opening's top, clear of a window's head and a door's canopy; an awning can hang below it. *Stretch* fits it across the opening and 25 cm past each side, and two neighbours meet in the middle.
+   - **Over an opening**: over a ground-floor window or door, as the awning. Its pivot is the middle of its back, and goes 25 cm above the opening's top, clear of a window's head; an awning can hang below it. *Stretch* fits it across the opening and 25 cm past each side, and two neighbours meet in the middle.
 4. **Placed by rule** (optional):
    - *Under upper-floor windows*: as AC units, its top 7 cm under the window. Never on the ground floor or a curtain wall.
    - *Between windows*: as vents, in a stretch of wall with 25 cm to spare each side, its top 45 cm under the ceiling.

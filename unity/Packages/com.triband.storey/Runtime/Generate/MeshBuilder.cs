@@ -70,7 +70,7 @@ namespace Triband.Storey.Generate
         public readonly List<(int start, int end)> BackingTris = new List<(int, int)>();
         /// <summary>
         /// Openings made that show what is behind them at any distance: a doorway with nothing in it (a walk-in storey's
-        /// doors but a glazed one) and an artist's glass, which LOD0's far windows don't paint over. Their storey's rooms
+        /// doors) and an artist's glass, which LOD0's far windows don't paint over. Their storey's rooms
         /// are not kept apart (<see cref="Inside"/>).
         /// </summary>
         public int SeeThrough;

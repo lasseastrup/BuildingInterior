@@ -229,8 +229,6 @@ namespace Triband.Storey
     public enum WindowType { Punched, Tall, Ribbon, Curtain, None }
     /// <summary>What tops a window or door: a flat head, or an arched hood over it. Storey's own.</summary>
     public enum HeadType { Flat, Arch }
-    /// <summary>Street doors: an opening with a canopy, or glazed double doors (frame, transom, fanlight, handles). Storey's own.</summary>
-    public enum DoorType { Canopy, Glazed }
     public enum GroundType { Storefront, Match, Solid }
     /// <summary>The top tier's roof. Mansard is Storey's own: a steep lower slope up to a break, then a shallow hip.</summary>
     public enum RoofType { Flat, Hip, Gable, Shed, Mansard }
@@ -280,8 +278,6 @@ namespace Triband.Storey
         /// <summary>The band under each storey's ceiling: height (null = 0.22 m), how far it stands out (null = 0.06 m), and whether it is a shade of the wall rather than the trim.</summary>
         public double? bandH, bandDepth;
         public bool bandWall;
-        /// <summary>Street doors.</summary>
-        public DoorType doorType = DoorType.Canopy;
         /// <summary>An artist-made window and street door (<see cref="Generate.OpeningKinds"/>), by id; null = the generator's own.</summary>
         public string? windowKind, doorKind;
         /// <summary>

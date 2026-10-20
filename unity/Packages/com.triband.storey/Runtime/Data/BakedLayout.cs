@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 2;
+        public const int Version = 3;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -249,7 +249,7 @@ namespace Triband.Storey
             s.windows = E<WindowType>(ref r); s.winW = r.F64(); s.bay = r.F64(); s.ground = E<GroundType>(ref r); s.bands = r.Bool(); s.parapet = r.Bool();
             s.roofType = E<RoofType>(ref r); s.pitch = r.Opt(); s.eave = r.Opt();
             s.head = E<HeadType>(ref r); s.sills = r.Bool(); s.heads = r.Bool(); s.paneCols = r.OptInt(); s.paneRows = r.OptInt(); s.frames = r.Bool();
-            s.bandH = r.Opt(); s.bandDepth = r.Opt(); s.bandWall = r.Bool(); s.doorType = E<DoorType>(ref r);
+            s.bandH = r.Opt(); s.bandDepth = r.Opt(); s.bandWall = r.Bool();
             s.windowKind = Str(ref r); s.doorKind = Str(ref r); s.sillH = r.Opt();
             s.plinthH = r.Opt(); s.foundation = r.Opt(); s.foundationH = r.Opt(); s.foundationOut = r.Opt(); s.bricks = r.Opt(); s.mansard = r.Opt(); s.dormers = r.Opt();
             if (r.Bool())
@@ -400,7 +400,7 @@ namespace Triband.Storey
             w.E(s.windows); w.F64(s.winW); w.F64(s.bay); w.E(s.ground); w.Bool(s.bands); w.Bool(s.parapet);
             w.E(s.roofType); w.Opt(s.pitch); w.Opt(s.eave);
             w.E(s.head); w.Bool(s.sills); w.Bool(s.heads); w.OptInt(s.paneCols); w.OptInt(s.paneRows); w.Bool(s.frames);
-            w.Opt(s.bandH); w.Opt(s.bandDepth); w.Bool(s.bandWall); w.E(s.doorType);
+            w.Opt(s.bandH); w.Opt(s.bandDepth); w.Bool(s.bandWall);
             w.Count(S(s.windowKind)); w.Count(S(s.doorKind)); w.Opt(s.sillH);
             w.Opt(s.plinthH); w.Opt(s.foundation); w.Opt(s.foundationH); w.Opt(s.foundationOut); w.Opt(s.bricks); w.Opt(s.mansard); w.Opt(s.dormers);
             w.Bool(s.details != null);

@@ -104,9 +104,6 @@ namespace Triband.Storey.Tests
                     if (storey[t] == 2 && Math.Abs(m.P[m.I[3 * t]].x - 10) < 0.2) partition++;
                 }
             Assert.True(partition > 0, "the partition");
-            // a glazed door's glass is painted over far away as a window's is: the ground floor keeps its rooms apart too
-            b.style.doorType = DoorType.Glazed;
-            Assert.Contains(0, StoreysWithRooms(new Site(d.buildings), b));
         }
 
         [Fact]
@@ -126,12 +123,13 @@ namespace Triband.Storey.Tests
         [Fact]
         public void TheRoofsOpeningsKeepWhatTheyShow()
         {
-            // stairs up to a bulkhead on the roof: through its door the top storey shows, at any distance
+            // stairs up to a bulkhead on the roof: through its door the top storey shows, at any distance; and the storey the
+            // stairs lead up to from the ground floor's doorway (BackFaceTests found the ray in up the stairwell)
             var (d, b) = Block(4);
             var stairs = Shafts.Place(b, 0, new Vec2(4, 8), CoreType.Stairs, 0, Shafts.NewId(d))!;
             Assert.True(Cores.StairHoleAt(b, stairs, 4));
             var site = new Site(d.buildings);
-            Assert.Equal(new[] { 1, 2 }, StoreysWithRooms(site, b));
+            Assert.Equal(new[] { 2 }, StoreysWithRooms(site, b));
             var op = Build(site, b).op; var marked = Marked(op);
             Assert.Contains(Enumerable.Range(0, op.Tris), t => marked[t] && op.C[op.I[3 * t]].slot == ColorSlot.Core);   // the core is the rooms' below
             // a straight flight's railed opening, stacked over every flight: every storey shows from above

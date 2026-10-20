@@ -87,18 +87,18 @@ namespace Triband.Storey.Tests
 
         /// <summary>
         /// LOD1's plain windows are panes proud of a flat wall, marked so the shader draws the recess LOD0 cuts behind them;
-        /// its doors (a glazed one too) are recessed in their openings as LOD0's are, and LOD0's panes and the prototype's
-        /// recessed LOD1 have no flat pane.
+        /// its doors are recessed in their openings as LOD0's are, and LOD0's panes and the prototype's recessed LOD1 have no
+        /// flat pane.
         /// </summary>
         [Fact]
         public void OnlyLod1sPlainWindowsAreFlatPanes()
         {
             var (b, site) = Block(false);
-            b.style.doorType = DoorType.Glazed;
-            var lod1 = Panes(Lod1.Build(site, b));
+            var m1 = Lod1.Build(site, b); var lod1 = Panes(m1);
             Assert.Contains(lod1, x => x.w.flat);
             Assert.All(lod1.Where(x => x.p.y > Derived.FloorBase(b, 1) - 0.01), x => Assert.True(x.w.flat, $"an upper storey's window at {x.p} isn't flat"));
-            Assert.Contains(lod1, x => !x.w.flat && x.p.y < Derived.FloorBase(b, 1));   // the glazed door
+            var door = m1.PaneUV.Where(kv => m1.C[kv.Key].slot == ColorSlot.Door).ToList();
+            Assert.NotEmpty(door); Assert.All(door, kv => Assert.False(kv.Value.flat));   // the door's panel, in its recess
             Assert.DoesNotContain(Panes(Lod1.Build(site, b, recessed: true)), x => x.w.flat);
             Assert.DoesNotContain(Panes(Lod0.Build(site, b).Op), x => x.w.flat);
         }

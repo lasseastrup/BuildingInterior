@@ -61,7 +61,7 @@ namespace Triband.Storey.Generate
     {
         public double u0, u1, y0, y1;
         public bool door, full, thr;
-        /// <summary>A door with no canopy over it (a bridge's: the bridge is its cover).</summary>
+        /// <summary>A bridge's door: always the generator's plain door, never the style's artist-made street door.</summary>
         public bool bare;
         /// <summary>
         /// How far an artist's window or door in it reaches past it (<see cref="OpeningKind.reachL"/>), as placed: left, right,

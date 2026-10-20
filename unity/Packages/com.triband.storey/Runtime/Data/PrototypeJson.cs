@@ -265,7 +265,6 @@ namespace Triband.Storey
             s.bandH = c.Opt(o, "bandH", path);
             s.bandDepth = c.Opt(o, "bandDepth", path);
             s.bandWall = c.Bool(o, "bandWall", false, path);
-            s.doorType = c.Enum<DoorType>(o, "doorType", DoorType.Canopy, path);
             s.plinthH = c.Opt(o, "plinthH", path);
             s.foundation = c.Opt(o, "foundation", path);
             s.foundationH = c.Opt(o, "foundationH", path);
@@ -418,7 +417,6 @@ namespace Triband.Storey
             if (s.bandH.HasValue) o["bandH"] = s.bandH.Value;
             if (s.bandDepth.HasValue) o["bandDepth"] = s.bandDepth.Value;
             if (s.bandWall) o["bandWall"] = true;
-            if (s.doorType != DoorType.Canopy) o["doorType"] = Lower(s.doorType);
             if (s.plinthH.HasValue) o["plinthH"] = s.plinthH.Value;
             if (s.foundation.HasValue) o["foundation"] = s.foundation.Value;
             if (s.foundationH.HasValue) o["foundationH"] = s.foundationH.Value;
@@ -527,8 +525,9 @@ namespace Triband.Storey
             public static readonly string[] Style =
             {
                 "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "details",
-                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "doorType", "plinthH", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind", "sillH",
+                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "plinthH", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind", "sillH",
                 "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth",
+                "doorType",   // street doors' Canopy or Glazed, gone (every generated door is plain): read and dropped, not reported
             };
         }
 

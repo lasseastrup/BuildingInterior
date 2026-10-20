@@ -131,6 +131,11 @@ namespace Triband.Storey.Generate
             bool open = false, bulkhead = false;
             if (!Roofs.IsPitched(b)) foreach (var v in b.voids) if (v.kind == VoidKind.Atrium && Courtyards.HoleAt(b, v, N)) open = true;
             foreach (var s in b.shafts) if (Cores.StairHoleAt(b, s, N)) { if (s.type == CoreType.Flight) open = true; else bulkhead = true; }
+            // and what a storey's openings show takes in what its stairs open onto: a ray in through a walk-in storey's
+            // doorway goes on up the stairwell. A storey that shows its rooms shows the next storey's up or down a switchback
+            // stair (its flights and landings close the well beyond), and every storey up a straight flight's stack
+            bool shownBelow = false; (int ranges, int end)? markBelow = null;
+            bool Up(int k, bool straight) { foreach (var s in b.shafts) if (Cores.HasFlight(b, s, k) && (!straight || s.type == CoreType.Flight)) return true; return false; }
             for (int k = 0; k <= N; k++)
             {
                 var sg = new List<Seg>(); var g = At(k); bool sb = Derived.IsSetback(b, k); var Cb = At(Math.Max(0, k - 1)).C;
@@ -142,7 +147,7 @@ namespace Triband.Storey.Generate
                 foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && k == v.bottom && Courtyards.Live(b, v)) Courtyards.Pave(op, b, v, g.C);
                 // the storey's rooms are kept apart unless one of its openings shows them at any distance (a doorway, an
                 // artist's glass), which is known once its walls are made: until then they are only marked
-                bool apart = k < N && !open && !(bulkhead && k == N - 1); var mark = op.InsideMark; int seen = op.SeeThrough;
+                bool apart = k < N && !open && !(bulkhead && k == N - 1) && !shownBelow; var mark = op.InsideMark; int seen = op.SeeThrough;
                 if (k < N)
                 {
                     FacadeStorey(op, gl, sg, k, g, apart); Details.Build(op, site, b, k, g.C, 0);
@@ -156,7 +161,11 @@ namespace Triband.Storey.Generate
                     if (!Roofs.IsPitched(b)) foreach (var v in b.voids) if (v.kind == VoidKind.Atrium && Courtyards.HoleAt(b, v, N)) Courtyards.Skylight(op, gl, sg, b, v, Cb);
                 }
                 if (!shell && !Derived.Filled(b, k)) Shafts(op, sg, k, g.C, apart);
-                if (apart && op.SeeThrough != seen) op.TakeBackInside(mark);
+                bool shows = op.SeeThrough != seen;
+                if (shows && markBelow is { } below && Up(k - 1, false)) op.TakeBackInside(below);   // the storey below too, down its stairs
+                else if (shows && apart) op.TakeBackInside(mark);
+                shownBelow = shows && Up(k, false) || shownBelow && Up(k, true);
+                markBelow = apart && !shows ? mark : ((int, int)?)null;
                 r.Segs.Add(sg);
                 yield return k;
             }
@@ -695,6 +704,20 @@ namespace Triband.Storey.Generate
                     {
                         double fh = Derived.FloorH(b, k), half = fh / 2; int n = 10; double run = 3.2 / n;
                         for (int i = 0; i < n; i++) { double z0 = -1.6 + i * run, t = y + (i + 1) * half / n; Bx(-1.25, -0.05, t - 0.2, t, z0, z0 + run, C.step, null, Skip.UEnd); }
+                        // the steps' ends against the centre wall, which the prototype leaves out as the wall covers them: where a
+                        // step reaches past the wall (the second flight's last steps over its top, a slab under the next floor; the
+                        // first step's foot under the floor) it was open, its riser and tread seen from behind across the stairwell.
+                        // Only Unity draws those parts
+                        double top = y + (atRoof ? 1.1 : h);
+                        void Ends(double x0, double x1, double t, double z0, double z1, Skip face)
+                        {
+                            if (t > top) Bx(x0, x1, Math.Max(t - 0.2, top), t, z0, z1, C.step, null, Facade.AllBut(face));
+                            if (t - 0.2 < y) Bx(x0, x1, t - 0.2, Math.Min(t, y), z0, z1, C.step, null, Facade.AllBut(face));
+                        }
+                        op.Backing = true;
+                        for (int i = 0; i < n; i++) { double z0 = -1.6 + i * run, t = y + (i + 1) * half / n; Ends(-1.25, -0.05, t, z0, z0 + run, Skip.UEnd); }
+                        for (int i = 0; i < n; i++) { double z1 = 1.6 - i * run, t = y + half + (i + 1) * half / n; Ends(0.05, 1.25, t, z1 - run, z1, Skip.UStart); }
+                        op.Backing = false;
                         Bx(-1.3, 1.3, y + half - 0.22, y + half, 1.6, 2.6, C.step, null, Skip.UStart | Skip.UEnd | Skip.Out);
                         // its ends against the building's own walls, whose windows show them: only Unity draws them
                         var against = (fL ? Skip.UStart : Skip.None) | (fR ? Skip.UEnd : Skip.None) | (fB ? Skip.Out : Skip.None);
