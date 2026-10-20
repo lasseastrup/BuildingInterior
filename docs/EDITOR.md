@@ -61,6 +61,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    With nothing selected it says so. Delete the site from the Hierarchy.
 7. Delete the site's GameObject anyway (from the Hierarchy), then undo: the site comes back with the layout as it was. The edit is written to the file before the site goes, and shown on it again when it returns.
 6. Enter and leave Play mode, and edit a script to force a domain reload, while editing: the edit and its undo history survive.
+   - With domain reload off (*Project Settings ▸ Editor ▸ When entering Play Mode*), make a building walk-in and enter Play mode: Play mode shows it walk-in. The layout is saved and reimported as Play starts, and the reimport writes the new text into the same asset object, so the asset reads it again rather than keeping its parse of the layout from before (`StoreyDocumentAsset`). Play mode showed the layout from before the edit until a domain reload.
 
 ## 5. Slices 6.4–6.7: what is written, and checking it in the editor
 

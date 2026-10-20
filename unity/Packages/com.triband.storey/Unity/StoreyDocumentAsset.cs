@@ -35,7 +35,10 @@ namespace Triband.Storey.Unity
         [SerializeField] internal string[] unknownKeys = System.Array.Empty<string>();
         [SerializeField, HideInInspector] internal byte[] baked = System.Array.Empty<byte>();
 
-        StoreyDocument? cached;
+        // the parse, and what it was read from (Source). A reimport writes the new text and bytes into this same object and
+        // clears nothing else, so the parse is of what the asset holds only while that is the same. With no domain reload
+        // before Play, the parse made before an edit was kept, and Play mode showed the layout as it was before it
+        StoreyDocument? cached; object? cachedFrom;
         Lod.LayoutParse? parse;
         BakedLayout? bakedLayout; byte[]? bakedFrom;
 
@@ -71,24 +74,25 @@ namespace Triband.Storey.Unity
         public string[] UnknownKeys => unknownKeys;
 
         /// <summary>
-        /// The parsed layout, read once per asset load (from <see cref="Baked"/> when there is one), on the caller's
-        /// thread: one being read on a build thread (<see cref="DocumentOffMainThread"/>) is waited for.
+        /// The parsed layout, read once per asset load and again after a reimport (from <see cref="Baked"/> when there is
+        /// one), on the caller's thread: one being read on a build thread (<see cref="DocumentOffMainThread"/>) is waited for.
         /// </summary>
         public StoreyDocument Document
         {
             get
             {
-                if (cached == null)
+                var from = Source;
+                if (cached == null || !ReferenceEquals(cachedFrom, from))
                 {
-                    cached = parse != null && ReferenceEquals(parse.Source, Source) ? parse.Wait() : Read();
-                    parse = null;
+                    cached = parse != null && ReferenceEquals(parse.Source, from) ? parse.Wait() : Read();
+                    cachedFrom = from; parse = null;
                 }
                 return cached;
             }
         }
 
         /// <summary>The parsed layout when it is parsed already, otherwise null: nothing is parsed.</summary>
-        public StoreyDocument? Parsed => cached;
+        public StoreyDocument? Parsed => cached != null && ReferenceEquals(cachedFrom, Source) ? cached : null;
 
         /// <summary>
         /// The parsed layout, parsed on a build thread (<see cref="Lod.LayoutParse"/>): null until it is done, the parse
@@ -97,11 +101,11 @@ namespace Triband.Storey.Unity
         /// </summary>
         public StoreyDocument? DocumentOffMainThread()
         {
-            if (cached != null) return cached;
             var from = Source;
+            if (cached != null && ReferenceEquals(cachedFrom, from)) return cached;
             if (parse == null || !ReferenceEquals(parse.Source, from)) parse = from is BakedLayout b ? new Lod.LayoutParse(b) : new Lod.LayoutParse(json);
             var d = parse.Document;
-            if (d != null) { cached = d; parse = null; }
+            if (d != null) { cached = d; cachedFrom = from; parse = null; }
             return d;
         }
 
@@ -144,7 +148,7 @@ namespace Triband.Storey.Unity
         static void LetGo()
         {
             // a parse running finishes on its thread, unread; the baked layout's reader goes with its strings, made again when asked for
-            foreach (var a in letGo) { a.cached = null; a.parse = null; a.bakedLayout = null; a.bakedFrom = null; }
+            foreach (var a in letGo) { a.cached = null; a.cachedFrom = null; a.parse = null; a.bakedLayout = null; a.bakedFrom = null; }
             letGo.Clear();
         }
 
@@ -158,7 +162,7 @@ namespace Triband.Storey.Unity
             coreCount = s.coreCount;
             detailCount = s.detailCount;
             unknownKeys = s.unknownKeys.ToArray();
-            cached = null; parse = null;
+            cached = null; cachedFrom = null; parse = null;
         }
     }
 }
