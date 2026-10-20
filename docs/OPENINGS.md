@@ -131,7 +131,7 @@ Today *Stretch* scales everything to the style's opening, and with it off the me
 
 ### 4.1 The window decides its hole (step 2)
 
-With *Stretch* off ("Keep size"), the hole takes the window's size. `Facade.WindowSpec` takes its width and height from the style's window kind, and the style still decides where windows go (its bays) and their sill height. Everything that uses openings follows, since they're all laid out from `WindowSpec`: LOD0, LOD1, LOD2's painted windows (`Lod2.SpecOf`), courtyard walls, the facade details and the editor's tools. A window wider than its bay allows (the bay less 0.5 m, as `Ops` keeps it) is narrowed and fitted into the smaller hole, and the Facade tab says so. That is the old solution's behaviour, without setting *Window width* to match.
+With *Stretch* off ("Keep size"), the hole takes the window's size. `Facade.WindowSpec` takes its width and height from the style's window kind, and the style still decides where windows go (its bays) and their sill height (*Sill height*, `FacadeStyle.sillH`, added after the plan; without it, the window type's sill). Everything that uses openings follows, since they're all laid out from `WindowSpec`: LOD0, LOD1, LOD2's painted windows (`Lod2.SpecOf`), courtyard walls, the facade details and the editor's tools. A window wider than its bay allows (the bay less 0.5 m, as `Ops` keeps it) is narrowed and fitted into the smaller hole, and the Facade tab says so. That is the old solution's behaviour, without setting *Window width* to match.
 
 Doors keep the standard doorway (1.6 m, `Dim.DOOR_EXT`), which the entrance tools, courtyards and the walls' door spots assume, and a door is fitted into it. Doors of their own size come later (§7).
 

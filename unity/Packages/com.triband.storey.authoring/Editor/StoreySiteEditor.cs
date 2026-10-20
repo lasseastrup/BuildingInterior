@@ -540,12 +540,12 @@ namespace Triband.Storey.Editor
                 StoreyInspectorUI.Section("Style", "Start from a preset; every change below makes the style this building's own");
                 Presets(e, b, k0, st);
                 StoreyInspectorUI.Section("Windows and doors");
-                StyleEnum(e, k0, "Windows", st.windows, (s, x) => s.windows = x);
                 KindPopup(e, k0, "Window", st.windowKind, false);
                 bool ownSize = Generate.OpeningKinds.Of(st, false) is Generate.OpeningKind wk && !wk.stretch;
-                using (new EditorGUI.DisabledScope(ownSize))
+                Openings(e, k0, st, ownSize);
+                // Window width sizes Punched and Tall holes alone: Ribbon and Curtain span the bay, and a window of its own size is its own width
+                using (new EditorGUI.DisabledScope(ownSize || st.windows is not (WindowType.Punched or WindowType.Tall)))
                     StyleSlider(e, k0, "Window width", st.winW, 0.6, 2.4, 0.1, (s, x) => s.winW = x);
-                if (ownSize) EditorGUILayout.LabelField("The artist's window keeps its own size: its hole is as wide and high as it is.", StoreyInspectorUI.Caption);
                 StyleSlider(e, k0, "Bay spacing", st.bay, 1.4, 5, 0.1, (s, x) => s.bay = x);
                 WindowDetails(e, b, k0, st);
                 StoreyInspectorUI.Section("Walls");
@@ -725,6 +725,33 @@ namespace Triband.Storey.Editor
             StyleSlider(e, k0, "Brick patches", st.bricks ?? 0, 0, 1, 0.05, (s, x) => s.bricks = x > 0 ? x : (double?)null);
         }
 
+        static readonly GUIContent OpeningsLabel = new GUIContent("Openings",
+            "Where each storey's windows are and how big their holes are, whatever window fills them (the ground floor follows Ground floor). " +
+            "Punched: up to 1.35 m high over a 90 cm sill, Window width wide. Tall: from 40 cm to half a metre under the storey's top, Window width wide. " +
+            "Ribbon: a strip across each bay. Curtain: glass across each bay, floor to ceiling. None: blank walls.");
+        static readonly GUIContent OwnSizeLabel = new GUIContent("Openings", "The artist's window keeps its own size, so each hole is as big as it is, as high over its floor as Sill height says. None: blank walls.");
+        static readonly GUIContent[] OwnSizeChoices = { new GUIContent("The window's own size"), new GUIContent("None") };
+
+        /// <summary>
+        /// The style's openings (its window type, docs/EDITOR.md §6.9): where each storey's windows are and how big their
+        /// holes are. An artist's window that keeps its own size leaves two things to them: whether there are any, and how high
+        /// they sit (<see cref="FacadeStyle.sillH"/>, which starts at the type's sill).
+        /// </summary>
+        static void Openings(StoreyEdit e, int k0, FacadeStyle st, bool ownSize)
+        {
+            if (!ownSize)
+            {
+                var x = (WindowType)EditorGUILayout.EnumPopup(OpeningsLabel, st.windows);
+                if (x != st.windows) e.ApplyTo("Openings", bb => { Styles.Edited(bb, k0).windows = x; return true; });
+                return;
+            }
+            int was = st.windows == WindowType.None ? 1 : 0, pick = EditorGUILayout.Popup(OwnSizeLabel, was, OwnSizeChoices);
+            if (pick != was) e.ApplyTo(pick == 1 ? "No windows" : "Windows", bb => { Styles.Edited(bb, k0).windows = pick == 1 ? WindowType.None : WindowType.Punched; return true; });
+            if (was == 1) return;
+            StyleSlider(e, k0, "Sill height", st.sillH ?? Generate.Facade.SillOf(st.windows), 0, 2, 0.05, (s, x) => s.sillH = x);
+            EditorGUILayout.LabelField("The window keeps its own size, this high over each floor.", StoreyInspectorUI.Caption);
+        }
+
         /// <summary>
         /// The generator's window (or street door), or one an artist made (a Storey Opening asset: docs/EDITOR.md §6.9).
         /// Picking one adds it to the site's list, so builds include it.
@@ -737,7 +764,7 @@ namespace Triband.Storey.Editor
             if (kinds.Count == 0) names.Add(door ? "(make one: Create ▸ Storey ▸ Window or Door)" : "(make one: Create ▸ Storey ▸ Window or Door)");
             int at = current == null ? 0 : kinds.FindIndex(o => o.Id == current) + 1;
             if (current != null && at == 0) { names.Add("Missing: " + current.Substring(0, Math.Min(8, current.Length))); at = names.Count - 1; }
-            int pick = EditorGUILayout.Popup(new GUIContent(label, door ? "Street doors: the style's own (Canopy or Glazed), or one an artist made" : "Windows: the generator's own, or one an artist made"), at, names.Select(n => new GUIContent(n)).ToArray());
+            int pick = EditorGUILayout.Popup(new GUIContent(label, door ? "Street doors: the style's own (Canopy or Glazed), or one an artist made" : "What fills each opening: the generator's own window, or one an artist made"), at, names.Select(n => new GUIContent(n)).ToArray());
             if (pick == at) return;
             if (pick == 0) { e.ApplyTo(label + ": generated", bb => { var s = Styles.Edited(bb, k0); if (door) s.doorKind = null; else s.windowKind = null; return true; }); return; }
             if (pick - 1 >= kinds.Count) return;

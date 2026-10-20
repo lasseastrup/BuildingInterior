@@ -310,6 +310,7 @@ namespace UnityEditor
         public static bool Toggle(string label, bool value, params GUILayoutOption[] options) => value;
         public static bool Toggle(GUIContent label, bool value, params GUILayoutOption[] options) => value;
         public static System.Enum EnumPopup(string label, System.Enum selected, params GUILayoutOption[] options) => selected;
+        public static System.Enum EnumPopup(GUIContent label, System.Enum selected, params GUILayoutOption[] options) => selected;
         public static bool Foldout(bool foldout, string content, bool toggleOnLabelClick) => foldout;
         public static bool Foldout(bool foldout, GUIContent content, bool toggleOnLabelClick) => foldout;
         public static bool Foldout(bool foldout, GUIContent content, bool toggleOnLabelClick, GUIStyle style) => foldout;

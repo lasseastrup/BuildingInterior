@@ -284,6 +284,11 @@ namespace Triband.Storey
         public DoorType doorType = DoorType.Canopy;
         /// <summary>An artist-made window and street door (<see cref="Generate.OpeningKinds"/>), by id; null = the generator's own.</summary>
         public string? windowKind, doorKind;
+        /// <summary>
+        /// How high an artist's window that keeps its own size sits over each floor, in metres (docs/EDITOR.md §6.9); null = the
+        /// sill of its <see cref="windows"/> type (<see cref="Generate.Facade.SillOf"/>). Other windows take their type's.
+        /// </summary>
+        public double? sillH;
         /// <summary>The ground floor's plinth height; null = 0.45 m.</summary>
         public double? plinthH;
         /// <summary>A foundation along the foot of the ground floor: how deep it goes below ground (null = none), and how high it shows (null = 0.2 m).</summary>

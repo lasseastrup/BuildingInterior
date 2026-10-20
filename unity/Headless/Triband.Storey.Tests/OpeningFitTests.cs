@@ -100,6 +100,76 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void AWindowOfItsOwnSizeSitsAtTheStylesSillHeight()
+        {
+            With(Dressed("t-fit-sill", 0.9, 1.3, keep: true), () =>
+            {
+                // without a sill height, as high as its type's windows (Punched: 90 cm); with one, that high, in every LOD
+                foreach (var (sill, want) in new[] { ((double?)null, 0.9), (1.2, 1.2), (0.3, 0.3) })
+                {
+                    var (b, s) = Block(st => { st.windowKind = "t-fit-sill"; st.sillH = sill; });
+                    int windows = 0;
+                    foreach (var (k, _, _, ops) in Walls(b, s))
+                        foreach (var o in ops.Where(o => !o.door))
+                        {
+                            windows++;
+                            Assert.InRange(o.y0, want - 1e-9, want + 1e-9);
+                            Assert.InRange(o.y1 - o.y0, 1.3 - 1e-9, 1.3 + 1e-9);
+                        }
+                    Assert.True(windows > 10, $"{windows} windows");
+                    var spec = Lod2.SpecOf(Facade.WindowSpec(b.style.windows, Derived.FloorH(b, 1), b.style));
+                    Assert.Equal(want, spec[2], 9); Assert.Equal(want + 1.3, spec[3], 9);
+                }
+                // over a plinth, the ground floor's stay 15 cm above it
+                var (bp, sp) = Block(st => { st.windowKind = "t-fit-sill"; st.sillH = 0.3; st.plinthH = 0.8; });
+                foreach (var (k, _, _, ops) in Walls(bp, sp))
+                    foreach (var o in ops.Where(o => !o.door)) Assert.InRange(o.y0, (k == 0 ? 0.95 : 0.3) - 1e-9, (k == 0 ? 0.95 : 0.3) + 1e-9);
+            });
+        }
+
+        [Fact]
+        public void OnlyAWindowOfItsOwnSizeTakesTheSillHeight()
+        {
+            // the generator's own windows, and an artist's fitted to the openings, take their type's sill whatever the style says
+            With(Dressed("t-fit-sill-stretch", 1.0, 1.5), () =>
+            {
+                foreach (var kind in new[] { null, "t-fit-sill-stretch" })
+                {
+                    var (b, s) = Block(st => { st.windowKind = kind; st.sillH = 1.5; });
+                    var ys = Walls(b, s).SelectMany(w => w.ops).Where(o => !o.door).Select(o => o.y0).ToList();
+                    Assert.NotEmpty(ys);
+                    Assert.All(ys, y => Assert.InRange(y, 0.9 - 1e-9, 0.9 + 1e-9));
+                }
+            });
+        }
+
+        [Fact]
+        public void ASillTooHighForItsStoreyLeavesNoWindowsAtAnyLod()
+        {
+            With(Dressed("t-fit-sill-high", 0.9, 1.3, keep: true), () =>
+            {
+                // squeezed under the storey's top into a hole 20 cm high: none in LOD0 and LOD1, and none painted in LOD2,
+                // which painted a 20 cm strip
+                var (b0, _) = Block(); double h = Derived.FloorH(b0, 1);
+                var (b, s) = Block(st => { st.windowKind = "t-fit-sill-high"; st.sillH = h - 0.3; });
+                Assert.Null(Facade.WindowSpec(b.style.windows, h, b.style));
+                Assert.DoesNotContain(Walls(b, s).Where(w => w.k > 0 && Math.Abs(Derived.FloorH(b, w.k) - h) < 1e-9).SelectMany(w => w.ops), o => !o.door);
+                var spec = Lod2.SpecOf(Facade.WindowSpec(b.style.windows, h, b.style));
+                Assert.True(spec[3] <= spec[2], "LOD2 paints a window");
+            });
+        }
+
+        [Fact]
+        public void TheSillHeightIsKeptInTheLayout()
+        {
+            var st = Styles.Preset("brick"); st.sillH = 1.15;
+            var json = PrototypeJson.WriteStyle(st);
+            Assert.Contains("\"sillH\"", json);
+            Assert.Equal(1.15, PrototypeJson.ReadStyle(json).sillH);
+            Assert.DoesNotContain("\"sillH\"", PrototypeJson.WriteStyle(Styles.Preset("brick")));   // none set, none written
+        }
+
+        [Fact]
         public void StretchedWindowsKeepTheStylesHoles()
         {
             // without Keep size, or without dressing, an artist's window leaves the openings as the generator's are

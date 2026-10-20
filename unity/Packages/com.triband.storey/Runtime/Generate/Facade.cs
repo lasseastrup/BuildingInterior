@@ -14,15 +14,19 @@ namespace Triband.Storey.Generate
         static WinSpec? RawSpec(WindowType kind, double h, FacadeStyle st, bool storefront)
         {
             if (storefront) return new WinSpec { sp = st.bay, full = 0.4, y0 = 0.4, y1 = h - 0.75 };
+            double y0 = SillOf(kind);
             switch (kind)
             {
-                case WindowType.Punched: return new WinSpec { sp = st.bay, w = st.winW, y0 = 0.9, y1 = Math.Min(h - 0.55, 2.25) };
-                case WindowType.Tall: return new WinSpec { sp = st.bay, w = st.winW, y0 = 0.4, y1 = h - 0.5 };
-                case WindowType.Ribbon: return new WinSpec { sp = st.bay, full = 0.2, y0 = 0.95, y1 = h - 0.6 };
-                case WindowType.Curtain: return new WinSpec { sp = st.bay, full = 0.07, y0 = 0.1, y1 = h - 0.1 };
+                case WindowType.Punched: return new WinSpec { sp = st.bay, w = st.winW, y0 = y0, y1 = Math.Min(h - 0.55, 2.25) };
+                case WindowType.Tall: return new WinSpec { sp = st.bay, w = st.winW, y0 = y0, y1 = h - 0.5 };
+                case WindowType.Ribbon: return new WinSpec { sp = st.bay, full = 0.2, y0 = y0, y1 = h - 0.6 };
+                case WindowType.Curtain: return new WinSpec { sp = st.bay, full = 0.07, y0 = y0, y1 = h - 0.1 };
                 default: return null;
             }
         }
+
+        /// <summary>How high a window type's windows start over the floor (metres): what an artist's window of its own size takes without <see cref="FacadeStyle.sillH"/>.</summary>
+        public static double SillOf(WindowType kind) => kind switch { WindowType.Tall => 0.4, WindowType.Ribbon => 0.95, WindowType.Curtain => 0.1, _ => 0.9 };
 
         /// <summary>The ground floor's window spec: the style's own, none, or a storefront.</summary>
         public static WinSpec? GroundSpec(FacadeStyle st, double h)
@@ -36,14 +40,16 @@ namespace Triband.Storey.Generate
         /// <summary>
         /// A window spec finished for its style (docs/OPENINGS.md §4.1, §4.2). An artist's window that keeps its size
         /// (<see cref="OpeningKind.stretch"/> off) makes the hole its own size, the style still deciding where it goes and its
-        /// sill's height; and its dressing stays clear of the floor, of a plinth (<paramref name="plinth"/>: its top, on the
-        /// ground floor), of the storey's top and of a band. The generator's own windows, and their arched heads, stay under a
-        /// band, and over a plinth.
+        /// sill's height (<see cref="FacadeStyle.sillH"/>, or its type's); and its dressing stays clear of the floor, of a
+        /// plinth (<paramref name="plinth"/>: its top, on the ground floor), of the storey's top and of a band. The generator's
+        /// own windows, and their arched heads, stay under a band, and over a plinth. A hole left 40 cm high or less is none:
+        /// <see cref="Ops"/> lays out no windows there, and LOD2 paints none.
         /// </summary>
         static WinSpec? Fit(WinSpec? ws, double h, FacadeStyle st, double? plinth)
         {
             if (ws == null) return null;
             var k = OpeningKinds.Of(st, false);
+            if (k != null && !k.stretch && st.sillH is double sill) ws.y0 = sill;
             double sy = k != null && OpeningKinds.Stretched(k) ? (ws.y1 - ws.y0) / Math.Max(1e-3, k.h) : 1, rb = (k?.reachB ?? 0) * sy, rt = (k?.reachT ?? 0) * sy;
             if (plinth is double p) ws.y0 = Math.Max(ws.y0, p + Math.Max(0.15, rb + 0.05));
             if (k != null)
@@ -54,7 +60,7 @@ namespace Triband.Storey.Generate
             }
             // a band of the style's own height: windows (and their heads) stay under it
             if (st.bandH is double bh && st.bands) ws.y1 = Math.Min(ws.y1, h - bh - (k != null ? Math.Max(0.1, rt + 0.05) : st.head == HeadType.Arch ? 0.3 : 0.1));
-            return ws;
+            return ws.y1 - ws.y0 > 0.4 ? ws : null;
         }
 
         /// <summary>
