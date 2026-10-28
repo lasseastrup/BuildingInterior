@@ -33,6 +33,15 @@ namespace Triband.Storey.Editor.ColorPipeline
                 var d = palette.Colors[i];
                 return (ColorPipelinePalette.IdOf(d.ID), d.Name);
             };
+            StoreyColorField.RemapOf = c =>
+            {
+                if (!(c is ColorRemap r)) return null;
+                var map = new Dictionary<string, string>(StringComparer.Ordinal);
+                var from = r.OriginalColors; var to = r.OverwriteColors;
+                if (from != null && to != null)
+                    for (int i = 0; i < from.Count && i < to.Count; i++) map[ColorPipelinePalette.IdOf(from[i])] = ColorPipelinePalette.IdOf(to[i]);
+                return map;
+            };
             StoreyColorField.Conform = d =>
             {
                 ColorPaletteDefinition palette;

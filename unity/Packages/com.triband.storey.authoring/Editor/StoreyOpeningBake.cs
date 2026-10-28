@@ -36,7 +36,7 @@ namespace Triband.Storey.Editor
             public readonly Dictionary<string, string> owns = new Dictionary<string, string>(StringComparer.Ordinal);
             public readonly List<string> notes = new List<string>();
             public int objects;
-            readonly Dictionary<(string material, int index), string> palette = new Dictionary<(string, int), string>();
+            readonly Dictionary<(string material, int index, string? to), string> palette = new Dictionary<(string, int, string?), string>();
 
             public void Key(string key, string label)
             {
@@ -46,16 +46,19 @@ namespace Triband.Storey.Editor
 
             /// <summary>
             /// The key of a material's triangles of one palette colour (the Model Remapper's), named after the palette entry,
-            /// which it keeps as its own colour; by its index when there is no palette to name it.
+            /// which it keeps as its own colour; by its index when there is no palette to name it. A remap on the renderer
+            /// (<see cref="StoreyColorField.RemapOf"/>) gives the colour it draws instead.
             /// </summary>
-            public string Palette(string material, string materialName, int index)
+            public string Palette(string material, string materialName, int index, IReadOnlyDictionary<string, string>? remap = null)
             {
-                if (palette.TryGetValue((material, index), out var key)) return key;
                 var entry = StoreyColorField.PaletteEntryAt?.Invoke(index);
-                key = material + "|" + (entry?.id ?? "#" + index);
-                Key(key, entry?.name ?? $"{materialName}, palette colour {index}");
-                if (entry != null) owns[key] = entry.Value.id;
-                return palette[(material, index)] = key;
+                string? to = entry != null && remap != null && remap.TryGetValue(entry.Value.id, out var r) && r != entry.Value.id ? r : null;
+                if (palette.TryGetValue((material, index, to), out var key)) return key;
+                string? id = to ?? entry?.id;
+                key = material + "|" + (id ?? "#" + index);
+                Key(key, entry == null ? $"{materialName}, palette colour {index}" : to != null ? $"{entry.Value.name} (remapped)" : entry.Value.name);
+                if (id != null) owns[key] = id;
+                return palette[(material, index, to)] = key;
             }
         }
 
@@ -159,10 +162,17 @@ namespace Triband.Storey.Editor
                 leaf |= leaves.Contains(t);
                 int k = keeps.IndexOf(t); if (k >= 0) keep = k;   // under the nearest object that keeps its shape
                 var f = t.GetComponent<MeshFilter>(); var r = t.GetComponent<MeshRenderer>();
-                if (f != null && r != null && f.sharedMesh != null && r.enabled && (here == null || here.Contains(r) || !elsewhere!.Contains(r)))
-                    Add(g, f.sharedMesh, r.sharedMaterials, toRoot * t.localToWorldMatrix, leaf, t.name).keep = keep;
+                // a palette remap on the object (Color Pipeline's ColorRemap) is kept: its colours are the parts' own
+                IReadOnlyDictionary<string, string>? remap = null;
                 foreach (var c in t.GetComponents<Component>())
-                    if (c != null && !Quiet(c)) g.notes.Add($"{c.GetType().Name} on {t.name} isn't carried over: Storey builds only the meshes.");
+                {
+                    if (c == null || Quiet(c)) continue;
+                    var m = StoreyColorField.RemapOf?.Invoke(c);
+                    if (m != null) { remap = m; continue; }
+                    g.notes.Add($"{c.GetType().Name} on {t.name} isn't carried over: Storey builds only the meshes.");
+                }
+                if (f != null && r != null && f.sharedMesh != null && r.enabled && (here == null || here.Contains(r) || !elsewhere!.Contains(r)))
+                    Add(g, f.sharedMesh, r.sharedMaterials, toRoot * t.localToWorldMatrix, leaf, t.name, remap).keep = keep;
                 for (int i = 0; i < t.childCount; i++) Walk(t.GetChild(i), leaf, keep);
             }
             Walk(root.transform, false, -1);
@@ -195,7 +205,7 @@ namespace Triband.Storey.Editor
             return g;
         }
 
-        static KindBake.Source Add(Gathered g, Mesh mesh, Material[] mats, Matrix4x4 m, bool leaf, string objectName)
+        static KindBake.Source Add(Gathered g, Mesh mesh, Material[] mats, Matrix4x4 m, bool leaf, string objectName, IReadOnlyDictionary<string, string>? remap = null)
         {
             var s = Source(mesh, m, leaf);
             var colours = PaletteColours(mesh);
@@ -212,7 +222,7 @@ namespace Triband.Storey.Editor
                     for (int t = 0; t < sub.keys.Length; t++)
                     {
                         int v = sub.tris[t * 3];
-                        sub.keys[t] = g.Palette(key, mats[k].name, (uint)v < (uint)colours.Length ? colours[v] : 0);
+                        sub.keys[t] = g.Palette(key, mats[k].name, (uint)v < (uint)colours.Length ? colours[v] : 0, remap);
                     }
                 }
                 s.subs.Add(sub);

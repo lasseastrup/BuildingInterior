@@ -43,6 +43,12 @@ namespace Triband.ColorPipeline.Runtime
         public int GetIndexOfColor(SerializableGUID id) => 0;
     }
 
+    public class ColorRemap : UnityEngine.MonoBehaviour
+    {
+        public System.Collections.Generic.IReadOnlyList<SerializableGUID> OriginalColors => null;
+        public System.Collections.Generic.IReadOnlyList<SerializableGUID> OverwriteColors => null;
+    }
+
     public struct ColorRemapDescriptor
     {
         public ColorRemapDescriptor(SerializableGUID[] originalColors, SerializableGUID[] overwriteColors) { }

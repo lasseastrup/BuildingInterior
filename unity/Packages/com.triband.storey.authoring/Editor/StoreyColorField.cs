@@ -50,6 +50,13 @@ namespace Triband.Storey.Editor
         /// </summary>
         public static Func<int, (string id, string name)?>? PaletteEntryAt { get; set; }
 
+        /// <summary>
+        /// A component's palette colour remap, original palette id to the one drawn instead (Color Pipeline's
+        /// <c>ColorRemap</c> on a prefab's renderer), for a prefab's bake to keep (docs/OPENINGS.md §6); null for any other
+        /// component, and without a palette. Color Pipeline's integration installs it. Storey's own.
+        /// </summary>
+        public static Func<UnityEngine.Component, IReadOnlyDictionary<string, string>?>? RemapOf { get; set; }
+
         sealed class HexPicker : IStoreyColorPicker
         {
             public string? Draw(string key, string label, string value, string field, Func<string, PaletteEntry?> lookup)
