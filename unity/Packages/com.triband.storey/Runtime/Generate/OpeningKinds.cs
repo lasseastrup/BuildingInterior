@@ -282,8 +282,9 @@ namespace Triband.Storey.Generate
                 {
                     if (shell || gl == null)
                     {
+                        // a door's glass shows a room too, as the project's Window shader shows one behind the old generator's doors
                         int first = part.Put(op, at, C.glassDark);
-                        if (!k.door) Facade.PaneUV(op, first, F, u0, u1, y0, y1);
+                        Facade.PaneUV(op, first, F, u0, u1, y0, y1);
                     }
                     else
                     {

@@ -182,6 +182,9 @@ namespace Triband.Storey.Tests
                 Assert.Equal(strip > 0 ? (14 - 2 * inset) * (10 - 2 * inset) - (14 - 2 * inset - 2 * strip) * (10 - 2 * inset - 2 * strip) : 0, stripArea, 3);
                 // no curb: nothing in the trim's colour stands above the walls' top
                 Assert.DoesNotContain(Enumerable.Range(0, op.Verts), v => op.C[v].slot == ColorSlot.Trim && op.P[v].y > top + 1e-6);
+                // the roof round the block in the cap's rim colour, as the old generator's roof insert has it
+                Assert.Contains(Enumerable.Range(0, op.Verts), v => op.C[v].slot == ColorSlot.CapRim && op.N[v].y > 0.9 && Math.Abs(op.P[v].y - top) < 1e-6);
+                Assert.DoesNotContain(Enumerable.Range(0, op.Verts), v => op.C[v].slot == ColorSlot.Roof && op.N[v].y > 0.9 && Math.Abs(op.P[v].y - top) < 1e-6);
                 var r = CoplanarCheck.Run(Lod0.Build(site, b, solids: true).Op);
                 Assert.True(r.Overlaps.Count == 0, string.Join("\n", r.Overlaps.Take(5)));
             }

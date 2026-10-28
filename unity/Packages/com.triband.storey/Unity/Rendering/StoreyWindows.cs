@@ -45,6 +45,8 @@ namespace Triband.Storey.Unity
         void Update() => Apply();
         void OnDisable() => Shader.SetGlobalFloat(On, 0);
 
+        static Vector4 Linear(Color c) => QualitySettings.activeColorSpace == ColorSpace.Linear ? c.linear : c;
+
         void Apply()
         {
             if (!isActiveAndEnabled) return;
@@ -52,9 +54,11 @@ namespace Triband.Storey.Unity
             Shader.SetGlobalTexture(Rooms, rooms != null ? rooms : Texture2D.blackTexture);
             Shader.SetGlobalTexture(Glare, glare != null ? glare : Texture2D.blackTexture);
             Shader.SetGlobalVector(Atlas, new Vector4(Mathf.Max(1, atlasGrid.x), Mathf.Max(1, atlasGrid.y), depth, glare != null ? glareStrength : 0));
-            Shader.SetGlobalVector(Tint, tint);
-            Shader.SetGlobalVector(Light, light);
-            Shader.SetGlobalVector(Light2, light2);
+            // colours as a material's colour properties are, in linear space when the project is: a global keeps what it is given,
+            // and the gamma values made the rooms several times too bright
+            Shader.SetGlobalVector(Tint, Linear(tint));
+            Shader.SetGlobalVector(Light, Linear(light));
+            Shader.SetGlobalVector(Light2, Linear(light2));
             Shader.SetGlobalVector(Night, new Vector4(NightBlend ?? nightBlend, lightChance, 0, 0));
         }
     }

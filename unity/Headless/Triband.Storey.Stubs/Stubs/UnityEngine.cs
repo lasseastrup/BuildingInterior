@@ -107,10 +107,13 @@ namespace UnityEngine
 
     public enum LogType { Error = 0, Assert = 1, Warning = 2, Log = 3, Exception = 4 }
 
+    public enum ColorSpace { Uninitialized = -1, Gamma = 0, Linear = 1 }
+
     public static class QualitySettings
     {
         public static string[] names => new string[0];
         public static int GetQualityLevel() => 0;
+        public static ColorSpace activeColorSpace => ColorSpace.Linear;
     }
 
     public class ScriptableObject : Object
@@ -255,6 +258,7 @@ namespace UnityEngine
         public float r, g, b, a;
         public Color(float r, float g, float b, float a = 1) { this.r = r; this.g = g; this.b = b; this.a = a; }
         public static Color white => default;
+        public Color linear => this;
         public static Color Lerp(Color a, Color b, float t) => a;
         public static implicit operator Vector4(Color c) => new Vector4(c.r, c.g, c.b, c.a);
     }

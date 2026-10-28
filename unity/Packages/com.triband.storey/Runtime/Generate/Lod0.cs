@@ -227,8 +227,12 @@ namespace Triband.Storey.Generate
             var up = new P3(0, 1, 0); var down = new P3(0, -1, 0);
             // a raised roof cap that covers the whole roof lifts it to its top (RoofCap.Lid), the cap's own top round it
             double lidIn = 0, lid = k == N ? RoofCap.Lid(b, out lidIn) : 0;
+            // round an inset cap's block the roof is in the cap's rim colour where the style gives one, as the old generator's
+            // roof insert has the roof round its block
+            var stN = Derived.StyleAt(b, N);
+            var roofC = k == N && stN.capRim != null && RoofCap.Of(b) is RoofCap rc && rc.inset && RoofCap.Whole(b) ? C.CapRimOf(stN) : C.roof;
             if (!step && lidIn > 1e-6) foreach (var r in Courtyards.Offset(outer, -lidIn)) Surf(r, floorHoles, y + lid, up, C.roof);
-            else if (!step) Surf(outer, floorHoles, y + lid, up, k == N ? C.roof : C.floor);
+            else if (!step) Surf(outer, floorHoles, y + lid, up, k == N ? roofC : C.floor);
             else
             {
                 // a stair opening out on the terrace (straight flights coming up onto it): the deck is cut round it, and the
