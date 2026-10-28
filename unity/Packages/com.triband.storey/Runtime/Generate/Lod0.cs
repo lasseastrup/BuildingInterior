@@ -414,7 +414,7 @@ namespace Triband.Storey.Generate
                     var stk = Derived.StyleAt(b, k);
                     Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : Wall(stk, C, k == 0), C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? Facade.ShellRevealFrom(stk, false, OpeningSets.Representative(stk, k == 0, out var rk) ? rk : null) : 0, rooms: rooms,
                         doorRevealFrom: shell ? Facade.ShellRevealFrom(stk, true, OpeningKinds.Of(stk, true)) : (double?)null, thresholdC: k == 0 ? C.foundation : (Swatch?)null, doorsRecessed: stk.doorRecess.HasValue));
-                    Facade.Dress(op, gl, F, ops, y, C, shell, stk, Wall(stk, C, k == 0));
+                    Facade.Dress(op, gl, F, ops, y, C, shell, stk, Wall(stk, C, k == 0), Panel, pm, h);
                     if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
                     if (!party && stk.bricks is double density && density > 0)
                     {
