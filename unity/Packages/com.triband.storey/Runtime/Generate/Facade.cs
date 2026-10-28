@@ -326,7 +326,7 @@ namespace Triband.Storey.Generate
             {
                 // fixed bays on the wall's outer face, from the outline (not the caller's span), so every caller has them alike
                 var (oS, oE) = st.bayFit == BayFit.Fixed && i < Derived.OutlineAt(b, k).Count ? OuterFace(b, k, i) : (uS, uE);
-                Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, oS, oE, shaftHere, cornice);
+                Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, oS, oE, shaftHere, cornice, Derived.ShellAt(b, k));
             }
             ops.Sort((p, q) => p.u0.CompareTo(q.u0));
             return ops;
@@ -347,7 +347,7 @@ namespace Triband.Storey.Generate
         /// meets the window before it.
         /// </summary>
         internal static void Windows(List<Opening> ops, OpeningPool? pool, FacadeStyle st, double h, bool ground, string id, int k, int k0, int edge, double uS, double uE,
-            double oS, double oE, List<Cores.Flush>? shafts, double? cornice = null)
+            double oS, double oE, List<Cores.Flush>? shafts, double? cornice = null, bool shell = false)
         {
             var set = OpeningSets.Windows(st, ground);
             var (wS, wE) = WindowSpan(st, ground, uS, uE);
@@ -373,7 +373,10 @@ namespace Triband.Storey.Generate
                     // clear of the corners as the span keeps them, dressing and all; then clear of the window before: holes a
                     // centimetre apart at least (a strip of wall between them), so windows a bay wide stand in a row as the old
                     // generator's ribbons do
-                    double lo = uS - (CornerClear - FixedCornerClear) + (wk?.reachL ?? 0) * sx + ww / 2, hi = uE + (CornerClear - FixedCornerClear) - (wk?.reachR ?? 0) * sx - ww / 2;
+                    // a shell storey draws its wall's outer face and the reveals only: its windows may reach to the outer face's
+                    // corners, as the old generator's (whose walls had no thickness) did; a walk-in one keeps clear of its inner face's
+                    double lo = (shell ? oS : uS - CornerClear) + FixedCornerClear + (wk?.reachL ?? 0) * sx + ww / 2;
+                    double hi = (shell ? oE : uE + CornerClear) - FixedCornerClear - (wk?.reachR ?? 0) * sx - ww / 2;
                     if (lo > hi) continue;
                     c = Math.Max(lo, Math.Min(hi, c));
                     if (c - ww / 2 < last + 0.01) continue;

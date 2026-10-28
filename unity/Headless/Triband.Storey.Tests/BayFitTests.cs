@@ -154,7 +154,16 @@ namespace Triband.Storey.Tests
                 var ops = Ops(s, b, 2, 1).Where(o => !o.door).OrderBy(o => o.u0).ToList();
                 Assert.Equal(n, ops.Count);   // every bay has its window: none dropped for standing close to the one before
                 for (int j = 1; j < ops.Count; j++) Assert.InRange(ops[j].u0 - ops[j - 1].u1, 0.01, 0.05);
+                // the 14 m wall's outer face holds ten bays with 15 cm to spare at either end: on a shell storey, whose wall is
+                // drawn by its outer face, the end windows stay where their bays put them, into the corner past the inner face
+                var (os2, oe2) = Outer(Rect, 2);
+                int n2 = (int)Math.Floor((oe2 - os2) / 1.43 + 1e-6);
+                var ops2 = Ops(s, b, 2, 2).Where(o => !o.door).OrderBy(o => o.u0).ToList();
+                Assert.Equal(n2, ops2.Count);
+                Assert.True(ops2[0].u0 < 0 && ops2[0].u0 >= os2 + Facade.FixedCornerClear - 1e-9, $"the first window starts at {ops2[0].u0:0.###}");
+                for (int j = 1; j < ops2.Count; j++) Assert.True(ops2[j].u0 - ops2[j - 1].u1 >= 0.01 - 1e-9);
                 Assert.Empty(CoplanarCheck.Run(Lod0.Build(s, b).Op).Overlaps);
+                Assert.Empty(CoplanarCheck.Run(Lod1.Build(s, b)).Overlaps);
             });
         }
 
