@@ -160,6 +160,94 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void AWindowCentredInItsStoreySitsHalfwayUpEachStoreysOwnHeight()
+        {
+            With(Dressed("t-fit-centre", 0.9, 1.3, keep: true), () =>
+            {
+                // the ground storey 3.6 m, the next 3 m, the top 4 m: each window's middle halfway up its own storey, in every
+                // LOD, whatever the sill height says
+                var (b, s) = Block(st => { st.windowKind = "t-fit-centre"; st.winCentre = true; st.sillH = 0.3; });
+                Floors.SetHeight(b, 2, 4.0);
+                var seen = new HashSet<int>();
+                foreach (var (k, _, _, ops) in Walls(b, s))
+                    foreach (var o in ops.Where(o => !o.door))
+                    {
+                        seen.Add(k);
+                        double h = Derived.FloorH(b, k);
+                        Assert.InRange((o.y0 + o.y1) / 2, h / 2 - 1e-9, h / 2 + 1e-9);
+                        Assert.InRange(o.y1 - o.y0, 1.3 - 1e-9, 1.3 + 1e-9);
+                    }
+                Assert.Equal(new[] { 0, 1, 2 }, seen.OrderBy(k => k));
+                var op = Lod0.Build(s, b).Op;
+                for (int k = 0; k < b.floors.Count; k++)
+                {
+                    double f0 = Derived.FloorBase(b, k), h = Derived.FloorH(b, k);
+                    var ys = Enumerable.Range(0, op.Verts).Where(i => op.C[i].slot == ColorSlot.Glass && op.P[i].y > f0 && op.P[i].y < f0 + h).Select(i => op.P[i].y).ToList();
+                    Assert.NotEmpty(ys);
+                    Assert.InRange((ys.Max() + ys.Min()) / 2 - f0, h / 2 - 1e-6, h / 2 + 1e-6);
+                }
+                // LOD2 paints the ground storey's and the others' windows from the same specs
+                var g = Lod2.SpecOf(Facade.GroundSpec(b.style, 3.6)); var up = Lod2.SpecOf(Facade.WindowSpec(b.style.windows, 3.0, b.style));
+                Assert.Equal(1.15, g[2], 9); Assert.Equal(2.45, g[3], 9);
+                Assert.Equal(0.85, up[2], 9); Assert.Equal(2.15, up[3], 9);
+            });
+        }
+
+        [Fact]
+        public void ACentredWindowStillStaysUnderABandAndACornice()
+        {
+            With(Dressed("t-fit-centre-tall", 0.9, 2.4, keep: true), () =>
+            {
+                // 2.4 m centred in a 3 m storey would reach 2.7 m: a 30 cm band, and a 50 cm cornice on the top storey, cut it
+                // down to 10 cm under them, its foot still where centring put it
+                var (b, s) = Block(st => { st.windowKind = "t-fit-centre-tall"; st.winCentre = true; st.bandH = 0.3; st.corniceH = 0.5; });
+                int windows = 0, cut = 0;
+                foreach (var (k, _, _, ops) in Walls(b, s))
+                    foreach (var o in ops.Where(o => !o.door))
+                    {
+                        windows++;
+                        double h = Derived.FloorH(b, k), top = h - Math.Max(0.3, Facade.CorniceUnder(b, k) ?? 0) - 0.1;
+                        if ((h + 2.4) / 2 > top) cut++;   // the 3.6 m ground storey's reaches only 3 m, under its band
+                        Assert.InRange(o.y0, (h - 2.4) / 2 - 1e-9, (h - 2.4) / 2 + 1e-9);
+                        Assert.InRange(o.y1, Math.Min((h + 2.4) / 2, top) - 1e-9, Math.Min((h + 2.4) / 2, top) + 1e-9);
+                    }
+                Assert.True(windows > 10 && cut > 5, $"{windows} windows, {cut} cut down");
+                Assert.NotNull(Facade.CorniceUnder(b, b.floors.Count - 1));
+            });
+        }
+
+        [Fact]
+        public void CentringLeavesOtherWindowsAndTheDefaultAsTheyWere()
+        {
+            // off by default, and never written then; the generator's windows, and an artist's fitted to the openings, ignore it
+            Assert.False(Styles.Preset("brick").winCentre);
+            Assert.DoesNotContain("\"winCentre\"", PrototypeJson.WriteStyle(Styles.Preset("brick")));
+            With(Dressed("t-fit-centre-stretch", 1.0, 1.5), () =>
+            {
+                foreach (var kind in new[] { null, "t-fit-centre-stretch" })
+                {
+                    var (b0, s0) = Block(st => st.windowKind = kind);
+                    var (b1, s1) = Block(st => { st.windowKind = kind; st.winCentre = true; });
+                    Assert.Equal(Walls(b0, s0).SelectMany(w => w.ops).Select(o => (o.u0, o.u1, o.y0, o.y1)).ToList(), Walls(b1, s1).SelectMany(w => w.ops).Select(o => (o.u0, o.u1, o.y0, o.y1)).ToList());
+                }
+            });
+        }
+
+        [Fact]
+        public void CentringIsKeptInTheLayoutAndTheBake()
+        {
+            var st = Styles.Preset("brick"); st.winCentre = true;
+            var json = PrototypeJson.WriteStyle(st);
+            Assert.Contains("\"winCentre\":true", json.Replace(" ", ""));
+            Assert.True(PrototypeJson.ReadStyle(json).winCentre);
+            var d = new StoreyDocument();
+            var b = Buildings.Add(d, "rect", new Vec2(0, 0)); b.style = st;
+            var baked = BakedLayout.Of(BakedLayout.Bake(d))!.Document().buildings[0].style;
+            Assert.True(baked.winCentre);
+            Assert.Equal(json, PrototypeJson.WriteStyle(baked));
+        }
+
+        [Fact]
         public void TheSillHeightIsKeptInTheLayout()
         {
             var st = Styles.Preset("brick"); st.sillH = 1.15;

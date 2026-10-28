@@ -54,7 +54,8 @@ namespace Triband.Storey.Generate
         /// <summary>
         /// A window spec finished for its style (docs/OPENINGS.md §4.1, §4.2). An artist's window that keeps its size
         /// (<see cref="OpeningKind.stretch"/> off) makes the hole its own size, the style still deciding where it goes and its
-        /// sill's height (<see cref="FacadeStyle.sillH"/>, or its type's); and its dressing stays clear of the floor, of a
+        /// sill's height (<see cref="FacadeStyle.sillH"/>, or its type's), or centring it in the storey's height
+        /// (<see cref="FacadeStyle.winCentre"/>); and its dressing stays clear of the floor, of a
         /// plinth (<paramref name="plinth"/>: its top, on the ground floor), of the storey's top and of a band. The generator's
         /// own windows, and their arched heads, stay under a band, and over a plinth. A hole left 40 cm high or less is none:
         /// <see cref="Ops"/> lays out no windows there, and LOD2 paints none. <paramref name="k"/>: the window in it (null: the generator's). On a tier's top storey under a cornice
@@ -64,7 +65,12 @@ namespace Triband.Storey.Generate
         static WinSpec? Fit(WinSpec? ws, double h, FacadeStyle st, double? plinth, OpeningKind? k, double? cornice = null, bool ground = false)
         {
             if (ws == null) return null;
-            if (k != null && !k.stretch && st.sillH is double sill) ws.y0 = sill;
+            if (k != null && !k.stretch)
+            {
+                // centred in the storey (FacadeStyle.winCentre), or at the style's sill; what follows keeps it clear as ever
+                if (st.winCentre) ws.y0 = (h - k.h) / 2;
+                else if (st.sillH is double sill) ws.y0 = sill;
+            }
             double sy = k != null && OpeningKinds.Stretched(k) ? (ws.y1 - ws.y0) / Math.Max(1e-3, k.h) : 1, rb = (k?.reachB ?? 0) * sy, rt = (k?.reachT ?? 0) * sy;
             if (plinth is double p) ws.y0 = Math.Max(ws.y0, p + Math.Max(0.15, rb + 0.05));
             if (k != null)
