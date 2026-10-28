@@ -602,8 +602,42 @@ namespace Triband.Storey.Editor
                         bool on = GUILayout.Toggle(v.facadeTool == tool, label, EditorStyles.miniButton, GUILayout.Height(20));
                         if (on != (v.facadeTool == tool)) { v.facadeTool = on ? tool : ""; if (on) StoreyToolContext.Show(StoreyTab.Facade); SceneView.RepaintAll(); }
                     }
+            if (v.facadeTool == "blank") WallStates(e, b, k0);
             if (v.facadeTool == "bridge") EditorGUILayout.HelpBox("Click an upper floor's wall: a bridge goes straight out to the building facing it, to its floor nearest this one. Click a bridge's door to remove it.", MessageType.None);
             BridgeList(e, b);
+        }
+
+        /// <summary>What the Blank wall tool makes a wall, as its toolbar names them (<see cref="EdgeState"/> from Blank).</summary>
+        internal static readonly string[] WallStateNames = { "Blank wall", "Quiet wall", "Bare wall" };
+
+        static readonly GUIContent[] WallStateChoices =
+        {
+            new GUIContent("No windows", "Blank: no windows (doors you placed stay); bands, plinth and details stay"),
+            new GUIContent("No details", "Quiet: no windows and no details by rule; bands and plinth stay"),
+            new GUIContent("Bare", "Bare: a plain wall: no windows, no details by rule, no floor bands or plinth (the foundation and parapet stay)"),
+        };
+
+        /// <summary>
+        /// The Blank wall tool's options (docs/EDITOR.md §6.7): what a click makes a wall (blank, quiet or bare; a click on a
+        /// wall that is so already brings its windows back), and every wall of a side at once.
+        /// </summary>
+        void WallStates(StoreyEdit e, BuildingData b, int k0)
+        {
+            var v = e.View;
+            int cur = Math.Max(0, (int)v.wallState - 1), pick = GUILayout.Toolbar(cur, WallStateChoices, EditorStyles.miniButton);
+            if (pick != cur) v.wallState = (EdgeState)(pick + 1);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField(new GUIContent("Whole side", "Every wall of this outline facing that way (by its outward normal, in the building's axes: front +Z, right +X)"), GUILayout.Width(EditorGUIUtility.labelWidth - 4));
+                foreach (var side in new[] { Side.Front, Side.Back, Side.Left, Side.Right })
+                    if (GUILayout.Button(side.ToString(), EditorStyles.miniButton))
+                    {
+                        var s = v.wallState; int n = 0;
+                        e.ApplyTo($"{side} walls {WallStateNames[(int)s - 1].ToLowerInvariant()}", bb => (n = Facades.SetSide(bb, k0, side, s)) > 0);
+                        if (n == 0) message = $"Every {side.ToString().ToLowerInvariant()} wall already has that, or more.";
+                    }
+            }
+            EditorGUILayout.LabelField("Click a wall to make it so; click it again for its windows back.", StoreyInspectorUI.Caption);
         }
 
         /// <summary>

@@ -230,6 +230,7 @@ namespace Triband.Storey.Generate
             }
             for (int i = 0; i < n; i++)
             {
+                if (Derived.EdgeStateAt(b, k, i) >= EdgeState.Quiet) continue;   // a quiet or bare wall has no details by rule (docs/EDITOR.md §6.7)
                 var (f, ops) = OpsOf(i); double uS = f.uS, uE = f.uE, L = f.e.L; if (L < 1.5) continue;
                 if (R.ac > 0 && k > 0)
                     for (int j = 0; j < ops.Count; j++)

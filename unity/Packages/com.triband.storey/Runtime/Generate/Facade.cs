@@ -209,8 +209,7 @@ namespace Triband.Storey.Generate
                 if (s.type != CoreType.Lift || !Cores.Serves(b, s, k)) continue;
                 foreach (var f in Cores.CoreFlush(Derived.OutlineAt(b, k), s)) if (f != null && f.i == i) (shaftHere ??= new List<Cores.Flush>()).Add(f);
             }
-            var blank = Derived.TierStart(b, k) > 0 ? b.floors[Derived.TierStart(b, k)].blank : b.blank;
-            if (!blank.Contains(i)) Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, shaftHere);
+            if (Derived.EdgeStateAt(b, k, i) == EdgeState.Open) Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, shaftHere);
             ops.Sort((p, q) => p.u0.CompareTo(q.u0));
             return ops;
         }
@@ -730,12 +729,28 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>A strip split into pieces at ranges; the first and last take the mitred ends.</summary>
-        public static void StripPieces(MeshBuilder gb, Frame F, Miter m, List<(double, double)> ranges, double y0, double y1, double wa, double wb, Swatch c, Swatch? cIn, Skip skip = Skip.None)
+        /// <param name="squareS">The wall before has no such strip (a bare wall, docs/EDITOR.md §6.7): where it reaches the
+        /// start corner the strip ends square at the wall's face there, closed where it stands out past the corner and open
+        /// against the wall before where it doesn't. <paramref name="squareE"/> likewise at the end.</param>
+        public static void StripPieces(MeshBuilder gb, Frame F, Miter m, List<(double, double)> ranges, double y0, double y1, double wa, double wb, Swatch c, Swatch? cIn, Skip skip = Skip.None,
+            bool squareS = false, bool squareE = false)
         {
             var (s0, e0) = m.Span(wa, wb);
             foreach (var (a, bb) in ranges)
             {
                 bool ms = a <= s0 + 1e-6, me = bb >= e0 - 1e-6;
+                if ((ms && squareS) || (me && squareE))
+                {
+                    // the square end: at the corner of the wall's face; a convex corner's stands out past the wall before, and is closed
+                    var sk = skip & ~(Skip.UStart | Skip.UEnd);
+                    double ks = ms ? m.S.k : 0, ke = me ? m.E.k : 0; double ss = ms ? m.S.s : a, se = me ? m.E.s : bb;
+                    if (ms && squareS) { ss = m.S.At(wa); ks = 0; sk |= m.S.At(wb) > m.S.At(wa) ? Skip.UStart : Skip.None; }
+                    else sk |= skip & Skip.UStart | (ms ? Skip.UStart : Skip.None);
+                    if (me && squareE) { se = m.E.At(wa); ke = 0; sk |= m.E.At(wb) < m.E.At(wa) ? Skip.UEnd : Skip.None; }
+                    else sk |= skip & Skip.UEnd | (me ? Skip.UEnd : Skip.None);
+                    gb.MBox(F, ss, ks, se, ke, y0, y1, wa, wb, c, cIn, sk);
+                    continue;
+                }
                 gb.MBox(F, ms ? m.S.s : a, ms ? m.S.k : 0, me ? m.E.s : bb, me ? m.E.k : 0, y0, y1, wa, wb, c, cIn, skip | (ms ? Skip.UStart : Skip.None) | (me ? Skip.UEnd : Skip.None));
             }
         }

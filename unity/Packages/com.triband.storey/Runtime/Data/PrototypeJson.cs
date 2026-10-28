@@ -101,6 +101,7 @@ namespace Triband.Storey
             };
             c.Points(o, "footprint", w, b.footprint);
             c.Ints(o, "blank", w, b.blank);
+            b.quiet = OptInts(c, o, "quiet", w); b.bare = OptInts(c, o, "bare", w);
             if (o.TryGetValue("style", out var st) && st != null) Style(c, c.Obj(st, w.In("style")), w.In("style"), b.style);
             int i = 0;
             foreach (var f in c.Array(o, "floors", w)) { var at = w.In("floors", i++); b.floors.Add(Floor(c, c.Obj(f, at), at)); }
@@ -145,6 +146,14 @@ namespace Triband.Storey
             return b;
         }
 
+        // a list of edges that is null when absent or empty (BuildingData.quiet, bare)
+        static List<int>? OptInts(Ctx c, Dictionary<string, object?> o, string key, Where w)
+        {
+            if (c.Array(o, key, w).Count == 0) return null;
+            var l = new List<int>(); c.Ints(o, key, w, l);
+            return l;
+        }
+
         static void Corners(Ctx c, Dictionary<string, object?> o, Where w, List<CornerData> into)
         {
             int i = 0;
@@ -179,6 +188,7 @@ namespace Triband.Storey
             };
             c.Points(o, "shape", w, f.shape);
             c.Ints(o, "blank", w, f.blank);
+            f.quiet = OptInts(c, o, "quiet", w); f.bare = OptInts(c, o, "bare", w);
             int i = 0;
             foreach (var wv in c.Array(o, "walls", w))
             {
@@ -388,6 +398,8 @@ namespace Triband.Storey
                 o["details"] = ds;
             }
             o["blank"] = Ints(b.blank);   // the prototype always writes it, empty or not
+            if (b.quiet is { Count: > 0 }) o["quiet"] = Ints(b.quiet);
+            if (b.bare is { Count: > 0 }) o["bare"] = Ints(b.bare);
             o["groundHeight"] = b.groundHeight;
             o["floorHeight"] = b.floorHeight;
             o["interior"] = b.interior;
@@ -422,7 +434,12 @@ namespace Triband.Storey
             o["walls"] = walls;
             if (f.h.HasValue) o["h"] = f.h.Value;
             if (f.filled) o["filled"] = true;
-            if (f.HasShape) { o["shape"] = Pts(f.shape); o["blank"] = Ints(f.blank); if (f.corners.Count > 0) o["corners"] = Corners(f.corners); }
+            if (f.HasShape)
+            {
+                o["shape"] = Pts(f.shape); o["blank"] = Ints(f.blank); if (f.corners.Count > 0) o["corners"] = Corners(f.corners);
+                if (f.quiet is { Count: > 0 }) o["quiet"] = Ints(f.quiet);
+                if (f.bare is { Count: > 0 }) o["bare"] = Ints(f.bare);
+            }
             if (f.style != null) o["style"] = Style(f.style);
             if (f.terraceRoof != null) o["terraceRoof"] = new Dictionary<string, object?> { ["pitch"] = f.terraceRoof.pitch };
             return o;
@@ -545,13 +562,13 @@ namespace Triband.Storey
         {
             public static readonly string[] Root = { "v", "seq", "spawn", "buildings", "palette" };
             public static readonly string[] PaletteEntry = { "name", "hex" };
-            public static readonly string[] Building = { "id", "name", "pos", "elevation", "footprint", "floors", "shafts", "entrances", "details", "blank", "groundHeight", "floorHeight", "interior", "style", "gen", "voids", "bridges", "corners" };
+            public static readonly string[] Building = { "id", "name", "pos", "elevation", "footprint", "floors", "shafts", "entrances", "details", "blank", "quiet", "bare", "groundHeight", "floorHeight", "interior", "style", "gen", "voids", "bridges", "corners" };
             public static readonly string[] Entrance = { "edge", "t", "k" };
             public static readonly string[] Detail = { "kind", "k", "edge", "t", "y" };
             public static readonly string[] Void = { "id", "kind", "shape", "bottom" };
             public static readonly string[] Bridge = { "id", "to", "k", "at", "toK", "width", "open" };
             public static readonly string[] Corner = { "at", "shape", "size", "door", "pts" };
-            public static readonly string[] Floor = { "walls", "h", "shape", "blank", "style", "terraceRoof", "props", "filled", "corners" };
+            public static readonly string[] Floor = { "walls", "h", "shape", "blank", "quiet", "bare", "style", "terraceRoof", "props", "filled", "corners" };
             public static readonly string[] Wall = { "a", "b", "doors" };
             public static readonly string[] Door = { "t" };
             public static readonly string[] Terrace = { "pitch" };

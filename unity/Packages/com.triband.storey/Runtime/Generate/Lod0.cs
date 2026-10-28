@@ -432,7 +432,11 @@ namespace Triband.Storey.Generate
                 pc.s > 0.02 ? Math.Max(r.Item1, pc.s) : c0 != null ? c0.Value.At(T) + 1e-4 : r.Item1,
                 pc.e < L - 0.02 ? Math.Min(r.Item2, pc.e) : c1 != null ? c1.Value.At(T) - 1e-4 : r.Item2);
             var st = Derived.StyleAt(b, k);
-            if (st.bands && k < N - 1)
+            // a bare wall (docs/EDITOR.md §6.7) has no band or plinth; next to one, they end square at the corner
+            int n = Derived.OutlineAt(b, k).Count;
+            bool bare = Derived.EdgeStateAt(b, k, i) == EdgeState.Bare;
+            bool sqS = !bare && Derived.EdgeStateAt(b, k, (i - 1 + n) % n) == EdgeState.Bare, sqE = !bare && Derived.EdgeStateAt(b, k, (i + 1) % n) == EdgeState.Bare;
+            if (st.bands && k < N - 1 && !bare)
             {
                 var (bh, bd, bc) = Band(st, C);
                 var under = new List<(double, double)>();
@@ -445,12 +449,12 @@ namespace Triband.Storey.Generate
                 var decks = Decks(k + 1, F, T, T + bd);
                 var rs = decks == null ? band : Geo.MinusRanges(band, decks);
                 rs.RemoveAll(r => r.Item2 - r.Item1 <= 0.02);
-                if (rs.Count > 0) { Facade.StripPieces(op, F, m, rs, y + h - bh, y + h, T, T + bd, bc, bc, Skip.In); Facade.StripBacks(op, F, rs, ops, y, y + h - bh, y + h, T, bc, rooms); }
+                if (rs.Count > 0) { Facade.StripPieces(op, F, m, rs, y + h - bh, y + h, T, T + bd, bc, bc, Skip.In, sqS, sqE); Facade.StripBacks(op, F, rs, ops, y, y + h - bh, y + h, T, bc, rooms); }
                 if (decks != null && bh > Bridges.Deck + 0.01)
                 {
                     var below = new List<(double, double)>();
                     foreach (var (a0, a1) in band) foreach (var (d0, d1) in decks) if (Math.Min(a1, d1) - Math.Max(a0, d0) > 0.02) below.Add((Math.Max(a0, d0), Math.Min(a1, d1)));
-                    if (below.Count > 0) { Facade.StripPieces(op, F, m, below, y + h - bh, y + h - Bridges.Deck, T, T + bd, bc, bc, Skip.In); Facade.StripBacks(op, F, below, ops, y, y + h - bh, y + h - Bridges.Deck, T, bc, rooms); }
+                    if (below.Count > 0) { Facade.StripPieces(op, F, m, below, y + h - bh, y + h - Bridges.Deck, T, T + bd, bc, bc, Skip.In, sqS, sqE); Facade.StripBacks(op, F, below, ops, y, y + h - bh, y + h - Bridges.Deck, T, bc, rooms); }
                 }
             }
             if (k == 0)
@@ -464,13 +468,13 @@ namespace Triband.Storey.Generate
                     Facade.StripPieces(op, F, m, rf, y - Math.Max(0, depth), y + fTop, T, T + fo, C.foundation, C.foundation, Skip.In | Skip.Bot);   // y: the ground floor's slab, the building's ground
                     Facade.StripBacks(op, F, rf, ops, y, y - Math.Max(0, depth), y + fTop, T, C.foundation, rooms);
                 }
-                if (pTop > fTop + 0.01)
+                if (pTop > fTop + 0.01 && !bare)
                 {
                     var r = Clip(m.Span(T, T + 0.04));
                     var widened = ops.ConvertAll(o => { if (!o.door) return o; var d = o.Clone(); d.u0 -= 0.08; d.u1 += 0.08; return d; });
                     var pc0 = st.plinth != null ? new Swatch(C.style, ColorSlot.Plinth) : C.plinth;
                     var rp = Facade.SolidRanges(r.Item1, r.Item2, widened);
-                    Facade.StripPieces(op, F, m, rp, y + fTop, y + pTop, T, T + 0.04, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart);
+                    Facade.StripPieces(op, F, m, rp, y + fTop, y + pTop, T, T + 0.04, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart, sqS, sqE);
                     Facade.StripBacks(op, F, rp, ops, y, y + fTop, y + pTop, T, pc0, rooms);
                 }
             }

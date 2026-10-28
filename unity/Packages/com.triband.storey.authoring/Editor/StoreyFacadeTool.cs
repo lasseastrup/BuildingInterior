@@ -39,9 +39,9 @@ namespace Triband.Storey.Editor
             {
                 var fp = Derived.OutlineAt(b, h.k); var a = fp[h.i]; var c = fp[(h.i + 1) % fp.Count];
                 double y0 = Derived.FloorBase(b, h.k0), y1 = Derived.FloorBase(b, Tiers.End(b, h.k0));
-                bool on = Tiers.Blank(b, h.k0).Contains(h.i);
+                var want = e.View.wallState; bool on = Tiers.State(b, h.k0, h.i) == want;
                 Box(new GhostBox { cx = (a.x + c.x) / 2 + b.pos.x, cy = (y0 + y1) / 2, cz = (a.z + c.z) / 2 + b.pos.z, sx = h.L, sy = y1 - y0 + 0.2, sz = Dim.T_EXT * 2.4, u = new Vec2((c.x - a.x) / h.L, (c.z - a.z) / h.L) }, on ? Ok : Accent);
-                Label(new Vector3((float)((a.x + c.x) / 2 + b.pos.x), (float)y1, (float)((a.z + c.z) / 2 + b.pos.z)), on ? "Restore the windows" : "Blank wall");
+                Label(new Vector3((float)((a.x + c.x) / 2 + b.pos.x), (float)y1, (float)((a.z + c.z) / 2 + b.pos.z)), on ? "Restore the windows" : StoreySiteEditor.WallStateNames[(int)want - 1]);
             }
             else if (tool == "entrance")
             {
@@ -100,8 +100,8 @@ namespace Triband.Storey.Editor
             var h = hit.Value; string? err = null;
             if (tool == "blank")
             {
-                bool on = Tiers.Blank(b, h.k0).Contains(h.i);
-                e.ApplyTo(on ? "Windows restored" : "Wall set to blank", bb => { Facades.ToggleBlank(bb, h.k, h.i); return true; });
+                var want = e.View.wallState; bool on = Tiers.State(b, h.k0, h.i) == want;
+                e.ApplyTo(on ? "Windows restored" : "Wall set to " + StoreySiteEditor.WallStateNames[(int)want - 1].ToLowerInvariant(), bb => { Facades.ToggleState(bb, h.k, h.i, want); return true; });
             }
             else if (tool == "entrance")
                 e.ApplyTo("Entrance", bb => (err = Facades.ToggleEntrance(new Site(e.Document.buildings), bb, h)) == null);

@@ -63,6 +63,12 @@ namespace Triband.Storey
         public List<DetailData> details = new List<DetailData>();
         /// <summary>Blank (windowless) edges of the base outline.</summary>
         public List<int> blank = new List<int>();
+        /// <summary>
+        /// Edges of the base outline that are also quiet (no details by rule) or bare (no details by rule, no floor bands and
+        /// no plinth either): <see cref="EdgeState"/>. Each is in <see cref="blank"/> too, so the prototype shows it windowless.
+        /// Null for none: most buildings have none, and an empty list each was memory every layout load kept. Storey's own.
+        /// </summary>
+        public List<int>? quiet, bare;
         public double groundHeight = 3.6;
         public double floorHeight = 3.0;
         /// <summary>False = shell only: facade and roof, no slabs, rooms or cores.</summary>
@@ -146,6 +152,8 @@ namespace Triband.Storey
         public List<Vec2> shape = new List<Vec2>();
         /// <summary>Blank edges of <see cref="shape"/>. Only meaningful with a shape.</summary>
         public List<int> blank = new List<int>();
+        /// <summary>Quiet and bare edges of <see cref="shape"/>, as the base's (<see cref="BuildingData.quiet"/>). Storey's own.</summary>
+        public List<int>? quiet, bare;
         /// <summary>The cut corners of <see cref="shape"/>. Storey's own.</summary>
         public List<CornerData> corners = new List<CornerData>();
         /// <summary>The setback's own exterior style; null = inherit the tier below.</summary>
@@ -227,6 +235,14 @@ namespace Triband.Storey
     }
 
     public enum WindowType { Punched, Tall, Ribbon, Curtain, None }
+
+    /// <summary>
+    /// What a wall of an outline has (docs/EDITOR.md §6.7): windows (Open); none (Blank: doors placed by hand stay, as do its
+    /// strips and details); none and no details by rule either (Quiet); or none, no details by rule and no floor bands or
+    /// plinth (Bare: a plain wall, its foundation and parapet still on). Not stored as such: the outline's blank, quiet and
+    /// bare lists. Storey's own, for the old BuildingGenerator's suppressed edges, its sides left without details, and its blank edges.
+    /// </summary>
+    public enum EdgeState { Open, Blank, Quiet, Bare }
     /// <summary>What tops a window or door: a flat head, or an arched hood over it. Storey's own.</summary>
     public enum HeadType { Flat, Arch }
     public enum GroundType { Storefront, Match, Solid }

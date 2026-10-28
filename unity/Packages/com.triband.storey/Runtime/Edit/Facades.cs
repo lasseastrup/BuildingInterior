@@ -6,6 +6,9 @@ using Triband.Storey.Generate;
 
 namespace Triband.Storey.Edit
 {
+    /// <summary>A side of a building, by its walls' outward normals in the building's own axes: +z the front, −z the back, +x the right, −x the left.</summary>
+    public enum Side { Front, Back, Left, Right }
+
     /// <summary>A point on a facade: outline edge i of tier k0, t along it, at height y (world), on storey k.</summary>
     public struct FacadeHit
     {
@@ -68,12 +71,43 @@ namespace Triband.Storey.Edit
             return h;
         }
 
-        /// <summary>The blank walls of storey k's outline: switch edge i's windows off, or back on.</summary>
+        /// <summary>The blank walls of storey k's outline: switch edge i's windows off, or back on (a quiet or bare wall then has everything again).</summary>
         public static void ToggleBlank(BuildingData b, int k, int i)
         {
-            var bl = Tiers.Blank(b, Derived.TierStart(b, k));
-            int at = bl.IndexOf(i);
-            if (at >= 0) bl.RemoveAt(at); else bl.Add(i);
+            int k0 = Derived.TierStart(b, k);
+            Tiers.SetState(b, k0, i, Tiers.State(b, k0, i) == EdgeState.Open ? EdgeState.Blank : EdgeState.Open);
+        }
+
+        /// <summary>
+        /// What wall i of storey k's outline has (<see cref="EdgeState"/>, docs/EDITOR.md §6.7): the Facade tool sets
+        /// <paramref name="s"/>, or, on a wall that has it already, its windows and all back (Open).
+        /// </summary>
+        public static void ToggleState(BuildingData b, int k, int i, EdgeState s)
+        {
+            int k0 = Derived.TierStart(b, k);
+            Tiers.SetState(b, k0, i, Tiers.State(b, k0, i) == s ? EdgeState.Open : s);
+        }
+
+        /// <summary>
+        /// Every wall of tier k0 facing <paramref name="side"/> (by the larger part of its outward normal, as the old
+        /// BuildingGenerator's sides: +z the front, −z the back, +x the right, −x the left) set to <paramref name="s"/>: the old
+        /// generator's per-building side mask, as per-wall states (a converter's, or the Facade tab's). Walls already in a
+        /// stronger state keep it. Returns how many changed.
+        /// </summary>
+        public static int SetSide(BuildingData b, int k0, Side side, EdgeState s)
+        {
+            var fp = Tiers.Outline(b, k0); int n = fp.Count, changed = 0; bool ccw = Geo.Area2(fp) > 0;
+            for (int i = 0; i < n; i++)
+            {
+                var a = fp[i]; var c = fp[(i + 1) % n]; double dx = c.x - a.x, dz = c.z - a.z;
+                if (dx * dx + dz * dz < 1e-10) continue;
+                // the outward normal: to the right of the edge on a counter-clockwise outline (x right, z up in plan)
+                double nx = ccw ? dz : -dz, nz = ccw ? -dx : dx;
+                var at = Math.Abs(nx) >= Math.Abs(nz) ? (nx >= 0 ? Side.Right : Side.Left) : (nz >= 0 ? Side.Front : Side.Back);
+                if (at != side || Tiers.State(b, k0, i) >= s) continue;
+                Tiers.SetState(b, k0, i, s); changed++;
+            }
+            return changed;
         }
 
         /// <summary>

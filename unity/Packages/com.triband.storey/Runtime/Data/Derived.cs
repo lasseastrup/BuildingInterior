@@ -55,6 +55,19 @@ namespace Triband.Storey
             return 0;
         }
 
+        /// <summary>
+        /// What edge <paramref name="i"/> of storey <paramref name="k"/>'s outline has (<see cref="EdgeState"/>), from its tier's
+        /// blank, quiet and bare lists: the strongest it is in. Storey's own.
+        /// </summary>
+        public static EdgeState EdgeStateAt(BuildingData b, int k, int i)
+        {
+            int k0 = TierStart(b, k);
+            var f = k0 > 0 ? b.floors[k0] : null;
+            if ((f != null ? f.bare : b.bare)?.Contains(i) == true) return EdgeState.Bare;
+            if ((f != null ? f.quiet : b.quiet)?.Contains(i) == true) return EdgeState.Quiet;
+            return (f?.blank ?? b.blank).Contains(i) ? EdgeState.Blank : EdgeState.Open;
+        }
+
         /// <summary>Outline of storey <paramref name="k"/> (k = floors.Count gives the roof's).</summary>
         public static List<Vec2> OutlineAt(BuildingData b, int k)
         {
