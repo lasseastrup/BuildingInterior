@@ -79,21 +79,23 @@ namespace Triband.Storey.Tests
             // the growing tables' sizes go up with their buffers, in the order the shaders read them (x wall ids, y
             // parameter rows, z colour rows)
             Assert.Matches(new Regex(@"SetGlobalVector\(StoreyShaderIds\.TableSize,\s*new Vector4\(Wall\.Length,\s*Params\.Length\s*/\s*ParamTexels,\s*Colors\.Length\s*/\s*Generate\.ColorRows\.Uint4s"), table);
-            // a colour row is three of the buffer's elements, uint4s, as the shaders read it (_StoreyColors[row * 3 + …])
+            // a colour row is four of the buffer's elements, uint4s, as the shaders read it (_StoreyColors[row * STOREY_ROW_UINT4S + …])
             Assert.Matches(new Regex(@"public struct ColorWords \{ public uint x, y, z, w; \}"), table);
+            Assert.Equal(ColorRows.Uint4s, Define(palette, "STOREY_ROW_UINT4S"));
+            Assert.Equal(ColorRows.RemapEntry, Define(palette, "STOREY_REMAP_ENTRY"));
             foreach (var src in new[] { occlusion, palette, facade }) Assert.Contains("float4 _StoreyTableSize;", src);
         }
 
         [Fact]
         public void TheDetailColoursHaveAnEntryForEverySlotAVertexCanName()
         {
-            // StoreyPalette.hlsl reads _StoreyDetailColors[slot - 24] for every colour, a slot of 24 and up included: a
+            // StoreyPalette.hlsl reads _StoreyDetailColors[slot - 32] for every colour, a slot of 32 and up included: a
             // vertex's slot is a byte, and the table must reach to 255
             var table = File.ReadAllText(Path.Combine(Package, "Unity", "Rendering", "BuildingTable.cs"));
             Assert.Matches(new Regex(@"DetailColors\s*=\s*new uint\[\s*256\s*-\s*Generate\.ColorRows\.Entries\s*\]"), table);
-            Assert.Equal(24, ColorRows.Entries);   // StoreyPalette.hlsl's STOREY_ROW_SLOTS
+            Assert.Equal(32, ColorRows.Entries);   // StoreyPalette.hlsl's STOREY_ROW_SLOTS
             var palette = File.ReadAllText(Path.Combine(Package, "Unity", "Shaders", "StoreyPalette.hlsl"));
-            Assert.Contains("#define STOREY_ROW_SLOTS 24", palette);
+            Assert.Contains("#define STOREY_ROW_SLOTS 32", palette);
         }
     }
 }

@@ -9,7 +9,7 @@ namespace Triband.Storey.Tests
 {
     /// <summary>
     /// Colours artists' parts keep whatever the style (<see cref="KindColors"/>, docs/OPENINGS.md §6): a slot of their own from
-    /// 24 up, carried in the vertex's slot byte, resolved through the palette like a style's. Storey's own.
+    /// 32 up, carried in the vertex's slot byte, resolved through the palette like a style's. Storey's own.
     /// </summary>
     [Collection("OpeningKinds")]   // the registries are shared
     public class KindColorsTests

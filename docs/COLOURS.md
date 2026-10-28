@@ -76,8 +76,8 @@ public readonly struct Swatch { public readonly StyleRef style; public readonly 
 
 Two buffers join the building table and are allocated and freed like LOD2's parameter rows:
 
-- `_StoreyColors` (`StructuredBuffer<uint4>`): **one row per building tier** of three `uint4`, 24 16-bit entries. Entries 0–16 are the palette indices of the style's seventeen colours in `ColorSlot` order, 17–22 are spare, and entry 23 is the **atlas row of the building's remap** (0 = none). At 48 bytes a row this is about 210 KiB for the 3,000-building test city, at 1.5 tiers per building.
-- `_StoreyDetailColors` (`StructuredBuffer<uint>`): the palette index of each colour used by facade-detail models (slot − 24, §3.9), written once from the detail catalogue. None is set until detail models exist, but the table has an entry for every slot a vertex's byte can name (24 to 255): the shader reads it for every colour (§3.5), and on Metal a read past a buffer's end can fault the GPU.
+- `_StoreyColors` (`StructuredBuffer<uint4>`): **one row per building tier** of four `uint4`, 32 16-bit entries. The first entries are the palette indices of the style's colours in `ColorSlot` order (25 today), the rest up to 30 are spare, and entry 31 is the **atlas row of the building's remap** (0 = none). At 64 bytes a row this is about 280 KiB for the 3,000-building test city, at 1.5 tiers per building. The row was three `uint4` (24 entries, 48 bytes, about 210 KiB) until the facade's strips and roof cap (docs/EDITOR.md §6.7) needed five slots where three were spare: the fourth `uint4` costs 16 bytes a row, about 70 KiB for the test city, and no shader reads it but for the remap row, which the massing read from the third before.
+- `_StoreyDetailColors` (`StructuredBuffer<uint>`): the palette index of each colour used by facade-detail models (slot − 32, §3.9), written once from the detail catalogue. None is set until detail models exist, but the table has an entry for every slot a vertex's byte can name (32 to 255): the shader reads it for every colour (§3.5), and on Metal a read past a buffer's end can fault the GPU.
 
 The CPU writes a row when a building is uploaded or its colours change. It rewrites every row when the palette's indices may have moved (`OnMappingsInvalidated`), resolving each palette id to its current index through `ColorPaletteDefinition.Instance`. Party-wall faces point at the neighbour's row, so the neighbour's interior colour follows it without a rebuild. Party walls already rebuild when a neighbour's structure changes.
 
@@ -102,7 +102,7 @@ One new include, `StoreyPalette.hlsl`, is Storey's whole view of Color Pipeline.
 ```hlsl
 TEXTURE2D(_GlobalColorPaletteTex);          // ColorMappingManager's atlas, or Storey's hex palette (§3.7)
 uint _ColorAtlasWidth;
-StructuredBuffer<uint4> _StoreyColors;       // per colour row, 3 x uint4: 24 x uint16 (17 style colours, spare, remap row)
+StructuredBuffer<uint4> _StoreyColors;       // per colour row, 4 x uint4: 32 x uint16 (the style's colours, spare, remap row)
 StructuredBuffer<uint>  _StoreyDetailColors; // per facade-detail colour: palette index
 
 // Color Pipeline 2.1.11's SampleColorPalette, same addressing; the width kept off zero and the texel inside the texture
@@ -115,8 +115,8 @@ float4 StoreyAtlas(uint i)
 
 uint StoreyRowEntry(uint row, uint e)
 {
-    e = min(e, 23u);   // inside the row, whatever e
-    uint4 r = _StoreyColors[row * 3 + (e >> 3)];
+    e = min(e, 31u);   // inside the row, whatever e
+    uint4 r = _StoreyColors[row * 4 + (e >> 3)];
     uint q = (e >> 1) & 3;
     uint w = q == 0 ? r.x : q == 1 ? r.y : q == 2 ? r.z : r.w;
     return (e & 1) ? w >> 16 : w & 0xFFFF;
@@ -124,10 +124,10 @@ uint StoreyRowEntry(uint row, uint e)
 
 float3 StoreyPaletteColor(uint row, uint slot, float tone)
 {
-    // HLSL reads both sides of a ?: whichever it uses: a style's slot reads detail colour 0, not slot - 24 wrapped round
-    uint detail = _StoreyDetailColors[slot >= 24 ? slot - 24 : 0];
-    uint index = slot < 24 ? StoreyRowEntry(row, slot) : detail;
-    return StoreyAtlas(StoreyRowEntry(row, 23) * _ColorAtlasWidth + index).rgb * tone;
+    // HLSL reads both sides of a ?: whichever it uses: a style's slot reads detail colour 0, not slot - 32 wrapped round
+    uint detail = _StoreyDetailColors[slot >= 32 ? slot - 32 : 0];
+    uint index = slot < 32 ? StoreyRowEntry(row, slot) : detail;
+    return StoreyAtlas(StoreyRowEntry(row, 31) * _ColorAtlasWidth + index).rgb * tone;
 }
 
 float3 StoreyVertexColor(float4 c)   // the vertex Color attribute (§3.4)
@@ -150,7 +150,7 @@ Nothing is per material: no `_ColorPaletteOffset` and no property blocks, so the
 ```csharp
 var d = new ColorRemapDescriptor(original, overwrite);           // SerializableGUID[] each
 ColorMappingManager.SetupColorRemap(d, out int offset);
-int atlasRow = offset / Shader.GetGlobalInt("_ColorAtlasWidth"); // goes into entry 23 of each of the building's rows
+int atlasRow = offset / Shader.GetGlobalInt("_ColorAtlasWidth"); // goes into entry 31 of each of the building's rows
 ```
 
 - Keep every descriptor that has been registered and register them all again in `OnMappingsInvalidated`, because offsets handed out before it are stale. `ColorRowBook` (engine-free) does this bookkeeping: rows per style, remaps per building, and a re-entrancy-safe rewrite.
@@ -197,7 +197,7 @@ int atlasRow = offset / Shader.GetGlobalInt("_ColorAtlasWidth"); // goes into en
 
 An artist's facade detail (a Facade Detail asset, docs/EDITOR.md §6.12) is coloured as an artist's window or door is (docs/EDITOR.md §6.9). Each part takes one of the style's colour slots: Detail metal, Grille, Detail dark, Dish, Rail, Trim and the rest. Its vertices carry the slot, so they use the building's own colour rows, and a palette change rewrites the table, not the buildings. The model's materials only name the parts.
 
-A part can instead keep a palette colour of its own, whatever the style (docs/OPENINGS.md §6). Each such colour gets a slot from 24 up, handed out for the session (`KindColors`), which its vertices carry in their slot byte. The shaders read its palette index from `_StoreyDetailColors` (§3.5), which the building table writes from the palette (`BuildingTable.SyncKindColors`) and writes again when the palette's indices move. The building's remap row still applies. There are 232 such slots, for the whole project.
+A part can instead keep a palette colour of its own, whatever the style (docs/OPENINGS.md §6). Each such colour gets a slot from 32 up, handed out for the session (`KindColors`), which its vertices carry in their slot byte. The shaders read its palette index from `_StoreyDetailColors` (§3.5), which the building table writes from the palette (`BuildingTable.SyncKindColors`) and writes again when the palette's indices move. The building's remap row still applies. There are 224 such slots, for the whole project (232 before the colour row grew to 32 entries, §3.3).
 
 A window or door made from a prefab the Model Remapper coloured reads the palette index of each vertex from UV channel 3 (as the index + 0.1, which the project's lit shader reads as `uv3.x`). It turns the indices into palette ids as it bakes, so deleting a palette entry doesn't shift them, and makes a part of each colour, which keeps it.
 

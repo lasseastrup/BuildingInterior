@@ -77,7 +77,7 @@ namespace Triband.Storey.Unity
         /// <summary>LOD2 parameter rows: wall, trim, glass, roof colours, window spec, run data.</summary>
         public Vector4[] Params { get; private set; } = new Vector4[ParamRowsStart * ParamTexels];
         /// <summary>
-        /// Colour rows: per style, the palette index of each slot and the remap row, 24 16-bit entries in 12 words, three of
+        /// Colour rows: per style, the palette index of each slot and the remap row, 32 16-bit entries in 16 words, four of
         /// the buffer's 16-byte elements a row, so a changed row goes up alone (docs/PERFORMANCE.md §6.8).
         /// </summary>
         public ColorWords[] Colors { get; private set; } = new ColorWords[ColorRowsStart * Generate.ColorRows.Uint4s];
@@ -86,7 +86,7 @@ namespace Triband.Storey.Unity
         public struct ColorWords { public uint x, y, z, w; }
         readonly uint[] packed = new uint[Generate.ColorRows.Words];
         /// <summary>
-        /// Palette indices of the colours artists' parts keep whatever the style (slots 24 and up, <see cref="Generate.KindColors"/>,
+        /// Palette indices of the colours artists' parts keep whatever the style (slots 32 and up, <see cref="Generate.KindColors"/>,
         /// docs/OPENINGS.md §6): written by <see cref="SyncKindColors"/>. One for every slot a vertex's byte can name: the
         /// shaders read it for every colour (StoreyPalette.hlsl), and on Metal a read past a buffer's end can fault the GPU.
         /// </summary>

@@ -6,7 +6,7 @@ namespace Triband.Storey.Generate
 {
     /// <summary>
     /// The palette colours that parts of artists' windows, doors and facade details keep whatever the style
-    /// (docs/OPENINGS.md §6): each colour reference a part names gets a slot of its own, from 24 up, which its vertices
+    /// (docs/OPENINGS.md §6): each colour reference a part names gets a slot of its own, from 32 up, which its vertices
     /// carry in their slot byte. The shaders read its palette index from <c>_StoreyDetailColors</c> (StoreyPalette.hlsl),
     /// which <see cref="Fill"/> writes, and the building's remap row still applies. A slot is handed out for the session and
     /// never taken back, so a mesh built with it stays right; past the last, a part takes its style colour instead.
@@ -53,7 +53,7 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>
-        /// The palette index of every colour handed out, into <paramref name="dest"/> from its start (slot 24 at 0, as the
+        /// The palette index of every colour handed out, into <paramref name="dest"/> from its start (slot 32 at 0, as the
         /// shaders read <c>_StoreyDetailColors</c>). Returns how many were written.
         /// </summary>
         public static int Fill(IColorPalette palette, uint[] dest)

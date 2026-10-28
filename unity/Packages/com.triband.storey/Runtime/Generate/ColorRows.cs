@@ -26,12 +26,13 @@ namespace Triband.Storey.Generate
 
     /// <summary>
     /// The GPU side of swatches (docs/COLOURS.md §3.3, §3.4), engine-free so the headless tests can check
-    /// exactly what the shaders will read. A colour row is 24 16-bit entries in three <c>uint4</c>s: the palette
-    /// index of each <see cref="ColorSlot"/> of a style, spare entries, and the atlas row of the building's remap.
+    /// exactly what the shaders will read. A colour row is 32 16-bit entries in four <c>uint4</c>s: the palette
+    /// index of each <see cref="ColorSlot"/> of a style, spare entries, and the atlas row of the building's remap. It was
+    /// 24 in three until the facade's strips and roof cap needed more slots than were spare (docs/COLOURS.md §3.3).
     /// </summary>
     public static class ColorRows
     {
-        public const int Entries = 24, Words = 12, Uint4s = 3, RemapEntry = 23;
+        public const int Entries = 32, Words = 16, Uint4s = 4, RemapEntry = 31;
         public static readonly int Slots = Enum.GetValues(typeof(ColorSlot)).Length;
         /// <summary>Rows are numbered in two bytes of the vertex colour.</summary>
         public const int MaxRow = 65535;

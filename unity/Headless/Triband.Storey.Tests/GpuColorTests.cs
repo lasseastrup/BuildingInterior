@@ -128,7 +128,7 @@ namespace Triband.Storey.Tests
         public void TheShadersSlotNumbersHold()
         {
             Assert.Equal((0, 1, 4, 6), ((int)ColorSlot.Wall, (int)ColorSlot.Trim, (int)ColorSlot.Roof, (int)ColorSlot.Glass));
-            Assert.Equal((24, 23, 12, 3), (ColorRows.Entries, ColorRows.RemapEntry, ColorRows.Words, ColorRows.Uint4s));
+            Assert.Equal((32, 31, 16, 4), (ColorRows.Entries, ColorRows.RemapEntry, ColorRows.Words, ColorRows.Uint4s));
             Assert.True(ColorRows.Slots < ColorRows.RemapEntry);
         }
 
@@ -136,7 +136,7 @@ namespace Triband.Storey.Tests
         public void TheMassingFindsItsFourColoursWhereTheRowPacksThem()
         {
             // StoreyStyleColors (StoreyPalette.hlsl) reads wall, trim, roof and glass from the row's first uint4 and the remap
-            // row from its third, by word and half, in two loads (docs/PERFORMANCE.md §7.4): where ColorRows.Pack puts them
+            // row from its last, by word and half, in two loads (docs/PERFORMANCE.md §7.4): where ColorRows.Pack puts them
             var w = new uint[ColorRows.Words];
             var idx = Enumerable.Range(0, ColorRows.Slots).Select(i => 300 + i * 11).ToArray();
             ColorRows.Pack(idx, 777, w, 0);
@@ -144,9 +144,9 @@ namespace Triband.Storey.Tests
             Assert.Equal(idx[(int)ColorSlot.Trim], (int)(w[0] >> 16));
             Assert.Equal(idx[(int)ColorSlot.Roof], (int)(w[2] & 0xFFFF));
             Assert.Equal(idx[(int)ColorSlot.Glass], (int)(w[3] & 0xFFFF));
-            Assert.Equal(777, (int)(w[11] >> 16));
+            Assert.Equal(777, (int)(w[15] >> 16));
             var hlsl = System.Text.RegularExpressions.Regex.Replace(System.IO.File.ReadAllText(UnityAsset.Package("com.triband.storey", "Unity", "Shaders", "StoreyPalette.hlsl")), @"//[^\n]*", "");
-            foreach (var read in new[] { "uint4 slots = _StoreyColors[row * 3];", "uint4 last = _StoreyColors[row * 3 + 2];", "(last.w >> 16) * _ColorAtlasWidth",
+            foreach (var read in new[] { "uint4 slots = _StoreyColors[row * STOREY_ROW_UINT4S];", "uint4 last = _StoreyColors[row * STOREY_ROW_UINT4S + STOREY_ROW_UINT4S - 1];", "(last.w >> 16) * _ColorAtlasWidth",
                 "wall = StoreyAtlasAt(base + (slots.x & 0xFFFF), a).rgb * tones.x;", "trim = StoreyAtlasAt(base + (slots.x >> 16), a).rgb * tones.y;",
                 "roof = StoreyAtlasAt(base + (slots.z & 0xFFFF), a).rgb * tones.z;", "glass = StoreyAtlasAt(base + (slots.w & 0xFFFF), a).rgb * tones.w;" })
                 Assert.Contains(read, hlsl);
