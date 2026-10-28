@@ -95,6 +95,7 @@ namespace Triband.Storey.Generate
         internal readonly Facade.PanelOpt Panel = new Facade.PanelOpt();
         List<BridgeSpan>? bridges;   // the bridges that meet this building, looked up when a band first asks
         static readonly List<BridgeSpan> NoBridges = new List<BridgeSpan>();
+        static readonly List<(double, double)> NoRanges = new List<(double, double)>();   // read only
 
         /// <summary>The openings of a piece of wall: those of <paramref name="all"/> between lo and hi, in order (none on a party wall).</summary>
         internal List<Opening> Piece(List<Opening> all, bool party, double lo, double hi)
@@ -403,15 +404,16 @@ namespace Triband.Storey.Generate
                     var ops = Piece(all, party, pc.lo, pc.hi);
                     var wc = Geo.WallCtx(e.a, e.u, e.w, e.L);
                     op.Ctx(wc, party ? 1 + 8 * (pc.r!.pIdx + 1) : 1); gl.Ctx(wc, 1);
-                    Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : C.wall, C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? T * 0.45 : 0, rooms: rooms));
                     var stk = Derived.StyleAt(b, k);
+                    Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : Wall(stk, C, k == 0), C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? T * 0.45 : 0, rooms: rooms));
                     Facade.Dress(op, gl, F, ops, y, C, shell, stk);
                     if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
                     if (!party && stk.bricks is double density && density > 0)
                     {
                         var (bs0, be0) = pm.Span(T, T);
                         Facade.Bricks(op, F, Math.Max(bs0, pc.lo), Math.Min(be0, pc.hi), y, h, k == 0 ? Math.Max(stk.plinthH ?? 0.45, stk.foundation.HasValue ? FoundationH(stk) : 0) : 0,
-                            stk.bands && k < N - 1 ? Band(stk, C).h : 0, ops, density, Facade.Seed(b.id, k, i, pc.lo), C.brick);
+                            Math.Max(Facade.BandAt(b, k) ? Band(stk, C).h : 0, Facade.CorniceUnder(b, k) ?? 0), ops, density, Facade.Seed(b.id, k, i, pc.lo),
+                            k == 0 && stk.groundWall != null ? C.groundWall.Shade(0.8) : C.brick);
                     }
                     if (!party) { op.Ctx(wc, 1); PieceStrips(op, k, F, m, pc, ops, y, h, C, rooms && !shell); }
                     var (cs, ce) = pm.Span(T / 2, T / 2);
@@ -421,7 +423,11 @@ namespace Triband.Storey.Generate
             }
         }
 
-        /// <summary>Floor bands and the ground-floor plinth along one facade piece (ends against a party wall are left open).</summary>
+        /// <summary>
+        /// Floor bands, the cornice at a tier's top and the ground-floor plinth along one facade piece (ends against a party
+        /// wall are left open). The cornice runs where nothing stands on the wall above: under the roof, or along a terrace
+        /// where a setback starts; elsewhere on that storey (where the setback's wall goes on up) the band stays.
+        /// </summary>
         /// <param name="rooms">The strips' backs over openings are the rooms' (<see cref="Facade.StripBacks"/>).</param>
         public void PieceStrips(MeshBuilder op, int k, Frame F, Miter m, Party.Piece pc, List<Opening> ops, double y, double h, Palette C, bool rooms = false)
         {
@@ -432,13 +438,27 @@ namespace Triband.Storey.Generate
                 pc.s > 0.02 ? Math.Max(r.Item1, pc.s) : c0 != null ? c0.Value.At(T) + 1e-4 : r.Item1,
                 pc.e < L - 0.02 ? Math.Min(r.Item2, pc.e) : c1 != null ? c1.Value.At(T) - 1e-4 : r.Item2);
             var st = Derived.StyleAt(b, k);
-            if (st.bands && k < N - 1)
+            // the cornice: along the parts of the edge nothing stands on (all of it under the roof; along a setback's terrace)
+            List<(double, double)>? cornice = null;
+            if (Facade.CorniceAt(b, k))
             {
-                var (bh, bd, bc) = Band(st, C);
+                double ch = Facade.CorniceH(st.corniceH!.Value), cd = Facade.CorniceDepth(st), drop = Facade.CorniceDrop(b, k);
+                cornice = new List<(double, double)>();
+                if (k == N - 1) cornice.Add((-1e9, 1e9));
+                else foreach (var (s0, e0) in Geo.ExposedRanges(Derived.OutlineAt(b, k), Derived.OutlineAt(b, k + 1), i)) cornice.Add((s0 < 0.06 ? -1e9 : s0, e0 > L - 0.06 ? 1e9 : e0));
+                var span = new List<(double, double)> { Clip(m.Span(T, T + cd)) };
+                var rc = Geo.MinusRanges(Geo.MinusRanges(span, Geo.MinusRanges(span, cornice)), Decks(k + 1, F, T, T + cd) ?? NoRanges);
+                rc.RemoveAll(r => r.Item2 - r.Item1 <= 0.02);
+                if (rc.Count > 0) { Facade.StripPieces(op, F, m, rc, y + h - drop - ch, y + h - drop, T, T + cd, C.CorniceOf(st), C.CorniceOf(st), Skip.In); Facade.StripBacks(op, F, rc, ops, y, y + h - drop - ch, y + h - drop, T, C.CorniceOf(st), rooms); }
+            }
+            if (Facade.BandAt(b, k))
+            {
+                var (bh, bd, bc) = Band(st, C, k == 0);
                 var under = new List<(double, double)>();
                 if (Derived.IsSetback(b, k + 1))
                     foreach (var (s0, e0) in Geo.ExposedRanges(Derived.OutlineAt(b, k), Derived.OutlineAt(b, k + 1), i, true))
                         under.Add((s0 < 0.06 ? -1e9 : s0, e0 > L - 0.06 ? 1e9 : e0));
+                if (cornice != null) under.AddRange(cornice);
                 var band = Geo.MinusRanges(new List<(double, double)> { Clip(m.Span(T, T + bd)) }, under);
                 // a bridge's deck at the floor above lies where the band's top would: the band stops at the deck's sides,
                 // and one deeper than the deck goes on beneath it
@@ -466,11 +486,12 @@ namespace Triband.Storey.Generate
                 }
                 if (pTop > fTop + 0.01)
                 {
-                    var r = Clip(m.Span(T, T + 0.04));
+                    double pd = PlinthDepth(st);
+                    var r = Clip(m.Span(T, T + pd));
                     var widened = ops.ConvertAll(o => { if (!o.door) return o; var d = o.Clone(); d.u0 -= 0.08; d.u1 += 0.08; return d; });
-                    var pc0 = st.plinth != null ? new Swatch(C.style, ColorSlot.Plinth) : C.plinth;
+                    var pc0 = st.plinth != null ? new Swatch(C.style, ColorSlot.Plinth) : st.groundWall != null ? C.groundWall.Shade(0.72) : C.plinth;
                     var rp = Facade.SolidRanges(r.Item1, r.Item2, widened);
-                    Facade.StripPieces(op, F, m, rp, y + fTop, y + pTop, T, T + 0.04, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart);
+                    Facade.StripPieces(op, F, m, rp, y + fTop, y + pTop, T, T + pd, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart);
                     Facade.StripBacks(op, F, rp, ops, y, y + fTop, y + pTop, T, pc0, rooms);
                 }
             }
@@ -519,9 +540,22 @@ namespace Triband.Storey.Generate
             }
         }
 
-        /// <summary>The band under a storey's ceiling: height, how far it stands out (at least a centimetre, so it never lies on the wall), colour.</summary>
-        public static (double h, double depth, Swatch c) Band(FacadeStyle st, Palette C) =>
-            (Math.Max(0.05, st.bandH ?? 0.22), Math.Max(0.01, st.bandDepth ?? 0.06), st.bandWall ? C.wallBand : C.trim);
+        /// <summary>
+        /// The band under a storey's ceiling: height, how far it stands out (at least a centimetre, so it never lies on the
+        /// wall), colour: its own (<see cref="FacadeStyle.band"/>), or a shade of the wall (the ground storey's own wall colour
+        /// on the <paramref name="ground"/> storey) or the trim.
+        /// </summary>
+        public static (double h, double depth, Swatch c) Band(FacadeStyle st, Palette C, bool ground = false) =>
+            (Math.Max(0.05, st.bandH ?? 0.22), Math.Max(0.01, st.bandDepth ?? 0.06), st.band != null ? C.band : st.bandWall ? (ground ? Wall(st, C, true).Shade(0.72) : C.wallBand) : C.trim);
+
+        /// <summary>
+        /// A storey's wall colour: the walls', or on the <paramref name="ground"/> storey the style's own ground-floor colour
+        /// (<see cref="FacadeStyle.groundWall"/>) when it has one. Its plinth, band and brick patches are shades of it.
+        /// </summary>
+        public static Swatch Wall(FacadeStyle st, Palette C, bool ground) => ground && st.groundWall != null ? C.groundWall : C.wall;
+
+        /// <summary>How far the plinth stands out from the wall: at least a centimetre (null = 4 cm).</summary>
+        public static double PlinthDepth(FacadeStyle st) => Math.Max(0.01, Math.Min(1.5, st.plinthDepth ?? 0.04));
 
         /// <summary>How high the foundation shows above the ground.</summary>
         public static double FoundationH(FacadeStyle st) => Math.Max(0.02, st.foundationH ?? 0.2);

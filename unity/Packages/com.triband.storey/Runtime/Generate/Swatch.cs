@@ -19,6 +19,12 @@ namespace Triband.Storey.Generate
         Foundation,
         /// <summary>The ground floor's plinth when the style gives it a colour of its own (otherwise a shade of the wall). Storey's own.</summary>
         Plinth,
+        /// <summary>The ground storey's walls when the style gives them a colour of their own (otherwise the walls'). Storey's own.</summary>
+        GroundWall,
+        /// <summary>The floor bands when the style gives them a colour of their own (otherwise the trim or a wall shade). Storey's own.</summary>
+        Band,
+        /// <summary>The cornice round the top of a tier's walls (otherwise the trim). Storey's own.</summary>
+        Cornice,
     }
 
     /// <summary>
@@ -93,6 +99,8 @@ namespace Triband.Storey.Generate
                 ColorSlot.Grille => st.grille ?? d.grille, ColorSlot.DetailDark => st.detailDark ?? d.detailDark, ColorSlot.Dish => st.dish ?? d.dish,
                 ColorSlot.Frame => st.frame ?? d.frame, ColorSlot.Foundation => st.foundationColor ?? d.foundation,
                 ColorSlot.Plinth => st.plinth ?? d.plinth,
+                // these follow another of the style's colours, not a project default: a style without one draws with that slot
+                ColorSlot.GroundWall => st.groundWall ?? st.wall, ColorSlot.Band => st.band ?? st.trim, ColorSlot.Cornice => st.cornice ?? st.trim,
                 _ => throw new ArgumentOutOfRangeException(nameof(slot)),
             };
         }

@@ -553,6 +553,7 @@ namespace Triband.Storey.Editor
                 WallDetails(e, b, k0, st);
                 StoreyInspectorUI.Section("Colours", "From the project's palette");
                 Colour(e, b, k0, "Walls", "wall");
+                if (k0 == 0) Colour(e, b, k0, "Ground floor walls", "groundWall", optional: true);
                 Colour(e, b, k0, "Trim", "trim");
                 Colour(e, b, k0, "Roof", "roof");
                 Colour(e, b, k0, "Glass", "glass");
@@ -696,19 +697,37 @@ namespace Triband.Storey.Editor
             }
         }
 
-        /// <summary>The style's wall details (docs/EDITOR.md §6.7): bands, and on the base the plinth and foundation; brick patches on any.</summary>
+        /// <summary>
+        /// The style's wall details (docs/EDITOR.md §6.7), top to bottom as they stand on the wall: the cornice, bands, and on
+        /// the base the plinth and foundation; brick patches on any. Each strip's colour is with it.
+        /// </summary>
         void WallDetails(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
         {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool cn = EditorGUILayout.Toggle(new GUIContent("Cornice", "A strip round the top of the walls, under the roof (and under a terrace's parapet where a setback starts above); the top storey's windows stay under it"), st.corniceH.HasValue);
+                if (cn != st.corniceH.HasValue) e.ApplyTo(cn ? "Cornice" : "No cornice", bb => { Styles.Edited(bb, k0).corniceH = cn ? 0.3 : (double?)null; return true; });
+            }
+            if (st.corniceH is double ch)
+            {
+                StyleSlider(e, k0, "   Height", ch, 0.05, 2, 0.01, (s, x) => s.corniceH = x);
+                StyleSlider(e, k0, "   Stands out", st.corniceDepth ?? 0.1, 0.01, 1, 0.01, (s, x) => s.corniceDepth = x);
+                Colour(e, b, k0, "   Colour", "cornice", optional: true);
+            }
             StyleToggle(e, k0, "Floor bands", st.bands, (s, x) => s.bands = x);
             if (st.bands)
             {
+                if (k0 == 0) StyleToggle(e, k0, "   Over the ground floor only", st.bandGround, (s, x) => s.bandGround = x);
                 StyleSlider(e, k0, "   Band height", st.bandH ?? 0.22, 0.05, 1.5, 0.01, (s, x) => s.bandH = x);
                 StyleSlider(e, k0, "   Band stands out", st.bandDepth ?? 0.06, 0.01, 0.2, 0.01, (s, x) => s.bandDepth = x);
-                StyleToggle(e, k0, "   Band in a wall shade", st.bandWall, (s, x) => s.bandWall = x);
+                using (new EditorGUI.DisabledScope(st.band != null))
+                    StyleToggle(e, k0, "   Band in a wall shade", st.bandWall, (s, x) => s.bandWall = x);
+                Colour(e, b, k0, "   Band colour", "band", optional: true);
             }
             if (k0 == 0)
             {
                 StyleSlider(e, k0, "Plinth height", st.plinthH ?? 0.45, 0, 2, 0.05, (s, x) => s.plinthH = x);
+                StyleSlider(e, k0, "   Stands out", st.plinthDepth ?? 0.04, 0.01, 1, 0.01, (s, x) => s.plinthDepth = x);
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     bool fd = EditorGUILayout.Toggle(new GUIContent("Foundation", "A foundation along the foot of the ground floor"), st.foundation.HasValue);
@@ -1003,7 +1022,7 @@ namespace Triband.Storey.Editor
                     id => doc.palette.TryGetValue(id, out var pe) ? pe : null);
                 if (picked != null && picked != value)
                     e.ApplyTo(label + " colour", bb => { spec.set(baseStyle ? bb.style : Styles.Edited(bb, k0), picked); return true; });
-                if (optional && value != null && GUILayout.Button(new GUIContent("Default", "Use the project's default colour"), EditorStyles.miniButton, GUILayout.Width(56)))
+                if (optional && value != null && GUILayout.Button(new GUIContent("Default", "Use the project's default colour, or the colour it follows"), EditorStyles.miniButton, GUILayout.Width(56)))
                     e.ApplyTo(label + " colour", bb => { spec.set(baseStyle ? bb.style : Styles.Edited(bb, k0), null!); return true; });
             }
         }
@@ -1030,7 +1049,8 @@ namespace Triband.Storey.Editor
             "wall" => ColorSlot.Wall, "trim" => ColorSlot.Trim, "interior" => ColorSlot.Interior, "floor" => ColorSlot.Floor, "roof" => ColorSlot.Roof,
             "core" => ColorSlot.Core, "glass" => ColorSlot.Glass, "door" => ColorSlot.Door, "rail" => ColorSlot.Rail, "metal" => ColorSlot.Metal,
             "ceiling" => ColorSlot.Ceiling, "liftInterior" => ColorSlot.LiftInterior, "liftButton" => ColorSlot.LiftButton, "detailMetal" => ColorSlot.DetailMetal,
-            "grille" => ColorSlot.Grille, "detailDark" => ColorSlot.DetailDark, "frame" => ColorSlot.Frame, "foundationColor" => ColorSlot.Foundation, "plinth" => ColorSlot.Plinth, _ => ColorSlot.Dish,
+            "grille" => ColorSlot.Grille, "detailDark" => ColorSlot.DetailDark, "frame" => ColorSlot.Frame, "foundationColor" => ColorSlot.Foundation, "plinth" => ColorSlot.Plinth,
+            "groundWall" => ColorSlot.GroundWall, "band" => ColorSlot.Band, "cornice" => ColorSlot.Cornice, _ => ColorSlot.Dish,
         };
 
         static void Slider(StoreyEdit e, string label, double value, double min, double max, double step, Action<BuildingData, double> set)

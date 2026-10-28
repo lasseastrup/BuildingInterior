@@ -247,6 +247,9 @@ namespace Triband.Storey
             s.frame = c.OptColor(o, "frame", path);
             s.foundationColor = c.OptColor(o, "foundationColor", path);
             s.plinth = c.OptColor(o, "plinth", path);
+            s.groundWall = c.OptColor(o, "groundWall", path);
+            s.band = c.OptColor(o, "band", path);
+            s.cornice = c.OptColor(o, "cornice", path);
             s.windows = c.Enum<WindowType>(o, "windows", WindowType.Punched, path);
             s.winW = c.Num(o, "winW", 1.2, path);
             s.bay = c.Num(o, "bay", 2.6, path);
@@ -265,7 +268,11 @@ namespace Triband.Storey
             s.bandH = c.Opt(o, "bandH", path);
             s.bandDepth = c.Opt(o, "bandDepth", path);
             s.bandWall = c.Bool(o, "bandWall", false, path);
+            s.bandGround = c.Bool(o, "bandGround", false, path);
+            s.corniceH = c.Opt(o, "corniceH", path);
+            s.corniceDepth = c.Opt(o, "corniceDepth", path);
             s.plinthH = c.Opt(o, "plinthH", path);
+            s.plinthDepth = c.Opt(o, "plinthDepth", path);
             s.foundation = c.Opt(o, "foundation", path);
             s.foundationH = c.Opt(o, "foundationH", path);
             s.foundationOut = c.Opt(o, "foundationOut", path);
@@ -417,7 +424,11 @@ namespace Triband.Storey
             if (s.bandH.HasValue) o["bandH"] = s.bandH.Value;
             if (s.bandDepth.HasValue) o["bandDepth"] = s.bandDepth.Value;
             if (s.bandWall) o["bandWall"] = true;
+            if (s.bandGround) o["bandGround"] = true;
+            if (s.corniceH.HasValue) o["corniceH"] = s.corniceH.Value;
+            if (s.corniceDepth.HasValue) o["corniceDepth"] = s.corniceDepth.Value;
             if (s.plinthH.HasValue) o["plinthH"] = s.plinthH.Value;
+            if (s.plinthDepth.HasValue) o["plinthDepth"] = s.plinthDepth.Value;
             if (s.foundation.HasValue) o["foundation"] = s.foundation.Value;
             if (s.foundationH.HasValue) o["foundationH"] = s.foundationH.Value;
             if (s.foundationOut.HasValue) o["foundationOut"] = s.foundationOut.Value;
@@ -438,6 +449,9 @@ namespace Triband.Storey
             if (s.frame != null) o["frame"] = s.frame;
             if (s.foundationColor != null) o["foundationColor"] = s.foundationColor;
             if (s.plinth != null) o["plinth"] = s.plinth;
+            if (s.groundWall != null) o["groundWall"] = s.groundWall;
+            if (s.band != null) o["band"] = s.band;
+            if (s.cornice != null) o["cornice"] = s.cornice;
             if (s.details != null)
             {
                 var d = new Dictionary<string, object?>();
@@ -525,8 +539,8 @@ namespace Triband.Storey
             public static readonly string[] Style =
             {
                 "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "details",
-                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "plinthH", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind", "sillH",
-                "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth",
+                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "bandGround", "corniceH", "corniceDepth", "plinthH", "plinthDepth", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind", "sillH",
+                "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth", "groundWall", "band", "cornice",
                 "doorType",   // street doors' Canopy or Glazed, gone (every generated door is plain): read and dropped, not reported
             };
         }

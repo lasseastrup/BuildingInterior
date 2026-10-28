@@ -63,7 +63,7 @@ namespace Triband.Storey.Generate
                         // it, as does an artist's whose LOD1 stays in front of it (recessed: all are cut)
                         bool cutAll = recessed || wk?.lod1 != null && !wk.lod1OnWall;
                         var cut = cutAll ? ops : Doors(ops, L0.CutOps);
-                        Facade.WallPanel(op, F, new Miter(pc.S, pc.E), 0, T, y, h, cut, party ? pc.r!.pInner : C.wall, C.wall, L0.Panel.Set(inner: false, revealFrom: T * 0.45, threshold: k == 0));
+                        Facade.WallPanel(op, F, new Miter(pc.S, pc.E), 0, T, y, h, cut, party ? pc.r!.pInner : Lod0.Shared.Wall(stk, C, k == 0), C.wall, L0.Panel.Set(inner: false, revealFrom: T * 0.45, threshold: k == 0));
                         foreach (var o in ops)
                         {
                             // an artist's window or door with a LOD1 mesh, and the plain pane where it leaves the hole open

@@ -143,7 +143,7 @@ namespace Triband.Storey.Generate
                 Facade.Dressing(d, dk);
                 ops.Add(d);
             }
-            var ws = Facade.WindowSpec(st.windows, h, st);
+            var ws = Facade.WindowSpec(st.windows, h, st, ground: k == 0);
             var (wS, wE) = Facade.WindowSpan(wk, uS, uE);
             var (n, bay) = Facade.BayLayout(st, wS, wE);
             if (ws != null && ws.y1 - ws.y0 > 0.4 && n > 0)
@@ -170,7 +170,7 @@ namespace Triband.Storey.Generate
         public static void Walls(MeshBuilder op, MeshBuilder? gl, List<Seg>? sg, BuildingData b, VoidData v, int k, Palette C, bool rooms = false)
         {
             var g = RingOf(b, v); int n = g.Wp.Count; double T = Dim.T_EXT, y = Derived.FloorBase(b, k), h = Derived.FloorH(b, k);
-            bool shell = Derived.ShellAt(b, k), lod1 = gl == null, bands = Derived.StyleAt(b, k).bands && k < b.floors.Count - 1;
+            bool shell = Derived.ShellAt(b, k), lod1 = gl == null, bands = Facade.BandAt(b, k);
             for (int i = 0; i < n; i++)
             {
                 var e = Geo.EdgeInfo(g.Wp, i, g.flag); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L); var (uS, uE) = Facade.Span(m, e.L);
@@ -190,7 +190,7 @@ namespace Triband.Storey.Generate
                 }
                 if (bands)
                 {
-                    var (bh, bd, bc) = Lod0.Shared.Band(Derived.StyleAt(b, k), C); var rb = new List<(double, double)> { m.Span(T, T + bd) };
+                    var (bh, bd, bc) = Lod0.Shared.Band(Derived.StyleAt(b, k), C, k == 0); var rb = new List<(double, double)> { m.Span(T, T + bd) };
                     Facade.StripPieces(op, F, m, rb, y + h - bh, y + h, T, T + bd, bc, bc, Skip.In);
                     if (!lod1) Facade.StripBacks(op, F, rb, ops, y, y + h - bh, y + h, T, bc, rooms && !shell);
                 }

@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 3;
+        public const int Version = 4;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -252,6 +252,7 @@ namespace Triband.Storey
             s.bandH = r.Opt(); s.bandDepth = r.Opt(); s.bandWall = r.Bool();
             s.windowKind = Str(ref r); s.doorKind = Str(ref r); s.sillH = r.Opt();
             s.plinthH = r.Opt(); s.foundation = r.Opt(); s.foundationH = r.Opt(); s.foundationOut = r.Opt(); s.bricks = r.Opt(); s.mansard = r.Opt(); s.dormers = r.Opt();
+            s.groundWall = Str(ref r); s.band = Str(ref r); s.cornice = Str(ref r); s.bandGround = r.Bool(); s.corniceH = r.Opt(); s.corniceDepth = r.Opt(); s.plinthDepth = r.Opt();
             if (r.Bool())
             {
                 var dr = s.details = new DetailRules { ac = r.Opt(), vents = r.Opt() };
@@ -403,6 +404,7 @@ namespace Triband.Storey
             w.Opt(s.bandH); w.Opt(s.bandDepth); w.Bool(s.bandWall);
             w.Count(S(s.windowKind)); w.Count(S(s.doorKind)); w.Opt(s.sillH);
             w.Opt(s.plinthH); w.Opt(s.foundation); w.Opt(s.foundationH); w.Opt(s.foundationOut); w.Opt(s.bricks); w.Opt(s.mansard); w.Opt(s.dormers);
+            w.Count(S(s.groundWall)); w.Count(S(s.band)); w.Count(S(s.cornice)); w.Bool(s.bandGround); w.Opt(s.corniceH); w.Opt(s.corniceDepth); w.Opt(s.plinthDepth);
             w.Bool(s.details != null);
             if (s.details != null)
             {

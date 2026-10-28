@@ -9,7 +9,10 @@ namespace Triband.Storey.Generate
     {
         public sealed class WinSpec { public double sp, w, y0, y1; public double? full; }
 
-        public static WinSpec? WindowSpec(WindowType kind, double h, FacadeStyle st, bool storefront = false) => Fit(RawSpec(kind, h, st, storefront), h, st, null);
+        /// <param name="cornice">The storey is its tier's top, under a cornice: how far under its top the cornice's foot is
+        /// (<see cref="CorniceUnder"/>). Its windows stay under it.</param>
+        /// <param name="ground">The ground storey: the only one with a band where the style has <see cref="FacadeStyle.bandGround"/>.</param>
+        public static WinSpec? WindowSpec(WindowType kind, double h, FacadeStyle st, bool storefront = false, double? cornice = null, bool ground = false) => Fit(RawSpec(kind, h, st, storefront), h, st, null, cornice, ground);
 
         static WinSpec? RawSpec(WindowType kind, double h, FacadeStyle st, bool storefront)
         {
@@ -28,13 +31,13 @@ namespace Triband.Storey.Generate
         /// <summary>How high a window type's windows start over the floor (metres): what an artist's window of its own size takes without <see cref="FacadeStyle.sillH"/>.</summary>
         public static double SillOf(WindowType kind) => kind switch { WindowType.Tall => 0.4, WindowType.Ribbon => 0.95, WindowType.Curtain => 0.1, _ => 0.9 };
 
-        /// <summary>The ground floor's window spec: the style's own, none, or a storefront.</summary>
-        public static WinSpec? GroundSpec(FacadeStyle st, double h)
+        /// <summary>The ground floor's window spec: the style's own, none, or a storefront. <paramref name="cornice"/>: under a cornice, as <see cref="WindowSpec"/>.</summary>
+        public static WinSpec? GroundSpec(FacadeStyle st, double h, double? cornice = null)
         {
             var ws = st.ground == GroundType.Match ? RawSpec(st.windows, h, st, false) : st.ground == GroundType.Solid ? null : RawSpec(st.windows, h, st, true);
             // a plinth (or foundation) of the style's own height: the ground floor's windows start above it
             double? plinth = st.plinthH.HasValue || st.foundation.HasValue ? Math.Max(st.plinthH ?? 0.45, st.foundation.HasValue ? Math.Max(0.02, st.foundationH ?? 0.2) : 0) : (double?)null;
-            return Fit(ws, h, st, plinth);
+            return Fit(ws, h, st, plinth, cornice, true);
         }
 
         /// <summary>
@@ -43,9 +46,11 @@ namespace Triband.Storey.Generate
         /// sill's height (<see cref="FacadeStyle.sillH"/>, or its type's); and its dressing stays clear of the floor, of a
         /// plinth (<paramref name="plinth"/>: its top, on the ground floor), of the storey's top and of a band. The generator's
         /// own windows, and their arched heads, stay under a band, and over a plinth. A hole left 40 cm high or less is none:
-        /// <see cref="Ops"/> lays out no windows there, and LOD2 paints none.
+        /// <see cref="Ops"/> lays out no windows there, and LOD2 paints none. On a tier's top storey under a cornice
+        /// (<paramref name="cornice"/>: how far under the storey's top its foot is) they stay under it as under a band; a band of the style's own height, only on the ground storey with
+        /// <see cref="FacadeStyle.bandGround"/> (<paramref name="ground"/>).
         /// </summary>
-        static WinSpec? Fit(WinSpec? ws, double h, FacadeStyle st, double? plinth)
+        static WinSpec? Fit(WinSpec? ws, double h, FacadeStyle st, double? plinth, double? cornice = null, bool ground = false)
         {
             if (ws == null) return null;
             var k = OpeningKinds.Of(st, false);
@@ -58,10 +63,50 @@ namespace Triband.Storey.Generate
                 if (!k.stretch) { ws.full = null; ws.w = k.w; ws.y1 = ws.y0 + k.h; }
                 ws.y1 = Math.Min(ws.y1, h - Math.Max(0.1, rt + 0.05));
             }
-            // a band of the style's own height: windows (and their heads) stay under it
-            if (st.bandH is double bh && st.bands) ws.y1 = Math.Min(ws.y1, h - bh - (k != null ? Math.Max(0.1, rt + 0.05) : st.head == HeadType.Arch ? 0.3 : 0.1));
+            // a band of the style's own height, and a cornice: windows (and their heads) stay under them
+            double under = k != null ? Math.Max(0.1, rt + 0.05) : st.head == HeadType.Arch ? 0.3 : 0.1;
+            if (st.bandH is double bh && st.bands && (!st.bandGround || ground)) ws.y1 = Math.Min(ws.y1, h - bh - under);
+            if (cornice is double cu) ws.y1 = Math.Min(ws.y1, h - cu - under);
             return ws.y1 - ws.y0 > 0.4 ? ws : null;
         }
+
+        /// <summary>
+        /// Whether storey k has a band under its ceiling (docs/EDITOR.md §6.7): with the style's bands, every storey but the
+        /// top, or only the ground storey with <see cref="FacadeStyle.bandGround"/>. Where a cornice tops the storey
+        /// (<see cref="CorniceAt"/>), the band gives way to it on the walls the cornice runs along.
+        /// </summary>
+        public static bool BandAt(BuildingData b, int k)
+        {
+            var st = Derived.StyleAt(b, k);
+            return st.bands && k < b.floors.Count - 1 && (!st.bandGround || k == 0);
+        }
+
+        /// <summary>
+        /// Whether storey k is its tier's top and its style has a cornice (<see cref="FacadeStyle.corniceH"/>): round the
+        /// top of the walls under the roof, or under a terrace's parapet where a setback starts above. Storey's own.
+        /// </summary>
+        public static bool CorniceAt(BuildingData b, int k) =>
+            Derived.StyleAt(b, k).corniceH.HasValue && (k == b.floors.Count - 1 || Derived.IsSetback(b, k + 1));
+
+        /// <summary>
+        /// How far under storey k's top its cornice's top is: 0, or under a pitched roof (the building's, or a terrace's over
+        /// the storey) its eave's soffit, which hangs below the wall's top (<see cref="Roofs.SoffitDrop"/>).
+        /// </summary>
+        public static double CorniceDrop(BuildingData b, int k)
+        {
+            int N = b.floors.Count;
+            if (k == N - 1) { var st = Derived.StyleAt(b, N); return st.roofType == RoofType.Flat ? 0 : Roofs.SoffitDrop(st.roofType, st.pitch, st.eave); }
+            return k + 1 < N && b.floors[k + 1].terraceRoof is TerraceRoofData tr ? Roofs.SoffitDrop(RoofType.Hip, tr.pitch, Roofs.TerraceEave) : 0;
+        }
+
+        /// <summary>How far under storey k's top its cornice's foot is (<see cref="CorniceDrop"/> and its height), or null with no cornice.</summary>
+        public static double? CorniceUnder(BuildingData b, int k) =>
+            CorniceAt(b, k) ? CorniceDrop(b, k) + CorniceH(Derived.StyleAt(b, k).corniceH!.Value) : (double?)null;
+
+        /// <summary>A cornice's height (2 cm to 3 m).</summary>
+        public static double CorniceH(double h) => Math.Max(0.02, Math.Min(3, h));
+        /// <summary>How far a cornice stands out: at least a centimetre, so it never lies on the wall; null = 10 cm.</summary>
+        public static double CorniceDepth(FacadeStyle st) => Math.Max(0.01, Math.Min(1.5, st.corniceDepth ?? 0.1));
 
         /// <summary>
         /// Where windows are laid out along a wall: the span (<see cref="Span"/>) less how far an artist's window reaches past
@@ -160,8 +205,10 @@ namespace Triband.Storey.Generate
             var st = Derived.StyleAt(b, k); double h = Derived.FloorH(b, k), spn = uE - uS;
             var wk = OpeningKinds.Of(st, false); var dk = OpeningKinds.Of(st, true);
             // a band of the style's own height: doors stay under it as windows do (WindowSpec), their posts too (Dress: 8 cm
-            // above the door, standing out as far as a band does by default, so they would lie in its face)
-            double? band = st.bandH is double bh && st.bands ? bh : (double?)null;
+            // above the door, standing out as far as a band does by default, so they would lie in its face); and under a cornice
+            double? cornice = CorniceUnder(b, k);
+            double? band = st.bandH is double bh && st.bands && (!st.bandGround || k == 0) ? bh : (double?)null;
+            if (cornice is double cu) band = Math.Max(band ?? 0, cu);
             double under = band is double b0 ? h - b0 - 0.08 : double.MaxValue;
             ops.Clear();
             Opening New() => pool != null ? pool.Take() : new Opening();
@@ -191,7 +238,7 @@ namespace Triband.Storey.Generate
             var blank = Derived.TierStart(b, k) > 0 ? b.floors[Derived.TierStart(b, k)].blank : b.blank;
             if (!blank.Contains(i))
             {
-                var ws = k == 0 ? GroundSpec(st, h) : WindowSpec(st.windows, h, st);
+                var ws = k == 0 ? GroundSpec(st, h, cornice) : WindowSpec(st.windows, h, st, cornice: cornice);
                 var (wS, wE) = WindowSpan(wk, uS, uE);
                 var (n, bay) = BayLayout(st, wS, wE);
                 if (ws != null && ws.y1 - ws.y0 > 0.4 && n > 0)

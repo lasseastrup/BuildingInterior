@@ -13,8 +13,21 @@ namespace Triband.Storey.Generate
         public double[] spec = { -1, 0, 1, 0 };
         /// <summary>Storey height, storeys with a band, run height (1e9 = not the top), parapet 0 none / 1 wall / 2 curb.</summary>
         public double[] run = { 3, 0, 1e9, 0 };
-        /// <summary>The band: height (0 = the prototype's 0.22 m), a shade of the wall (1) or the trim (0), that shade. GPU texel 2. Storey's own.</summary>
+        /// <summary>
+        /// The band: height (0 = the prototype's 0.22 m), a shade of the wall (1) or the trim (0), that shade, and its own
+        /// colour's slot (<see cref="ColorSlot.Band"/>; 0 = none). GPU texel 2. Storey's own.
+        /// </summary>
         public double[] band = { 0, 0, 0, 0 };
+        /// <summary>
+        /// The slot the run's walls take their colour from: 0 for the walls', <see cref="ColorSlot.GroundWall"/> for a ground
+        /// storey with its own (docs/EDITOR.md §6.7). GPU texel 1's y. Storey's own.
+        /// </summary>
+        public int wallSlot;
+        /// <summary>
+        /// A cornice round the top of the run's storeys (a tier's top storey, a run of its own): its height (0 = none) and its
+        /// colour's slot (the trim's or <see cref="ColorSlot.Cornice"/>). GPU texel 1's z and w. Storey's own.
+        /// </summary>
+        public double corniceH; public int corniceSlot;
         /// <summary>The 24 floats as the table stores them (six texels: wall, trim, glass, roof, spec, run), colours resolved to linear RGB.</summary>
         public double[] Texels(ColorResolver colors)
         {
@@ -24,13 +37,14 @@ namespace Triband.Storey.Generate
 
         /// <summary>
         /// The 24 floats the GPU table stores (docs/COLOURS.md §3.5): texel 0 is (colour row, wall, trim and glass
-        /// shades), texel 1 (roof shade), texels 2 and 3 are unused, then spec and run as in <see cref="Texels"/>.
+        /// shades), texel 1 (roof shade, the walls' slot, the cornice's height and slot), texel 2 the band, texel 3 unused,
+        /// then spec and run as in <see cref="Texels"/>.
         /// The facade shader reads wall, trim, glass and roof from <paramref name="colorRow"/>, the row of the swatches' style.
         /// </summary>
         public double[] GpuTexels(int colorRow)
         {
             Check();
-            return new[] { colorRow, wall.tone, trim.tone, glass.tone, roof.tone, 0, 0, 0, band[0], band[1], band[2], band[3], 0, 0, 0, 0, spec[0], spec[1], spec[2], spec[3], run[0], run[1], run[2], run[3] };
+            return new[] { colorRow, wall.tone, trim.tone, glass.tone, roof.tone, wallSlot, corniceH, corniceSlot, band[0], band[1], band[2], band[3], 0, 0, 0, 0, spec[0], spec[1], spec[2], spec[3], run[0], run[1], run[2], run[3] };
         }
 
         /// <summary>
@@ -41,7 +55,7 @@ namespace Triband.Storey.Generate
         {
             Check();
             into[0] = colorRow; into[1] = (float)wall.tone; into[2] = (float)trim.tone; into[3] = (float)glass.tone;
-            into[4] = (float)roof.tone; into[5] = 0; into[6] = 0; into[7] = 0;
+            into[4] = (float)roof.tone; into[5] = wallSlot; into[6] = (float)corniceH; into[7] = corniceSlot;
             for (int i = 0; i < 4; i++) { into[8 + i] = (float)band[i]; into[12 + i] = 0; into[16 + i] = (float)spec[i]; into[20 + i] = (float)run[i]; }
         }
 
@@ -229,15 +243,24 @@ namespace Triband.Storey.Generate
                 for (int k = t.k0; k < t.k1; k++)
                 {
                     double h = Derived.FloorH(b, k); bool gnd = k == 0;
-                    if (runs.Count > 0 && !runs[runs.Count - 1].g && !gnd && Math.Abs(runs[runs.Count - 1].h - h) < 1e-6) { var r = runs[runs.Count - 1]; r.k1 = k + 1; runs[runs.Count - 1] = r; }
+                    // a tier's top storey under a cornice is a run of its own: its windows stay under the cornice, which it paints
+                    if (runs.Count > 0 && !runs[runs.Count - 1].g && !gnd && Math.Abs(runs[runs.Count - 1].h - h) < 1e-6 && !Facade.CorniceAt(b, k)) { var r = runs[runs.Count - 1]; r.k1 = k + 1; runs[runs.Count - 1] = r; }
                     else runs.Add((k, k + 1, h, gnd, 0, false));
                 }
                 for (int ri = 0; ri < runs.Count; ri++)
                 {
                     var r = runs[ri]; double H = Derived.FloorBase(b, r.k1) - Derived.FloorBase(b, r.k0); bool topRun = last && ri == runs.Count - 1;
-                    var ws = r.g ? Facade.GroundSpec(st, r.h) : Facade.WindowSpec(st.windows, r.h, st);
-                    r.slot = Row(C, SpecOf(ws), new[] { r.h, st.bands ? Math.Max(0, Math.Min(r.k1, N - 1) - r.k0) : 0, topRun && !pitched ? H : 1e9, topRun ? (st.parapet ? 1 : 2) : 0 });
-                    if (st.bandH.HasValue || st.bandWall) M.Rows[r.slot].band = new[] { Lod0.Shared.Band(st, C).h, st.bandWall ? 1 : 0, C.wallBand.tone, 0 };
+                    double? under = Facade.CorniceUnder(b, r.k1 - 1); bool cn = under.HasValue;
+                    var ws = r.g ? Facade.GroundSpec(st, r.h, under) : Facade.WindowSpec(st.windows, r.h, st, cornice: under);
+                    // the storeys with a band, from the run's first (Facade.BandAt: all but the building's top, or the ground's
+                    // alone); a cornice's storey has none
+                    int banded = 0; for (int k = r.k0; k < r.k1 && Facade.BandAt(b, k) && !(cn && k == r.k1 - 1); k++) banded++;
+                    r.slot = Row(C, SpecOf(ws), new[] { r.h, banded, topRun && !pitched ? H : 1e9, topRun ? (st.parapet ? 1 : 2) : 0 });
+                    var row = M.Rows[r.slot];
+                    if (st.bandH.HasValue || st.bandWall || st.band != null) row.band = new[] { Lod0.Shared.Band(st, C).h, st.bandWall ? 1 : 0, C.wallBand.tone, st.band != null ? (int)ColorSlot.Band : 0 };
+                    if (r.g && st.groundWall != null) row.wallSlot = (int)ColorSlot.GroundWall;
+                    // painted from its foot to the storey's top: under a pitched roof the eave's soffit covers the rest
+                    if (cn) { row.corniceH = under!.Value; row.corniceSlot = (int)C.CorniceOf(st).slot; }
                     r.top = topRun && !pitched; runs[ri] = r;
                 }
                 for (int i = 0; i < n; i++)

@@ -253,6 +253,15 @@ namespace Triband.Storey
         public string? frame, foundationColor;
         /// <summary>The plinth's own colour; null = a shade of the wall, as the prototype has it.</summary>
         public string? plinth;
+        /// <summary>
+        /// The ground storey's wall colour; null = the walls' (docs/EDITOR.md §6.7). Its plinth, band shade and brick patches
+        /// follow it. Storey's own (the old BuildingGenerator's ground-floor wall colour).
+        /// </summary>
+        public string? groundWall;
+        /// <summary>The floor bands' own colour; null = the trim, or a shade of the wall with <see cref="bandWall"/>. Storey's own.</summary>
+        public string? band;
+        /// <summary>The cornice's own colour (<see cref="corniceH"/>); null = the trim. Storey's own.</summary>
+        public string? cornice;
         public WindowType windows = WindowType.Punched;
         public double winW = 1.2;
         public double bay = 2.6;
@@ -278,6 +287,14 @@ namespace Triband.Storey
         /// <summary>The band under each storey's ceiling: height (null = 0.22 m), how far it stands out (null = 0.06 m), and whether it is a shade of the wall rather than the trim.</summary>
         public double? bandH, bandDepth;
         public bool bandWall;
+        /// <summary>Only the band over the ground floor: the storeys above have none (docs/EDITOR.md §6.7). Storey's own.</summary>
+        public bool bandGround;
+        /// <summary>
+        /// A cornice round the top of each tier's walls, under its roof or terrace (docs/EDITOR.md §6.7): its height (null =
+        /// none) and how far it stands out (null = 0.1 m). It takes the band's place on that storey, whose windows stay under
+        /// it. Storey's own (the old BuildingGenerator's top strip).
+        /// </summary>
+        public double? corniceH, corniceDepth;
         /// <summary>An artist-made window and street door (<see cref="Generate.OpeningKinds"/>), by id; null = the generator's own.</summary>
         public string? windowKind, doorKind;
         /// <summary>
@@ -287,6 +304,8 @@ namespace Triband.Storey
         public double? sillH;
         /// <summary>The ground floor's plinth height; null = 0.45 m.</summary>
         public double? plinthH;
+        /// <summary>How far the plinth stands out from the wall, in metres; null = 0.04 m. Storey's own.</summary>
+        public double? plinthDepth;
         /// <summary>A foundation along the foot of the ground floor: how deep it goes below ground (null = none), and how high it shows (null = 0.2 m).</summary>
         public double? foundation, foundationH;
         /// <summary>How far the foundation stands out from the wall, in metres; null = 0.08 m.</summary>
