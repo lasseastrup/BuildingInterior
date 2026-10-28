@@ -115,6 +115,40 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void ScatteredDetailsKeepTheirGapFromOneAnotherAndOnlyAFewCentimetresFromAnArtistsWindows()
+        {
+            // the old generator's spacing is between details; its walls are full of windows 2.11 m apart, 0.6 m wide
+            var win = new OpeningKind { id = "t-scatter-win", name = "t-scatter-win", w = 0.6, h = 0.9, stretch = false, lod0 = new OpeningKind.Mesh
+            {
+                P = new[] { new P3(-0.3, 0, -0.05), new P3(0.3, 0, -0.05), new P3(0.3, 0.9, -0.05), new P3(-0.3, 0.9, -0.05) },
+                N = Enumerable.Repeat(new P3(0, 0, 1), 4).ToArray(),
+                parts = { new OpeningKind.Part { slot = ColorSlot.Glass, tris = new[] { 0, 1, 2, 0, 2, 3 } } },
+            } };
+            OpeningKinds.Register(win);
+            try
+            {
+                var k = Kind(Details.Rule.Scatter, 0.45, 0.25, 0.02, id: "5ca77e2ed0000000000000000000a002");
+                var (b, s) = DetailKindTests.Block(bb => { Floors.SetCount(bb, 3); bb.style.bay = 2.11; Set(bb, k.id, 100, new KindRule { density = 0.5, spacing = 0.5 }); });
+                int generated = ItemsByFloor(s, b, k).Count;   // the generator's own windows: their heads and sills kept clear as before
+                b.style.windowKind = win.id;
+                var all = ItemsByFloor(s, b, k);
+                Assert.True(all.Count > generated, $"{all.Count} beside an artist's windows, {generated} beside the generator's");
+                foreach (var g in all.GroupBy(x => (x.k, x.it.i)))
+                {
+                    var ops = Ops(s, b, g.Key.k, g.Key.i); var list = g.Select(x => x.it).ToList();
+                    foreach (var it in list)
+                    {
+                        double u0 = it.u - k.w / 2, u1 = it.u + k.w / 2, v0 = it.y + k.bottom, v1 = v0 + k.h;
+                        Assert.All(ops, o => Assert.False(u0 < o.Right + 0.05 - 1e-9 && u1 > o.Left - 0.05 + 1e-9 && v0 < o.Top + 0.05 - 1e-9 && v1 > o.Bottom - 0.05 + 1e-9, "within 5 cm of a window"));
+                        foreach (var other in list)
+                            if (other != it) Assert.False(Math.Abs(other.u - it.u) < k.w + 0.5 - 1e-9 && Math.Abs(other.y - it.y) < k.h + 0.5 - 1e-9, "two nearer than their gap");
+                    }
+                }
+            }
+            finally { OpeningKinds.Remove(win.id); }
+        }
+
+        [Fact]
         public void AScatteredKindGoesOnTheStoreysItsStyleSays()
         {
             var k = Kind(Details.Rule.Scatter);

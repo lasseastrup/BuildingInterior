@@ -143,6 +143,22 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void WindowsABayWideStandInARowAsRibbonsDo()
+        {
+            // the old generator's skyscraper: windows 1.40 m wide in bays of 1.43 m, 3 cm of wall between them
+            With(Kind("t-ribbon", 1.40, 0.84, keep: true), () =>
+            {
+                var (b, s, _) = Block(Rect, BayFit.Fixed, st => { st.bay = 1.43; st.windowKind = "t-ribbon"; });
+                var (os, oe) = Outer(Rect, 1);
+                int n = (int)Math.Floor((oe - os) / 1.43 + 1e-6);
+                var ops = Ops(s, b, 2, 1).Where(o => !o.door).OrderBy(o => o.u0).ToList();
+                Assert.Equal(n, ops.Count);   // every bay has its window: none dropped for standing close to the one before
+                for (int j = 1; j < ops.Count; j++) Assert.InRange(ops[j].u0 - ops[j - 1].u1, 0.01, 0.05);
+                Assert.Empty(CoplanarCheck.Run(Lod0.Build(s, b).Op).Overlaps);
+            });
+        }
+
+        [Fact]
         public void TheDetailsAndLodZeroHaveTheWindowsInTheSamePlace()
         {
             var (b, s, _) = Block(Ell, BayFit.Fixed, st => st.details = new DetailRules { ac = 100, vents = 100 });

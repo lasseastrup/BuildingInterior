@@ -214,12 +214,18 @@ namespace Triband.Storey.Generate
             return OuterFace(fp, Geo.Area2(fp) > 0, i);
         }
 
-        /// <summary>Windows keep clear of the neighbouring wall.</summary>
+        /// <summary>Windows keep clear of the neighbouring wall (<see cref="CornerClear"/>).</summary>
         public static (double, double) Span(Miter m, double L)
         {
             var (ws, we) = m.Span(0, Dim.T_EXT);
-            return (Math.Max(0, ws) + 0.14, Math.Min(L, we) - 0.14);
+            return (Math.Max(0, ws) + CornerClear, Math.Min(L, we) - CornerClear);
         }
+
+        /// <summary>
+        /// How far a window keeps from the neighbouring wall (<see cref="Span"/>); with fixed bays (<see cref="BayFit.Fixed"/>),
+        /// only <see cref="FixedCornerClear"/>, as the old generator's bays reach the corner. Storey's own.
+        /// </summary>
+        public const double CornerClear = 0.14, FixedCornerClear = 0.02;
 
         /// <summary>A door on an upper floor needs terrace in front of it.</summary>
         public static bool TerraceAt(BuildingData b, int k, int i, double t)
@@ -354,11 +360,13 @@ namespace Triband.Storey.Generate
                 double sx = wk != null && OpeningKinds.Stretched(wk) ? ww / Math.Max(1e-3, wk.w) : 1;
                 if (fix)
                 {
-                    // clear of the corners as the span keeps them, dressing and all; then clear of the window before
-                    double lo = uS + (wk?.reachL ?? 0) * sx + ww / 2, hi = uE - (wk?.reachR ?? 0) * sx - ww / 2;
+                    // clear of the corners as the span keeps them, dressing and all; then clear of the window before: holes a
+                    // centimetre apart at least (a strip of wall between them), so windows a bay wide stand in a row as the old
+                    // generator's ribbons do
+                    double lo = uS - (CornerClear - FixedCornerClear) + (wk?.reachL ?? 0) * sx + ww / 2, hi = uE + (CornerClear - FixedCornerClear) - (wk?.reachR ?? 0) * sx - ww / 2;
                     if (lo > hi) continue;
                     c = Math.Max(lo, Math.Min(hi, c));
-                    if (c - ww / 2 < last + 0.05) continue;
+                    if (c - ww / 2 < last + 0.01) continue;
                 }
                 double u0 = c - ww / 2, u1 = c + ww / 2;
                 bool blocked = false;

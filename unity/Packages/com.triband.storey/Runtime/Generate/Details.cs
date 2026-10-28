@@ -350,8 +350,8 @@ namespace Triband.Storey.Generate
                     {
                         int cell = order[c];
                         double uc = cu0 + (cell % cols + R()) * W / cols, vc = cv0 + (cell / cols + R()) * H / rows;
-                        double a0 = uc - w / 2 - gap, a1 = uc + w / 2 + gap, b0 = vc - hh / 2 - gap, b1 = vc + hh / 2 + gap;
-                        if (!Clear(a0, a1, b0, b1, i, ops)) continue;
+                        double a0 = uc - w / 2, a1 = uc + w / 2, b0 = vc - hh / 2, b1 = vc + hh / 2;
+                        if (!Clear(a0, a1, b0, b1, gap, i, ops)) continue;
                         bool onParty = false; foreach (var r in party) if (a0 < r.e + 0.3 && a1 > r.s - 0.3) { onParty = true; break; }
                         if (onParty) break;
                         var it = Mk(dk, i, uc, null); it.y = vc - hh / 2 - dk.bottom; out_.Add(it);
@@ -360,14 +360,22 @@ namespace Triband.Storey.Generate
             }
 
             // whether a box (u across, v up from the floor) is clear of the openings with their heads, and of what is on the wall
-            bool Clear(double a0, double a1, double b0, double b1, int i, List<Opening> ops)
+            // the gap is kept from the other details, as the old generator's spacing; openings by a few centimetres, past what
+            // dresses them (an artist's window's bounds take in its frame and sill; the generator's own heads, sills and hoods
+            // lie outside the hole, so more is kept round those)
+            bool Clear(double a0, double a1, double b0, double b1, double gap, int i, List<Opening> ops)
             {
-                foreach (var o in ops) if (a0 < o.Right + 0.12 && a1 > o.Left - 0.12 && b0 < o.Top + 0.45 && b1 > o.Bottom - 0.15) return false;
+                foreach (var o in ops)
+                {
+                    bool own = o.kind == null;
+                    double side = own ? 0.12 : 0.05, over = own ? 0.45 : 0.05, under = own ? 0.15 : 0.05;
+                    if (a0 < o.Right + side && a1 > o.Left - side && b0 < o.Top + over && b1 > o.Bottom - under) return false;
+                }
                 foreach (var m in out_)
                 {
                     if (m.i != i || m.corner) continue;
                     double half = m.Width / 2; var (mlo, mhi) = Rise(m, h);
-                    if (a0 < m.u + half && a1 > m.u - half && b0 < mhi && b1 > mlo) return false;
+                    if (a0 - gap < m.u + half && a1 + gap > m.u - half && b0 - gap < mhi && b1 + gap > mlo) return false;
                 }
                 return true;
             }
