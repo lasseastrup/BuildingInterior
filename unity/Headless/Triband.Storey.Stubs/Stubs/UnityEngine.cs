@@ -713,6 +713,7 @@ namespace UnityEngine
         public string[] shaderKeywords { get; set; } = System.Array.Empty<string>();
         public void SetFloat(int nameID, float value) { }
         public bool HasProperty(int nameID) => false;
+        public bool HasProperty(string name) => false;
         public int renderQueue { get; set; }
     }
 

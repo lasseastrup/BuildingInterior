@@ -57,6 +57,14 @@ namespace Triband.Storey.Editor
         /// </summary>
         public static Func<UnityEngine.Component, IReadOnlyDictionary<string, string>?>? RemapOf { get; set; }
 
+        /// <summary>
+        /// Whether a material draws with the palette (Color Pipeline's lit shader), so a Model Remapper's palette indices on a
+        /// mesh drawn with it are its colours; one that doesn't (a window shader of its own) is a part by its material, though
+        /// its mesh carries indices. Null without a palette: every material is taken to. Color Pipeline's integration installs
+        /// it. Storey's own.
+        /// </summary>
+        public static Func<UnityEngine.Material, bool>? PaletteMaterial { get; set; }
+
         sealed class HexPicker : IStoreyColorPicker
         {
             public string? Draw(string key, string label, string value, string field, Func<string, PaletteEntry?> lookup)

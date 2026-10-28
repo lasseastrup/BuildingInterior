@@ -42,6 +42,9 @@ namespace Triband.Storey.Editor.ColorPipeline
                     for (int i = 0; i < from.Count && i < to.Count; i++) map[ColorPipelinePalette.IdOf(from[i])] = ColorPipelinePalette.IdOf(to[i]);
                 return map;
             };
+            // Color Pipeline's lit shader takes a palette offset (ColorMappingManager's remaps); a material without it doesn't
+            // draw from the palette
+            StoreyColorField.PaletteMaterial = m => m != null && m.HasProperty("_ColorPaletteOffset");
             StoreyColorField.Conform = d =>
             {
                 ColorPaletteDefinition palette;

@@ -214,7 +214,9 @@ namespace Triband.Storey.Editor
                 if (k >= mats.Length || mats[k] == null) { g.notes.Add($"A submesh of {objectName} has no material, so Unity doesn't draw it: it is left out."); continue; }
                 string key = Key(mats[k]);
                 var sub = new KindBake.Sub { tris = mesh.GetTriangles(k), key = key };
-                if (colours == null) g.Key(key, mats[k].name);
+                // the Model Remapper's colours, where the material draws them; a material of its own (a window's glass shader)
+                // is a part by itself, though its mesh carries indices
+                if (colours == null || !(StoreyColorField.PaletteMaterial?.Invoke(mats[k]) ?? true)) g.Key(key, mats[k].name);
                 else
                 {
                     // the Model Remapper's: a part for each palette colour, taken from each triangle's first vertex
