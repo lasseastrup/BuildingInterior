@@ -215,6 +215,22 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void ABareWallOrTwoQuietOnesTakeTheCornerDetailsBetweenThem()
+        {
+            var k = Kind(Details.Rule.Corners, 0.3, 0.4, 0.1, y0: -0.2);
+            var (b, s) = DetailKindTests.Block(bb => Set(bb, k.id, 100, new KindRule { spacing = 0.75 }));
+            int all = ItemsByFloor(s, b, k).Count, per = all / 4;
+            Tiers.SetState(b, 0, 0, EdgeState.Blank);   // blank: no windows, the corners stay
+            Assert.Equal(all, ItemsByFloor(s, b, k).Count);
+            Tiers.SetState(b, 0, 0, EdgeState.Quiet);   // one quiet wall: its corners stay
+            Assert.Equal(all, ItemsByFloor(s, b, k).Count);
+            Tiers.SetState(b, 0, 1, EdgeState.Quiet);   // two quiet walls: the corner between them goes
+            Assert.Equal(all - per, ItemsByFloor(s, b, k).Count);
+            Tiers.SetState(b, 0, 1, EdgeState.Open); Tiers.SetState(b, 0, 0, EdgeState.Bare);   // a bare wall: both its corners go
+            Assert.Equal(all - 2 * per, ItemsByFloor(s, b, k).Count);
+        }
+
+        [Fact]
         public void AnLShapeHasOneCornerSetIn()
         {
             var k = Kind(Details.Rule.Corners, 0.3, 0.4, 0.1, y0: -0.2);

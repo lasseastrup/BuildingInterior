@@ -110,7 +110,7 @@ namespace Triband.Storey.Edit
         }
 
         /// <summary>A thing on a cut's own edges, kept while the cut is out: which cut, which of its edges, how far along.</summary>
-        sealed class Kept { public Vec2 at; public int j; public double t; public EntranceData? e; public DetailData? d; public bool blank; }
+        sealed class Kept { public Vec2 at; public int j; public double t; public EntranceData? e; public DetailData? d; public EdgeState state; }
 
         /// <summary>
         /// Take every cut of tier k0 out: the outline becomes the sharp one. Doors, details and blank walls on the edges
@@ -151,13 +151,14 @@ namespace Triband.Storey.Edit
                 if (r != null) { d.edge = r.Value.Item1; d.t = r.Value.Item2; dets.Add(d); }
             }
             b.details = dets;
-            var nb = new List<int>();
             foreach (int j in Tiers.Blank(b, k0))
+                if (runOf.TryGetValue(j, out var r)) kept.Add(new Kept { at = r.c.at, j = r.j, state = Tiers.State(b, k0, j) });
+            Tiers.MapEdges(b, k0, l =>
             {
-                if (runOf.TryGetValue(j, out var r)) { kept.Add(new Kept { at = r.c.at, j = r.j, blank = true }); continue; }
-                nb.Add(map[j]);
-            }
-            Tiers.SetBlank(b, k0, nb.Distinct().ToList());
+                var nb = new List<int>();
+                foreach (int j in l) if (!runOf.ContainsKey(j)) nb.Add(map[j]);
+                return nb.Distinct().ToList();
+            });
             foreach (var (c, s) in live) cuts.Add(new Spec { i = map[s], at = c.at, shape = c.shape, size = c.size, door = c.door });
             fp.Clear(); fp.AddRange(sharp);
             Tiers.Corners(b, k0).Clear();
@@ -197,7 +198,7 @@ namespace Triband.Storey.Edit
                     int edge = (start + kk.j) % fp.Count;
                     if (kk.e != null) { kk.e.edge = edge; kk.e.t = kk.t; b.entrances.Add(kk.e); hasDoor |= kk.e.k == 0; }
                     else if (kk.d != null) { kk.d.edge = edge; kk.d.t = kk.t; b.details.Add(kk.d); }
-                    else if (kk.blank) { var bl = Tiers.Blank(b, k0); if (!bl.Contains(edge)) bl.Add(edge); }
+                    else if (kk.state != EdgeState.Open) Tiers.SetState(b, k0, edge, kk.state);
                 }
                 if (c.door && !hasDoor && edges == 1) b.entrances.Add(new EntranceData { edge = start, t = 0.5, k = 0 });
             }

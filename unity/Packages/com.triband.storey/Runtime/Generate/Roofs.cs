@@ -611,7 +611,12 @@ namespace Triband.Storey.Generate
                 if (p.Kind == RoofKind.Window && p.WinF is Frame wf && p.WinO is Opening wo)
                 {
                     if (op.Lean) Facade.Pane(op, wf, wo.u0, wo.u1, wo.y0, wo.y1, Dim.T_EXT * 0.45, C.glassDark, false);
-                    else Facade.Dress(op, null!, wf, new List<Opening> { wo }, 0, C, true, st);
+                    else
+                    {
+                        // the style's window that stands for its set (OpeningSets.Representative), or the generator's
+                        var dw = wo.Clone(); OpeningSets.Representative(st, false, out var dk); dw.kind = dk;
+                        Facade.Dress(op, null!, wf, new List<Opening> { dw }, 0, C, true, st);
+                    }
                     op.Ctx(null, 0);
                     continue;
                 }

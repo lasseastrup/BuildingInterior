@@ -43,6 +43,46 @@ namespace Triband.Storey.Edit
 
         public static void SetBlank(BuildingData b, int k0, List<int> v) { if (k0 > 0) b.floors[k0].blank = v; else b.blank = v; }
 
+        /// <summary>Tier k0's quiet and bare walls (edge indices; each blank too: <see cref="EdgeState"/>); an empty list (not the tier's) for none.</summary>
+        public static List<int> Quiet(BuildingData b, int k0) => (k0 > 0 ? b.floors[k0].quiet : b.quiet) ?? new List<int>();
+        public static List<int> Bare(BuildingData b, int k0) => (k0 > 0 ? b.floors[k0].bare : b.bare) ?? new List<int>();
+
+        static void SetQuietBare(BuildingData b, int k0, List<int> q, List<int> r)
+        {
+            List<int>? Q = q.Count > 0 ? q : null, R = r.Count > 0 ? r : null;
+            if (k0 > 0) { b.floors[k0].quiet = Q; b.floors[k0].bare = R; } else { b.quiet = Q; b.bare = R; }
+        }
+
+        /// <summary>
+        /// Tier k0's blank, quiet and bare walls each made again by <paramref name="map"/> (from the old list, to the new), as
+        /// an outline edit moves its edges: so a wall keeps its state.
+        /// </summary>
+        public static void MapEdges(BuildingData b, int k0, Func<List<int>, List<int>> map)
+        {
+            SetBlank(b, k0, map(Blank(b, k0)));
+            SetQuietBare(b, k0, map(Quiet(b, k0)), map(Bare(b, k0)));
+        }
+
+        /// <summary>What edge i of tier k0 has (<see cref="EdgeState"/>).</summary>
+        public static EdgeState State(BuildingData b, int k0, int i) =>
+            Bare(b, k0).Contains(i) ? EdgeState.Bare : Quiet(b, k0).Contains(i) ? EdgeState.Quiet : Blank(b, k0).Contains(i) ? EdgeState.Blank : EdgeState.Open;
+
+        /// <summary>Set what edge i of tier k0 has: it is in the lists its state needs (a quiet or bare wall is blank too), and no others.</summary>
+        public static void SetState(BuildingData b, int k0, int i, EdgeState s)
+        {
+            void Put(List<int> l, bool on) { l.RemoveAll(j => j == i); if (on) l.Add(i); }
+            var q = Quiet(b, k0); var r = Bare(b, k0);
+            Put(Blank(b, k0), s != EdgeState.Open); Put(q, s == EdgeState.Quiet); Put(r, s == EdgeState.Bare);
+            SetQuietBare(b, k0, q, r);
+        }
+
+        /// <summary>A tier's walls' states moved from one floor's lists to another's (a setback moved, or become the base), the first left with none.</summary>
+        public static void MoveEdges(FloorData from, FloorData to)
+        {
+            to.blank = from.blank; to.quiet = from.quiet; to.bare = from.bare;
+            from.blank = new List<int>(); from.quiet = null; from.bare = null;
+        }
+
         /// <summary>A door is anchored to the edges of the tier its storey uses.</summary>
         public static bool DoorOn(BuildingData b, EntranceData e, int k0) => Derived.TierStart(b, e.k) == k0;
 

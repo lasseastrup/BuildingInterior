@@ -79,7 +79,7 @@ namespace Triband.Storey.Tests
                 sb.Append('}');
             }
             string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())))[..16];
-            Assert.True(hash == "BACF1BA05932BB88", $"the model's shape is {hash}: see this test's summary ({sb})");
+            Assert.True(hash == "AF52AE3CF2867804", $"the model's shape is {hash}: see this test's summary ({sb})");
         }
 
         /// <summary>A number the enum doesn't name, which the JSON reader takes ("roofType": "7"), bakes and reads back as it was.</summary>
@@ -139,8 +139,8 @@ namespace Triband.Storey.Tests
         {
             typeof(StoreyDocument), typeof(PaletteEntry), typeof(BuildingData), typeof(BridgeData), typeof(VoidData), typeof(CornerData),
             typeof(FloorData), typeof(WallData), typeof(DoorData), typeof(CoreData), typeof(EntranceData), typeof(DetailData),
-            typeof(TerraceRoofData), typeof(FacadeStyle), typeof(DetailRules), typeof(KindRule), typeof(Vec2),
-            typeof(VoidKind), typeof(CornerShape), typeof(CoreType), typeof(WindowType), typeof(HeadType), typeof(GroundType), typeof(RoofType), typeof(DetailFloors), typeof(DetailCorners),
+            typeof(TerraceRoofData), typeof(FacadeStyle), typeof(DetailRules), typeof(KindRule), typeof(OpeningEntry), typeof(Vec2),
+            typeof(VoidKind), typeof(WindowPick), typeof(CornerShape), typeof(CoreType), typeof(WindowType), typeof(HeadType), typeof(GroundType), typeof(RoofType), typeof(DetailFloors), typeof(DetailCorners),
         };
 
         static IEnumerable<FieldInfo> Fields(Type t) => t.GetFields(BindingFlags.Public | BindingFlags.Instance).OrderBy(f => f.MetadataToken);
@@ -203,6 +203,7 @@ namespace Triband.Storey.Tests
             if (t == typeof(Vec2)) return new Vec2((r.NextDouble() - 0.5) * 200, (r.NextDouble() - 0.5) * 200);
             if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(List<>))
             {
+                if (nullable && r.Next(3) == 0) return null;   // a style's sets: none
                 var list = (IList)Activator.CreateInstance(t)!; var item = t.GetGenericArguments()[0];
                 int n = depth > 3 ? 0 : r.Next(4);
                 for (int i = 0; i < n; i++) list.Add(Value(item, false, r, depth + 1));

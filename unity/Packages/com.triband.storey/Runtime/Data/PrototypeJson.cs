@@ -101,6 +101,7 @@ namespace Triband.Storey
             };
             c.Points(o, "footprint", w, b.footprint);
             c.Ints(o, "blank", w, b.blank);
+            b.quiet = OptInts(c, o, "quiet", w); b.bare = OptInts(c, o, "bare", w);
             if (o.TryGetValue("style", out var st) && st != null) Style(c, c.Obj(st, w.In("style")), w.In("style"), b.style);
             int i = 0;
             foreach (var f in c.Array(o, "floors", w)) { var at = w.In("floors", i++); b.floors.Add(Floor(c, c.Obj(f, at), at)); }
@@ -145,6 +146,14 @@ namespace Triband.Storey
             return b;
         }
 
+        // a list of edges that is null when absent or empty (BuildingData.quiet, bare)
+        static List<int>? OptInts(Ctx c, Dictionary<string, object?> o, string key, Where w)
+        {
+            if (c.Array(o, key, w).Count == 0) return null;
+            var l = new List<int>(); c.Ints(o, key, w, l);
+            return l;
+        }
+
         static void Corners(Ctx c, Dictionary<string, object?> o, Where w, List<CornerData> into)
         {
             int i = 0;
@@ -179,6 +188,7 @@ namespace Triband.Storey
             };
             c.Points(o, "shape", w, f.shape);
             c.Ints(o, "blank", w, f.blank);
+            f.quiet = OptInts(c, o, "quiet", w); f.bare = OptInts(c, o, "bare", w);
             int i = 0;
             foreach (var wv in c.Array(o, "walls", w))
             {
@@ -272,6 +282,10 @@ namespace Triband.Storey
             s.bricks = c.Opt(o, "bricks", path);
             s.windowKind = c.OptStr(o, "windowKind", path);
             s.doorKind = c.OptStr(o, "doorKind", path);
+            s.windowSet = Entries(c, o, "windowSet", path);
+            s.groundSet = Entries(c, o, "groundSet", path);
+            s.doorSet = Entries(c, o, "doorSet", path);
+            s.windowPick = c.Enum<WindowPick>(o, "windowPick", WindowPick.Window, path);
             s.sillH = c.Opt(o, "sillH", path);
             if (o.TryGetValue("panes", out var pn) && pn != null)
             {
@@ -311,6 +325,34 @@ namespace Triband.Storey
             }
             c.Check(o, path, Keys.Style);
             return s;
+        }
+
+        /// <summary>A style's set of windows or doors (docs/OPENINGS.md §7.1); absent is null. An entry is <c>{"kind": id}</c>, <c>{"none": true}</c> or <c>{}</c> (the generator's), with a <c>"weight"</c> when not 1.</summary>
+        static List<OpeningEntry>? Entries(Ctx c, Dictionary<string, object?> o, string key, Where path)
+        {
+            if (!o.TryGetValue(key, out var v) || v == null) return null;
+            var items = c.Array(o, key, path); var set = new List<OpeningEntry>(items.Count); int i = 0;
+            foreach (var it in items)
+            {
+                var at = path.In(key, i++); var eo = c.Obj(it, at);
+                set.Add(new OpeningEntry { kind = c.OptStr(eo, "kind", at), none = c.Bool(eo, "none", false, at), weight = c.Num(eo, "weight", 1, at) });
+                c.Check(eo, at, Keys.OpeningEntry);
+            }
+            return set;
+        }
+
+        static List<object?> Entries(List<OpeningEntry> set)
+        {
+            var l = new List<object?>(set.Count);
+            foreach (var e in set)
+            {
+                var eo = new Dictionary<string, object?>();
+                if (e.none) eo["none"] = true;
+                else if (!string.IsNullOrEmpty(e.kind)) eo["kind"] = e.kind;
+                if (e.weight != 1) eo["weight"] = e.weight;
+                l.Add(eo);
+            }
+            return l;
         }
 
         // ---- writing -----------------------------------------------------------------
@@ -372,6 +414,8 @@ namespace Triband.Storey
                 o["details"] = ds;
             }
             o["blank"] = Ints(b.blank);   // the prototype always writes it, empty or not
+            if (b.quiet is { Count: > 0 }) o["quiet"] = Ints(b.quiet);
+            if (b.bare is { Count: > 0 }) o["bare"] = Ints(b.bare);
             o["groundHeight"] = b.groundHeight;
             o["floorHeight"] = b.floorHeight;
             o["interior"] = b.interior;
@@ -406,7 +450,12 @@ namespace Triband.Storey
             o["walls"] = walls;
             if (f.h.HasValue) o["h"] = f.h.Value;
             if (f.filled) o["filled"] = true;
-            if (f.HasShape) { o["shape"] = Pts(f.shape); o["blank"] = Ints(f.blank); if (f.corners.Count > 0) o["corners"] = Corners(f.corners); }
+            if (f.HasShape)
+            {
+                o["shape"] = Pts(f.shape); o["blank"] = Ints(f.blank); if (f.corners.Count > 0) o["corners"] = Corners(f.corners);
+                if (f.quiet is { Count: > 0 }) o["quiet"] = Ints(f.quiet);
+                if (f.bare is { Count: > 0 }) o["bare"] = Ints(f.bare);
+            }
             if (f.style != null) o["style"] = Style(f.style);
             if (f.terraceRoof != null) o["terraceRoof"] = new Dictionary<string, object?> { ["pitch"] = f.terraceRoof.pitch };
             return o;
@@ -440,6 +489,10 @@ namespace Triband.Storey
             if (s.bricks.HasValue) o["bricks"] = s.bricks.Value;
             if (!string.IsNullOrEmpty(s.windowKind)) o["windowKind"] = s.windowKind;
             if (!string.IsNullOrEmpty(s.doorKind)) o["doorKind"] = s.doorKind;
+            if (s.windowSet is { Count: > 0 }) o["windowSet"] = Entries(s.windowSet);
+            if (s.groundSet is { Count: > 0 }) o["groundSet"] = Entries(s.groundSet);
+            if (s.doorSet is { Count: > 0 }) o["doorSet"] = Entries(s.doorSet);
+            if (s.windowPick != WindowPick.Window) o["windowPick"] = Lower(s.windowPick);
             if (s.sillH.HasValue) o["sillH"] = s.sillH.Value;
             if (s.door != null) o["door"] = s.door;
             if (s.rail != null) o["rail"] = s.rail;
@@ -540,24 +593,26 @@ namespace Triband.Storey
         {
             public static readonly string[] Root = { "v", "seq", "spawn", "buildings", "palette" };
             public static readonly string[] PaletteEntry = { "name", "hex" };
-            public static readonly string[] Building = { "id", "name", "pos", "elevation", "footprint", "floors", "shafts", "entrances", "details", "blank", "groundHeight", "floorHeight", "interior", "style", "gen", "voids", "bridges", "corners" };
+            public static readonly string[] Building = { "id", "name", "pos", "elevation", "footprint", "floors", "shafts", "entrances", "details", "blank", "quiet", "bare", "groundHeight", "floorHeight", "interior", "style", "gen", "voids", "bridges", "corners" };
             public static readonly string[] Entrance = { "edge", "t", "k" };
             public static readonly string[] Detail = { "kind", "k", "edge", "t", "y" };
             public static readonly string[] Void = { "id", "kind", "shape", "bottom" };
             public static readonly string[] Bridge = { "id", "to", "k", "at", "toK", "width", "open" };
             public static readonly string[] Corner = { "at", "shape", "size", "door", "pts" };
-            public static readonly string[] Floor = { "walls", "h", "shape", "blank", "style", "terraceRoof", "props", "filled", "corners" };
+            public static readonly string[] Floor = { "walls", "h", "shape", "blank", "quiet", "bare", "style", "terraceRoof", "props", "filled", "corners" };
             public static readonly string[] Wall = { "a", "b", "doors" };
             public static readonly string[] Door = { "t" };
             public static readonly string[] Terrace = { "pitch" };
             public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof" };
             public static readonly string[] DetailRules = { "ac", "vents" };
             public static readonly string[] KindRule = { "p", "density", "spacing", "per", "floors", "corners", "color" };
+            public static readonly string[] OpeningEntry = { "kind", "none", "weight" };
             public static readonly string[] Point = { "x", "z" };
             public static readonly string[] Style =
             {
                 "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "details",
                 "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "plinthH", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind", "sillH",
+                "windowSet", "groundSet", "doorSet", "windowPick",
                 "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth",
                 "doorType",   // street doors' Canopy or Glazed, gone (every generated door is plain): read and dropped, not reported
             };

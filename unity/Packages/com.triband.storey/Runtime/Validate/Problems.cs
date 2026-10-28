@@ -198,8 +198,9 @@ namespace Triband.Storey.Validate
             int N = b.floors.Count;
             foreach (var t in Tiers.Of(b))
             {
-                var st = Derived.StyleAt(b, t.k0); var wk = OpeningKinds.Of(st, false);
-                if (wk == null || wk.reachL + wk.reachR <= 0) continue;
+                var st = Derived.StyleAt(b, t.k0);
+                var (rl, rr) = OpeningSets.Reach(st, false); var (gl, gr) = OpeningSets.Reach(st, true);
+                if (rl + rr <= 0 && (t.k0 > 0 || gl + gr <= 0)) continue;
                 bool found = false;
                 foreach (int k in t.k0 == 0 && t.k1 > 1 ? new[] { 0, 1 } : new[] { t.k0 })
                 {
@@ -212,7 +213,7 @@ namespace Triband.Storey.Validate
                         foreach (var w in Facade.Ops(site, b, k, i, f.e.L, f.uS, f.uE))
                         {
                             if (w.door) { prev = null; continue; }
-                            if (prev != null && prev.Right + 0.02 > w.Left)
+                            if (prev != null && prev.Right + 0.02 > w.Left && (prev.kind ?? w.kind) is OpeningKind wk)
                             {
                                 var at = f.e.F.At2((prev.u1 + w.u0) / 2, Dim.T_EXT);
                                 o.Add(P(b, k, Severity.Warning, "dressing", $"“{wk.name}” on {Floor(b, k)} meets the next window: what it has round its hole needs bays of at least {prev.Right - prev.Left + 0.1:0.0} m, and these are {w.u0 - prev.u0:0.0} m apart", at.x - b.pos.x, at.z - b.pos.z));

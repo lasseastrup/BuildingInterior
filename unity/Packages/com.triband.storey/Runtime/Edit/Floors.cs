@@ -37,14 +37,14 @@ namespace Triband.Storey.Edit
         {
             if (b.floors.Count <= 1) return false;
             var gone = b.floors[k]; var next = k + 1 < b.floors.Count ? b.floors[k + 1] : null;
-            if (gone.HasShape && next != null && !next.HasShape) { next.shape = gone.shape; next.blank = gone.blank; }   // the floors above keep the setback (and its terrace doors)
+            if (gone.HasShape && next != null && !next.HasShape) { next.shape = gone.shape; Tiers.MoveEdges(gone, next); }   // the floors above keep the setback (and its terrace doors)
             else if (k > 0 || (next != null && next.HasShape)) b.entrances.RemoveAll(e => e.k == k);
             b.floors.RemoveAt(k);
             foreach (var e in b.entrances) if (e.k > k) e.k--;
             b.details.RemoveAll(d => d.k == k);
             foreach (var d in b.details) if (d.k > k) d.k--;
             var g = b.floors[0];
-            if (g.HasShape) { b.footprint = g.shape; b.blank = g.blank; g.shape = new List<Vec2>(); g.blank = new List<int>(); }   // a setback that became the ground floor is the new base
+            if (g.HasShape) { b.footprint = g.shape; b.blank = g.blank; b.quiet = g.quiet; b.bare = g.bare; g.shape = new List<Vec2>(); g.blank = new List<int>(); g.quiet = null; g.bare = null; }   // a setback that became the ground floor is the new base
             b.shafts.RemoveAll(s => s.bottom == k && s.top == k);
             foreach (var s in b.shafts)
             {

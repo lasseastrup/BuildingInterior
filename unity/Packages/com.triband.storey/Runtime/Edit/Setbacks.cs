@@ -28,7 +28,7 @@ namespace Triband.Storey.Edit
             int k = t.k0 + (t.k1 - t.k0 + 1) / 2;
             if (k >= b.floors.Count) throw new InvalidOperationException($"floor {k0} has no floor above it to start a setback");
             var f = b.floors[k];
-            f.shape = Tiers.Copy(Tiers.Outline(b, t.k0)); f.blank = new List<int>(Tiers.Blank(b, t.k0));
+            f.shape = Tiers.Copy(Tiers.Outline(b, t.k0)); f.blank = new List<int>(Tiers.Blank(b, t.k0)); var q = Tiers.Quiet(b, t.k0); var r = Tiers.Bare(b, t.k0); f.quiet = q.Count > 0 ? new List<int>(q) : null; f.bare = r.Count > 0 ? new List<int>(r) : null;
             f.corners = Tiers.Corners(b, t.k0).Select(c => new CornerData { at = c.at, shape = c.shape, size = c.size, pts = Tiers.Copy(c.pts) }).ToList();   // no door: that is the street's
             return k;
         }
@@ -38,7 +38,7 @@ namespace Triband.Storey.Edit
         {
             b.details.RemoveAll(d => Derived.TierStart(b, d.k) == k0);
             b.entrances.RemoveAll(e => Tiers.DoorOn(b, e, k0));
-            var f = b.floors[k0]; f.shape = new List<Vec2>(); f.blank = new List<int>(); f.corners = new List<CornerData>(); f.terraceRoof = null;
+            var f = b.floors[k0]; f.shape = new List<Vec2>(); f.blank = new List<int>(); f.quiet = null; f.bare = null; f.corners = new List<CornerData>(); f.terraceRoof = null;
         }
 
         /// <summary>
@@ -50,7 +50,7 @@ namespace Triband.Storey.Edit
             var tb = b.details.Select(d => Derived.TierStart(b, d.k)).ToList();
             var te = b.entrances.Select(e => e.k == k0 ? -1 : Derived.TierStart(b, e.k)).ToList();
             var f = b.floors[k0]; var g = b.floors[k];
-            g.shape = f.shape; g.blank = f.blank; g.corners = f.corners; f.shape = new List<Vec2>(); f.blank = new List<int>(); f.corners = new List<CornerData>();
+            g.shape = f.shape; g.corners = f.corners; f.shape = new List<Vec2>(); f.corners = new List<CornerData>(); Tiers.MoveEdges(f, g);
             if (f.terraceRoof != null) { g.terraceRoof = f.terraceRoof; f.terraceRoof = null; }
             foreach (var e in b.entrances) if (e.k == k0) e.k = k;
             b.details = b.details.Where((d, j) => Derived.TierStart(b, d.k) == tb[j]).ToList();
@@ -73,7 +73,7 @@ namespace Triband.Storey.Edit
             var kept = b.entrances.Where(e => e.k != 0 && Derived.TierStart(b, e.k) != 0).ToList();
             b.entrances = new List<EntranceData> { new EntranceData { edge = 0, t = 0.5 } };
             b.entrances.AddRange(kept);
-            b.blank = new List<int>();
+            b.blank = new List<int>(); b.quiet = null; b.bare = null;
             foreach (var t in Tiers.Of(b))
                 if (t.k0 > 0 && Outlines.Issue(b, t.k0, Derived.OutlineAt(b, t.k0)) != OutlineIssue.None) Remove(b, t.k0);
             b.shafts = b.shafts.Where(s => Tiers.ShaftFits(b, s)).ToList();

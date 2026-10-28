@@ -540,9 +540,12 @@ namespace Triband.Storey.Editor
                 StoreyInspectorUI.Section("Style", "Start from a preset; every change below makes the style this building's own");
                 Presets(e, b, k0, st);
                 StoreyInspectorUI.Section("Windows and doors");
-                KindPopup(e, k0, "Window", st.windowKind, false);
-                bool ownSize = Generate.OpeningKinds.Of(st, false) is Generate.OpeningKind wk && !wk.stretch;
-                Openings(e, k0, st, ownSize);
+                SetRows(e, k0, st, SetOf.Windows, "Window");
+                if (st.windowSet is { Count: > 1 }) StyleEnum(e, k0, "   Picked by", st.windowPick, (s, x) => s.windowPick = x);
+                if (k0 == 0) GroundRows(e, st);
+                OpeningSets.Uses(st, out bool generated, out _, out bool anyOwnSize);
+                bool ownSize = !generated && anyOwnSize;
+                Openings(e, k0, st, ownSize, anyOwnSize);
                 // Window width sizes Punched and Tall holes alone: Ribbon and Curtain span the bay, and a window of its own size is its own width
                 using (new EditorGUI.DisabledScope(ownSize || st.windows is not (WindowType.Punched or WindowType.Tall)))
                     StyleSlider(e, k0, "Window width", st.winW, 0.6, 2.4, 0.1, (s, x) => s.winW = x);
@@ -599,8 +602,42 @@ namespace Triband.Storey.Editor
                         bool on = GUILayout.Toggle(v.facadeTool == tool, label, EditorStyles.miniButton, GUILayout.Height(20));
                         if (on != (v.facadeTool == tool)) { v.facadeTool = on ? tool : ""; if (on) StoreyToolContext.Show(StoreyTab.Facade); SceneView.RepaintAll(); }
                     }
+            if (v.facadeTool == "blank") WallStates(e, b, k0);
             if (v.facadeTool == "bridge") EditorGUILayout.HelpBox("Click an upper floor's wall: a bridge goes straight out to the building facing it, to its floor nearest this one. Click a bridge's door to remove it.", MessageType.None);
             BridgeList(e, b);
+        }
+
+        /// <summary>What the Blank wall tool makes a wall, as its toolbar names them (<see cref="EdgeState"/> from Blank).</summary>
+        internal static readonly string[] WallStateNames = { "Blank wall", "Quiet wall", "Bare wall" };
+
+        static readonly GUIContent[] WallStateChoices =
+        {
+            new GUIContent("No windows", "Blank: no windows (doors you placed stay); bands, plinth and details stay"),
+            new GUIContent("No details", "Quiet: no windows and no details by rule; bands and plinth stay"),
+            new GUIContent("Bare", "Bare: a plain wall: no windows, no details by rule, no floor bands or plinth (the foundation and parapet stay)"),
+        };
+
+        /// <summary>
+        /// The Blank wall tool's options (docs/EDITOR.md §6.7): what a click makes a wall (blank, quiet or bare; a click on a
+        /// wall that is so already brings its windows back), and every wall of a side at once.
+        /// </summary>
+        void WallStates(StoreyEdit e, BuildingData b, int k0)
+        {
+            var v = e.View;
+            int cur = Math.Max(0, (int)v.wallState - 1), pick = GUILayout.Toolbar(cur, WallStateChoices, EditorStyles.miniButton);
+            if (pick != cur) v.wallState = (EdgeState)(pick + 1);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField(new GUIContent("Whole side", "Every wall of this outline facing that way (by its outward normal, in the building's axes: front +Z, right +X)"), GUILayout.Width(EditorGUIUtility.labelWidth - 4));
+                foreach (var side in new[] { Side.Front, Side.Back, Side.Left, Side.Right })
+                    if (GUILayout.Button(side.ToString(), EditorStyles.miniButton))
+                    {
+                        var s = v.wallState; int n = 0;
+                        e.ApplyTo($"{side} walls {WallStateNames[(int)s - 1].ToLowerInvariant()}", bb => (n = Facades.SetSide(bb, k0, side, s)) > 0);
+                        if (n == 0) message = $"Every {side.ToString().ToLowerInvariant()} wall already has that, or more.";
+                    }
+            }
+            EditorGUILayout.LabelField("Click a wall to make it so; click it again for its windows back.", StoreyInspectorUI.Caption);
         }
 
         /// <summary>
@@ -737,7 +774,8 @@ namespace Triband.Storey.Editor
         /// <summary>The style's window details (docs/EDITOR.md §6.7): heads, glazing bars, frames; and on the base its street door.</summary>
         void WindowDetails(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
         {
-            bool artist = Generate.OpeningKinds.Of(st, false) != null;
+            OpeningSets.Uses(st, out bool generated, out _, out _);
+            bool artist = !generated;
             using (new EditorGUI.DisabledScope(artist))
             {
                 StyleToggle(e, k0, "Sills", st.sills, (s, x) => s.sills = x);
@@ -757,10 +795,7 @@ namespace Triband.Storey.Editor
                 StyleToggle(e, k0, "Frames", st.frames, (s, x) => s.frames = x);
             }
             if (artist) EditorGUILayout.LabelField("The artist's window brings its own head, frame and bars.", StoreyInspectorUI.Caption);
-            if (k0 == 0)
-            {
-                KindPopup(e, k0, "Street door", st.doorKind, true);
-            }
+            if (k0 == 0) SetRows(e, k0, st, SetOf.Doors, "Street door");
         }
 
         /// <summary>The style's wall details (docs/EDITOR.md §6.7): bands, and on the base the plinth and foundation; brick patches on any.</summary>
@@ -803,12 +838,14 @@ namespace Triband.Storey.Editor
         /// holes are. An artist's window that keeps its own size leaves two things to them: whether there are any, and how high
         /// they sit (<see cref="FacadeStyle.sillH"/>, which starts at the type's sill).
         /// </summary>
-        static void Openings(StoreyEdit e, int k0, FacadeStyle st, bool ownSize)
+        /// <param name="sill">Some of the windows (not all: <paramref name="ownSize"/>) keep their own size: they take Sill height too.</param>
+        static void Openings(StoreyEdit e, int k0, FacadeStyle st, bool ownSize, bool sill)
         {
             if (!ownSize)
             {
                 var x = (WindowType)EditorGUILayout.EnumPopup(OpeningsLabel, st.windows);
                 if (x != st.windows) e.ApplyTo("Openings", bb => { Styles.Edited(bb, k0).windows = x; return true; });
+                if (sill && st.windows != WindowType.None) StyleSlider(e, k0, "   Sill height", st.sillH ?? Generate.Facade.SillOf(st.windows), 0, 2, 0.05, (s, y) => s.sillH = y);
                 return;
             }
             int was = st.windows == WindowType.None ? 1 : 0, pick = EditorGUILayout.Popup(OwnSizeLabel, was, OwnSizeChoices);
@@ -819,24 +856,67 @@ namespace Triband.Storey.Editor
         }
 
         /// <summary>
-        /// The generator's window (or street door), or one an artist made (a Storey Opening asset: docs/EDITOR.md §6.9).
-        /// Picking one adds it to the site's list, so builds include it.
+        /// A style's windows (or street doors, or the ground floor's own windows): the generator's own, or ones an artist made
+        /// (Storey Opening assets: docs/EDITOR.md §6.9), or none (no window there), each picked as often as its weight
+        /// (docs/OPENINGS.md §7.1). One entry is the style's one window, as before sets; with two or more, each has a weight,
+        /// its share, and a ×. Picking an artist's adds it to the site's list, so builds include it.
         /// </summary>
-        void KindPopup(StoreyEdit e, int k0, string label, string? current, bool door)
+        void SetRows(StoreyEdit e, int k0, FacadeStyle st, SetOf which, string label)
         {
+            var set = WindowSets.Shown(st, which)!;
+            bool door = which == SetOf.Doors, many = set.Count > 1;
             var kinds = StoreyOpenings.All().Where(o => o.door == door).ToList();
-            var names = new List<string> { door ? "Plain" : "Generated" };
-            names.AddRange(kinds.Select(o => o.name));
-            if (kinds.Count == 0) names.Add(door ? "(make one: Create ▸ Storey ▸ Window or Door)" : "(make one: Create ▸ Storey ▸ Window or Door)");
-            int at = current == null ? 0 : kinds.FindIndex(o => o.Id == current) + 1;
-            if (current != null && at == 0) { names.Add("Missing: " + current.Substring(0, Math.Min(8, current.Length))); at = names.Count - 1; }
-            int pick = EditorGUILayout.Popup(new GUIContent(label, door ? "Street doors: a plain one (a flat panel set into the wall, in the Doors colour), or one an artist made" : "What fills each opening: the generator's own window, or one an artist made"), at, names.Select(n => new GUIContent(n)).ToArray());
-            if (pick == at) return;
-            if (pick == 0) { e.ApplyTo(label + (door ? ": plain" : ": generated"), bb => { var s = Styles.Edited(bb, k0); if (door) s.doorKind = null; else s.windowKind = null; return true; }); return; }
-            if (pick - 1 >= kinds.Count) return;
-            var k = kinds[pick - 1]; string id = k.Id;
-            e.ApplyTo(label + ": " + k.name, bb => { var s = Styles.Edited(bb, k0); if (door) s.doorKind = id; else s.windowKind = id; return true; });
-            StoreyOpenings.Keep(e.Site, k);
+            var names = new List<GUIContent> { new GUIContent(door ? "Plain" : "Generated") };
+            if (!door) names.Add(new GUIContent("None", "No window: the wall is left whole there"));
+            int first = names.Count;
+            names.AddRange(kinds.Select(o => new GUIContent(o.name)));
+            if (kinds.Count == 0) names.Add(new GUIContent("(make one: Create ▸ Storey ▸ Window or Door)"));
+            double total = 0; for (int i = 0; i < set.Count; i++) total += OpeningSets.Weight(set, i);
+            var tip = new GUIContent(label, door
+                ? "Street doors: a plain one (a flat panel set into the wall, in the Doors colour), or ones an artist made. With several, each wall's doors are one of them, picked by its weight"
+                : "What fills each opening: the generator's own window, ones an artist made, or none. With several, each window is one of them, picked by its weight, the same on every build and different from building to building");
+            for (int i = 0; i < set.Count; i++)
+            {
+                var en = set[i]; int at = i;
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    var shown = new List<GUIContent>(names);
+                    int cur = en.none && !door ? 1 : en.kind == null ? 0 : kinds.FindIndex(o => o.Id == en.kind) + first;
+                    if (en.kind != null && !en.none && cur == first - 1) { shown.Add(new GUIContent("Missing: " + en.kind.Substring(0, Math.Min(8, en.kind.Length)))); cur = shown.Count - 1; }
+                    int pick = EditorGUILayout.Popup(i == 0 ? tip : new GUIContent(" "), cur, shown.ToArray());
+                    if (pick != cur && pick < first + kinds.Count)
+                    {
+                        bool none = !door && pick == 1; var k = pick >= first ? kinds[pick - first] : null; string? id = k?.Id;
+                        e.ApplyTo(label + ": " + shown[pick].text, bb => { WindowSets.Set(Styles.Edited(bb, k0), which, at, id, none); return true; });
+                        if (k != null) StoreyOpenings.Keep(e.Site, k);
+                    }
+                    if (many)
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        double w = Math.Max(0, EditorGUILayout.DelayedFloatField((float)en.weight, GUILayout.Width(36)));
+                        if (EditorGUI.EndChangeCheck() && w != en.weight) e.ApplyTo(label + " weight", bb => { WindowSets.Weigh(Styles.Edited(bb, k0), which, at, w); return true; });
+                        EditorGUILayout.LabelField(total > 0 ? $"{OpeningSets.Weight(set, i) / total * 100:0}%" : "", StoreyInspectorUI.Caption, GUILayout.Width(30));
+                        if (GUILayout.Button(new GUIContent("×", "Remove it from the set"), EditorStyles.miniButton, GUILayout.Width(22)))
+                            e.ApplyTo(label + " removed", bb => { WindowSets.Remove(Styles.Edited(bb, k0), which, at); return true; });
+                    }
+                }
+            }
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Space(EditorGUIUtility.labelWidth + 2);
+                if (GUILayout.Button(new GUIContent(door ? "+ Another door" : "+ Another window", door ? "Add a door: each wall's doors are picked from the set" : "Add a window (or none): each opening is picked from the set"), EditorStyles.miniButton))
+                    e.ApplyTo(label + " added", bb => { WindowSets.Add(Styles.Edited(bb, k0), which, null); return true; });
+            }
+        }
+
+        /// <summary>The ground floor's windows: the floors above's, or a set of its own (docs/OPENINGS.md §7.1). Solid ground floors have none.</summary>
+        void GroundRows(StoreyEdit e, FacadeStyle st)
+        {
+            if (st.ground == GroundType.Solid) return;
+            bool own = st.groundSet is { Count: > 0 };
+            bool x = EditorGUILayout.Toggle(new GUIContent("Own ground windows", "The ground floor's openings (as Ground floor lays them out) take windows of their own, not the floors above's"), own);
+            if (x != own) e.ApplyTo(x ? "Ground floor windows of its own" : "Ground floor windows as above", bb => { var s = Styles.Edited(bb, 0); if (x) WindowSets.Own(s, SetOf.Ground); else WindowSets.FollowAbove(s); return true; });
+            if (own) SetRows(e, 0, st, SetOf.Ground, "   Ground window");
         }
 
         static Vec2 Near()

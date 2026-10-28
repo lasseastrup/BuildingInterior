@@ -198,7 +198,7 @@ namespace Triband.Storey
             Style(r.Count(), b.style);
             Points(ref r, b.footprint);
             Corners(ref r, b.corners);
-            Ints(ref r, b.blank);
+            Ints(ref r, b.blank); b.quiet = OptInts(ref r); b.bare = OptInts(ref r);
             int n = r.Count();
             if (n > 0) b.floors.Capacity = n;
             for (; n > 0; n--)
@@ -212,7 +212,7 @@ namespace Triband.Storey
                 }
                 f.h = r.Opt();
                 Points(ref r, f.shape);
-                Ints(ref r, f.blank);
+                Ints(ref r, f.blank); f.quiet = OptInts(ref r); f.bare = OptInts(ref r);
                 Corners(ref r, f.corners);
                 int st = r.Count();
                 if (st > 0) Style(st - 1, f.style = new FacadeStyle());
@@ -251,6 +251,7 @@ namespace Triband.Storey
             s.head = E<HeadType>(ref r); s.sills = r.Bool(); s.heads = r.Bool(); s.paneCols = r.OptInt(); s.paneRows = r.OptInt(); s.frames = r.Bool();
             s.bandH = r.Opt(); s.bandDepth = r.Opt(); s.bandWall = r.Bool();
             s.windowKind = Str(ref r); s.doorKind = Str(ref r); s.sillH = r.Opt();
+            s.windowSet = Entries(ref r); s.groundSet = Entries(ref r); s.doorSet = Entries(ref r); s.windowPick = E<WindowPick>(ref r);
             s.plinthH = r.Opt(); s.foundation = r.Opt(); s.foundationH = r.Opt(); s.foundationOut = r.Opt(); s.bricks = r.Opt(); s.mansard = r.Opt(); s.dormers = r.Opt();
             if (r.Bool())
             {
@@ -268,6 +269,24 @@ namespace Triband.Storey
                 }
             }
             else s.details = null;
+        }
+
+        // a list of edges that may be null (BuildingData.quiet, bare): its count + 1, 0 for null
+        static List<int>? OptInts(ref Reader r)
+        {
+            int n = r.Count(); if (n == 0) return null;
+            var l = new List<int>(n - 1);
+            for (int i = 1; i < n; i++) l.Add(r.Int());
+            return l;
+        }
+
+        // a style's set of windows or doors: null when it has none
+        List<OpeningEntry>? Entries(ref Reader r)
+        {
+            int n = r.Count(); if (n == 0) return null;
+            var set = new List<OpeningEntry>(n - 1);
+            for (int i = 1; i < n; i++) set.Add(new OpeningEntry { kind = Str(ref r), none = r.Bool(), weight = r.F64() });
+            return set;
         }
 
         // ---- baking ------------------------------------------------------------------------
@@ -353,6 +372,8 @@ namespace Triband.Storey
             public void E<T>(T v) where T : struct, Enum => Int(Convert.ToInt32(v));
             public void Points(List<Vec2> ps) { Count(ps.Count); foreach (var p in ps) Vec(p); }
             public void Ints(List<int> xs) { Count(xs.Count); foreach (var x in xs) Int(x); }
+            /// <summary>A list that may be null: its count + 1, 0 for null.</summary>
+            public void OptInts(List<int>? xs) { Count(xs == null ? 0 : xs.Count + 1); if (xs != null) foreach (var x in xs) Int(x); }
         }
 
         static void WriteCorners(Writer w, List<CornerData> cs)
@@ -368,7 +389,7 @@ namespace Triband.Storey
             w.Count(St(b.style));
             w.Points(b.footprint);
             WriteCorners(w, b.corners);
-            w.Ints(b.blank);
+            w.Ints(b.blank); w.OptInts(b.quiet); w.OptInts(b.bare);
             w.Count(b.floors.Count);
             foreach (var f in b.floors)
             {
@@ -380,7 +401,7 @@ namespace Triband.Storey
                 }
                 w.Opt(f.h);
                 w.Points(f.shape);
-                w.Ints(f.blank);
+                w.Ints(f.blank); w.OptInts(f.quiet); w.OptInts(f.bare);
                 WriteCorners(w, f.corners);
                 w.Count(f.style == null ? 0 : St(f.style) + 1);
                 w.Bool(f.terraceRoof != null); if (f.terraceRoof != null) w.F64(f.terraceRoof.pitch);
@@ -408,6 +429,12 @@ namespace Triband.Storey
             w.E(s.head); w.Bool(s.sills); w.Bool(s.heads); w.OptInt(s.paneCols); w.OptInt(s.paneRows); w.Bool(s.frames);
             w.Opt(s.bandH); w.Opt(s.bandDepth); w.Bool(s.bandWall);
             w.Count(S(s.windowKind)); w.Count(S(s.doorKind)); w.Opt(s.sillH);
+            foreach (var set in new[] { s.windowSet, s.groundSet, s.doorSet })
+            {
+                w.Count(set == null ? 0 : set.Count + 1);
+                if (set != null) foreach (var e in set) { w.Count(S(e.kind)); w.Bool(e.none); w.F64(e.weight); }
+            }
+            w.E(s.windowPick);
             w.Opt(s.plinthH); w.Opt(s.foundation); w.Opt(s.foundationH); w.Opt(s.foundationOut); w.Opt(s.bricks); w.Opt(s.mansard); w.Opt(s.dormers);
             w.Bool(s.details != null);
             if (s.details != null)

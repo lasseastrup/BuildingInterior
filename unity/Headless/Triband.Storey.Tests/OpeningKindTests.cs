@@ -283,7 +283,11 @@ namespace Triband.Storey.Tests
             NoGarbage(k);
         }
 
-        void NoGarbage(OpeningKind kind)
+        /// <summary>A set of the artist's window, the generator's and none, picked window by window (docs/OPENINGS.md §7.1): no garbage a window either.</summary>
+        [Fact]
+        public void AWindowSetMakesNoGarbageWherePicked() => NoGarbage(Kind100("t-win100-set"), set: true);
+
+        void NoGarbage(OpeningKind kind, bool set = false)
         {
             // docs/PERFORMANCE.md §8.1: a kind's parts are made ready once, and each placement goes straight into the builder.
             // Placing one made two arrays of its points, and for each part a map, two lists and their copies (walk-in
@@ -295,7 +299,9 @@ namespace Triband.Storey.Tests
                 var site = new Site(d.buildings); var some = d.buildings.Where((x, i) => i % 4 == 0).ToList();
                 (double ms, long bytes) Run(bool artist, int lod)
                 {
-                    foreach (var b in some) b.style.windowKind = artist ? kind.id : null;
+                    foreach (var b in some)
+                        if (set) b.style.windowSet = artist ? new List<OpeningEntry> { new OpeningEntry { kind = kind.id, weight = 2 }, new OpeningEntry(), new OpeningEntry { none = true } } : null;
+                        else b.style.windowKind = artist ? kind.id : null;
                     long bytes = 0; var sw = new System.Diagnostics.Stopwatch();
                     for (int pass = 0; pass < 2; pass++)   // the first warms the pools
                         foreach (var b in some)
@@ -313,7 +319,7 @@ namespace Triband.Storey.Tests
                     output.WriteLine($"{(walkIn ? "walk-in" : "plain")} LOD{lod}, a build: the generator's windows {plain.ms:0.0} ms, {plain.bytes / 1024.0:N0} KB; an artist's 100-vertex window {artist.ms:0.0} ms, {artist.bytes / 1024.0:N0} KB");
                     Assert.True(artist.bytes < plain.bytes * 1.5 + 64 * 1024, $"{(walkIn ? "walk-in" : "plain")} LOD{lod}: {artist.bytes:N0} bytes a build with the artist's window, {plain.bytes:N0} with the generator's");
                 }
-                foreach (var b in some) b.style.windowKind = null;
+                foreach (var b in some) { b.style.windowKind = null; b.style.windowSet = null; }
             }
         }
     }

@@ -63,6 +63,12 @@ namespace Triband.Storey
         public List<DetailData> details = new List<DetailData>();
         /// <summary>Blank (windowless) edges of the base outline.</summary>
         public List<int> blank = new List<int>();
+        /// <summary>
+        /// Edges of the base outline that are also quiet (no details by rule) or bare (no details by rule, no floor bands and
+        /// no plinth either): <see cref="EdgeState"/>. Each is in <see cref="blank"/> too, so the prototype shows it windowless.
+        /// Null for none: most buildings have none, and an empty list each was memory every layout load kept. Storey's own.
+        /// </summary>
+        public List<int>? quiet, bare;
         public double groundHeight = 3.6;
         public double floorHeight = 3.0;
         /// <summary>False = shell only: facade and roof, no slabs, rooms or cores.</summary>
@@ -146,6 +152,8 @@ namespace Triband.Storey
         public List<Vec2> shape = new List<Vec2>();
         /// <summary>Blank edges of <see cref="shape"/>. Only meaningful with a shape.</summary>
         public List<int> blank = new List<int>();
+        /// <summary>Quiet and bare edges of <see cref="shape"/>, as the base's (<see cref="BuildingData.quiet"/>). Storey's own.</summary>
+        public List<int>? quiet, bare;
         /// <summary>The cut corners of <see cref="shape"/>. Storey's own.</summary>
         public List<CornerData> corners = new List<CornerData>();
         /// <summary>The setback's own exterior style; null = inherit the tier below.</summary>
@@ -227,6 +235,14 @@ namespace Triband.Storey
     }
 
     public enum WindowType { Punched, Tall, Ribbon, Curtain, None }
+
+    /// <summary>
+    /// What a wall of an outline has (docs/EDITOR.md §6.7): windows (Open); none (Blank: doors placed by hand stay, as do its
+    /// strips and details); none and no details by rule either (Quiet); or none, no details by rule and no floor bands or
+    /// plinth (Bare: a plain wall, its foundation and parapet still on). Not stored as such: the outline's blank, quiet and
+    /// bare lists. Storey's own, for the old BuildingGenerator's suppressed edges, its sides left without details, and its blank edges.
+    /// </summary>
+    public enum EdgeState { Open, Blank, Quiet, Bare }
     /// <summary>What tops a window or door: a flat head, or an arched hood over it. Storey's own.</summary>
     public enum HeadType { Flat, Arch }
     public enum GroundType { Storefront, Match, Solid }
@@ -278,8 +294,23 @@ namespace Triband.Storey
         /// <summary>The band under each storey's ceiling: height (null = 0.22 m), how far it stands out (null = 0.06 m), and whether it is a shade of the wall rather than the trim.</summary>
         public double? bandH, bandDepth;
         public bool bandWall;
-        /// <summary>An artist-made window and street door (<see cref="Generate.OpeningKinds"/>), by id; null = the generator's own.</summary>
+        /// <summary>
+        /// An artist-made window and street door (<see cref="Generate.OpeningKinds"/>), by id; null = the generator's own. The
+        /// style's one window and one door: a set (<see cref="windowSet"/>, <see cref="doorSet"/>) takes their place.
+        /// </summary>
         public string? windowKind, doorKind;
+        /// <summary>
+        /// Several windows, each picked as often as its weight says, opening by opening (docs/OPENINGS.md §7.1); null (or
+        /// empty) = <see cref="windowKind"/> in every window. An entry can be the generator's window, or none (the wall left
+        /// whole there). Storey's own.
+        /// </summary>
+        public List<OpeningEntry>? windowSet;
+        /// <summary>The ground floor's own windows, as <see cref="windowSet"/>; null (or empty) = the floors above's. Storey's own.</summary>
+        public List<OpeningEntry>? groundSet;
+        /// <summary>Several street doors, as <see cref="windowSet"/> (an entry that is none is a plain door); null (or empty) = <see cref="doorKind"/>. Storey's own.</summary>
+        public List<OpeningEntry>? doorSet;
+        /// <summary>How alike a set's windows are (docs/OPENINGS.md §7.1): each picked on its own, or a column, a storey or a wall at a time. Storey's own.</summary>
+        public WindowPick windowPick;
         /// <summary>
         /// How high an artist's window that keeps its own size sits over each floor, in metres (docs/EDITOR.md §6.9); null = the
         /// sill of its <see cref="windows"/> type (<see cref="Generate.Facade.SillOf"/>). Other windows take their type's.
@@ -302,8 +333,44 @@ namespace Triband.Storey
         /// <summary>Densities for details placed by rule, as the prototype stores them (percentages); null = the defaults.</summary>
         public DetailRules? details;
 
-        public FacadeStyle Clone() { var c = (FacadeStyle)MemberwiseClone(); c.details = details?.Clone(); return c; }
+        public FacadeStyle Clone()
+        {
+            var c = (FacadeStyle)MemberwiseClone(); c.details = details?.Clone();
+            c.windowSet = OpeningEntry.Copy(windowSet); c.groundSet = OpeningEntry.Copy(groundSet); c.doorSet = OpeningEntry.Copy(doorSet);
+            return c;
+        }
     }
+
+    /// <summary>
+    /// One entry of a style's set of windows or street doors (<see cref="FacadeStyle.windowSet"/>, docs/OPENINGS.md §7.1):
+    /// what fills an opening, and how often. Storey's own.
+    /// </summary>
+    public sealed class OpeningEntry
+    {
+        /// <summary>An artist's window or door (<see cref="Generate.OpeningKinds"/>), by id; null = the generator's own.</summary>
+        public string? kind;
+        /// <summary>No window: the wall is left whole there. A door is always a door: a door entry that is none is the plain one.</summary>
+        public bool none;
+        /// <summary>How often it is picked, against the others' weights; 0 leaves it out, unless every weight is 0 (then each is picked as often).</summary>
+        public double weight = 1;
+
+        public OpeningEntry Clone() => (OpeningEntry)MemberwiseClone();
+
+        /// <summary>A copy of a set, entry by entry; null stays null.</summary>
+        public static List<OpeningEntry>? Copy(List<OpeningEntry>? set)
+        {
+            if (set == null) return null;
+            var c = new List<OpeningEntry>(set.Count);
+            foreach (var e in set) c.Add(e.Clone());
+            return c;
+        }
+    }
+
+    /// <summary>
+    /// How alike a set's windows are: each window picked on its own (as the old BuildingGenerator picks them), each column of
+    /// a wall the same window all the way up its tier, each storey of a wall the same along it, or each wall one window.
+    /// </summary>
+    public enum WindowPick { Window, Column, Storey, Wall }
 
     /// <summary>
     /// What a style colour field holds (docs/COLOURS.md §3.1): a CSS literal <c>#RRGGBB</c> (or <c>#RGB</c>),

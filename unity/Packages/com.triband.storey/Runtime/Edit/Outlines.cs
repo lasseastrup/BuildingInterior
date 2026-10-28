@@ -57,7 +57,7 @@ namespace Triband.Storey.Edit
             var fp = Tiers.Outline(b, k0); var a = fp[i]; var c = fp[(i + 1) % fp.Count];
             fp.Insert(i + 1, new Vec2(Tiers.Cm((a.x + c.x) / 2), Tiers.Cm((a.z + c.z) / 2)));
             RemapEdgeItems(b, k0, (edge, t) => edge > i ? (edge + 1, t) : edge == i ? (t < 0.5 ? (i, t * 2) : (i + 1, (t - 0.5) * 2)) : (edge, t));
-            Tiers.SetBlank(b, k0, Tiers.Blank(b, k0).SelectMany(j => j > i ? new[] { j + 1 } : j == i ? new[] { i, i + 1 } : new[] { j }).ToList());
+            Tiers.MapEdges(b, k0, l => l.SelectMany(j => j > i ? new[] { j + 1 } : j == i ? new[] { i, i + 1 } : new[] { j }).ToList());
             return i + 1;
         }
 
@@ -118,10 +118,12 @@ namespace Triband.Storey.Edit
                 if (edge == i) { double s = t * L2; return s >= d2 ? ((int, double)?)(Ni(i), (s - d2) / (L2 - d2)) : null; }
                 return (Ni(edge), t);
             });
-            var bl = Tiers.Blank(b, k0);
-            var nb = bl.Select(Ni).ToList();
-            if (bl.Contains(prev) && bl.Contains(i)) for (int j = 0; j < m; j++) nb.Add((i + j) % nf.Count);   // a blank corner stays blank
-            Tiers.SetBlank(b, k0, nb.Distinct().ToList());
+            Tiers.MapEdges(b, k0, bl =>
+            {
+                var nb = bl.Select(Ni).ToList();
+                if (bl.Contains(prev) && bl.Contains(i)) for (int j = 0; j < m; j++) nb.Add((i + j) % nf.Count);   // a blank (quiet, bare) corner stays so
+                return nb.Distinct().ToList();
+            });
             fp.Clear(); fp.AddRange(nf);
             first = i % nf.Count; count = m;
             return OutlineIssue.None;
@@ -152,7 +154,7 @@ namespace Triband.Storey.Edit
             fp.RemoveAt(i);
             int Remap(int j) => j > i ? j - 1 : j;
             RemapEdgeItems(b, k0, (edge, t) => edge == i || edge == prev ? null : ((int, double)?)(Remap(edge), t));
-            Tiers.SetBlank(b, k0, Tiers.Blank(b, k0).Where(j => j != i).Select(Remap).Distinct().Where(j => j < fp.Count).ToList());
+            Tiers.MapEdges(b, k0, l => l.Where(j => j != i).Select(Remap).Distinct().Where(j => j < fp.Count).ToList());
             return true;
         }
 
@@ -164,10 +166,12 @@ namespace Triband.Storey.Edit
             int Ni(int j) => j > i ? j - 1 : j;
             int merged = Ni(prev);
             RemapEdgeItems(b, k0, (edge, t) => edge == prev ? (merged, t * L1 / LL) : edge == i ? (merged, (L1 + t * L2) / LL) : (Ni(edge), t));
-            var bl = Tiers.Blank(b, k0);
-            var nb = bl.Where(j => j != i && j != prev).Select(Ni).ToList();
-            if (bl.Contains(i) || bl.Contains(prev)) nb.Add(merged);
-            Tiers.SetBlank(b, k0, nb.Distinct().ToList());
+            Tiers.MapEdges(b, k0, bl =>
+            {
+                var nb = bl.Where(j => j != i && j != prev).Select(Ni).ToList();
+                if (bl.Contains(i) || bl.Contains(prev)) nb.Add(merged);
+                return nb.Distinct().ToList();
+            });
             fp.RemoveAt(i);
         }
 

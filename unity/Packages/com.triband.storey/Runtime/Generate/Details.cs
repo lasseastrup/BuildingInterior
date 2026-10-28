@@ -265,6 +265,7 @@ namespace Triband.Storey.Generate
             }
             for (int i = 0; i < n; i++)
             {
+                if (Derived.EdgeStateAt(b, k, i) >= EdgeState.Quiet) continue;   // a quiet or bare wall has no details by rule (docs/EDITOR.md §6.7)
                 var (f, ops) = OpsOf(i); double uS = f.uS, uE = f.uE, L = f.e.L; if (L < 1.5) continue;
                 if (R.ac > 0 && k > 0)
                     for (int j = 0; j < ops.Count; j++)
@@ -414,6 +415,10 @@ namespace Triband.Storey.Generate
                     bool outward = turn > 0;
                     if ((mode == DetailCorners.Outward && !outward) || (mode == DetailCorners.Inward && outward)) continue;
                     if (OnParty(i, 0) || OnParty(ip, la)) continue;
+                    // none beside a bare wall, nor between two quiet ones (as the old generator kept them off its blank edges and
+                    // between two sides it left plain); a wall that is only blank keeps its corners
+                    EdgeState sa = Derived.EdgeStateAt(b, k, ip), sc = Derived.EdgeStateAt(b, k, i);
+                    if (sa == EdgeState.Bare || sc == EdgeState.Bare || (sa >= EdgeState.Quiet && sc >= EdgeState.Quiet)) continue;
                     for (int j = 0; j < steps; j++)
                     {
                         double x = Hash01(b.id, "corner", k, i, j * 32 + (int)Math.Min(31, Math.Round(step * 10)));

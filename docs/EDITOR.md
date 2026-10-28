@@ -345,6 +345,21 @@ Layout keys: `head`, `panes`, `frames`, `bandH`, `bandDepth`, `bandWall`, `plint
 1. Arch heads, 2 × 3 panes, Frames, Band 0.65 m in a wall shade, Plinth 0.8 m with a grey Plinth colour, Foundation, Brick patches 0.6: the building looks like the artist's.
 2. Set Foundation *Below ground* to 1 m and lower the ground (or lift the site): the foundation shows down to it.
 
+**Blank, quiet and bare walls** (`EdgeState`, Storey's own, for the old BuildingGenerator's per-edge states). *Place on walls › Blank wall* has three choices for what a click makes a wall:
+- *No windows* (**blank**, as before): no windows; doors placed by hand stay, as do the bands, plinth and details. The old generator's *suppressed* edge.
+- *No details* (**quiet**): no details by rule (AC units, vents, an artist's Facade Details with a rule) either; hand-placed ones stay. The old generator's sides left out of its *Detail Sides* mask.
+- *Bare*: no floor bands or plinth either, a plain wall; its foundation and the parapet stay. The bands and plinths of the walls each side end square at its corners: closed where they stand out past a convex corner, against the wall at a concave one. The old generator's *blank* edge.
+
+Click a wall that is already so to get its windows back. *Whole side* sets every wall of the outline facing *Front* (+Z), *Back*, *Left* or *Right* (by the larger part of its outward normal, as the old generator's sides) at once, leaving walls with more taken away as they are (`Facades.SetSide`). The old generator's per-building side mask is not a setting of its own: a converter sets the sides it leaves out to quiet walls, so each wall says what it has, can be changed one by one, and keeps its state through outline edits (corners added, removed, merged or cut, setbacks added or moved); a mask would silently change which walls it means when a wall is turned past 45°.
+
+Layout keys `quiet` and `bare` (edge lists, beside `blank`, on the building and on a setback's floor; written only when there are any). A quiet or bare wall is in `blank` too, so the prototype shows it without windows. At LOD2 a blank or quiet wall paints no windows, as before, and a bare one no band either (a parameter row of its own, made only when a run has a bare wall).
+
+| BuildingBuild | Storey |
+|---|---|
+| `_suppressedEdges` | `blank` |
+| `_blankEdges` | `bare` (and `blank`) |
+| `_detailSides` without a side | its walls `quiet` (and `blank`), unless already `bare` (`Facades.SetSide`) |
+
 ### 6.8 Windows
 
 Windows show a room behind the glass, after the project's *Window* shader graph. Add **Storey Windows** (*Add Component › Storey › Storey Windows*) to any object in the scene and give it the room atlas. Without the component, or with no atlas, the glass is the plain dark glass of before.
@@ -403,6 +418,8 @@ Either way, *Faces back* turns round one made facing −Z, and the parts take th
 - **Its own colour** keeps a palette colour whatever the style. A project can have 232 such colours across its windows, doors and facade details (`KindColors`). Past that, a part takes its style colour.
 
 In the Facade tab, pick it under **Window**, first under *Windows and doors*, or **Street door** (with the other details). *Generated* (*Plain* for a street door) goes back to the generator's own. *Window* is what fills each opening; *Openings* is where the openings are and how big (*Punched*, *Tall*, *Ribbon*, *Curtain* or *None*, each described in its tooltip).
+
+**Several windows** (docs/OPENINGS.md §7.1): *+ Another window* adds a row under *Window*. Each row is a window (*Generated*, *None* for no window there, or an artist's), its weight, its share in percent, and × to remove it. Each opening takes one, picked by weight, the same on every build and different from building to building. *Picked by* keeps them alike by *Column*, *Storey* or *Wall* instead of window by window. With one row left, the style has one window again. On the base, *Own ground windows* gives the ground floor rows of its own (starting as the floors above's); off, it has theirs. *Street door* has rows the same way (*+ Another door*): every door on one wall is the same one. *Sill height* shows when any of the windows keeps its own size; *Sills*, *Heads*, *Glazing bars* and *Frames* are greyed out only when none of them is the generator's.
 
 The inspector says how many objects, parts and triangles it has and where its hole came from, and warns of what will cost too much or look wrong:
 - more triangles than the generator's most dressed window (140, with arch heads, frames and glazing bars; a block of six storeys has about 156 windows), or a LOD1 of more than 12 (most buildings on screen are at LOD1, where the plain pane is 2);
@@ -474,7 +491,7 @@ The site's inspector reads top to bottom in the order you work: which layout, wh
 4. **Shape / Facade / Interior**: three large buttons, each with an icon and a line saying what it's for. The selected one is tinted, with an accent bar along its bottom. On a narrow inspector the line moves under the bar.
 5. The mode's settings in named groups, each a header with a hairline and space above it, not a box:
    - **Shape:** *Placement* (elevation, Snap to ground), *Outline* (setbacks, presets), *Corners*, *Courtyards and atria* (folded until the building has one), *Storey heights*.
-   - **Facade:** *Style for* (with setbacks), *Style* (preset), *Windows and doors* (window, openings, sill height for an artist's window of its own size, width for Punched and Tall openings, bay spacing, sills, heads, glazing bars, frames, street door: plain or an artist's), *Walls* (ground floor, bands, plinth, foundation, brick patches), *Colours* (*More colours* folded), *Roof*, *Details by rule* (folded), *Place on walls* (rows of four: Entrance, Blank wall, every Facade Detail, Bridge), *Bridges*.
+   - **Facade:** *Style for* (with setbacks), *Style* (preset), *Windows and doors* (window, or several with their weights and *Picked by*, the ground floor's own, openings, sill height for an artist's window of its own size, width for Punched and Tall openings, bay spacing, sills, heads, glazing bars, frames, street door: plain or an artist's, or several), *Walls* (ground floor, bands, plinth, foundation, brick patches), *Colours* (*More colours* folded), *Roof*, *Details by rule* (folded), *Place on walls* (rows of four: Entrance, Blank wall with its No windows / No details / Bare choice and *Whole side*, every Facade Detail, Bridge), *Bridges*.
    - **Interior:** *Inside* (walk-in or shell), *Floor*, *Tools*, the selection, *This storey's height*, *Interior colours* (folded).
 6. **Site settings** (folded): materials, the LOD shown, colliders, and the artist's windows, doors and facade details the layout uses.
 

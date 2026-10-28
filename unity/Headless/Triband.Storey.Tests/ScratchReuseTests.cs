@@ -54,7 +54,8 @@ namespace Triband.Storey.Tests
             // a field added to Opening must be copied by Set too: the wall panels merge their openings into copies made with it
             var o = new Opening(); var rnd = new Random(5);
             foreach (var f in typeof(Opening).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                f.SetValue(o, f.FieldType == typeof(double) ? rnd.NextDouble() + 1 : f.FieldType == typeof(bool) ? true : throw new InvalidOperationException($"Opening.{f.Name}: Set copies doubles and bools; add {f.FieldType.Name} to it and to this test"));
+                f.SetValue(o, f.FieldType == typeof(double) ? rnd.NextDouble() + 1 : f.FieldType == typeof(bool) ? true : f.FieldType == typeof(OpeningKind) ? new OpeningKind { id = "t-copied" }
+                    : throw new InvalidOperationException($"Opening.{f.Name}: Set copies doubles, bools and a kind; add {f.FieldType.Name} to it and to this test"));
             var c = new Opening().Set(o);
             foreach (var f in typeof(Opening).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
                 Assert.Equal(f.GetValue(o), f.GetValue(c));
@@ -68,9 +69,9 @@ namespace Triband.Storey.Tests
             var openingSet = typeof(Opening).GetMethods().Single(m => m.Name == nameof(Opening.Set) && m.GetParameters().Length > 1);
             Assert.Equal(fields(typeof(Opening)), openingSet.GetParameters().Length);
             Assert.Equal(fields(typeof(Facade.PanelOpt)), typeof(Facade.PanelOpt).GetMethod(nameof(Facade.PanelOpt.Set))!.GetParameters().Length);
-            var used = new Opening().Set(new Opening { u0 = 1, u1 = 2, y0 = 3, y1 = 4, door = true, full = true, thr = true, bare = true });
+            var used = new Opening().Set(new Opening { u0 = 1, u1 = 2, y0 = 3, y1 = 4, door = true, full = true, thr = true, bare = true, kind = new OpeningKind() });
             var again = used.Set(5, 6, 0.5, 2, full: true);
-            Assert.True(again.u0 == 5 && again.u1 == 6 && again.y0 == 0.5 && again.y1 == 2 && again.full && !again.door && !again.thr && !again.bare);
+            Assert.True(again.u0 == 5 && again.u1 == 6 && again.y0 == 0.5 && again.y1 == 2 && again.full && !again.door && !again.thr && !again.bare && again.kind == null);
             var p = new Facade.PanelOpt { outer = false, ends = true, revealC = new Swatch(new StyleRef(1, 0), ColorSlot.Wall) }.Set(inner: false);
             Assert.True(p.outer && !p.inner && !p.ends && !p.threshold && p.revealFrom == null && p.revealC == null);
         }

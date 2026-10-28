@@ -130,9 +130,11 @@ namespace Triband.Storey.Generate
         public static List<Opening> Ops(BuildingData b, VoidData v, int k, int i, double L, double uS, double uE)
         {
             var st = Derived.StyleAt(b, k); double h = Derived.FloorH(b, k), spn = uE - uS;
-            var wk = OpeningKinds.Of(st, false); var dk = OpeningKinds.Of(st, true);
             var ops = new List<Opening>();
             var (de, dt) = Door(v);
+            // its walls' picks are the building's, with edges of their own (below the outline's: -1 and down, a thousand a courtyard)
+            int edge = -1 - i - 1000 * b.voids.IndexOf(v);
+            var dk = OpeningSets.Door(st, OpeningSets.DoorSeed(b.id, k, edge));
             double sl = Math.Max(0.3, dk?.reachL ?? 0), sr = Math.Max(0.3, dk?.reachR ?? 0);
             if (k == v.bottom && i == de && spn > Dim.DOOR_EXT + sl + sr)
             {
@@ -143,21 +145,8 @@ namespace Triband.Storey.Generate
                 Facade.Dressing(d, dk);
                 ops.Add(d);
             }
-            var ws = Facade.WindowSpec(st.windows, h, st);
-            var (wS, wE) = Facade.WindowSpan(wk, uS, uE);
-            var (n, bay) = Facade.BayLayout(st, wS, wE);
-            if (ws != null && ws.y1 - ws.y0 > 0.4 && n > 0)
-                for (int j = 0; j < n; j++)
-                {
-                    double c = wS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : Math.Min(ws.w, bay - 0.5);
-                    if (ww < 0.45) continue;
-                    double u0 = c - ww / 2, u1 = c + ww / 2, sx = wk != null && OpeningKinds.Stretched(wk) ? ww / Math.Max(1e-3, wk.w) : 1; bool blocked = false;
-                    foreach (var o in ops) if (o.door && Facade.NearDoor(o, u0, u1, (wk?.reachL ?? 0) * sx, (wk?.reachR ?? 0) * sx)) blocked = true;
-                    if (blocked) continue;
-                    var w = new Opening { u0 = u0, u1 = u1, y0 = ws.y0, y1 = ws.y1, full = ws.full != null };
-                    Facade.Dressing(w, wk);
-                    ops.Add(w);
-                }
+            // windows by the style's bays, as the outer walls' above the ground floor (docs/OPENINGS.md §7.1)
+            Facade.Windows(ops, null, st, h, false, b.id, k, Derived.TierStart(b, k), edge, uS, uE, null);
             ops.Sort((p, q) => p.u0.CompareTo(q.u0));
             return ops;
         }
