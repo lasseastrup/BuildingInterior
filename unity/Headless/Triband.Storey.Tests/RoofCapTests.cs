@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Triband.Storey.Edit;
 using Triband.Storey.Generate;
+using Triband.Storey.Play;
 using Triband.Storey.Validate;
 using Xunit;
 
@@ -123,6 +124,67 @@ namespace Triband.Storey.Tests
             var op = Lod0.Build(site, b).Op;
             Assert.Equal(top + 0.11, op.P.ToList().Max(p => p.y), 6);   // no 30 cm curb
             Assert.Equal(top + 0.11, Lod2.Build(site, b).P.Max(p => p.y), 6);
+        }
+
+        /// <summary>
+        /// A raised cap on a roof nothing comes up through lifts the whole roof to its top, as the old BuildingGenerator's roof
+        /// insert is a slab (<see cref="RoofCap.Lid"/>): no ring with the roof below it, and the roof walked on there. With stairs
+        /// to the roof the roof keeps its height inside the ring, for the bulkhead's door.
+        /// </summary>
+        [Fact]
+        public void ARaisedCapLiftsTheWholeRoofWhereNothingComesUpThroughIt()
+        {
+            foreach (bool core in new[] { false, true })
+            {
+                var (_, b, site) = Block(Capped(0.4, -0.25, 0.43), core: core);
+                double top = Derived.RoofY(b), lift = core ? 0 : 0.4;
+                Assert.Equal(lift, RoofCap.Lid(b, out _), 9);
+                var op = Lod0.Build(site, b).Op;
+                // the roof's own colour facing up, away from the bulkhead: at the cap's top, or at the walls' with stairs up to it
+                var roof = Enumerable.Range(0, op.Verts).Where(v => op.C[v].slot == ColorSlot.Roof && op.N[v].y > 0.9 && op.P[v].x > 8).Select(v => op.P[v].y).Distinct().ToList();
+                Assert.Contains(top + lift, roof.Select(y => Math.Round(y, 6)));
+                if (!core) Assert.DoesNotContain(roof, y => Math.Abs(y - top) < 1e-6);
+                // the cap's sides facing in over the roof: none round a lid
+                var inner = Enumerable.Range(0, op.Verts).Count(v => op.C[v].slot == ColorSlot.Cap && Math.Abs(op.N[v].y) < 0.1 && op.N[v].z > 0.9 && Math.Abs(op.P[v].z) < 1e-6);
+                Assert.True(core ? inner > 0 : inner == 0, $"core {core}: {inner} inner side vertices");
+                var r = CoplanarCheck.Run(Lod0.Build(site, b, solids: true).Op);
+                Assert.True(r.Overlaps.Count == 0, string.Join("\n", r.Overlaps.Take(5)));
+                // walked on at its top
+                var m = CollisionMesh.Build(site, b, Lod0.BuildShape(site, b));
+                var floors = Enumerable.Range(0, m.Tris).Where(t => m.Kind[t] == CollisionKind.Floor).Select(t => m.P[m.I[3 * t]].y).ToList();
+                Assert.Equal(top + lift, floors.Max(), 6);
+            }
+        }
+
+        /// <summary>
+        /// An inset cap on a roof nothing comes up through is a solid block, as the old BuildingGenerator's inset roof insert,
+        /// its top the roof's colour (round it the strip's, where there is one), with no curb round the roof under it.
+        /// </summary>
+        [Fact]
+        public void AnInsetCapIsASolidBlockWhereNothingComesUpThroughIt()
+        {
+            foreach (double strip in new[] { 0.0, 0.5 })
+            {
+                var (_, b, site) = Block(Capped(1.31, 0.74, strip > 0 ? strip : null));
+                double top = Derived.RoofY(b), T = Dim.T_EXT, inset = 0.74 - T;
+                var op = Lod0.Build(site, b).Op;
+                double area = 0, stripArea = 0;
+                for (int t = 0; t < op.Tris; t++)
+                {
+                    int i0 = op.I[3 * t], i1 = op.I[3 * t + 1], i2 = op.I[3 * t + 2];
+                    if (Math.Abs(op.P[i0].y - (top + 1.31)) > 1e-6 || op.N[i0].y < 0.9) continue;
+                    var a = op.P[i1] - op.P[i0]; var c = op.P[i2] - op.P[i0];
+                    double ar = Math.Abs(a.x * c.z - a.z * c.x) / 2;
+                    area += ar; if (op.C[i0].slot == ColorSlot.Cap) stripArea += ar;
+                }
+                // the outline (14 × 10) set in to the cap's outer side, all of it
+                Assert.Equal((14 - 2 * inset) * (10 - 2 * inset), area, 3);
+                Assert.Equal(strip > 0 ? (14 - 2 * inset) * (10 - 2 * inset) - (14 - 2 * inset - 2 * strip) * (10 - 2 * inset - 2 * strip) : 0, stripArea, 3);
+                // no curb: nothing in the trim's colour stands above the walls' top
+                Assert.DoesNotContain(Enumerable.Range(0, op.Verts), v => op.C[v].slot == ColorSlot.Trim && op.P[v].y > top + 1e-6);
+                var r = CoplanarCheck.Run(Lod0.Build(site, b, solids: true).Op);
+                Assert.True(r.Overlaps.Count == 0, string.Join("\n", r.Overlaps.Take(5)));
+            }
         }
 
         [Fact]

@@ -8,13 +8,18 @@
 //
 // A window's number comes from its centre on the wall (Facade.WindowId, baked into LOD0's and LOD1's panes; worked
 // out the same way for LOD2's), so a window keeps its room and its light across an LOD switch.
+//
+// Included by StoreyFragment.hlsl, after a project shader's own lighting, which can put its own nodes in first: define
+// STOREY_WINDOW_PARALLAX as a function with StoreyWindowParallax's inputs that gives the atlas UV (the project's
+// WindowInteriorParallax node, say), and STOREY_WINDOW_NIGHT_BLEND as the project's night blend (0 day .. 1 night) in
+// place of StoreyWindows' (the Color Palette Lit sample does both).
 #ifndef STOREY_WINDOW_INCLUDED
 #define STOREY_WINDOW_INCLUDED
 
 TEXTURE2D(_StoreyWindowRooms);  SAMPLER(sampler_StoreyWindowRooms);
 TEXTURE2D(_StoreyWindowGlare);  SAMPLER(sampler_StoreyWindowGlare);
 float  _StoreyWindowsOn;        // 0: the plain dark glass of before
-float4 _StoreyWindowAtlas;      // xy: the atlas's columns and rows; z: room depth (0..1); w: glare strength
+float4 _StoreyWindowAtlas;      // xy: the atlas's columns and rows; z: room depth (1: as deep as the window is wide); w: glare strength
 float4 _StoreyWindowTint;       // by day: the room × the main light's colour × this
 float4 _StoreyWindowLight;      // at night: the room × a lamp colour between these two
 float4 _StoreyWindowLight2;
@@ -66,26 +71,37 @@ float3 StoreyPaneRecess(inout float2 uv, float2 uvDx, float2 uvDy, float3 posDx,
 }
 
 // The room atlas's UV for a point (uv, 0 to 1) on a pane, seen along viewTS (towards the camera, in the pane's
-// tangent space: x across, y up, z out of the wall). The same inputs as the project's WindowInteriorParallax_float
-// node, so that node can stand in here. A single-texture interior: the room is a box behind the pane whose back wall
-// is depth × the window's size, drawn in one-point perspective in each atlas cell.
+// tangent space: x across, y up, z out of the wall). The project's WindowInteriorParallax_float node as it is now (its
+// float version), with the same inputs, so that node can stand in here (STOREY_WINDOW_PARALLAX). The room is a box
+// depth × the window's width deep behind the pane; where the line of sight first meets its back wall or a side, that
+// point is drawn in one-point perspective into the atlas cell, laid out in thirds (ceiling, floor and side walls round
+// the back wall in the middle third).
 float2 StoreyWindowParallax(float2 uv, float3 viewTS, float depth, float2 roomIndex, float2 grid, float flipX, float flipY)
 {
-    if (flipX > 0.5) { uv.x = 1.0 - uv.x; viewTS.x = -viewTS.x; }
-    if (flipY > 0.5) { uv.y = 1.0 - uv.y; viewTS.y = -viewTS.y; }
-    float farFrac = clamp(depth, 0.05, 0.95);
-    float depthScale = 1.0 / (1.0 - farFrac) - 1.0;
-    float3 d = float3(-viewTS.x, -viewTS.y, max(viewTS.z, 1e-4) * depthScale);   // into the room
-    float3 pos = float3(uv * 2.0 - 1.0, -1.0);
-    float3 id = 1.0 / d;
-    float3 k = abs(id) - pos * id;
-    pos += min(min(k.x, k.y), k.z) * d;
-    float interp = pos.z * 0.5 + 0.5;
-    float realZ = saturate(interp) / depthScale + 1.0;
-    interp = (1.0 - 1.0 / realZ) * (depthScale + 1.0);
-    float2 iuv = saturate(pos.xy * lerp(1.0, farFrac, interp) * 0.5 + 0.5);
-    return (roomIndex + iuv) / grid;
+    uv = frac(uv);
+    uv.x = lerp(uv.x, 1.0 - uv.x, flipX);
+    uv.y = lerp(uv.y, 1.0 - uv.y, flipY);
+    float vz = max(viewTS.z, 0.0001);
+    float tBack = depth / vz;
+    float ax = abs(viewTS.x), ay = abs(viewTS.y);
+    float tx = ax < 0.0001 ? 1e9 : (viewTS.x > 0.0 ? uv.x : 1.0 - uv.x) / ax;
+    float ty = ay < 0.0001 ? 1e9 : (viewTS.y > 0.0 ? uv.y : 1.0 - uv.y) / ay;
+    float t = min(tBack, min(tx, ty));
+    float2 hitXY = uv - viewTS.xy * t;
+    float hitZ = vz * t;
+    const float wallFraction = 0.333;
+    float hz = max(hitZ + depth * wallFraction, 0.001);
+    float scale = depth * (1.0 - 2.0 * wallFraction);
+    float2 roomUV = saturate(float2(0.5, 0.5) + (hitXY - float2(0.5, 0.5)) / hz * scale);
+    return (roomUV + roomIndex) / grid;
 }
+
+#ifndef STOREY_WINDOW_PARALLAX
+#define STOREY_WINDOW_PARALLAX StoreyWindowParallax
+#endif
+#ifndef STOREY_WINDOW_NIGHT_BLEND
+#define STOREY_WINDOW_NIGHT_BLEND _StoreyWindowNight.x
+#endif
 
 // A pane's colour at a point: uv on the pane (across along cross(up, N), up), the window's number (StoreyWindowId),
 // uv's screen derivatives (taken outside any branch: StoreyFragment), the point and the wall's outward normal in
@@ -105,12 +121,12 @@ float3 StoreyWindowPane(float2 uv, float2 uvDx, float2 uvDy, float id, float3 po
     float2 grid = max(floor(_StoreyWindowAtlas.xy + 0.5), 1.0);
     float pick = min(floor(r2 * grid.x * grid.y), grid.x * grid.y - 1.0);
     float2 room = float2(fmod(pick, grid.x), floor(pick / grid.x));
-    float2 auv = StoreyWindowParallax(uv, viewTS, _StoreyWindowAtlas.z, room, grid, step(0.5, r3), 0.0);
+    float2 auv = STOREY_WINDOW_PARALLAX(uv, viewTS, _StoreyWindowAtlas.z, room, grid, step(0.5, r3), 0.0);
     // no mip chain across a cell's edge: sample at the level the pane itself would take
     float3 interior = SAMPLE_TEXTURE2D_GRAD(_StoreyWindowRooms, sampler_StoreyWindowRooms, auv, uvDx / grid, uvDy / grid).rgb;
 
     // lit once the night blend passes the window's number (the shader graph's comparison), lamp colour by it too
-    bool lit = r < _StoreyWindowNight.x * _StoreyWindowNight.y;
+    bool lit = r < STOREY_WINDOW_NIGHT_BLEND * _StoreyWindowNight.y;
     float3 light = lit ? lerp(_StoreyWindowLight2.rgb, _StoreyWindowLight.rgb, r) : GetMainLight().color * _StoreyWindowTint.rgb;
     float3 glare = SAMPLE_TEXTURE2D(_StoreyWindowGlare, sampler_StoreyWindowGlare, (float2(dot(posWS, T), posWS.y) + viewTS.xy) * 0.5).rgb;
     return glare * _StoreyWindowAtlas.w + interior * light;

@@ -365,6 +365,20 @@ namespace Triband.Storey
         /// BuildingGenerator's window and door insets).
         /// </summary>
         public double? recess, doorRecess;
+        /// <summary>
+        /// How much bigger each side the hole of a recessed artist's street door is than the door's own (its Storey Cutout), in
+        /// metres; below 0 smaller, the door's frame then behind the wall (docs/EDITOR.md §6.7). Its top goes up as far, its foot
+        /// stays on the floor; held to its bay with fixed bays and under the storey's band. Only on a shell storey and with a
+        /// recess (<see cref="doorRecess"/>, or the door's entry's); null = 0, the door's own hole. Storey's own (the old
+        /// BuildingGenerator's door inset offset).
+        /// </summary>
+        public double? doorRecessOffset;
+        /// <summary>
+        /// A recess with an artist's window or door in it has a back in the wall's colour at its depth, across the whole hole,
+        /// on a shell storey (docs/EDITOR.md §6.7): what of the window or door lies behind it is hidden, and round a hole bigger
+        /// than what fills it the wall shows. Storey's own (the old BuildingGenerator caps its insets so).
+        /// </summary>
+        public bool recessBack;
         /// <summary>The ground floor's plinth height; null = 0.45 m.</summary>
         public double? plinthH;
         /// <summary>How far the plinth stands out from the wall, in metres; null = 0.04 m. Storey's own.</summary>
@@ -432,9 +446,12 @@ namespace Triband.Storey
 
     /// <summary>
     /// How alike a set's windows are: each window picked on its own (as the old BuildingGenerator picks them), each column of
-    /// a wall the same window all the way up its tier, each storey of a wall the same along it, or each wall one window.
+    /// a wall the same window all the way up its tier, each storey of a wall the same along it, or each wall one window. Or
+    /// picked as the old BuildingGenerator picks, by the wall's edge, the storey and the bay alone, so a building it made gets
+    /// the same window in every bay (and the same street door), every building of the style the same pattern
+    /// (<see cref="Generate.OpeningSets.PickAsGenerator"/>). Storey's own.
     /// </summary>
-    public enum WindowPick { Window, Column, Storey, Wall }
+    public enum WindowPick { Window, Column, Storey, Wall, Generator }
 
     /// <summary>
     /// How a wall's bays are laid out: as many as round the style's bay to, stretched to fill the span between the corners;

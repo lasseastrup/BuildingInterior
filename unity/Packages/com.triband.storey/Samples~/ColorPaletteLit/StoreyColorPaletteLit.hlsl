@@ -10,6 +10,7 @@
 #include_with_pragmas "Assets/Art/Shaders/CustomNodes/GlobalVariables.hlsl"
 #include_with_pragmas "Assets/Art/Shaders/CustomNodes/MainLightNode.hlsl"
 #include_with_pragmas "Assets/Art/Shaders/CustomNodes/AdditionalLightsNode.hlsl"
+#include_with_pragmas "Assets/Art/Shaders/CustomNodes/WindowInteriorParallax.hlsl"
 
 // The graph's Colorspace Conversion node, RGB to Linear
 float3 StoreyGraphToLinear(float3 c)
@@ -20,7 +21,7 @@ float3 StoreyGraphToLinear(float3 c)
 }
 
 // The graph's Lighting sub-graph: hard main-light shadow faded out with distance, the global shadow colour as
-// ambient, plus the additional lights
+// ambient, plus the additional lights (Forward+'s, or a per-object list), plus a tenth of a light from straight above
 float3 StoreyGraphLighting(float3 positionWS, float3 normalWS, float3 shadowColor)
 {
     float3 absWS = GetAbsolutePositionWS(positionWS);
@@ -38,7 +39,7 @@ float3 StoreyGraphLighting(float3 positionWS, float3 normalWS, float3 shadowColo
     float3 light = lerp(shadowColor, color, lit);
     float3 directional, omni;
     SG_MobileVertexLights_float(positionWS, normalWS, directional, omni);
-    return saturate(light + lerp(directional, omni, 0.7));
+    return saturate(light + lerp(directional, omni, 0.7)) + saturate(0.1 * saturate(normalWS.y));
 }
 
 // The graph's Character Blob: darkens a small spot under the player
@@ -62,7 +63,25 @@ float3 StoreyGraphFog(float3 color, float3 positionWS)
 #endif
     return lerp(color, unity_FogColor.rgb, density);
 }
-#define STOREY_FOG StoreyGraphFog   // StoreyFragment fogs the section cap with it
+#define STOREY_FOG StoreyGraphFog   // StoreyFragment fogs the section cap and the windows' rooms with it
+
+// The project's Window graph's room mapping and night blend, for the panes that show a room (StoreyWindow.hlsl, included
+// after this file): the same node and the same global, so Storey's windows and the old buildings' read alike
+float2 StoreyGraphWindowParallax(float2 uv, float3 viewTS, float depth, float2 room, float2 grid, float flipX, float flipY)
+{
+    float2 o;
+    WindowInteriorParallax_float(uv, viewTS, depth, room, grid, flipX, flipY, o);
+    return o;
+}
+#define STOREY_WINDOW_PARALLAX StoreyGraphWindowParallax
+
+float StoreyGraphNightBlend()
+{
+    float n;
+    GetGlobalNightBlend_float(n);
+    return n;
+}
+#define STOREY_WINDOW_NIGHT_BLEND StoreyGraphNightBlend()
 
 // Base Shading then Handle Fog, as the graph's Base Color. The Unlit target outputs it unchanged.
 float4 StoreyLighting(StoreySurface s)

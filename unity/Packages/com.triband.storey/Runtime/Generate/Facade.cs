@@ -175,10 +175,33 @@ namespace Triband.Storey.Generate
 
         /// <summary>
         /// Whether a window from <paramref name="u0"/> to <paramref name="u1"/>, its dressing reaching <paramref name="l"/> and
-        /// <paramref name="r"/> past it, comes too near a door: 30 cm between them, and 10 cm between their dressings.
+        /// <paramref name="r"/> past it, comes too near a door: 30 cm between them, and 10 cm between their dressings. With fixed
+        /// bays (<paramref name="tight"/>) only where they would meet, a centimetre between them and their dressings, as the old
+        /// BuildingGenerator puts a window in the tile beside its door's.
         /// </summary>
-        public static bool NearDoor(Opening door, double u0, double u1, double l, double r) =>
-            u1 > door.u0 - Math.Max(0.3, r + door.rl + 0.1) && u0 < door.u1 + Math.Max(0.3, l + door.rr + 0.1);
+        public static bool NearDoor(Opening door, double u0, double u1, double l, double r, bool tight = false) => tight
+            ? u1 + r > door.u0 - door.rl - 0.01 && u0 - l < door.u1 + door.rr + 0.01
+            : u1 > door.u0 - Math.Max(0.3, r + door.rl + 0.1) && u0 < door.u1 + Math.Max(0.3, l + door.rr + 0.1);
+
+        /// <summary>
+        /// A recessed artist's street door's hole made bigger or smaller than the door by the style's offset
+        /// (<see cref="FacadeStyle.doorRecessOffset"/>, the old BuildingGenerator's door inset offset): that much past the door each
+        /// side and over it (below 0, short of it), its foot on the floor; held to its bay with fixed bays (centred on the door, as
+        /// its tile was) and under <paramref name="top"/>. The door keeps its own size (<see cref="Opening.hl"/>, hr and ht say
+        /// where it is in the hole), and its dressing is measured from the hole. Storey's own.
+        /// </summary>
+        static void HoleOffset(Opening o, FacadeStyle st, double top)
+        {
+            double d = st.doorRecessOffset ?? 0;
+            if (Math.Abs(d) < 1e-4 || !(RecessOf(st, o) is double r) || r <= 1e-3) return;
+            double c = (o.u0 + o.u1) / 2, half0 = (o.u1 - o.u0) / 2, half = half0 + d;
+            if (st.bayFit == BayFit.Fixed && st.bay > 0.1) half = Math.Min(half, st.bay / 2);
+            half = Math.Max(0.1, half);
+            double y1 = Math.Max(0.2, Math.Min(Math.Max(top, o.y1), o.y1 + d));
+            o.hl = o.hr = half - half0; o.ht = y1 - o.y1;
+            o.u0 = c - half; o.u1 = c + half; o.y1 = y1;
+            o.rl = Math.Max(0, o.rl - o.hl); o.rr = Math.Max(0, o.rr - o.hr); o.rt = Math.Max(0, o.rt - o.ht);
+        }
 
         public static (int n, double bay) BayLayout(FacadeStyle st, double uS, double uE)
         {
@@ -293,6 +316,7 @@ namespace Triband.Storey.Generate
             if (cornice is double cu) band = Math.Max(band ?? 0, cu);
             double under = band is double b0 ? h - b0 - 0.08 : double.MaxValue;
             ops.Clear();
+            bool shell = Derived.ShellAt(b, k);
             Opening New() => pool != null ? pool.Take() : new Opening();
             foreach (var e in b.entrances)
             {
@@ -300,14 +324,20 @@ namespace Triband.Storey.Generate
                 // the style's street door, or the one its set picks for this wall (docs/OPENINGS.md §7.1)
                 // with its entry's own recess, if it has one
                 double? er = null;
-                var ek = doorSet == null ? dk : OpeningSets.Door(st, OpeningSets.DoorSeed(b.id, k, i), out er);
+                var ek = doorSet == null ? dk : OpeningSets.DoorAt(st, b.id, k, i, out er);
+                // an artist's door that keeps its size is as wide as it is on a shell storey, as a window is (a shop's double door
+                // is not squeezed into a house door's hole); a walk-in storey's doorway, which the player walks through, stays the
+                // standard one
+                bool own = shell && ek != null && !ek.stretch;
+                double dw = own ? ek!.w : Dim.DOOR_EXT;
                 // a door's dressing keeps the span's 14 cm from a neighbouring wall, as a window's does
                 double sl = Math.Max(0.3, ek?.reachL ?? 0), sr = Math.Max(0.3, ek?.reachR ?? 0);
-                if (spn <= Dim.DOOR_EXT + sl + sr || !DoorOpen(site, b, e)) continue;
-                double c = Math.Max(uS + Dim.DOOR_EXT / 2 + sl, Math.Min(uE - Dim.DOOR_EXT / 2 - sr, e.t * L));
+                if (spn <= dw + sl + sr || !DoorOpen(site, b, e)) continue;
+                double c = Math.Max(uS + dw / 2 + sl, Math.Min(uE - dw / 2 - sr, e.t * L));
                 var land = k > 0 && !TerraceAt(b, k, i, e.t) ? LandingAt(site, b, k, i, e.t) : null;
-                var o = New().Set(c - Dim.DOOR_EXT / 2, c + Dim.DOOR_EXT / 2, 0, DoorTop(ek, h, band), door: true, thr: land != null && land.y < Derived.FloorBase(b, k) - 0.02, recess: er);
+                var o = New().Set(c - dw / 2, c + dw / 2, 0, DoorTop(ek, h, band), door: true, thr: land != null && land.y < Derived.FloorBase(b, k) - 0.02, recess: er);
                 Dressing(o, ek);
+                if (own) HoleOffset(o, st, band is double ub ? h - ub - 0.08 : h - 0.1);
                 ops.Add(o);
             }
             foreach (var (bk, bi, bt) in Bridges.Doors(site, b))
@@ -326,7 +356,7 @@ namespace Triband.Storey.Generate
             {
                 // fixed bays on the wall's outer face, from the outline (not the caller's span), so every caller has them alike
                 var (oS, oE) = st.bayFit == BayFit.Fixed && i < Derived.OutlineAt(b, k).Count ? OuterFace(b, k, i) : (uS, uE);
-                Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, oS, oE, shaftHere, cornice, Derived.ShellAt(b, k));
+                Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, oS, oE, shaftHere, cornice, shell);
             }
             ops.Sort((p, q) => p.u0.CompareTo(q.u0));
             return ops;
@@ -362,7 +392,8 @@ namespace Triband.Storey.Generate
             for (int j = 0; j < n; j++)
             {
                 OpeningKind? wk = one;
-                if (set != null && !OpeningSets.Window(st, ground, st.windowPick == WindowPick.Window ? OpeningSets.At(wall, j) : OpeningSets.WindowSeed(id, st.windowPick, k, k0, edge, j), out wk)) continue;
+                if (set != null && !(st.windowPick == WindowPick.Generator ? OpeningSets.WindowAsGenerator(st, ground, edge, k, j, out wk)
+                    : OpeningSets.Window(st, ground, st.windowPick == WindowPick.Window ? OpeningSets.At(wall, j) : OpeningSets.WindowSeed(id, st.windowPick, k, k0, edge, j), out wk))) continue;
                 var ws = specs != null ? specs.Of(wk, st, h, ground, cornice, k == 0) : oneSpec;
                 if (ws == null || ws.y1 - ws.y0 <= 0.4) continue;
                 double c = bS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : fix && wk != null && !wk.stretch ? ws.w : Math.Min(ws.w, bay - 0.5);
@@ -383,7 +414,7 @@ namespace Triband.Storey.Generate
                 }
                 double u0 = c - ww / 2, u1 = c + ww / 2;
                 bool blocked = false;
-                foreach (var o in ops) if (o.door && NearDoor(o, u0, u1, (wk?.reachL ?? 0) * sx, (wk?.reachR ?? 0) * sx)) blocked = true;
+                foreach (var o in ops) if (o.door && NearDoor(o, u0, u1, (wk?.reachL ?? 0) * sx, (wk?.reachR ?? 0) * sx, fix)) blocked = true;
                 if (shafts != null) foreach (var f in shafts) if (u1 > f.s0 - 0.1 && u0 < f.s1 + 0.1) blocked = true;
                 if (blocked) continue;
                 var w = (pool != null ? pool.Take() : new Opening()).Set(u0, u1, ws.y0, ws.y1, full: ws.full != null);
@@ -425,18 +456,36 @@ namespace Triband.Storey.Generate
         /// <summary>
         /// On a shell storey, the plain pane at the back of an artist's window or door that leaves part of its hole open (an
         /// arched window in its square hole, <see cref="OpeningKind.lod0Covers"/>): where the reveal ends, as LOD1 has it, so the
-        /// hole never shows into the shell. Storey's own.
+        /// hole never shows into the shell. A style that closes its recesses (<see cref="FacadeStyle.recessBack"/>) has the
+        /// recess's back instead, whatever the window or door covers (<see cref="RecessBack"/>). Storey's own.
         /// </summary>
-        static void HoleBack(MeshBuilder op, Frame F, Opening o, double y, Palette C, FacadeStyle? st)
+        static void HoleBack(MeshBuilder op, Frame F, Opening o, double y, Palette C, FacadeStyle? st, Swatch wall)
         {
             var kk = o.kind;
-            if (kk == null || kk.lod0Covers) return;
+            if (kk == null) return;
+            if (RecessBack(op, F, o, y, st, wall)) return;
+            if (kk.lod0Covers) return;
             double ro = o.door && o.recess is double r ? ShellRevealFrom(r, true, kk) : ShellRevealFrom(st, o.door, kk);
             Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, ro, o.door ? C.door : C.glassDark, false);
         }
 
-        public static void Dress(MeshBuilder op, MeshBuilder gl, Frame F, List<Opening> ops, double y, Palette C, bool shell, FacadeStyle? st = null)
+        /// <summary>
+        /// The back of a recessed opening's hole in <paramref name="wall"/>'s colour, where the style closes its recesses
+        /// (<see cref="FacadeStyle.recessBack"/>): across the whole hole at the recess's depth, where the artist's window or door
+        /// in it is pushed back to, so what of it lies behind its pivot is hidden and round a hole bigger than it the wall shows,
+        /// as the old BuildingGenerator caps its insets. False where the style doesn't (or the opening isn't recessed). Storey's own.
+        /// </summary>
+        public static bool RecessBack(MeshBuilder op, Frame F, Opening o, double y, FacadeStyle? st, Swatch wall)
         {
+            if (st == null || !st.recessBack || o.kind == null || !(RecessOf(st, o) is double r)) return false;
+            double w = Dim.T_EXT - KindBack(r);
+            op.Quad(F.At(o.u0, y + o.y0, w), F.At(o.u1, y + o.y0, w), F.At(o.u1, y + o.y1, w), F.At(o.u0, y + o.y1, w), new P3(F.w.x, 0, F.w.z), wall);
+            return true;
+        }
+
+        public static void Dress(MeshBuilder op, MeshBuilder gl, Frame F, List<Opening> ops, double y, Palette C, bool shell, FacadeStyle? st = null, Swatch? wall = null)
+        {
+            var wc = wall ?? C.wall;   // the storey's wall colour, for the backs of recesses
             if (op.ShapeOnly) return;   // faces only: no walls numbered, no segments
             double T = Dim.T_EXT;
             bool frames = st != null && st.frames, arch = st != null && st.head == HeadType.Arch;
@@ -451,8 +500,8 @@ namespace Triband.Storey.Generate
             {
                 var kk = o.kind;
                 // a street door with its own recess (its set's entry's) goes that deep
-                if (o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y, y + o.y1, C, shell, o.recess.HasValue ? KindBack(st, o) : db); if (!shell) op.SeeThrough++; else HoleBack(op, F, o, y, C, st); continue; }   // its leaf is left out
-                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell, wb); if (shell) HoleBack(op, F, o, y, C, st); continue; }
+                if (o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0 + o.hl, o.u1 - o.hr, y, y + o.y1 - o.ht, C, shell, o.recess.HasValue ? KindBack(st, o) : db); if (!shell) op.SeeThrough++; else HoleBack(op, F, o, y, C, st, wc); continue; }   // its leaf is left out
+                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell, wb); if (shell) HoleBack(op, F, o, y, C, st, wc); continue; }
                 if (o.door)
                 {
                     // the generator's door: the wall's recess, with a flat panel at its back where the doorway is closed

@@ -81,8 +81,9 @@ namespace Triband.Storey.Tests
         }
 
         /// <summary>
-        /// The Color Palette Lit sample's colour passes declare the additional lights its project's nodes read: Per Vertex
-        /// only (the sample's README). Per Pixel and Forward+'s light loop drew the same, each doubling the variants.
+        /// The Color Palette Lit sample's colour passes declare the additional lights its project's nodes read (the sample's
+        /// README): Forward+'s cluster loop, or Per Vertex's per-object list, as one set (URP never has both: three variants,
+        /// not four). Plain Per Pixel adds nothing in the node, so it isn't declared.
         /// </summary>
         [Fact]
         public void TheSampleDeclaresOnlyTheLightKeywordsItsNodesRead()
@@ -91,9 +92,9 @@ namespace Triband.Storey.Tests
             foreach (var f in Directory.GetFiles(sample, "*.shader"))
             {
                 var forward = Regex.Split(Regex.Replace(File.ReadAllText(f), @"//[^\n]*", ""), @"\bPass\s*\{").Skip(1).Single(p => p.Contains("\"LightMode\" = \"UniversalForward\""));
-                Assert.Matches(new Regex(@"#pragma\s+multi_compile\s+_\s+_ADDITIONAL_LIGHTS_VERTEX\s*\n"), forward);
+                Assert.Matches(new Regex(@"#pragma\s+multi_compile\s+_\s+_ADDITIONAL_LIGHTS_VERTEX\s+_CLUSTER_LIGHT_LOOP\s*\n"), forward);
                 Assert.DoesNotMatch(new Regex(@"\b_ADDITIONAL_LIGHTS\b"), forward);
-                Assert.DoesNotContain("_CLUSTER_LIGHT_LOOP", forward);
+                Assert.Single(Regex.Matches(forward, "_CLUSTER_LIGHT_LOOP"));
             }
         }
 

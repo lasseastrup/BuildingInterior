@@ -159,9 +159,10 @@ namespace Triband.Storey.Generate
         {
             double T = Dim.T_EXT; int N = b.floors.Count; double ox = b.pos.x, oz = b.pos.z, top = Derived.RoofY(b);
             var stTop = Derived.StyleAt(b, N); bool pitched = Roofs.IsPitched(b);
-            // a raised roof cap takes the curb's place and lifts the parapet (RoofCap); its overhang is too small to show here
+            // a roof cap (but a fascia) takes the curb's place, and a raised one lifts the parapet (RoofCap); its overhang is too
+            // small to show here
             var cap = pitched ? null : RoofCap.Of(stTop); double lift = cap?.Lift ?? 0;
-            double yTop = pitched ? top : top + lift + (stTop.parapet ? 1.1 : lift > 0 ? 0 : 0.3);
+            double yTop = pitched ? top : top + lift + (stTop.parapet ? 1.1 : cap != null && !cap.Value.fascia ? 0 : 0.3);
             // under a pitched roof, the massing's lid: LOD1's roof slab, just below the roof where it sits on the walls. It
             // shows only where the roof stops short of the walls (pulled back behind a neighbour's wall along an edge mostly
             // shared, past the neighbour's end), which a back face culled would leave open
@@ -359,15 +360,16 @@ namespace Triband.Storey.Generate
                     var rings = new List<List<Vec2>> { fp };
                     foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, N)) rings.Add(v.shape);
                     Flat(rings, top, 2, false);
-                    // an inset cap: its sides in the trim's colour, its top the trim's with a strip, else the roof's
+                    // an inset cap: its sides in the trim's colour, its top the trim's with a strip, else the roof's; on a roof nothing
+                    // comes up through, a solid block (RoofCap.Whole) with its top the roof's
                     if (cap is RoofCap ci && ci.inset)
                     {
-                        double y1 = top + ci.h;
-                        foreach (var (ring, holes) in L0.InsetCapRegion(ci))
+                        double y1 = top + ci.h; bool block = RoofCap.Whole(b);
+                        foreach (var (ring, holes) in L0.InsetCapRegion(ci, block))
                         {
                             List<Vec2> Local(List<Vec2> r) { var l = new List<Vec2>(r.Count); foreach (var q in r) l.Add(new Vec2(q.x - ox, q.z - oz)); return l; }
                             var loc = new List<List<Vec2>> { Local(ring) }; foreach (var hl in holes) loc.Add(Local(hl));
-                            Flat(loc, y1, stTop.capStrip > 0 ? 3 : 2, false);
+                            Flat(loc, y1, !block && stTop.capStrip > 0 ? 3 : 2, false);
                             foreach (var (a, z, nx, nz) in Lod0.Shared.InsetCapSides(ring, holes))
                                 Quad(new P3(a.x, top, a.z), new P3(z.x, top, z.z), new P3(z.x, y1, z.z), new P3(a.x, y1, a.z), new P3(nx, 0, nz), 0, 3);
                         }

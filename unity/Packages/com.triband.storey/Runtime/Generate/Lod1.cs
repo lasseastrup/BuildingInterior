@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
 
 namespace Triband.Storey.Generate
@@ -73,15 +74,23 @@ namespace Triband.Storey.Generate
                         foreach (var o in cut) { if (o.door) cd ??= o.kind; else cw ??= o.kind; }
                         Facade.WallPanel(op, F, new Miter(pc.S, pc.E), 0, T, y, h, cut, party ? pc.r!.pInner : Lod0.Shared.Wall(stk, C, k == 0), C.wall, L0.Panel.Set(inner: false, revealFrom: Facade.ShellRevealFrom(stk, false, cw), threshold: k == 0,
                             doorRevealFrom: Facade.ShellRevealFrom(stk, true, cd), thresholdC: k == 0 ? C.foundation : (Swatch?)null, doorsRecessed: stk.doorRecess.HasValue));
+                        var wallC = Lod0.Shared.Wall(stk, C, k == 0);
                         foreach (var o in ops)
                         {
-                            // an artist's window or door with a LOD1 mesh, and the plain pane where it leaves the hole open
+                            // an artist's window or door with a LOD1 mesh, and the plain pane where it leaves the hole open; where the
+                            // style closes its recesses, their backs in the wall's colour instead (a door's own panel in front of it)
                             var kk = o.kind;
                             if (kk?.lod1 != null)
                             {
                                 // pushed back by the style's recess, as LOD0's, where it sits in a hole; one on the flat wall stays on it
-                                OpeningKinds.Place(op, null, F, kk, kk.lod1, o.u0, o.u1, o.door ? y : y + o.y0, y + o.y1, C, true, o.door || recessed || Cut(o) ? Facade.KindBack(stk, o) : 0);
+                                OpeningKinds.Place(op, null, F, kk, kk.lod1, o.u0 + o.hl, o.u1 - o.hr, o.door ? y : y + o.y0, y + o.y1 - o.ht, C, true, o.door || recessed || Cut(o) ? Facade.KindBack(stk, o) : 0);
+                                if ((o.door || recessed || Cut(o)) && Facade.RecessBack(op, F, o, y, stk, wallC)) continue;
                                 if (kk.lod1Covers) continue;
+                            }
+                            else if (o.door && kk != null && Facade.RecessBack(op, F, o, y, stk, wallC))
+                            {
+                                Facade.Pane(op, F, o.u0 + Math.Max(0, o.hl), o.u1 - Math.Max(0, o.hr), y, y + o.y1 - Math.Max(0, o.ht), Facade.PaneW(stk, o) + 0.01, C.door, false);
+                                continue;
                             }
                             bool flat = !recessed && !o.door && !Cut(o);   // a window on the flat wall: the shader draws its recess, and LOD0's centre bar
                             Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, flat ? T + PaneProud : Facade.PaneW(stk, o), o.door ? C.door : C.glassDark, false, flat, flat && kk == null && Facade.CentreBar(stk, o));

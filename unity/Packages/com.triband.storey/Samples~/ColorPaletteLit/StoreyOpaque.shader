@@ -34,9 +34,10 @@ Shader "Flamingo/Storey/Opaque"
             #pragma fragment StoreyFrag
             // the graph's lighting keywords
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
-            // only Per Vertex additional lights count in the project's nodes (README): Per Pixel and Forward+ (_ADDITIONAL_LIGHTS,
-            // _CLUSTER_LIGHT_LOOP) made variants that drew the same, so they aren't declared
-            #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX
+            // additional lights as the project's node takes them (README): Forward+'s cluster loop, or a per-object list where the
+            // URP asset sets Per Vertex; one set, as URP never has both. Plain Per Pixel adds nothing there, so _ADDITIONAL_LIGHTS
+            // isn't declared
+            #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _CLUSTER_LIGHT_LOOP
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
             #pragma multi_compile _ LIGHTMAP_SHADOW_MIXING

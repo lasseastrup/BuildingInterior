@@ -24,9 +24,6 @@
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "StoreyOcclusion.hlsl"
 #include "StoreyPalette.hlsl"
-#if !defined(STOREY_DEPTH)
-#include "StoreyWindow.hlsl"   // the glass too: LOD0's see-through panes start as LOD1's painted ones (StoreyFragment)
-#endif
 #ifdef STOREY_MASSING
 #include "StoreyFacade.hlsl"
 #endif

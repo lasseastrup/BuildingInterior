@@ -187,7 +187,8 @@ namespace Triband.Storey.Play
                     polys = Geo.GrownUnion(outlines, Dim.T_EXT + 0.02, holes);
                     if (keyed) made[key] = polys;
                 }
-                double y = Derived.FloorBase(b, k);
+                // the roof as high as a roof cap that covers it lifts it (RoofCap.Lid)
+                double y = Derived.FloorBase(b, k) + (k == N ? RoofCap.Lid(b, out _) : 0);
                 foreach (var poly in polys) Flat(poly, y, CollisionKind.Floor);
             }
         }

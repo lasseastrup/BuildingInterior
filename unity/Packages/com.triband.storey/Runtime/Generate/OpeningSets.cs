@@ -71,6 +71,36 @@ namespace Triband.Storey.Generate
             return !e.none;
         }
 
+        /// <summary>
+        /// The window the old BuildingGenerator would put in bay <paramref name="j"/> of edge <paramref name="edge"/> on storey
+        /// <paramref name="k"/> (<see cref="WindowPick.Generator"/>): as <see cref="Window(FacadeStyle, bool, uint, out OpeningKind)"/>,
+        /// seeded as it seeds its tiles, edge·100003 + floor·1009 + tile.
+        /// </summary>
+        public static bool WindowAsGenerator(FacadeStyle? st, bool ground, int edge, int k, int j, out OpeningKind? kind)
+        {
+            var set = Windows(st, ground);
+            if (set == null) { kind = OpeningKinds.Of(st, false); return true; }
+            var e = set[PickAsGenerator(set, unchecked(edge * 100003 + k * 1009 + j))];
+            kind = e.none ? null : KindOf(e, false);
+            return !e.none;
+        }
+
+        /// <summary>
+        /// The street door on edge <paramref name="edge"/> of storey <paramref name="k"/> as the style picks it
+        /// (<see cref="FacadeStyle.windowPick"/>: by the wall, or as the old BuildingGenerator by the edge alone, edge·100003),
+        /// and its entry's own recess (null: the style's).
+        /// </summary>
+        public static OpeningKind? DoorAt(FacadeStyle? st, string id, int k, int edge, out double? recess)
+        {
+            if (st != null && st.windowPick == WindowPick.Generator && Doors(st) is { } set)
+            {
+                var e = set[PickAsGenerator(set, unchecked(edge * 100003))];
+                recess = e.recess;
+                return e.none ? null : KindOf(e, true);
+            }
+            return Door(st, DoorSeed(id, k, edge), out recess);
+        }
+
         /// <summary>The street door a hash picks for a style (null: the plain one).</summary>
         public static OpeningKind? Door(FacadeStyle? st, uint hash) => Door(st, hash, out _);
 
@@ -178,5 +208,56 @@ namespace Triband.Storey.Generate
 
         // a hash's top 24 bits, 0 to 1
         static double Unit(uint h) => (h >> 8) / 16777216.0;
+
+        // ---- the old BuildingGenerator's pick ---------------------------------------------------------
+
+        /// <summary>
+        /// The entry the old BuildingGenerator picks with <paramref name="seed"/> (<see cref="WindowPick.Generator"/>):
+        /// <see cref="SystemRandomFirst"/> times the set's total weight, each entry's weight taken off in turn until nothing is
+        /// left, in single precision as it works; what rounding leaves over goes to the last entry. An entry that is none can
+        /// be picked (no window there). Every weight 0: each counts 1.
+        /// </summary>
+        public static int PickAsGenerator(List<OpeningEntry> set, int seed)
+        {
+            bool weighted = Weighted(set); float total = 0;
+            for (int i = 0; i < set.Count; i++) total += weighted ? Math.Max(0f, (float)set[i].weight) : 1f;
+            float r = (float)SystemRandomFirst(seed) * total;
+            for (int i = 0; i < set.Count; i++)
+            {
+                r -= weighted ? Math.Max(0f, (float)set[i].weight) : 1f;
+                if (r <= 0f) return i;
+            }
+            return set.Count - 1;
+        }
+
+        /// <summary>
+        /// <c>new System.Random(seed).NextDouble()</c> without the object: the first number of the subtractive generator (Knuth's)
+        /// a seeded System.Random has always been, on .NET Framework, Mono and IL2CPP and on .NET 5 and later alike, worked out
+        /// on the stack.
+        /// </summary>
+        public static double SystemRandomFirst(int seed)
+        {
+            const int MBIG = int.MaxValue, MSEED = 161803398;
+            Span<int> a = stackalloc int[56];
+            int mj = MSEED - (seed == int.MinValue ? int.MaxValue : Math.Abs(seed)), mk = 1, ii = 0;
+            a[55] = mj;
+            for (int i = 1; i < 55; i++)
+            {
+                if ((ii += 21) >= 55) ii -= 55;
+                a[ii] = mk;
+                mk = mj - mk; if (mk < 0) mk += MBIG;
+                mj = a[ii];
+            }
+            for (int k = 1; k < 5; k++)
+                for (int i = 1; i < 56; i++)
+                {
+                    int n = i + 30; if (n >= 55) n -= 55;
+                    a[i] -= a[1 + n]; if (a[i] < 0) a[i] += MBIG;
+                }
+            int r = a[1] - a[22];
+            if (r == MBIG) r--;
+            if (r < 0) r += MBIG;
+            return r * (1.0 / MBIG);
+        }
     }
 }

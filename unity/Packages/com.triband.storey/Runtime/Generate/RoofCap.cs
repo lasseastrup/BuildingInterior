@@ -52,5 +52,31 @@ namespace Triband.Storey.Generate
 
         /// <summary>How far a raised cap lifts the parapet (0 for the others).</summary>
         public double Lift => raised ? h : 0;
+
+        /// <summary>
+        /// Whether a cap covers the whole roof, as the old BuildingGenerator's roof insert does: a raised cap's roof rises with it
+        /// to its top (a lid, its overhang round it), an inset one is a solid block on the roof. Only on a roof nothing comes up
+        /// through (no stairs, lift or bulkhead, no courtyard or atrium): there a cap stays a ring, round a roof that keeps its
+        /// height, for the doors and openings onto it.
+        /// </summary>
+        public static bool Whole(BuildingData b)
+        {
+            int N = b.floors.Count;
+            foreach (var s in b.shafts) if (Cores.ShaftRoof(b, s) || Cores.StairHoleAt(b, s, N)) return false;
+            foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, N)) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// How far a raised cap that covers the whole roof (<see cref="Whole"/>) lifts it, and how far in from the outline the
+        /// cap's own top reaches (<paramref name="inset"/>: the roof is that much smaller, the cap's top round it); 0 = none.
+        /// </summary>
+        public static double Lid(BuildingData b, out double inset)
+        {
+            inset = 0;
+            if (!(Of(b) is RoofCap c) || !c.raised || !Whole(b)) return 0;
+            inset = Math.Max(0, -c.wIn);
+            return c.h;
+        }
     }
 }

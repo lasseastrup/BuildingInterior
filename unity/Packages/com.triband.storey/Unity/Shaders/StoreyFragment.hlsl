@@ -4,6 +4,10 @@
 #ifndef STOREY_FRAGMENT_INCLUDED
 #define STOREY_FRAGMENT_INCLUDED
 
+// windows: here, after a project's lighting, so its own room mapping and night blend can stand in (StoreyWindow.hlsl); the
+// glass too, whose see-through panes start as LOD1's painted ones
+#include "StoreyWindow.hlsl"
+
 float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) : SV_Target
 {
     UNITY_SETUP_INSTANCE_ID(IN);
@@ -70,7 +74,13 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
         // a flat pane's room from where LOD0's pane is, sampled at the pane's own scale (a reveal's pixels show the wall)
         float2 wuv = paneUV; float id = IN.win.w; float onPane = reveal ? 0.0 : IN.win.z;
     #endif
-        if (onPane > 0.5 && isFront) color.rgb = StoreyWindowPane(wuv, wdx, wdy, id, s.positionWS, s.normalWS);
+        if (onPane > 0.5 && isFront)
+        {
+            color.rgb = StoreyWindowPane(wuv, wdx, wdy, id, s.positionWS, s.normalWS);
+        #ifdef STOREY_FOG
+            color.rgb = STOREY_FOG(color.rgb, s.positionWS);   // as the lighting fogs, and the project's Window graph its windows
+        #endif
+        }
     }
 #elif !defined(STOREY_DEPTH)
     // LOD0's see-through glass: where LOD0 has just taken over it is LOD1's pane (the painted room, opaque), and it clears
@@ -86,6 +96,9 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
         {
             // LOD1's pane: the painted room, or with the window effect off its dark glass (the opaque glass's shade)
             float3 painted = _StoreyWindowsOn > 0.5 ? StoreyWindowPane(wuv, wdx, wdy, id, s.positionWS, s.normalWS) : color.rgb * 0.42;
+        #ifdef STOREY_FOG
+            if (_StoreyWindowsOn > 0.5) painted = STOREY_FOG(painted, s.positionWS);
+        #endif
             color.rgb = lerp(color.rgb, painted, fill);
             color.a = lerp(color.a, 1.0, fill);
         }

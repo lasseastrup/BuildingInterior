@@ -304,6 +304,8 @@ namespace Triband.Storey
             s.winCentre = c.Bool(o, "winCentre", false, path);
             s.recess = c.Opt(o, "recess", path);
             s.doorRecess = c.Opt(o, "doorRecess", path);
+            s.doorRecessOffset = c.Opt(o, "doorRecessOffset", path);
+            s.recessBack = c.Bool(o, "recessBack", false, path);
             if (o.TryGetValue("panes", out var pn) && pn != null)
             {
                 var pl = pn as List<object?> ?? throw new FormatException(path.At("panes") + ": expected [columns, rows]");
@@ -524,6 +526,8 @@ namespace Triband.Storey
             if (s.winCentre) o["winCentre"] = true;
             if (s.recess.HasValue) o["recess"] = s.recess.Value;
             if (s.doorRecess.HasValue) o["doorRecess"] = s.doorRecess.Value;
+            if (s.doorRecessOffset.HasValue) o["doorRecessOffset"] = s.doorRecessOffset.Value;
+            if (s.recessBack) o["recessBack"] = true;
             if (s.door != null) o["door"] = s.door;
             if (s.rail != null) o["rail"] = s.rail;
             if (s.metal != null) o["metal"] = s.metal;
@@ -646,7 +650,7 @@ namespace Triband.Storey
             public static readonly string[] Style =
             {
                 "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "capH", "capDepth", "capStrip", "details",
-                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "bandGround", "corniceH", "corniceDepth", "plinthH", "plinthDepth", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind", "sillH", "winCentre", "recess", "doorRecess",
+                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "bandGround", "corniceH", "corniceDepth", "plinthH", "plinthDepth", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind", "sillH", "winCentre", "recess", "doorRecess", "doorRecessOffset", "recessBack",
                 "windowSet", "groundSet", "doorSet", "windowPick", "bayFit",
                 "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth", "groundWall", "band", "cornice", "cap", "capRim",
                 "doorType",   // street doors' Canopy or Glazed, gone (every generated door is plain): read and dropped, not reported

@@ -69,9 +69,10 @@ namespace Triband.Storey.Tests
             var openingSet = typeof(Opening).GetMethods().Single(m => m.Name == nameof(Opening.Set) && m.GetParameters().Length > 1);
             Assert.Equal(fields(typeof(Opening)), openingSet.GetParameters().Length);
             Assert.Equal(fields(typeof(Facade.PanelOpt)), typeof(Facade.PanelOpt).GetMethod(nameof(Facade.PanelOpt.Set))!.GetParameters().Length);
-            var used = new Opening().Set(new Opening { u0 = 1, u1 = 2, y0 = 3, y1 = 4, door = true, full = true, thr = true, bare = true, kind = new OpeningKind(), recess = 0.2 });
+            var used = new Opening().Set(new Opening { u0 = 1, u1 = 2, y0 = 3, y1 = 4, door = true, full = true, thr = true, bare = true, kind = new OpeningKind(), recess = 0.2, hl = -0.2, ht = 0.1 });
+            Assert.True(used.hl == -0.2 && used.ht == 0.1);
             var again = used.Set(5, 6, 0.5, 2, full: true);
-            Assert.True(again.u0 == 5 && again.u1 == 6 && again.y0 == 0.5 && again.y1 == 2 && again.full && !again.door && !again.thr && !again.bare && again.kind == null && again.recess == null);
+            Assert.True(again.u0 == 5 && again.u1 == 6 && again.y0 == 0.5 && again.y1 == 2 && again.full && !again.door && !again.thr && !again.bare && again.kind == null && again.recess == null && again.hl == 0 && again.ht == 0);
             var p = new Facade.PanelOpt { outer = false, ends = true, revealC = new Swatch(new StyleRef(1, 0), ColorSlot.Wall) }.Set(inner: false);
             Assert.True(p.outer && !p.inner && !p.ends && !p.threshold && p.revealFrom == null && p.revealC == null && !p.doorsRecessed);
         }

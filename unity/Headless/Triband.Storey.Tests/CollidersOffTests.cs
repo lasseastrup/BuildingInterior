@@ -49,13 +49,13 @@ namespace Triband.Storey.Tests
             Assert.Equal(new[] { false, true }, one.Document.buildings.Select(b => b.colliders));
         }
 
-        /// <summary>Format 6: the field is new since format 5, which projects have imported, so every layout is baked again.</summary>
+        /// <summary>Format 6 or later: the field is new since format 5, which projects have imported, so every layout is baked again.</summary>
         [Fact]
-        public void TheBakedFormatIsSixSoEveryLayoutIsBakedAgain()
+        public void TheBakedFormatIsPastFiveSoEveryLayoutIsBakedAgain()
         {
-            Assert.Equal(6, BakedLayout.Version);
+            Assert.True(BakedLayout.Version >= 6);
             var bytes = BakedLayout.Bake(PrototypeJson.Read(Fixtures.Text("demo.json")).Document);
-            Assert.Equal(6, bytes[4]);
+            Assert.Equal(BakedLayout.Version, bytes[4]);
             var five = (byte[])bytes.Clone(); five[4] = 5;
             Assert.Null(BakedLayout.Of(five));
         }

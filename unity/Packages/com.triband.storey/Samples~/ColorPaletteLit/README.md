@@ -9,14 +9,17 @@ Only the lighting differs from Storey's own shaders. LOD switching and cross-fad
 - `Assets/Art/Shaders/CustomNodes/GlobalVariables.hlsl` for the shadow colour, the shadow fade distance and interval, and the player position
 - `MainLightNode.hlsl` for `MainLight_float`
 - `AdditionalLightsNode.hlsl` for `SG_MobileVertexLights_float`
+- `WindowInteriorParallax.hlsl` for the Window graph's room mapping (`WindowInteriorParallax_float`), and `GlobalVariables.hlsl`'s night blend, for Storey's windows (below)
 
-What those files do, checked against the copies of 2026-10-01:
+What those files do, checked against the copies of 2026-10-28:
 
 - **Shadows.** With `TRIBAND_SHADOWS_ON`, `MainLight_float` samples URP's own main-light shadow map: the cascade, the asset's soft-shadow quality, its strength and its fade. Storey's ShadowCaster pass draws into that map, so buildings cast onto props and props onto buildings. Without the keyword nothing is shadowed. The graph fades shadows out with distance a second time (`_GlobalShadowFadeDistanceStart`, `_GlobalShadowFadeInterval`), and so does this file.
-- **Additional lights.** They count only when the URP asset sets Additional Lights to *Per Vertex* (`_ADDITIONAL_LIGHTS_VERTEX`). They are still evaluated per pixel. *Per Pixel* and Forward+ add nothing, here as in the graph, so these shaders don't declare `_ADDITIONAL_LIGHTS` or `_CLUSTER_LIGHT_LOOP`: each doubled the colour passes' variants, all drawing the same. The graph's other lighting keywords are declared as it declares them. After a player build, Storey's line in the Console gives each shader's programs and the keywords left in them.
-- **Globals.** `_GlobalShadowColor`, the shadow fade, and `_GlobalPlayerPosition` (the blob) are set by the project, and buildings follow them.
+- **Additional lights.** With the renderer on Forward+ (`_CLUSTER_LIGHT_LOOP`, as the project has been since 2026-10-02) the node takes the additional directional lights and the clustered ones; on Forward, only when the URP asset sets Additional Lights to *Per Vertex* (`_ADDITIONAL_LIGHTS_VERTEX`), from the per-object list. Either way they are evaluated per pixel, each light's colour both Lambert-shaded and unshaded, 30 : 70, so they lift the faces turned away from them too. These shaders declare the two keywords as one set (URP never has both: three variants, not four); plain *Per Pixel* on Forward adds nothing in the node, so `_ADDITIONAL_LIGHTS` isn't declared. The graph's other lighting keywords are declared as it declares them. After a player build, Storey's line in the Console gives each shader's programs and the keywords left in them.
+- **From above.** The Lighting sub-graph adds a tenth of a white light from straight above (`0.1 × saturate(normal.y)`, after the rest is saturated), so roofs and sills read a little lighter (2026-10-08).
+- **Globals.** `_GlobalShadowColor`, the shadow fade, `_GlobalPlayerPosition` (the blob) and `_GlobalNightBlend` are set by the project, and buildings follow them.
+- **Windows.** Storey's panes that show a room (with a `StoreyWindows` in the scene) map it with the project's `WindowInteriorParallax_float` and light up as the project's night blend rises, as the Window graph's do (`STOREY_WINDOW_PARALLAX`, `STOREY_WINDOW_NIGHT_BLEND`, StoreyWindow.hlsl), and are fogged as the walls are. `StoreyWindows.nightBlend` is not used with this sample: set `_GlobalNightBlend` as the project does.
 
-If those files move, change the three include paths. If the graph's lighting changes, change this file to match.
+If those files move, change the four include paths. If the graph's lighting changes, change this file to match.
 
 | The graph | Here |
 |---|---|
