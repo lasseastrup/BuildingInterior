@@ -181,6 +181,9 @@ namespace Triband.Storey.Generate
         /// <summary>What <see cref="Facade.WallPanel"/> works in, kept with the builder for its next panel.</summary>
         internal Facade.PanelScratch? Panel;
 
+        /// <summary>What <see cref="KindPart.Put"/> works in (each point's vertex), kept with the builder for its next placement.</summary>
+        internal int[]? KindScratch;
+
         public int Tris => I.Count / 3;
         public int Verts => P.Count;
 

@@ -124,7 +124,8 @@ namespace Triband.Storey.Generate
                 if (m != null)
                     foreach (var part in m.parts)
                     {
-                        KindPart.Of(m.P, m.N, part.tris, ref part.ready);
+                        part.ready = null;   // made again: its mesh may have changed
+                        KindPart.Of(m, part);
                         part.ownSlot = part.own != null ? KindColors.SlotOf(part.own) : null;
                     }
             k.main = Main(k.lod0);
@@ -160,7 +161,7 @@ namespace Triband.Storey.Generate
             var at = new KindPlace(F, u, y0, sx, sy);
             foreach (var whole in m.parts)
             {
-                var part = KindPart.Of(m.P, m.N, whole.tris, ref whole.ready);
+                var part = KindPart.Of(m, whole);
                 var c = whole.ownSlot ?? whole.slot;
                 if (to.HasValue && c == from) c = to.Value;
                 if (part.Tris > 0) part.Put(op, at, new Swatch(C.style, c));

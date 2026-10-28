@@ -435,7 +435,10 @@ namespace Triband.Storey.Generate
             Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, ro, o.door ? C.door : C.glassDark, false);
         }
 
-        public static void Dress(MeshBuilder op, MeshBuilder gl, Frame F, List<Opening> ops, double y, Palette C, bool shell, FacadeStyle? st = null)
+        /// <param name="panel">The options the wall panel the openings are cut in was made with (<see cref="WallPanel"/>), with
+        /// its ends (<paramref name="piece"/>) and height (<paramref name="h"/>): given, an artist's window or door pushed back
+        /// into the wall leaves out what it buries there (<see cref="Whole"/>). Storey's own.</param>
+        public static void Dress(MeshBuilder op, MeshBuilder gl, Frame F, List<Opening> ops, double y, Palette C, bool shell, FacadeStyle? st = null, PanelOpt? panel = null, Miter piece = default, double h = 0)
         {
             if (op.ShapeOnly) return;   // faces only: no walls numbered, no segments
             double T = Dim.T_EXT;
@@ -450,9 +453,10 @@ namespace Triband.Storey.Generate
             foreach (var o in ops)
             {
                 var kk = o.kind;
+                double deep = kk != null && panel != null ? Whole(o, ops, piece, h, panel) : 0;
                 // a street door with its own recess (its set's entry's) goes that deep
-                if (o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y, y + o.y1, C, shell, o.recess.HasValue ? KindBack(st, o) : db); if (!shell) op.SeeThrough++; else HoleBack(op, F, o, y, C, st); continue; }   // its leaf is left out
-                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell, wb); if (shell) HoleBack(op, F, o, y, C, st); continue; }
+                if (o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y, y + o.y1, C, shell, o.recess.HasValue ? KindBack(st, o) : db, deep); if (!shell) op.SeeThrough++; else HoleBack(op, F, o, y, C, st); continue; }   // its leaf is left out
+                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell, wb, deep); if (shell) HoleBack(op, F, o, y, C, st); continue; }
                 if (o.door)
                 {
                     // the generator's door: the wall's recess, with a flat panel at its back where the doorway is closed
@@ -473,6 +477,27 @@ namespace Triband.Storey.Generate
                     else if (CentreBar(st, o)) { double mm = (o.u0 + o.u1) / 2; op.OBox(F, mm - BarHalf, mm + BarHalf, y + o.y0, y + o.y1, T * 0.3 + shift, T * 0.6 + shift, C.trim, C.trim, Skip.Top | Skip.Bot); }
                 }
             }
+        }
+
+        /// <summary>
+        /// How deep the wall round opening <paramref name="o"/> is known to be whole, from its outer face (0: not known): as deep
+        /// as its reveal goes (<see cref="PanelOpt.RevealFrom"/>), where what dresses the opening (<see cref="Opening.Left"/> and
+        /// the rest) stays on the wall piece that deep (<paramref name="m"/>'s ends), in its storey (<paramref name="h"/> high)
+        /// and a millimetre clear of every other opening. There the wall's faces and the reveal close the wall in, and nothing
+        /// in it can be seen: what an artist's window or door pushed back into it buries is left out (<see cref="OpeningKinds.Place"/>).
+        /// Storey's own.
+        /// </summary>
+        internal static double Whole(Opening o, List<Opening> ops, Miter m, double h, PanelOpt opt)
+        {
+            const double E = 1e-3;
+            double T = Dim.T_EXT, deep = T - opt.RevealFrom(o, 0);
+            if (deep < E) return 0;
+            var (s, e) = m.Span(T - deep, T);
+            // a door's hole goes down to the floor: nothing of it may go under (KindPart leaves out nothing under its hole)
+            if (o.Left < s + E || o.Right > e - E || o.Top > h - E || o.Bottom < (o.y0 > E ? E : -E)) return 0;
+            foreach (var q in ops)
+                if (!ReferenceEquals(q, o) && q.u0 < o.Right + E && q.u1 > o.Left - E && q.y0 < o.Top + E && q.y1 > o.Bottom - E) return 0;
+            return deep;
         }
 
         /// <summary>
@@ -739,6 +764,9 @@ namespace Triband.Storey.Generate
             /// <summary>The style recesses its doors (<see cref="FacadeStyle.doorRecess"/>).</summary>
             public bool doorsRecessed;
 
+            /// <summary>Where opening <paramref name="o"/>'s reveal starts, out from the wall's inner face (the panel's <paramref name="w0"/>), as <see cref="WallPanel"/> makes it.</summary>
+            public double RevealFrom(Opening o, double w0) => o.door && doorRevealFrom is double dr ? o.recess is double or ? ShellRevealFrom(or, true, o.kind) : dr : revealFrom ?? w0;
+
             /// <summary>Every option set, as a new one with these would be (for options used again panel after panel).</summary>
             public PanelOpt Set(bool outer = true, bool inner = true, bool ends = false, bool threshold = false, double? revealFrom = null, Swatch? revealC = null, bool rooms = false, double? doorRevealFrom = null, Swatch? thresholdC = null,
                 bool doorsRecessed = false)
@@ -804,11 +832,11 @@ namespace Triband.Storey.Generate
             }
             if (opt.outer) Face(w1, 1, cOut);
             if (opt.inner) { bool was = gb.Inside; gb.Inside = was || opt.rooms; Face(w0, -1, cIn); gb.Inside = was; }
-            double rw = opt.revealFrom ?? w0; Swatch rc = opt.revealC ?? cOut;
+            Swatch rc = opt.revealC ?? cOut;
             var nu = new P3(F.u.x, 0, F.u.z);
             foreach (var o in os)
             {
-                double ro = o.door && opt.doorRevealFrom is double dr ? o.recess is double or ? ShellRevealFrom(or, true, o.kind) : dr : rw;
+                double ro = opt.RevealFrom(o, w0);
                 gb.Quad(X(o.u0, o.y0, ro), X(o.u0, o.y0, w1), X(o.u0, o.y1, w1), X(o.u0, o.y1, ro), nu, rc);
                 gb.Quad(X(o.u1, o.y0, ro), X(o.u1, o.y0, w1), X(o.u1, o.y1, w1), X(o.u1, o.y1, ro), new P3(-nu.x, 0, -nu.z), rc);
                 if (o.y0 > 1e-3 || opt.threshold || o.thr) gb.Quad(X(o.u0, o.y0, ro), X(o.u1, o.y0, ro), X(o.u1, o.y0, w1), X(o.u0, o.y0, w1), new P3(0, 1, 0), o.y0 <= 1e-3 && o.door && opt.thresholdC is Swatch tc && (opt.doorsRecessed || o.recess.HasValue) ? tc : rc);

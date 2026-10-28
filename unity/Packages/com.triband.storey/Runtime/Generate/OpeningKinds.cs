@@ -101,11 +101,15 @@ namespace Triband.Storey.Generate
             k.lod0Covers = Uncovered(k, k.lod0) <= 0.01;
             foreach (var m in new[] { k.lod0, k.lod1 })
                 if (m != null)
+                {
+                    var places = Stretched(k) ? null : KindPart.Places(m, new KindPart.Hole(k));
                     foreach (var part in m.parts)
                     {
-                        KindPart.Of(m.P, m.N, part.tris, ref part.ready);
+                        part.ready = null;   // made again: its kind may have changed with its mesh
+                        KindPart.Of(k, m, part, places);
                         part.ownSlot = part.own != null && part.slot != ColorSlot.Glass ? KindColors.SlotOf(part.own) : null;
                     }
+                }
             all[k.id] = k; Version++;
         }
         public static void Remove(string id) { if (all.TryRemove(id, out _)) Version++; }
@@ -268,31 +272,34 @@ namespace Triband.Storey.Generate
         /// see-through glass <paramref name="gl"/> on a walk-in storey (both faces), opaque with the window shader's pane
         /// coordinates on a <paramref name="shell"/> one. A door's leaf is left out where the doorway stays open. Pushed
         /// <paramref name="back"/> metres into the wall where the style recesses it (<see cref="Facade.KindBack"/>); its pane
-        /// coordinates still name the window by its place on the wall's face.
+        /// coordinates still name the window by its place on the wall's face. Where the wall round the opening is known to be
+        /// whole <paramref name="deep"/> metres in (<see cref="Facade.Whole"/>), what the recess buries in it is left out
+        /// (Storey's own: a frame made to lie on the wall's face, pushed back, is in the wall).
         /// </summary>
-        public static void Place(MeshBuilder op, MeshBuilder? gl, Frame F, OpeningKind k, OpeningKind.Mesh m, double u0, double u1, double y0, double y1, Palette C, bool shell, double back = 0)
+        public static void Place(MeshBuilder op, MeshBuilder? gl, Frame F, OpeningKind k, OpeningKind.Mesh m, double u0, double u1, double y0, double y1, Palette C, bool shell, double back = 0, double deep = 0)
         {
             var fitted = At(back != 0 ? new Frame(new Vec2(F.O.x - F.w.x * back, F.O.z - F.w.z * back), F.u, F.w) : F, k, u0, u1, y0, y1);
             foreach (var whole in m.parts)
             {
                 if (whole.leaf && !shell) continue;
-                var part = KindPart.Of(m.P, m.N, whole.tris, ref whole.ready);
-                var at = whole.anchor is P3 a ? fitted.Rigid(a) : fitted;
+                var part = KindPart.Of(k, m, whole);
+                // a part that keeps its shape goes where its anchor goes, maybe not where the hole says: all of it is kept
+                var at = whole.anchor is P3 a ? fitted.Rigid(a) : fitted; double d = whole.anchor.HasValue ? 0 : deep;
                 if (whole.slot == ColorSlot.Glass)
                 {
                     if (shell || gl == null)
                     {
-                        int first = part.Put(op, at, C.glassDark);
+                        int first = part.Put(op, at, C.glassDark, false, back, d);
                         if (!k.door) Facade.PaneUV(op, first, F, u0, u1, y0, y1);
                     }
                     else
                     {
-                        part.Put(gl, at, C.glass); op.SeeThrough++;   // clear at any distance
-                        part.Put(gl, at, C.glass, inside: true);
+                        part.Put(gl, at, C.glass, false, back, d); op.SeeThrough++;   // clear at any distance
+                        part.Put(gl, at, C.glass, true, back, d);
                     }
                     continue;
                 }
-                part.Put(op, at, new Swatch(C.style, whole.ownSlot ?? whole.slot));
+                part.Put(op, at, new Swatch(C.style, whole.ownSlot ?? whole.slot), false, back, d);
             }
         }
     }

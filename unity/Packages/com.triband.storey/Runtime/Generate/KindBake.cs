@@ -277,22 +277,26 @@ namespace Triband.Storey.Generate
         /// <summary>The hole a source's bounds make: as wide and high as they are, the wall's outer face on the root's Z 0.</summary>
         public static Hole HoleOf((P3 min, P3 max) b) => new Hole((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, Math.Max(0.05, b.max.x - b.min.x), Math.Max(0.05, b.max.y - b.min.y), 0);
 
-        enum Place { Kept, Hidden, OnWall }
+        internal enum Place { Kept, Hidden, OnWall }
 
         /// <summary>
         /// Where a triangle (in the opening's space) is against the wall round a hole <paramref name="w"/> wide and
         /// <paramref name="h"/> high: buried in the wall (or on one of its faces, turned into it), lying on its outer face
-        /// turned out, or anywhere else. The wall fills z from −<see cref="Dim.T_EXT"/> to 0 all round the hole.
+        /// turned out, or anywhere else. The wall fills z from −<paramref name="depth"/> (<see cref="Dim.T_EXT"/>: all of it)
+        /// to 0 all round the hole.
         /// </summary>
-        /// <paramref name="whole"/>: there is no hole, the wall is whole (a facade detail's).
-        static Place Where(P3 a, P3 b, P3 c, P3 n, double w, double h, bool whole = false)
+        /// <param name="whole">There is no hole, the wall is whole (a facade detail's).</param>
+        /// <param name="depth">How deep the wall is closed in round the hole: all of it, or as deep as a shell storey's reveal
+        /// goes (what a kind pushed back into it buries, <see cref="KindPart"/>).</param>
+        /// <param name="open">The hole goes down to the floor (a door's): what is under it is not the wall's.</param>
+        internal static Place Where(P3 a, P3 b, P3 c, P3 n, double w, double h, bool whole = false, double depth = Dim.T_EXT, bool open = false)
         {
-            double T = Dim.T_EXT, hw = w / 2;
+            double T = depth, hw = w / 2;
             double xmin = Math.Min(a.x, Math.Min(b.x, c.x)), xmax = Math.Max(a.x, Math.Max(b.x, c.x));
             double ymin = Math.Min(a.y, Math.Min(b.y, c.y)), ymax = Math.Max(a.y, Math.Max(b.y, c.y));
             double zmin = Math.Min(a.z, Math.Min(b.z, c.z)), zmax = Math.Max(a.z, Math.Max(b.z, c.z));
             // round the hole: wholly to one side of it (beside, under or over), within the wall's depth
-            bool round = whole || xmax <= -hw + Eps || xmin >= hw - Eps || ymax <= Eps || ymin >= h - Eps;
+            bool round = whole || xmax <= -hw + Eps || xmin >= hw - Eps || (!open && ymax <= Eps) || ymin >= h - Eps;
             if (!round) return Place.Kept;
             bool onFace = zmax <= Eps && zmin >= -Eps;
             if (onFace && n.z > 0.5) return Place.OnWall;
