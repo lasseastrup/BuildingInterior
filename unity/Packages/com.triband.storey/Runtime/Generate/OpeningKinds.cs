@@ -76,6 +76,8 @@ namespace Triband.Storey.Generate
         public bool lod1OnWall;
         /// <summary>LOD1's mesh covers its hole, as seen from the street: found when it is registered. Where it doesn't, LOD1 draws the plain pane in the hole too.</summary>
         public bool lod1Covers;
+        /// <summary>LOD0's mesh covers its hole, as seen from the street: found when it is registered. Where it doesn't, a shell storey has the plain pane in the hole behind it, as LOD1 does, so the hole never shows into the shell. Storey's own.</summary>
+        public bool lod0Covers;
     }
 
     /// <summary>
@@ -96,6 +98,7 @@ namespace Triband.Storey.Generate
             Reach(k);
             k.lod1OnWall = k.lod1 != null && OnWall(k, k.lod1);
             k.lod1Covers = k.lod1 != null && Uncovered(k, k.lod1) <= 0.01;
+            k.lod0Covers = Uncovered(k, k.lod0) <= 0.01;
             foreach (var m in new[] { k.lod0, k.lod1 })
                 if (m != null)
                     foreach (var part in m.parts)

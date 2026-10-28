@@ -19,9 +19,10 @@ namespace Triband.Storey.Tests
             var P = new List<P3>(); var N = new List<P3>();
             int Q(P3 a, P3 b, P3 c, P3 d, P3 n) { int s = P.Count; P.AddRange(new[] { a, b, c, d }); N.AddRange(new[] { n, n, n, n }); return s; }
             var f = new P3(0, 0, 1);
-            // a frame strip along the top, standing out 3 cm, and the pane 5 cm back in the reveal; front faces as the generator's
-            int s0 = Q(new P3(-0.5, 1.4, 0.03), new P3(-0.5, 1.5, 0.03), new P3(0.5, 1.5, 0.03), new P3(0.5, 1.4, 0.03), f);
-            int s1 = Q(new P3(-0.5, 0, -0.05), new P3(-0.5, 1.4, -0.05), new P3(0.5, 1.4, -0.05), new P3(0.5, 0, -0.05), f);
+            // a frame strip along the top, standing out 3 cm, and the pane 5 cm back in the reveal; front faces as a baked
+            // kind's (KindBake), turned to the street, so they cover the hole (OpeningKind.lod0Covers)
+            int s0 = Q(new P3(-0.5, 1.4, 0.03), new P3(0.5, 1.4, 0.03), new P3(0.5, 1.5, 0.03), new P3(-0.5, 1.5, 0.03), f);
+            int s1 = Q(new P3(-0.5, 0, -0.05), new P3(0.5, 0, -0.05), new P3(0.5, 1.4, -0.05), new P3(-0.5, 1.4, -0.05), f);
             int[] Tri(int s) { var t = new[] { s, s + 1, s + 2, s, s + 2, s + 3 }; return t; }
             m.P = P.ToArray(); m.N = N.ToArray();
             m.parts.Add(new OpeningKind.Part { slot = ColorSlot.Frame, tris = Tri(s0) });
@@ -41,6 +42,28 @@ namespace Triband.Storey.Tests
         }
 
         static int Count(MeshBuilder m, ColorSlot s) => Enumerable.Range(0, m.Verts).Count(i => m.C[i].slot == s);
+
+        [Fact]
+        public void AShellStoreyClosesTheHoleAnArtistsWindowLeavesOpen()
+        {
+            // a pane over the lower half of its hole only, as an arched window leaves its top corners open
+            var m = new OpeningKind.Mesh();
+            var f = new P3(0, 0, 1);
+            m.P = new[] { new P3(-0.5, 0, -0.05), new P3(0.5, 0, -0.05), new P3(0.5, 0.75, -0.05), new P3(-0.5, 0.75, -0.05) };
+            m.N = new[] { f, f, f, f };
+            m.parts.Add(new OpeningKind.Part { slot = ColorSlot.Frame, tris = new[] { 0, 1, 2, 0, 2, 3 } });
+            OpeningKinds.Register(new OpeningKind { id = "t-half", name = "t-half", w = 1, h = 1.5, lod0 = m });
+            OpeningKinds.Register(Kind("t-whole", false));
+            Assert.False(OpeningKinds.Get("t-half")!.lod0Covers); Assert.True(OpeningKinds.Get("t-whole")!.lod0Covers);
+            // a shell storey: each half-covered window has the plain pane behind it, where its reveal ends; a whole one none
+            var (bh, sh) = Block(false, st => st.windowKind = "t-half"); var half = Lod0.Build(sh, bh).Op;
+            var (bw, sw) = Block(false, st => st.windowKind = "t-whole"); var whole = Lod0.Build(sw, bw).Op;
+            int windows = Count(half, ColorSlot.Frame) / 4;
+            Assert.True(windows > 0);
+            Assert.Equal(4 * windows, Count(half, ColorSlot.Glass));
+            Assert.Equal(Count(whole, ColorSlot.Frame), Count(whole, ColorSlot.Glass));   // its own glass, no plain pane
+            Assert.Empty(CoplanarCheck.Run(half).Overlaps);
+        }
 
         [Fact]
         public void AnArtistsWindowFillsEveryWindow()

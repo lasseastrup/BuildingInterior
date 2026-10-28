@@ -344,6 +344,19 @@ namespace Triband.Storey.Generate
         /// (<see cref="FacadeStyle.head"/>, panes, frames) change what is drawn on windows; without them, windows are the
         /// prototype's. The prototype's doors have a surround and a canopy, which Storey's leave out.
         /// </summary>
+        /// <summary>
+        /// On a shell storey, the plain pane at the back of an artist's window or door that leaves part of its hole open (an
+        /// arched window in its square hole, <see cref="OpeningKind.lod0Covers"/>): where the reveal ends, as LOD1 has it, so the
+        /// hole never shows into the shell. Storey's own.
+        /// </summary>
+        static void HoleBack(MeshBuilder op, Frame F, Opening o, double y, Palette C, FacadeStyle? st)
+        {
+            var kk = o.kind;
+            if (kk == null || kk.lod0Covers) return;
+            double ro = o.door && o.recess is double r ? ShellRevealFrom(r, true, kk) : ShellRevealFrom(st, o.door, kk);
+            Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, ro, o.door ? C.door : C.glassDark, false);
+        }
+
         public static void Dress(MeshBuilder op, MeshBuilder gl, Frame F, List<Opening> ops, double y, Palette C, bool shell, FacadeStyle? st = null)
         {
             if (op.ShapeOnly) return;   // faces only: no walls numbered, no segments
@@ -360,8 +373,8 @@ namespace Triband.Storey.Generate
             {
                 var kk = o.kind;
                 // a street door with its own recess (its set's entry's) goes that deep
-                if (o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y, y + o.y1, C, shell, o.recess.HasValue ? KindBack(st, o) : db); if (!shell) op.SeeThrough++; continue; }   // its leaf is left out
-                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell, wb); continue; }
+                if (o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y, y + o.y1, C, shell, o.recess.HasValue ? KindBack(st, o) : db); if (!shell) op.SeeThrough++; else HoleBack(op, F, o, y, C, st); continue; }   // its leaf is left out
+                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell, wb); if (shell) HoleBack(op, F, o, y, C, st); continue; }
                 if (o.door)
                 {
                     // the generator's door: the wall's recess, with a flat panel at its back where the doorway is closed

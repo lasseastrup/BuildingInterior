@@ -405,7 +405,7 @@ namespace Triband.Storey.Generate
                     var wc = Geo.WallCtx(e.a, e.u, e.w, e.L);
                     op.Ctx(wc, party ? 1 + 8 * (pc.r!.pIdx + 1) : 1); gl.Ctx(wc, 1);
                     var stk = Derived.StyleAt(b, k);
-                    Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : Wall(stk, C, k == 0), C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? Facade.ShellRevealFrom(stk, false, OpeningKinds.Of(stk, false)) : 0, rooms: rooms,
+                    Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : Wall(stk, C, k == 0), C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? Facade.ShellRevealFrom(stk, false, OpeningSets.Representative(stk, k == 0, out var rk) ? rk : null) : 0, rooms: rooms,
                         doorRevealFrom: shell ? Facade.ShellRevealFrom(stk, true, OpeningKinds.Of(stk, true)) : (double?)null, thresholdC: k == 0 ? C.foundation : (Swatch?)null, doorsRecessed: stk.doorRecess.HasValue));
                     Facade.Dress(op, gl, F, ops, y, C, shell, stk);
                     if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
