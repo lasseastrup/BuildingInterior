@@ -533,7 +533,7 @@ The details in Facade ▸ *Place on walls* are **Facade Detail** assets. Storey'
    - *Along the foot of the wall* (Storey's own): the same along the foot of the ground floor, its pivot on the ground, never across a doorway.
    - *Up the corners* (Storey's own): stacked up each corner of the building, so far apart, a step at a time centred on each storey, each one middled in its step. It faces out along the corner's bisector, from where the two walls' outer faces meet: x along the bisector's normal, +Z out. Not where a party wall meets the corner.
 
-   Then give it a chance per style in Facade ▸ *Details by rule*. Each detail has its own seed, so a rebuild puts every one back where it was. It keeps clear of what is already on the wall: what was put by hand, the AC units and vents, then the other details by rule in id order. Details in a row or up the corners share their places: at each place one draw picks at most one of them, each by its chance, so their chances act as the weights of a list (two at 50% fill every place between them; one at 30% leaves the rest bare).
+   Then give it a chance per style in Facade ▸ *Details by rule*; once it has one, its settings show under its slider. Each detail has its own seed, so a rebuild puts every one back where it was. It keeps clear of what is already on the wall: what was put by hand, the AC units and vents, then the other details by rule in id order. Details in a row or up the corners share their places: at each place one draw picks at most one of them, each by its chance, so their chances act as the weights of a list (two at 50% fill every place between them; one at 30% leaves the rest bare).
 
    A style's settings for each detail, beside its chance (`KindRule`, Storey's own; under the detail's slider):
    - *Per m²* (`density`, scattered; 0.5): how many to the square metre of wall at 100%. Its chance scales it, so two patches at 50% each share a density as the old generator's weighted list did.
@@ -583,3 +583,7 @@ Unity: `StoreyDetail` (`prefab`, `lod1Prefab`, `leaveOutOfLod1`, `Part.key`), `S
 6. Zoom out to LOD1: the LOD1 mesh shows. Change the model and reimport: the buildings update.
 7. Duplicate the asset: the copy is a detail of its own in the palette.
 8. Enter Play mode, and make a build: the details are there.
+9. Select the old generator's `Visual_BuildingDetail_Bricks01` and `Bricks02` prefabs and use *Facade Detail from Prefab*. Each keeps its palette colour (*Its own colour*), is left out of LOD1, and *Check on a building* says no faces overlap.
+10. Give both *Scattered on the walls*, then 50% each in Details by rule with *Per m²* 1: patches spread evenly over the walls, clear of windows, the band and the plinth; *Storeys: Upper* takes them off the ground floor. Turn on *Colour*: both patches take it, on this style alone. Zoom out to LOD1: they're gone.
+11. Make `TopBricks` a detail *Along the top of the wall* at 100% with *Per bay* 2: two to each bay along the roof line, none where a setback's wall goes on up. `EdgeBricks` *Up the corners*, *Inward*, on an L-shaped building: a stack up the corner set in, facing out along its bisector.
+12. Undo each change: the style writes the chance alone again once its settings are back to their defaults (`"<id>": 50`).

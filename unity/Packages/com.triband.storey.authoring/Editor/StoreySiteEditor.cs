@@ -585,7 +585,7 @@ namespace Triband.Storey.Editor
                     else StyleToggle(e, k0, "Parapet", st.parapet, (s, x) => s.parapet = x);
                 }
                 if (StoreyInspectorUI.Fold("rules", "Details by rule", false, "Details scattered on the walls by the style (AC units, vents, and your own Facade Details with a rule); place any by hand below"))
-                    RuleDetails(e, k0, st);
+                    RuleDetails(e, b, k0, st);
             }
             StoreyInspectorUI.Section("Place on walls", "Pick one, then click a wall in the Scene view; click a placed one to remove it");
             // rows of four: the labels stay whole at inspector widths
@@ -608,7 +608,7 @@ namespace Triband.Storey.Editor
         /// Facade Details with a rule, and any the style names that the project no longer has. Giving one a chance adds it
         /// to the site's list, so builds include it.
         /// </summary>
-        void RuleDetails(StoreyEdit e, int k0, FacadeStyle st)
+        void RuleDetails(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
         {
             var (ac, vents) = Details.Rules(st);
             StyleSlider(e, k0, "AC units %", Math.Round(ac * 100), 0, 100, 5, (s, x) => (s.details ??= new DetailRules()).ac = x);
@@ -619,6 +619,7 @@ namespace Triband.Storey.Editor
                 if (d.BuiltIn || !Details.RuleFits(d.anchor, d.rule)) continue;
                 shown.Add(d.Id);
                 RuleSlider(e, k0, st, d.name, d.Id);
+                if (Details.Density(st, d.Id) > 0) RuleSettings(e, b, k0, st, d.Id, d.rule);
             }
             if (st.details?.kinds != null)
                 foreach (var id in st.details.kinds.Keys.Where(id => !shown.Contains(id)).ToList()) RuleSlider(e, k0, st, StoreyDetails.Name(id), id);
@@ -634,6 +635,72 @@ namespace Triband.Storey.Editor
             if (!EditorGUI.EndChangeCheck() || x == was) return;
             e.ApplyTo(name + " %", bb => { StoreyDetails.SetDensity(Styles.Edited(bb, k0), id, x); return true; });
             if (x > 0) StoreyDetails.Keep(e.Site, id);
+        }
+
+        static readonly GUIContent[] FloorNames = { new GUIContent("All"), new GUIContent("Upper", "Not on the ground floor"), new GUIContent("Ground", "On the ground floor alone") };
+        static readonly GUIContent[] CornerNames = { new GUIContent("Outward", "The corners that stand out"), new GUIContent("Inward", "The corners set in"), new GUIContent("All") };
+
+        /// <summary>
+        /// A detail's settings in the style beside its chance (docs/EDITOR.md §6.12, <see cref="KindRule"/>), as its rule takes
+        /// them: how many to the square metre and the gap round each, scattered; how many to a bay, in a row; how far apart and
+        /// which corners, up the corners; which storeys; and the colour its main colour takes in this style.
+        /// </summary>
+        void RuleSettings(StoreyEdit e, BuildingData b, int k0, FacadeStyle st, string id, Details.Rule rule)
+        {
+            var r = Details.RuleOf(st, id);
+            void Set(string label, Action<KindRule> f) => e.ApplyTo(label, bb => { StoreyDetails.EditRule(Styles.Edited(bb, k0), id, f); return true; });
+            void Number(string label, double value, double min, double max, double step, Action<KindRule, double> f)
+            {
+                EditorGUI.BeginChangeCheck();
+                double x = Math.Round(EditorGUILayout.Slider("   " + label, (float)value, (float)min, (float)max) / step) * step;
+                if (EditorGUI.EndChangeCheck() && Math.Abs(x - value) > 1e-9) Set(label, kr => f(kr, Math.Round(x, 3)));
+            }
+            switch (rule)
+            {
+                case Details.Rule.Scatter:
+                {
+                    var (density, gap) = Details.ScatterOf(r);
+                    Number("Per m²", density, 0, 4, 0.05, (kr, x) => kr.density = x);
+                    Number("Gap", gap, 0, 1, 0.01, (kr, x) => kr.spacing = x);
+                    break;
+                }
+                case Details.Rule.AlongTop:
+                case Details.Rule.AlongFoot:
+                    Number("Per bay", Details.PerBay(r), 1, 8, 1, (kr, x) => kr.per = (int)x);
+                    break;
+                case Details.Rule.Corners:
+                {
+                    Number("Every", Details.CornerStep(r), 0.1, 3, 0.05, (kr, x) => kr.spacing = x);
+                    int c = EditorGUILayout.Popup(new GUIContent("   Corners", "Which corners it goes up"), (int)(r?.corners ?? DetailCorners.Outward), CornerNames);
+                    if (c != (int)(r?.corners ?? DetailCorners.Outward)) Set("Corners", kr => kr.corners = (DetailCorners)c);
+                    break;
+                }
+            }
+            if (rule == Details.Rule.Scatter || rule == Details.Rule.Corners)
+            {
+                int f = EditorGUILayout.Popup(new GUIContent("   Storeys", "Which storeys it goes on"), (int)(r?.floors ?? DetailFloors.All), FloorNames);
+                if (f != (int)(r?.floors ?? DetailFloors.All)) Set("Storeys", kr => kr.floors = (DetailFloors)f);
+            }
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool own = r?.color != null;
+                bool on = EditorGUILayout.Toggle(new GUIContent("   Colour", "Give its main colour (the one most of its triangles have) another in this style; off, it keeps its own"), own);
+                if (on != own) Set(on ? "Detail colour" : "Detail's own colour", kr => kr.color = on ? MainColour(st, id) : null);
+            }
+            if (r?.color is string colour)
+            {
+                var doc = e.Document;
+                string? picked = StoreyColorField.Picker.Draw($"{b.id}/{k0}/detail/{id}", "      Main colour", colour, "detail", pid => doc.palette.TryGetValue(pid, out var pe) ? pe : null);
+                if (picked != null && picked != colour) Set("Detail colour", kr => kr.color = picked);
+            }
+        }
+
+        /// <summary>What a detail's main colour is now, in this style: where a colour of its own starts.</summary>
+        static string MainColour(FacadeStyle st, string id)
+        {
+            var main = DetailKinds.Get(id)?.main;
+            if (main == null) return "#808080";
+            return KindColors.RefOf(main.Value) ?? StyleColors.Of(st, main.Value, StoreyColorField.Defaults?.Invoke() ?? new StyleDefaults()) ?? "#808080";
         }
 
         /// <summary>The bridges from and to this building: enclosed or open, their width, and removing them.</summary>

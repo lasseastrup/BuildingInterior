@@ -115,6 +115,20 @@ namespace Triband.Storey.Editor
             }
         }
 
+        /// <summary>
+        /// Change a style's settings for an artist's detail beside its chance (<see cref="KindRule"/>): made when first set,
+        /// and taken out again when they are all back to their defaults, so the layout writes the chance alone as before.
+        /// </summary>
+        public static void EditRule(FacadeStyle s, string id, Action<KindRule> change)
+        {
+            var rules = (s.details ??= new DetailRules()).rules ??= new SortedDictionary<string, KindRule>(StringComparer.Ordinal);
+            if (!rules.TryGetValue(id, out var r)) rules[id] = r = new KindRule();
+            change(r);
+            if (!r.IsEmpty) return;
+            rules.Remove(id);
+            if (rules.Count == 0) s.details.rules = null;
+        }
+
         /// <summary>Where a detail goes, in words.</summary>
         public static readonly GUIContent[] Anchors =
         {
