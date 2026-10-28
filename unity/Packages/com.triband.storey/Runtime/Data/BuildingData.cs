@@ -285,6 +285,12 @@ namespace Triband.Storey
         public WindowType windows = WindowType.Punched;
         public double winW = 1.2;
         public double bay = 2.6;
+        /// <summary>
+        /// How a wall's bays are laid out (docs/EDITOR.md §6.7): spread to fill the wall between its corners, or each exactly
+        /// <see cref="bay"/> wide, as many as fit on the wall's outer face and centred on it, as the old BuildingGenerator lays
+        /// out its tiles. Storey's own.
+        /// </summary>
+        public BayFit bayFit;
         public GroundType ground = GroundType.Storefront;
         public bool bands = true;
         public bool parapet = true;
@@ -423,6 +429,13 @@ namespace Triband.Storey
     /// a wall the same window all the way up its tier, each storey of a wall the same along it, or each wall one window.
     /// </summary>
     public enum WindowPick { Window, Column, Storey, Wall }
+
+    /// <summary>
+    /// How a wall's bays are laid out: as many as round the style's bay to, stretched to fill the span between the corners;
+    /// or as many whole bays as fit on the wall's outer face, each the style's bay exactly, centred on it, a window centred in
+    /// each (as the old BuildingGenerator lays out its tiles; docs/EDITOR.md §6.7). Storey's own.
+    /// </summary>
+    public enum BayFit { Spread, Fixed }
 
     /// <summary>
     /// What a style colour field holds (docs/COLOURS.md §3.1): a CSS literal <c>#RRGGBB</c> (or <c>#RGB</c>),

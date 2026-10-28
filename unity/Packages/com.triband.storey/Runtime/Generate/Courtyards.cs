@@ -146,7 +146,9 @@ namespace Triband.Storey.Generate
                 ops.Add(d);
             }
             // windows by the style's bays, as the outer walls' above the ground floor (docs/OPENINGS.md §7.1)
-            Facade.Windows(ops, null, st, h, false, b.id, k, Derived.TierStart(b, k), edge, uS, uE, null);
+            // fixed bays on the courtyard wall's outer face, the side facing into the court
+            var (oS, oE) = st.bayFit == BayFit.Fixed ? Facade.OuterFace(v.shape, Geo.Area2(v.shape) <= 0, i) : (uS, uE);
+            Facade.Windows(ops, null, st, h, false, b.id, k, Derived.TierStart(b, k), edge, uS, uE, oS, oE, null);
             ops.Sort((p, q) => p.u0.CompareTo(q.u0));
             return ops;
         }

@@ -550,6 +550,7 @@ namespace Triband.Storey.Editor
                 using (new EditorGUI.DisabledScope(ownSize || st.windows is not (WindowType.Punched or WindowType.Tall)))
                     StyleSlider(e, k0, "Window width", st.winW, 0.6, 2.4, 0.1, (s, x) => s.winW = x);
                 StyleSlider(e, k0, "Bay spacing", st.bay, 1.4, 5, 0.1, (s, x) => s.bay = x);
+                BayFits(e, k0, st);
                 WindowDetails(e, b, k0, st);
                 StoreyInspectorUI.Section("Walls");
                 if (k0 == 0) StyleEnum(e, k0, "Ground floor", st.ground, (s, x) => s.ground = x);
@@ -884,6 +885,23 @@ namespace Triband.Storey.Editor
                 }
             }
             StyleSlider(e, k0, "Brick patches", st.bricks ?? 0, 0, 1, 0.05, (s, x) => s.bricks = x > 0 ? x : (double?)null);
+        }
+
+        static readonly GUIContent BaysLabel = new GUIContent("Bays", "How each wall's bays are laid out along it");
+        static readonly GUIContent[] BayFitChoices =
+        {
+            new GUIContent("Spread", "As many bays as Bay spacing rounds to, stretched to fill the wall between its corners"),
+            new GUIContent("Fixed (as the old generator)", "As many whole bays of Bay spacing as fit on the wall's outside, centred on it, as the old BuildingGenerator lays out its tiles; an artist's window of its own size keeps it however narrow the bay"),
+        };
+
+        /// <summary>
+        /// How the style's bays are laid out (<see cref="FacadeStyle.bayFit"/>, docs/EDITOR.md §6.7): spread to fill each wall,
+        /// or fixed at Bay spacing and centred, as the old generator's tiles are.
+        /// </summary>
+        static void BayFits(StoreyEdit e, int k0, FacadeStyle st)
+        {
+            int x = EditorGUILayout.Popup(BaysLabel, (int)st.bayFit, BayFitChoices);
+            if (x != (int)st.bayFit) e.ApplyTo(x == (int)BayFit.Fixed ? "Fixed bays" : "Spread bays", bb => { Styles.Edited(bb, k0).bayFit = (BayFit)x; return true; });
         }
 
         static readonly GUIContent OpeningsLabel = new GUIContent("Openings",

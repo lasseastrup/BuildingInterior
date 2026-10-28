@@ -79,7 +79,7 @@ namespace Triband.Storey.Tests
                 sb.Append('}');
             }
             string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())))[..16];
-            Assert.True(hash == "C9B13CC77159E599", $"the model's shape is {hash}: see this test's summary ({sb})");
+            Assert.True(hash == "769A9E63A476EDF6", $"the model's shape is {hash}: see this test's summary ({sb})");
         }
 
         /// <summary>A number the enum doesn't name, which the JSON reader takes ("roofType": "7"), bakes and reads back as it was.</summary>
@@ -140,7 +140,7 @@ namespace Triband.Storey.Tests
             typeof(StoreyDocument), typeof(PaletteEntry), typeof(BuildingData), typeof(BridgeData), typeof(VoidData), typeof(CornerData),
             typeof(FloorData), typeof(WallData), typeof(DoorData), typeof(CoreData), typeof(EntranceData), typeof(DetailData),
             typeof(TerraceRoofData), typeof(FacadeStyle), typeof(DetailRules), typeof(KindRule), typeof(OpeningEntry), typeof(Vec2),
-            typeof(VoidKind), typeof(WindowPick), typeof(CornerShape), typeof(CoreType), typeof(WindowType), typeof(HeadType), typeof(GroundType), typeof(RoofType), typeof(DetailFloors), typeof(DetailCorners),
+            typeof(VoidKind), typeof(WindowPick), typeof(BayFit), typeof(CornerShape), typeof(CoreType), typeof(WindowType), typeof(HeadType), typeof(GroundType), typeof(RoofType), typeof(DetailFloors), typeof(DetailCorners),
         };
 
         static IEnumerable<FieldInfo> Fields(Type t) => t.GetFields(BindingFlags.Public | BindingFlags.Instance).OrderBy(f => f.MetadataToken);

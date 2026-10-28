@@ -177,6 +177,43 @@ namespace Triband.Storey.Generate
             return (n, spn / n);
         }
 
+        /// <summary>
+        /// A wall's bays as the style lays them out (<see cref="FacadeStyle.bayFit"/>): how many, how wide, and where the first
+        /// starts. Spread: over the window span (<paramref name="wS"/> to <paramref name="wE"/>, <see cref="WindowSpan(FacadeStyle, bool, double, double)"/>),
+        /// as <see cref="BayLayout"/>. Fixed: as many whole bays of the style's width as fit on the wall's outer face
+        /// (<paramref name="oS"/> to <paramref name="oE"/>, <see cref="OuterFace(List{Vec2}, bool, int)"/>), centred on it, as the
+        /// old BuildingGenerator lays out its tiles. LOD2 paints its windows from the same bays. Storey's own.
+        /// </summary>
+        public static (int n, double bay, double s) Bays(FacadeStyle st, double wS, double wE, double oS, double oE)
+        {
+            if (st.bayFit != BayFit.Fixed) { var (n0, b0) = BayLayout(st, wS, wE); return (n0, b0, wS); }
+            double bay = st.bay; if (!(bay > 0.1)) return (0, 0, 0);
+            int n = Math.Max(0, (int)Math.Floor((oE - oS) / bay + 1e-6));   // a wall of exactly so many bays has them all
+            return (n, bay, (oS + oE - n * bay) / 2);
+        }
+
+        /// <summary>
+        /// Where edge <paramref name="i"/>'s wall's outer face starts and ends along the edge of <paramref name="fp"/> (a storey's
+        /// outline, <paramref name="ccw"/> its winding as <see cref="Geo.Corners"/> takes it), from the edge's start: each end on
+        /// its corner's bisector, as the walls are mitred, <see cref="Dim.T_EXT"/> out from the outline. Past a convex corner the
+        /// face runs on beyond the outline's corner, short of a concave one. Fixed bays are laid out on it, worked out here from
+        /// the outline alone so that whoever lays out a wall's openings has them in the same place. Storey's own.
+        /// </summary>
+        public static (double s, double e) OuterFace(List<Vec2> fp, bool ccw, int i)
+        {
+            int n = fp.Count; var a = fp[i]; var c = fp[(i + 1) % n];
+            double L = Geo.Hypot(c.x - a.x, c.z - a.z); if (L == 0) L = 1e-6;
+            var c0 = Geo.CornerAt(fp, i, ccw); var c1 = Geo.CornerAt(fp, (i + 1) % n, ccw);
+            return (-c0.sg * c0.t * Dim.T_EXT, L + c1.sg * c1.t * Dim.T_EXT);
+        }
+
+        /// <summary>Edge i's outer face on storey k (<see cref="OuterFace(List{Vec2}, bool, int)"/>), from the storey's outline.</summary>
+        public static (double s, double e) OuterFace(BuildingData b, int k, int i)
+        {
+            var fp = Derived.OutlineAt(b, k);
+            return OuterFace(fp, Geo.Area2(fp) > 0, i);
+        }
+
         /// <summary>Windows keep clear of the neighbouring wall.</summary>
         public static (double, double) Span(Miter m, double L)
         {
@@ -269,7 +306,12 @@ namespace Triband.Storey.Generate
                 if (s.type != CoreType.Lift || !Cores.Serves(b, s, k)) continue;
                 foreach (var f in Cores.CoreFlush(Derived.OutlineAt(b, k), s)) if (f != null && f.i == i) (shaftHere ??= new List<Cores.Flush>()).Add(f);
             }
-            if (Derived.EdgeStateAt(b, k, i) == EdgeState.Open) Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, shaftHere, cornice);
+            if (Derived.EdgeStateAt(b, k, i) == EdgeState.Open)
+            {
+                // fixed bays on the wall's outer face, from the outline (not the caller's span), so every caller has them alike
+                var (oS, oE) = st.bayFit == BayFit.Fixed && i < Derived.OutlineAt(b, k).Count ? OuterFace(b, k, i) : (uS, uE);
+                Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, oS, oE, shaftHere, cornice);
+            }
             ops.Sort((p, q) => p.u0.CompareTo(q.u0));
             return ops;
         }
@@ -282,14 +324,20 @@ namespace Triband.Storey.Generate
         /// seeded by <paramref name="id"/>, the storey <paramref name="k"/> of the tier from <paramref name="k0"/>, and edge
         /// <paramref name="edge"/>. Windows keep clear of doors and of <paramref name="shafts"/> (lifts flush with the wall), and stay
         /// under a <paramref name="cornice"/> (<see cref="CorniceUnder"/>), and under a band only the ground storey has.
+        /// With fixed bays (<see cref="FacadeStyle.bayFit"/>) the bays are laid out on the wall's outer face (<paramref name="oS"/>
+        /// to <paramref name="oE"/>, <see cref="OuterFace(List{Vec2}, bool, int)"/>), and an artist's window that keeps its size
+        /// keeps it however narrow the bay; a window that would come nearer a corner than the span (<paramref name="uS"/> to
+        /// <paramref name="uE"/>, <see cref="Span"/>) allows, its dressing too, is moved in to its end, and left out if it then
+        /// meets the window before it.
         /// </summary>
         internal static void Windows(List<Opening> ops, OpeningPool? pool, FacadeStyle st, double h, bool ground, string id, int k, int k0, int edge, double uS, double uE,
-            List<Cores.Flush>? shafts, double? cornice = null)
+            double oS, double oE, List<Cores.Flush>? shafts, double? cornice = null)
         {
             var set = OpeningSets.Windows(st, ground);
             var (wS, wE) = WindowSpan(st, ground, uS, uE);
-            var (n, bay) = BayLayout(st, wS, wE);
+            var (n, bay, bS) = Bays(st, wS, wE, oS, oE);
             if (n == 0) return;
+            bool fix = st.bayFit == BayFit.Fixed; double last = double.MinValue;   // fixed: the last window's end
             // one window: its spec once; a set: each window's it picks, once each, in specs lent for the wall
             OpeningKind? one = set == null ? OpeningKinds.Of(st, false) : null;
             WinSpec? oneSpec = set == null ? ground ? GroundSpec(st, h, one, cornice) : WindowSpec(st.windows, h, st, one, cornice, k == 0) : null;
@@ -301,16 +349,25 @@ namespace Triband.Storey.Generate
                 if (set != null && !OpeningSets.Window(st, ground, st.windowPick == WindowPick.Window ? OpeningSets.At(wall, j) : OpeningSets.WindowSeed(id, st.windowPick, k, k0, edge, j), out wk)) continue;
                 var ws = specs != null ? specs.Of(wk, st, h, ground, cornice, k == 0) : oneSpec;
                 if (ws == null || ws.y1 - ws.y0 <= 0.4) continue;
-                double c = wS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : Math.Min(ws.w, bay - 0.5);
+                double c = bS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : fix && wk != null && !wk.stretch ? ws.w : Math.Min(ws.w, bay - 0.5);
                 if (ww < 0.45) continue;
-                double u0 = c - ww / 2, u1 = c + ww / 2, sx = wk != null && OpeningKinds.Stretched(wk) ? ww / Math.Max(1e-3, wk.w) : 1;
+                double sx = wk != null && OpeningKinds.Stretched(wk) ? ww / Math.Max(1e-3, wk.w) : 1;
+                if (fix)
+                {
+                    // clear of the corners as the span keeps them, dressing and all; then clear of the window before
+                    double lo = uS + (wk?.reachL ?? 0) * sx + ww / 2, hi = uE - (wk?.reachR ?? 0) * sx - ww / 2;
+                    if (lo > hi) continue;
+                    c = Math.Max(lo, Math.Min(hi, c));
+                    if (c - ww / 2 < last + 0.05) continue;
+                }
+                double u0 = c - ww / 2, u1 = c + ww / 2;
                 bool blocked = false;
                 foreach (var o in ops) if (o.door && NearDoor(o, u0, u1, (wk?.reachL ?? 0) * sx, (wk?.reachR ?? 0) * sx)) blocked = true;
                 if (shafts != null) foreach (var f in shafts) if (u1 > f.s0 - 0.1 && u0 < f.s1 + 0.1) blocked = true;
                 if (blocked) continue;
                 var w = (pool != null ? pool.Take() : new Opening()).Set(u0, u1, ws.y0, ws.y1, full: ws.full != null);
                 Dressing(w, wk);
-                ops.Add(w);
+                ops.Add(w); last = u1;
             }
             if (specs != null) { specs.Clear(); SpecCache.Lent.Give(specs); }
         }
