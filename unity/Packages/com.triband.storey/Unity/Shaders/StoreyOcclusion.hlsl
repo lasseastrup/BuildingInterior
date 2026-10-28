@@ -4,7 +4,9 @@
 // Everything that hides geometry is colour-pass only: the shadow caster and depth passes define
 // STOREY_DEPTH and cast from the whole building, so the light indoors is the same with or without
 // the cutaway (Plan §6.3). Sink's displacement too, as the prototype's OCC_SINK: a sinking building's
-// shadow stays whole. (Only Dissolve and the isolate ghost take shadows away, dithered.)
+// shadow stays whole. (Only Dissolve and the isolate ghost take shadows away, dithered.) A building
+// hidden at run time (STOREY_HIDDEN) is left out of the depth prepass as well as the colour pass,
+// which it must match; the shadow caster (STOREY_SHADOW) draws it as before.
 //
 // STOREY_STEADY (docs/CITY.md §2): the variant a renderer draws with while nothing can hide any of its pixels,
 // with no discard and no Sink, so tile-based GPUs treat it as opaque. SiteRenderer gives it only to buildings
@@ -21,8 +23,8 @@
 #ifndef STOREY_OCCLUSION_INCLUDED
 #define STOREY_OCCLUSION_INCLUDED
 
-// per building: displayed LOD, previous LOD, cross-fade 0..1 (1 and over: done, and LOD0's glass reads the part over 1 as
-// its hold), occluder slot + 1
+// per building: displayed LOD (plus STOREY_HIDDEN while hidden), previous LOD, cross-fade 0..1 (1 and over: done, and
+// LOD0's glass reads the part over 1 as its hold), occluder slot + 1
 StructuredBuffer<float4> _StoreyState;
 // per occluder slot, STOREY_OCC_W texels: (segments, dark, clip height, base height), then (floor line, scale, gone, slab gone) per storey
 StructuredBuffer<float4> _StoreyOcc;
@@ -35,6 +37,7 @@ StructuredBuffer<float4> _StoreyWallData;
 #define STOREY_SLAB 0.25
 #define STOREY_ROWS 8192       // _StoreyState's rows (BuildingTable.MaxBuildings)
 #define STOREY_OCC_SLOTS 16    // _StoreyOcc's slots of STOREY_OCC_W texels (BuildingTable.OccSlots)
+#define STOREY_HIDDEN 4        // added to a hidden building's displayed LOD (Lod.StateRow.Hidden)
 
 // The tables that grow, their sizes now (BuildingTable.Upload): x wall ids, y parameter rows, z colour rows
 #ifndef STOREY_TABLE_SIZE_DECLARED
@@ -48,6 +51,12 @@ int StoreyRow(int ib) { return clamp(ib, 0, STOREY_ROWS - 1); }
 int StoreySlotRow(int slot) { return clamp(slot, 0, STOREY_OCC_SLOTS - 1) * STOREY_OCC_W; }
 // A wall id from a vertex, kept in the wall tables (id 0, none, reads the first entry)
 int StoreyWallId(float wid) { return clamp((int)(wid + 0.5), 0, max((int)_StoreyTableSize.x - 1, 0)); }
+
+// A building hidden at run time (StoreySite.SetHidden, docs/PLAY.md §6): its row's displayed LOD is past STOREY_HIDDEN. The
+// colour and depth passes draw none of it (StoreyVertex); the shadow caster draws the LOD it shows, so its shadow stays
+bool StoreyHidden(float4 st) { return st.x > STOREY_HIDDEN - 0.5; }
+// The LOD a row shows, hidden or not
+float StoreyShownLod(float4 st) { return StoreyHidden(st) ? st.x - STOREY_HIDDEN : st.x; }
 
 float3 _StoreyCam;      // camera position for the cutaway (focus + camera offset from the play camera's target)
 float3 _StoreyFocus;    // the player
@@ -126,20 +135,31 @@ bool StoreyVertex(float tag, float4 wall, float kind, float wid, float3 worldPos
     v.worldPos = worldPos; v.wall = wall; v.kind = kind; v.wid = wid; v.origY = origY;
     v.bid = fmod(tag, 65536.0); v.lod = floor(tag / 65536.0);
     float4 st = _StoreyState[StoreyRow((int)(v.bid + 0.5))];   // x: displayed LOD, y: previous LOD, z: cross-fade 0..1, w: occluder slot + 1
+    float shownLod = StoreyShownLod(st);
 #if defined(STOREY_SHADOW) && defined(STOREY_MASSING)
     // shadow proxy (docs/PERFORMANCE.md §7.8): a building shown at LOD1 casts through its massing, which has its outline
     // and heights in a twentieth of the triangles; LOD1's renderers cast none. Between LOD1 and LOD2 the massing stays
     // whole. The shadow caster pass only: the depth prepass must match the colour pass
-    bool isDisp = st.x > 0.5 && st.x < 2.5;
+    bool isDisp = shownLod > 0.5 && shownLod < 2.5;
     bool isFrom = st.z < 1.0 && st.y > 0.5 && st.y < 2.5;
 #else
-    bool isDisp = abs(v.lod - st.x) < 0.5;
+    bool isDisp = abs(v.lod - shownLod) < 0.5;
     bool isFrom = st.z < 1.0 && abs(v.lod - st.y) < 0.5;
 #endif
     v.fade = st.z >= 1.0 || (isDisp && isFrom) ? 3.0 : (isDisp ? st.z : -1.0 - st.z);
     v.occ = st.w - 1.0;
     // a LOD0 that came late keeps LOD1's painted windows a moment (LodManager.Entry.Hold): the glass reads it
     v.hold = st.z < 1.0 ? 1.0 : saturate(st.z - 1.0);
+#ifndef STOREY_SHADOW
+    // hidden (docs/PLAY.md §6): nothing in the colour and depth passes, at any LOD, but LOD0's party walls while the
+    // neighbour they are built for shows: they are its walls too (Sink keeps them so). The branch keeps the neighbour's
+    // row from being read for a building that isn't hidden
+    [branch] if (StoreyHidden(st))
+    {
+        int im = (int)floor(kind / 8.0) - 1;
+        if (v.lod > 0.5 || im < 0 || StoreyHidden(_StoreyState[StoreyRow(im)])) return false;
+    }
+#endif
     return isDisp || isFrom;
 }
 

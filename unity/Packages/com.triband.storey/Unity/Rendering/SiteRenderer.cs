@@ -962,6 +962,29 @@ namespace Triband.Storey.Unity
             book?.SetRemap(building, original, overwrite);
         }
 
+        /// <summary>
+        /// Hide a building, or show it again (docs/PLAY.md §6, <see cref="StoreySite.SetHidden"/>): hidden, it draws nothing in
+        /// the colour and depth passes at any LOD, in its cell too, while its shadow is cast as before and its collider stays.
+        /// Its state row's displayed LOD goes past <see cref="StateRow.Hidden"/> (<see cref="BuildingTable.SetHidden"/>) and the
+        /// shaders do the rest: the LOD, the cross-fades, residency and the cells carry on under it, so shown again it draws
+        /// what it would have, and nothing is looked at per frame. Kept by id: a building built later (a layout loading over
+        /// frames) or again (an edit) is hidden as it is built. No garbage.
+        /// </summary>
+        public void SetHidden(string id, bool hide)
+        {
+            if (hide ? !hiddenIds.Add(id) : !hiddenIds.Remove(id)) return;
+            if (built.TryGetValue(id, out var bt)) table.SetHidden(bt.idx, hide);
+        }
+
+        /// <summary>Whether a building is hidden (<see cref="SetHidden"/>).</summary>
+        public bool IsHidden(string id) => hiddenIds.Count > 0 && hiddenIds.Contains(id);
+
+        /// <summary>The buildings hidden, by id: drawing nothing, they are never in the way of the occlusion system.</summary>
+        internal ICollection<string> Hidden => hiddenIds;
+
+        // SetHidden's buildings: room for a few at once, so hiding and showing them make no garbage
+        readonly HashSet<string> hiddenIds = new HashSet<string>(16, StringComparer.Ordinal);
+
         /// <summary>A building's table row, root object and massing (<paramref name="made"/> when made already), and its detail if it showed one.</summary>
         void Build(BuildingData b, Lod2Mesh? made = null)
         {
@@ -969,6 +992,7 @@ namespace Triband.Storey.Unity
             // neighbour's layout index, moved into the block at upload (MeshUpload's mates), and the shader looks it up
             var bt = new Built { id = b.id, idx = blockStart + site!.IndexOf(b), collider = b.colliders };
             built[b.id] = bt; byIdx[bt.idx] = bt;
+            if (hiddenIds.Count > 0 && hiddenIds.Contains(b.id)) table.SetHidden(bt.idx, true);   // hidden before it was built (again)
 
             StoreyTimings.Count("buildings built");
             var t2 = StoreyTimings.Time("build: massing and its rows");

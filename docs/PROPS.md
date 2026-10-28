@@ -28,6 +28,7 @@ A prop that knows its building's index goes through the same `StoreySink` and `S
 | Dissolve | The same dither, the same darkening |
 | LOD cross-fade | A prop counts as LOD0: it fades in and out with the building's LOD0 |
 | Isolate (editor) | Ghosts with its building |
+| Hidden at run time (`StoreySite.SetHidden`, docs/PLAY.md §6) | Gone from the colour and depth passes with it, its shadow kept |
 
 Two consequences:
 - **Moving props need little handling.** A dropped object is re-filed under whichever building it's now in. Within its building it's tested by height every frame, so a fall to another floor needs nothing at all.
@@ -113,7 +114,8 @@ A Storey Prop with **Hide Whole** is switched off while its point is in a storey
 - above the ceiling clip of the player's building;
 - a Sink storey gone or squashed past half;
 - above Slice's plane;
-- above Cutout's, Fade's or Dissolve's base once half faded.
+- above Cutout's, Fade's or Dissolve's base once half faded;
+- anywhere in a building hidden at run time (docs/PLAY.md §6), shadow and all.
 
 It's all or nothing: no dither, no squash.
 

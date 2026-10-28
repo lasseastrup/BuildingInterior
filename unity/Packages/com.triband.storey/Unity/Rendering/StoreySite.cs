@@ -137,6 +137,26 @@ namespace Triband.Storey.Unity
         readonly List<(Vector3 at, float radius, float until)> prefetchAt = new List<(Vector3, float, float)>();
         readonly List<string> nearIds = new List<string>();
 
+        /// <summary>
+        /// Hide one building of the layout, or show it again, at run time (docs/PLAY.md §6): for a game's own occlusion, which
+        /// switches a building off while the player is behind it. Hidden, the building draws nothing in the colour pass at any
+        /// LOD, in its cell's merged massing too, while its shadow is cast as before and its collider stays; shown again, it
+        /// draws what it would have. Kept by id, so it holds while the layout loads, through LOD changes, edits and the site
+        /// switched off and on, and a building not built yet is hidden as it is built. Nothing is done per frame, and no
+        /// garbage is made. <see cref="StoreyBuildingHandle"/> calls it as its GameObject is switched on and off.
+        /// </summary>
+        public void SetHidden(string buildingId, bool hidden)
+        {
+            if (hidden ? !hiddenIds.Add(buildingId) : !hiddenIds.Remove(buildingId)) return;
+            site?.SetHidden(buildingId, hidden);
+        }
+
+        /// <summary>Whether a building is hidden (<see cref="SetHidden"/>).</summary>
+        public bool IsHidden(string buildingId) => hiddenIds.Count > 0 && hiddenIds.Contains(buildingId);
+
+        // the buildings hidden, given again to every renderer the site makes; room for a few, so hiding makes no garbage
+        readonly HashSet<string> hiddenIds = new HashSet<string>(16, StringComparer.Ordinal);
+
         /// <summary>The editor's camera (the Scene view's), set by the authoring package; the automatic LOD picks for it outside Play mode.</summary>
         public static Func<Camera?>? EditorCamera { get; set; }
 
@@ -294,6 +314,7 @@ namespace Triband.Storey.Unity
                     auto ? (quality != null ? quality.ToLodSettings() : new Lod.LodSettings()) : null);
                 builtWith = new Material?[] { opaque, glass, massing }; builtAuto = auto;
                 shownJson = null; pendingAll = true;
+                foreach (var id in hiddenIds) site.SetHidden(id, true);   // before any building is built: each is hidden as it is
             }
             site.Layer = gameObject.layer;   // everything the site makes is on its layer
             site.LoadOverFrames = OverFrames;
