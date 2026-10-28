@@ -338,6 +338,13 @@ namespace Triband.Storey
         /// </summary>
         public double? sillH;
         /// <summary>
+        /// An artist's window that keeps its own size sits centred in its storey's height, its hole's middle halfway up
+        /// (docs/EDITOR.md §6.9), as the old BuildingGenerator centres its window prefabs in each floor, the ground floor's in its
+        /// own height: over <see cref="sillH"/>, which it wins over. A plinth, a band, a cornice and the window's own dressing
+        /// still keep it clear as they do a sill's. Storey's own.
+        /// </summary>
+        public bool winCentre;
+        /// <summary>
         /// How deep windows (<see cref="recess"/>) and street doors (<see cref="doorRecess"/>) are set into the wall, in metres
         /// from its face (docs/EDITOR.md §6.7): the generator's pane or door panel goes that deep (its frame and bars with it), a
         /// shell storey's reveal as deep, and an artist's window or door is pushed back that far (its wall face to the
@@ -392,6 +399,12 @@ namespace Triband.Storey
         public bool none;
         /// <summary>How often it is picked, against the others' weights; 0 leaves it out, unless every weight is 0 (then each is picked as often).</summary>
         public double weight = 1;
+        /// <summary>
+        /// A street door's own recess, in metres from the wall's face: a door picked from this entry is set that deep in place of
+        /// the style's <see cref="FacadeStyle.doorRecess"/> (as the old BuildingGenerator's door entries override their inset);
+        /// null = the style's. Windows' entries leave it null. Storey's own.
+        /// </summary>
+        public double? recess;
 
         public OpeningEntry Clone() => (OpeningEntry)MemberwiseClone();
 

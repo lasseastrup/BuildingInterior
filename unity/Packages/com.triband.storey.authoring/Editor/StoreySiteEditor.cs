@@ -890,7 +890,7 @@ namespace Triband.Storey.Editor
             "Where each storey's windows are and how big their holes are, whatever window fills them (the ground floor follows Ground floor). " +
             "Punched: up to 1.35 m high over a 90 cm sill, Window width wide. Tall: from 40 cm to half a metre under the storey's top, Window width wide. " +
             "Ribbon: a strip across each bay. Curtain: glass across each bay, floor to ceiling. None: blank walls.");
-        static readonly GUIContent OwnSizeLabel = new GUIContent("Openings", "The artist's window keeps its own size, so each hole is as big as it is, as high over its floor as Sill height says. None: blank walls.");
+        static readonly GUIContent OwnSizeLabel = new GUIContent("Openings", "The artist's window keeps its own size, so each hole is as big as it is, as high over its floor as Sill height says, or centred in its storey. None: blank walls.");
         static readonly GUIContent[] OwnSizeChoices = { new GUIContent("The window's own size"), new GUIContent("None") };
 
         /// <summary>
@@ -905,14 +905,30 @@ namespace Triband.Storey.Editor
             {
                 var x = (WindowType)EditorGUILayout.EnumPopup(OpeningsLabel, st.windows);
                 if (x != st.windows) e.ApplyTo("Openings", bb => { Styles.Edited(bb, k0).windows = x; return true; });
-                if (sill && st.windows != WindowType.None) StyleSlider(e, k0, "   Sill height", st.sillH ?? Generate.Facade.SillOf(st.windows), 0, 2, 0.05, (s, y) => s.sillH = y);
+                if (sill && st.windows != WindowType.None) Sill(e, k0, st, "   ");
                 return;
             }
             int was = st.windows == WindowType.None ? 1 : 0, pick = EditorGUILayout.Popup(OwnSizeLabel, was, OwnSizeChoices);
             if (pick != was) e.ApplyTo(pick == 1 ? "No windows" : "Windows", bb => { Styles.Edited(bb, k0).windows = pick == 1 ? WindowType.None : WindowType.Punched; return true; });
             if (was == 1) return;
-            StyleSlider(e, k0, "Sill height", st.sillH ?? Generate.Facade.SillOf(st.windows), 0, 2, 0.05, (s, x) => s.sillH = x);
-            EditorGUILayout.LabelField("The window keeps its own size, this high over each floor.", StoreyInspectorUI.Caption);
+            Sill(e, k0, st, "");
+            EditorGUILayout.LabelField(st.winCentre ? "The window keeps its own size, centred in each storey's height." : "The window keeps its own size, this high over each floor.", StoreyInspectorUI.Caption);
+        }
+
+        static readonly GUIContent CentredLabel = new GUIContent("Centred in storey",
+            "A window that keeps its own size sits halfway up each storey, the ground storey's in its own height, as the old BuildingGenerator places its windows; Sill height then doesn't apply");
+        static readonly GUIContent CentredIndented = new GUIContent("   " + CentredLabel.text, CentredLabel.tooltip);
+
+        /// <summary>
+        /// Where a window that keeps its own size sits (docs/EDITOR.md §6.9): centred in its storey
+        /// (<see cref="FacadeStyle.winCentre"/>), or at <see cref="FacadeStyle.sillH"/>, whose slider is greyed out while centred.
+        /// </summary>
+        static void Sill(StoreyEdit e, int k0, FacadeStyle st, string indent)
+        {
+            bool x = EditorGUILayout.Toggle(indent == "" ? CentredLabel : CentredIndented, st.winCentre);
+            if (x != st.winCentre) e.ApplyTo(x ? "Windows centred in storey" : "Windows at sill height", bb => { Styles.Edited(bb, k0).winCentre = x; return true; });
+            using (new EditorGUI.DisabledScope(st.winCentre))
+                StyleSlider(e, k0, indent + "Sill height", st.sillH ?? Generate.Facade.SillOf(st.windows), 0, 2, 0.05, (s, y) => s.sillH = y);
         }
 
         /// <summary>
@@ -956,9 +972,10 @@ namespace Triband.Storey.Editor
                         double w = Math.Max(0, EditorGUILayout.DelayedFloatField((float)en.weight, GUILayout.Width(36)));
                         if (EditorGUI.EndChangeCheck() && w != en.weight) e.ApplyTo(label + " weight", bb => { WindowSets.Weigh(Styles.Edited(bb, k0), which, at, w); return true; });
                         EditorGUILayout.LabelField(total > 0 ? $"{OpeningSets.Weight(set, i) / total * 100:0}%" : "", StoreyInspectorUI.Caption, GUILayout.Width(30));
-                        if (GUILayout.Button(new GUIContent("×", "Remove it from the set"), EditorStyles.miniButton, GUILayout.Width(22)))
-                            e.ApplyTo(label + " removed", bb => { WindowSets.Remove(Styles.Edited(bb, k0), which, at); return true; });
                     }
+                    if (door && (many || en.recess.HasValue)) DoorRecess(e, k0, en, at, label);
+                    if (many && GUILayout.Button(new GUIContent("×", "Remove it from the set"), EditorStyles.miniButton, GUILayout.Width(22)))
+                        e.ApplyTo(label + " removed", bb => { WindowSets.Remove(Styles.Edited(bb, k0), which, at); return true; });
                 }
             }
             using (new EditorGUILayout.HorizontalScope())
@@ -967,6 +984,24 @@ namespace Triband.Storey.Editor
                 if (GUILayout.Button(new GUIContent(door ? "+ Another door" : "+ Another window", door ? "Add a door: each wall's doors are picked from the set" : "Add a window (or none): each opening is picked from the set"), EditorStyles.miniButton))
                     e.ApplyTo(label + " added", bb => { WindowSets.Add(Styles.Edited(bb, k0), which, null); return true; });
             }
+        }
+
+        static readonly GUIContent DoorRecessLabel = new GUIContent("recess",
+            "How deep this door sits in the wall, in metres from its face (0 to 0.29), in place of Door recess; empty: Door recess's");
+
+        /// <summary>
+        /// A street door entry's own recess (docs/EDITOR.md §6.7, <see cref="OpeningEntry.recess"/>), in metres: empty, the
+        /// style's <see cref="FacadeStyle.doorRecess"/>. One undo step, as every style edit.
+        /// </summary>
+        static void DoorRecess(StoreyEdit e, int k0, OpeningEntry en, int at, string label)
+        {
+            EditorGUILayout.LabelField(DoorRecessLabel, StoreyInspectorUI.Caption, GUILayout.Width(36));
+            string was = en.recess is double r ? r.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : "";
+            string x = EditorGUILayout.DelayedTextField(was, GUILayout.Width(40)).Trim();
+            if (x == was) return;
+            double? to = x.Length == 0 ? (double?)null
+                : double.TryParse(x.Replace(',', '.'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v) ? v : en.recess;
+            if (to != en.recess) e.ApplyTo(label + " recess", bb => { WindowSets.Recess(Styles.Edited(bb, k0), SetOf.Doors, at, to); return true; });
         }
 
         /// <summary>The ground floor's windows: the floors above's, or a set of its own (docs/OPENINGS.md §7.1). Solid ground floors have none.</summary>

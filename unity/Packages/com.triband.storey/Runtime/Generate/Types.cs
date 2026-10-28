@@ -73,6 +73,11 @@ namespace Triband.Storey.Generate
         /// for the generator's own, and always for a bridge's door.
         /// </summary>
         public OpeningKind? kind;
+        /// <summary>
+        /// Its own recess, metres from the wall's face, over the style's (<see cref="Facade.RecessOf"/>): a street door's from the
+        /// entry its style's set picked (<see cref="OpeningEntry.recess"/>); null = the style's.
+        /// </summary>
+        public double? recess;
         /// <summary>The opening with its window's dressing: where what keeps clear of windows keeps clear of.</summary>
         public double Left => u0 - rl;
         public double Right => u1 + rr;
@@ -80,13 +85,13 @@ namespace Triband.Storey.Generate
         public double Top => y1 + rt;
         public Opening Clone() => (Opening)MemberwiseClone();
         /// <summary>This opening made a copy of <paramref name="o"/>, every field (as <see cref="Clone"/>, into one already made).</summary>
-        public Opening Set(Opening o) { u0 = o.u0; u1 = o.u1; y0 = o.y0; y1 = o.y1; door = o.door; full = o.full; thr = o.thr; bare = o.bare; rl = o.rl; rr = o.rr; rb = o.rb; rt = o.rt; kind = o.kind; return this; }
+        public Opening Set(Opening o) { u0 = o.u0; u1 = o.u1; y0 = o.y0; y1 = o.y1; door = o.door; full = o.full; thr = o.thr; bare = o.bare; rl = o.rl; rr = o.rr; rb = o.rb; rt = o.rt; kind = o.kind; recess = o.recess; return this; }
         /// <summary>Every field set, as a new opening with these would be (one taken from an <see cref="OpeningPool"/>).</summary>
         public Opening Set(double u0, double u1, double y0, double y1, bool door = false, bool full = false, bool thr = false, bool bare = false,
-            double rl = 0, double rr = 0, double rb = 0, double rt = 0, OpeningKind? kind = null)
+            double rl = 0, double rr = 0, double rb = 0, double rt = 0, OpeningKind? kind = null, double? recess = null)
         {
             this.u0 = u0; this.u1 = u1; this.y0 = y0; this.y1 = y1; this.door = door; this.full = full; this.thr = thr; this.bare = bare;
-            this.rl = rl; this.rr = rr; this.rb = rb; this.rt = rt; this.kind = kind;
+            this.rl = rl; this.rr = rr; this.rb = rb; this.rt = rt; this.kind = kind; this.recess = recess;
             return this;
         }
     }

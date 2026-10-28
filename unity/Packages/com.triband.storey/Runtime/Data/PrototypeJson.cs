@@ -299,6 +299,7 @@ namespace Triband.Storey
             s.doorSet = Entries(c, o, "doorSet", path);
             s.windowPick = c.Enum<WindowPick>(o, "windowPick", WindowPick.Window, path);
             s.sillH = c.Opt(o, "sillH", path);
+            s.winCentre = c.Bool(o, "winCentre", false, path);
             s.recess = c.Opt(o, "recess", path);
             s.doorRecess = c.Opt(o, "doorRecess", path);
             if (o.TryGetValue("panes", out var pn) && pn != null)
@@ -341,7 +342,7 @@ namespace Triband.Storey
             return s;
         }
 
-        /// <summary>A style's set of windows or doors (docs/OPENINGS.md §7.1); absent is null. An entry is <c>{"kind": id}</c>, <c>{"none": true}</c> or <c>{}</c> (the generator's), with a <c>"weight"</c> when not 1.</summary>
+        /// <summary>A style's set of windows or doors (docs/OPENINGS.md §7.1); absent is null. An entry is <c>{"kind": id}</c>, <c>{"none": true}</c> or <c>{}</c> (the generator's), with a <c>"weight"</c> when not 1 and a door's <c>"recess"</c> when set.</summary>
         static List<OpeningEntry>? Entries(Ctx c, Dictionary<string, object?> o, string key, Where path)
         {
             if (!o.TryGetValue(key, out var v) || v == null) return null;
@@ -349,7 +350,7 @@ namespace Triband.Storey
             foreach (var it in items)
             {
                 var at = path.In(key, i++); var eo = c.Obj(it, at);
-                set.Add(new OpeningEntry { kind = c.OptStr(eo, "kind", at), none = c.Bool(eo, "none", false, at), weight = c.Num(eo, "weight", 1, at) });
+                set.Add(new OpeningEntry { kind = c.OptStr(eo, "kind", at), none = c.Bool(eo, "none", false, at), weight = c.Num(eo, "weight", 1, at), recess = c.Opt(eo, "recess", at) });
                 c.Check(eo, at, Keys.OpeningEntry);
             }
             return set;
@@ -364,6 +365,7 @@ namespace Triband.Storey
                 if (e.none) eo["none"] = true;
                 else if (!string.IsNullOrEmpty(e.kind)) eo["kind"] = e.kind;
                 if (e.weight != 1) eo["weight"] = e.weight;
+                if (e.recess.HasValue) eo["recess"] = e.recess.Value;
                 l.Add(eo);
             }
             return l;
@@ -515,6 +517,7 @@ namespace Triband.Storey
             if (s.doorSet is { Count: > 0 }) o["doorSet"] = Entries(s.doorSet);
             if (s.windowPick != WindowPick.Window) o["windowPick"] = Lower(s.windowPick);
             if (s.sillH.HasValue) o["sillH"] = s.sillH.Value;
+            if (s.winCentre) o["winCentre"] = true;
             if (s.recess.HasValue) o["recess"] = s.recess.Value;
             if (s.doorRecess.HasValue) o["doorRecess"] = s.doorRecess.Value;
             if (s.door != null) o["door"] = s.door;
@@ -634,12 +637,12 @@ namespace Triband.Storey
             public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof" };
             public static readonly string[] DetailRules = { "ac", "vents" };
             public static readonly string[] KindRule = { "p", "density", "spacing", "per", "floors", "corners", "color" };
-            public static readonly string[] OpeningEntry = { "kind", "none", "weight" };
+            public static readonly string[] OpeningEntry = { "kind", "none", "weight", "recess" };
             public static readonly string[] Point = { "x", "z" };
             public static readonly string[] Style =
             {
                 "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "capH", "capDepth", "capStrip", "details",
-                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "bandGround", "corniceH", "corniceDepth", "plinthH", "plinthDepth", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind", "sillH", "recess", "doorRecess",
+                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "bandGround", "corniceH", "corniceDepth", "plinthH", "plinthDepth", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind", "sillH", "winCentre", "recess", "doorRecess",
                 "windowSet", "groundSet", "doorSet", "windowPick",
                 "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth", "groundWall", "band", "cornice", "cap", "capRim",
                 "doorType",   // street doors' Canopy or Glazed, gone (every generated door is plain): read and dropped, not reported

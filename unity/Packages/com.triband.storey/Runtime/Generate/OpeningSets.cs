@@ -72,11 +72,15 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>The street door a hash picks for a style (null: the plain one).</summary>
-        public static OpeningKind? Door(FacadeStyle? st, uint hash)
+        public static OpeningKind? Door(FacadeStyle? st, uint hash) => Door(st, hash, out _);
+
+        /// <summary>The street door a hash picks for a style (null: the plain one), and its entry's own recess (<see cref="OpeningEntry.recess"/>; null: the style's).</summary>
+        public static OpeningKind? Door(FacadeStyle? st, uint hash, out double? recess)
         {
             var set = Doors(st);
-            if (set == null) return OpeningKinds.Of(st, true);
+            if (set == null) { recess = null; return OpeningKinds.Of(st, true); }
             var e = set[Pick(set, hash)];
+            recess = e.recess;
             return e.none ? null : KindOf(e, true);
         }
 

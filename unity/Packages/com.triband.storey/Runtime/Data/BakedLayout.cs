@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 4;
+        public const int Version = 5;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -255,6 +255,7 @@ namespace Triband.Storey
             s.plinthH = r.Opt(); s.foundation = r.Opt(); s.foundationH = r.Opt(); s.foundationOut = r.Opt(); s.bricks = r.Opt(); s.mansard = r.Opt(); s.dormers = r.Opt();
             s.groundWall = Str(ref r); s.band = Str(ref r); s.cornice = Str(ref r); s.bandGround = r.Bool(); s.corniceH = r.Opt(); s.corniceDepth = r.Opt(); s.plinthDepth = r.Opt();
             s.cap = Str(ref r); s.capRim = Str(ref r); s.capH = r.Opt(); s.capDepth = r.Opt(); s.capStrip = r.Opt(); s.recess = r.Opt(); s.doorRecess = r.Opt();
+            s.winCentre = r.Bool();
             if (r.Bool())
             {
                 var dr = s.details = new DetailRules { ac = r.Opt(), vents = r.Opt() };
@@ -287,7 +288,7 @@ namespace Triband.Storey
         {
             int n = r.Count(); if (n == 0) return null;
             var set = new List<OpeningEntry>(n - 1);
-            for (int i = 1; i < n; i++) set.Add(new OpeningEntry { kind = Str(ref r), none = r.Bool(), weight = r.F64() });
+            for (int i = 1; i < n; i++) set.Add(new OpeningEntry { kind = Str(ref r), none = r.Bool(), weight = r.F64(), recess = r.Opt() });
             return set;
         }
 
@@ -434,12 +435,13 @@ namespace Triband.Storey
             foreach (var set in new[] { s.windowSet, s.groundSet, s.doorSet })
             {
                 w.Count(set == null ? 0 : set.Count + 1);
-                if (set != null) foreach (var e in set) { w.Count(S(e.kind)); w.Bool(e.none); w.F64(e.weight); }
+                if (set != null) foreach (var e in set) { w.Count(S(e.kind)); w.Bool(e.none); w.F64(e.weight); w.Opt(e.recess); }
             }
             w.E(s.windowPick);
             w.Opt(s.plinthH); w.Opt(s.foundation); w.Opt(s.foundationH); w.Opt(s.foundationOut); w.Opt(s.bricks); w.Opt(s.mansard); w.Opt(s.dormers);
             w.Count(S(s.groundWall)); w.Count(S(s.band)); w.Count(S(s.cornice)); w.Bool(s.bandGround); w.Opt(s.corniceH); w.Opt(s.corniceDepth); w.Opt(s.plinthDepth);
             w.Count(S(s.cap)); w.Count(S(s.capRim)); w.Opt(s.capH); w.Opt(s.capDepth); w.Opt(s.capStrip); w.Opt(s.recess); w.Opt(s.doorRecess);
+            w.Bool(s.winCentre);
             w.Bool(s.details != null);
             if (s.details != null)
             {
