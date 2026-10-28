@@ -243,9 +243,6 @@ namespace Triband.Storey.Generate
                 for (int i = 0; i < n; i++)
                 {
                     var e = Geo.EdgeInfo(g.Wp, i, g.ccw); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L); var (sS, sE) = Facade.Span(m, e.L);
-                    // the windows' span, as Facade.Ops lays them out (narrowed by an artist's window's dressing)
-                    var (uS, uE) = Facade.WindowSpan(OpeningKinds.Of(st, false), sS, sE);
-                    double bay = blank.Contains(i) ? 0 : Facade.BayLayout(st, uS, uE).bay;
                     double yc = Derived.FloorBase(b, t.k0);
                     var c0 = Party.CornerCut(site, b, t.k0, i, false, yc, false, out double c0Top); var c1 = Party.CornerCut(site, b, t.k0, i, true, yc, false, out double c1Top);
                     double ms1 = m.S.At(T), me1 = m.E.At(T), ms0 = m.S.At(0), me0 = m.E.At(0);   // the corners mitred, as above a neighbour's top they are
@@ -254,6 +251,9 @@ namespace Triband.Storey.Generate
                     foreach (var r in runs)
                     {
                         double y0 = Derived.FloorBase(b, r.k0), y1 = r.top ? yTop : Derived.FloorBase(b, r.k1), H = y1 - y0; slot = r.slot;
+                        // the windows' span, as Facade.Ops lays them out (narrowed by the dressing of the artist's windows the run can pick)
+                        var (uS, uE) = Facade.WindowSpan(st, r.g, sS, sE);
+                        double bay = blank.Contains(i) ? 0 : Facade.BayLayout(st, uS, uE).bay;
                         Quad(F.At(s1, y0, T), F.At(e1, y0, T), F.At(e1, y1, T), F.At(s1, y1, T), outN, bay, 1, s1, e1, H, uS, uE);
                         // the tier's corner is cut for a neighbour lower than the run's top: above the neighbour the cut leaves a slit
                         // to the corner, closed by Unity only (the prototype's massing has it too)

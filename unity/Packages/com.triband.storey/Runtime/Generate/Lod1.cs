@@ -22,13 +22,19 @@ namespace Triband.Storey.Generate
         /// </summary>
         public const double PaneProud = 0.03;
 
-        /// <summary>The doors of <paramref name="ops"/>, in order, into <paramref name="into"/> (emptied first).</summary>
-        static List<Opening> Doors(List<Opening> ops, List<Opening> into)
+        /// <summary>
+        /// The openings of <paramref name="ops"/> LOD1 cuts the wall for, in order, into <paramref name="into"/> (emptied first):
+        /// doors, and an artist's windows whose LOD1 reaches into the wall (<see cref="Cut"/>).
+        /// </summary>
+        static List<Opening> Cuts(List<Opening> ops, List<Opening> into)
         {
             into.Clear();
-            foreach (var o in ops) if (o.door) into.Add(o);
+            foreach (var o in ops) if (o.door || Cut(o)) into.Add(o);
             return into;
         }
+
+        /// <summary>A window LOD1 cuts the wall for: an artist's whose LOD1 reaches into it, or comes nearer it than the flat pane (docs/OPENINGS.md §5).</summary>
+        static bool Cut(Opening o) => !o.door && o.kind?.lod1 != null && !o.kind.lod1OnWall;
 
         /// <param name="recessed">The prototype's LOD1: every window cut into the wall with its reveals (the parity tests).</param>
         public static MeshBuilder Build(Site site, BuildingData b, bool solids = false, bool recessed = false)
@@ -58,23 +64,22 @@ namespace Triband.Storey.Generate
                         bool party = pc.kind == Party.PieceKind.Party;
                         var ops = L0.Piece(all, party, pc.lo, pc.hi);
                         var stk = Derived.StyleAt(b, k);
-                        var wk = OpeningKinds.Of(stk, false); var dk = OpeningKinds.Of(stk, true);
                         // the wall is cut for doors, and round an artist's windows whose LOD1 reaches into it; a plain window lies on
-                        // it, as does an artist's whose LOD1 stays in front of it (recessed: all are cut)
-                        bool cutAll = recessed || wk?.lod1 != null && !wk.lod1OnWall;
-                        var cut = cutAll ? ops : Doors(ops, L0.CutOps);
+                        // it, as does an artist's whose LOD1 stays in front of it (recessed: all are cut). Each opening has its own
+                        // window, the one its style's set picked (docs/OPENINGS.md §7.1)
+                        var cut = recessed ? ops : Cuts(ops, L0.CutOps);
                         Facade.WallPanel(op, F, new Miter(pc.S, pc.E), 0, T, y, h, cut, party ? pc.r!.pInner : C.wall, C.wall, L0.Panel.Set(inner: false, revealFrom: T * 0.45, threshold: k == 0));
                         foreach (var o in ops)
                         {
                             // an artist's window or door with a LOD1 mesh, and the plain pane where it leaves the hole open
-                            var kk = o.door ? (o.bare ? null : dk) : wk;
+                            var kk = o.kind;
                             if (kk?.lod1 != null)
                             {
                                 OpeningKinds.Place(op, null, F, kk, kk.lod1, o.u0, o.u1, o.door ? y : y + o.y0, y + o.y1, C, true);
                                 if (kk.lod1Covers) continue;
                             }
-                            bool flat = !cutAll && !o.door;   // a window on the flat wall: the shader draws its recess, and LOD0's centre bar
-                            Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, flat ? T + PaneProud : T * 0.45, o.door ? C.door : C.glassDark, false, flat, flat && wk == null && Facade.CentreBar(stk, o));
+                            bool flat = !recessed && !o.door && !Cut(o);   // a window on the flat wall: the shader draws its recess, and LOD0's centre bar
+                            Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, flat ? T + PaneProud : T * 0.45, o.door ? C.door : C.glassDark, false, flat, flat && kk == null && Facade.CentreBar(stk, o));
                         }
                         if (!party) L0.PieceStrips(op, k, F, m, pc, ops, y, h, C);
                     }

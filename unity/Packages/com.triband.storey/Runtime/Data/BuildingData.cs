@@ -278,8 +278,23 @@ namespace Triband.Storey
         /// <summary>The band under each storey's ceiling: height (null = 0.22 m), how far it stands out (null = 0.06 m), and whether it is a shade of the wall rather than the trim.</summary>
         public double? bandH, bandDepth;
         public bool bandWall;
-        /// <summary>An artist-made window and street door (<see cref="Generate.OpeningKinds"/>), by id; null = the generator's own.</summary>
+        /// <summary>
+        /// An artist-made window and street door (<see cref="Generate.OpeningKinds"/>), by id; null = the generator's own. The
+        /// style's one window and one door: a set (<see cref="windowSet"/>, <see cref="doorSet"/>) takes their place.
+        /// </summary>
         public string? windowKind, doorKind;
+        /// <summary>
+        /// Several windows, each picked as often as its weight says, opening by opening (docs/OPENINGS.md §7.1); null (or
+        /// empty) = <see cref="windowKind"/> in every window. An entry can be the generator's window, or none (the wall left
+        /// whole there). Storey's own.
+        /// </summary>
+        public List<OpeningEntry>? windowSet;
+        /// <summary>The ground floor's own windows, as <see cref="windowSet"/>; null (or empty) = the floors above's. Storey's own.</summary>
+        public List<OpeningEntry>? groundSet;
+        /// <summary>Several street doors, as <see cref="windowSet"/> (an entry that is none is a plain door); null (or empty) = <see cref="doorKind"/>. Storey's own.</summary>
+        public List<OpeningEntry>? doorSet;
+        /// <summary>How alike a set's windows are (docs/OPENINGS.md §7.1): each picked on its own, or a column, a storey or a wall at a time. Storey's own.</summary>
+        public WindowPick windowPick;
         /// <summary>
         /// How high an artist's window that keeps its own size sits over each floor, in metres (docs/EDITOR.md §6.9); null = the
         /// sill of its <see cref="windows"/> type (<see cref="Generate.Facade.SillOf"/>). Other windows take their type's.
@@ -302,8 +317,44 @@ namespace Triband.Storey
         /// <summary>Densities for details placed by rule, as the prototype stores them (percentages); null = the defaults.</summary>
         public DetailRules? details;
 
-        public FacadeStyle Clone() { var c = (FacadeStyle)MemberwiseClone(); c.details = details?.Clone(); return c; }
+        public FacadeStyle Clone()
+        {
+            var c = (FacadeStyle)MemberwiseClone(); c.details = details?.Clone();
+            c.windowSet = OpeningEntry.Copy(windowSet); c.groundSet = OpeningEntry.Copy(groundSet); c.doorSet = OpeningEntry.Copy(doorSet);
+            return c;
+        }
     }
+
+    /// <summary>
+    /// One entry of a style's set of windows or street doors (<see cref="FacadeStyle.windowSet"/>, docs/OPENINGS.md §7.1):
+    /// what fills an opening, and how often. Storey's own.
+    /// </summary>
+    public sealed class OpeningEntry
+    {
+        /// <summary>An artist's window or door (<see cref="Generate.OpeningKinds"/>), by id; null = the generator's own.</summary>
+        public string? kind;
+        /// <summary>No window: the wall is left whole there. A door is always a door: a door entry that is none is the plain one.</summary>
+        public bool none;
+        /// <summary>How often it is picked, against the others' weights; 0 leaves it out, unless every weight is 0 (then each is picked as often).</summary>
+        public double weight = 1;
+
+        public OpeningEntry Clone() => (OpeningEntry)MemberwiseClone();
+
+        /// <summary>A copy of a set, entry by entry; null stays null.</summary>
+        public static List<OpeningEntry>? Copy(List<OpeningEntry>? set)
+        {
+            if (set == null) return null;
+            var c = new List<OpeningEntry>(set.Count);
+            foreach (var e in set) c.Add(e.Clone());
+            return c;
+        }
+    }
+
+    /// <summary>
+    /// How alike a set's windows are: each window picked on its own (as the old BuildingGenerator picks them), each column of
+    /// a wall the same window all the way up its tier, each storey of a wall the same along it, or each wall one window.
+    /// </summary>
+    public enum WindowPick { Window, Column, Storey, Wall }
 
     /// <summary>
     /// What a style colour field holds (docs/COLOURS.md §3.1): a CSS literal <c>#RRGGBB</c> (or <c>#RGB</c>),

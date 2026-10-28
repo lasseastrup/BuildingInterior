@@ -194,7 +194,34 @@ On the block above, a two-triangle sill in front of the wall makes LOD1 1,448 tr
 - **Live parts**: a light by a door, a door that opens, a collider. These aren't baked. If they're wanted, a prefab's other objects could be instanced beside the building as Storey Props (docs/PROPS.md), which already fade, clip and Sink with their building.
 - **Holes that aren't rectangles** (arched or round). `WallPanel` already cuts holes as polygons, but the reveals, the merging of neighbouring openings, LOD1's flat pane and LOD2's painted windows are all rectangles. Meanwhile, an arched surround in front of a rectangular hole looks the same from the street.
 - **Doors of their own size**, after §4.1: the entrance tools, courtyards and walls would take the width from the door kind instead of `Dim.DOOR_EXT`.
-- **Several windows a style**, picked per opening by the window's number (`Facade.WindowId`), so the choice is stable across rebuilds and LODs. If the old generator does this, it belongs in step 2.
+- ~~**Several windows a style**~~: built, §7.1.
+
+### 7.1 Several windows and doors a style (built)
+
+The old generator's themes have a weighted list of one to three window prefabs (8 of 26 with a "no window" entry), a separate list for the ground floor (24 of 26), and a weighted list of doors. Storey's styles have the same, as sets (`FacadeStyle.windowSet`, `groundSet`, `doorSet`; `OpeningSets` picks, `Edit.WindowSets` edits).
+
+- **An entry** (`OpeningEntry`) is an artist's window or door (`kind`, a Storey Opening's id), the generator's own (no `kind`), or **none** (`none`: the wall is left whole there). Its `weight` is how often it is picked against the others'; 0 leaves it out, unless every weight is 0, when each is picked as often (the old generator's rule). A door entry is never none: an entrance always has a door, so a converted "no door" entry is the plain door.
+- **One window a style stays as it was.** A style without a set has `windowKind` (and `doorKind`) in every opening, and builds exactly as before. A set of one window is the same as `windowKind`; the Facade tab keeps it there, so a set is only written once a style has two entries. Layouts, presets and baked layouts that name one kind read and write unchanged. Migrating every `windowKind` into a set would rewrite every layout for nothing, and the census fixtures are layouts of one window a style.
+- **The ground floor's set** is its own when it has one, otherwise the floors above's. It fills the openings Storey's *Ground floor* lays out: a storefront's full bays, the windows of *Match*, none for *Solid*. The old generator's empty ground list (a flat ground floor) is `ground: solid`, or `groundSet: [{"none": true}]` to keep the doors' storefront margins.
+- **The pick** is a hash of the building's id, the storey, the wall's edge and the window's place along the wall (`OpeningSets.WindowSeed`). So a rebuild, every LOD, and moving the building keep each window, and two buildings with the same footprint differ. The old generator seeds by edge, floor and slot only, so every building of one footprint and theme looks the same. Doors are picked by wall (`DoorSeed`): the doors along one wall are alike, as the old generator's are.
+- **Picked by** (`windowPick`, Storey's own): *Window* picks each on its own, as the old generator does. *Column* keeps a column the same window all the way up its tier (the ground floor, with its own set, a column of its own), *Storey* a storey of a wall, *Wall* a whole wall. A facade whose windows change along a column reads as a patchwork; real ones change by column or by floor.
+- **Where the windows go doesn't depend on the pick.** The bays are laid out over the span less the most dressing any entry has (`OpeningSets.Reach`), so shutters keep clear of a corner whichever is picked, and picking one never moves another. Each opening is then the size its own window makes it: a Keep size window its own size and sill, the generator's the style's (`Facade.Windows`).
+- **Cost:** a hash and a walk of the set per window, nothing allocated (`OpeningSetTests.APickMakesNoGarbage`); a wall's window specs are made once per window the set picks there, in specs lent for the wall. The pick lives on the opening (`Opening.kind`), so LOD0's dressing, LOD1, details, Problems and the editor all see the same window without picking again. Everything is still one merged mesh.
+
+**LODs.** LOD0 and LOD1 take each opening's own window: LOD1 cuts the wall only for the windows whose LOD1 reaches into it, and lays the rest on the flat wall. A none slot is whole wall at both. LOD2 paints every bay with one window, the set's heaviest that isn't none (`OpeningSets.Representative`; a dormer takes it too), and paints none only when every entry is none. So at LOD2 a slot left empty is painted as a window, and a smaller window as the heaviest's size. That's an approximation: at LOD2 a bay is a few pixels, and the share of glass changes by at most the none entries' weight. Matching LOD2 exactly would need the massing shader to know each run's picks, a parameter per window or the pick hashed in the shader from the building's id, edge and bay; the parameter row has a free texel for it (texel 3), if the pop at the LOD1 to LOD2 switch shows.
+
+**The old generator's settings, for a converter:**
+
+| BuildingTheme | Storey |
+|---|---|
+| `_windowPrefabs` (one entry) | `windowKind` |
+| `_windowPrefabs` (several) | `windowSet`: each entry's prefab as `kind` (its Storey Opening's id), a null prefab as `{"none": true}`, `Weight` as `weight` |
+| `_overrideGroundFloorWindows` off | no `groundSet` |
+| on, entries | `groundSet`, as above |
+| on, an empty list | `ground: "solid"` |
+| `_doorPrefabs` | `doorKind` for one, `doorSet` for several; a null prefab is the plain door (`{}`) |
+| `WallFillerPrefab` (no window list) | `windowKind` |
+| per-entry inset depth and offset | not yet (a per-entry `recess` is planned) |
 
 ## 8. Order of work
 
@@ -229,4 +256,4 @@ Answered when the plan was approved:
 1. **Textures:** the old prefabs use none, so §7's first point stays out.
 2. **Colours:** the old prefabs are coloured by the Model Remapper. So step 5 comes second, before the hole and the dressing: without it they would take the style's colours alone.
 3. **The old cutout:** not known. The conversion script (§3.2) takes `Center` as the hole's middle, as the component's own gizmo and its fit to the bounds have it, and the style decides the sill height. If an old prefab's hole sits half its height too low or too high, its `Center` was meant as the bottom: fix it in its Storey Cutout.
-4. **What else is on them:** only meshes, and one prefab per style. So nothing is instanced, and a style keeps one window and one door.
+4. **What else is on them:** only meshes, and one prefab per style. So nothing is instanced, and a style keeps one window and one door. (Later, for the old themes' weighted lists: several a style, §7.1.)

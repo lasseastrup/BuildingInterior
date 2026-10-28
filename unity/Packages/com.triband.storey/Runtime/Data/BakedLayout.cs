@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 3;
+        public const int Version = 4;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -251,6 +251,7 @@ namespace Triband.Storey
             s.head = E<HeadType>(ref r); s.sills = r.Bool(); s.heads = r.Bool(); s.paneCols = r.OptInt(); s.paneRows = r.OptInt(); s.frames = r.Bool();
             s.bandH = r.Opt(); s.bandDepth = r.Opt(); s.bandWall = r.Bool();
             s.windowKind = Str(ref r); s.doorKind = Str(ref r); s.sillH = r.Opt();
+            s.windowSet = Entries(ref r); s.groundSet = Entries(ref r); s.doorSet = Entries(ref r); s.windowPick = E<WindowPick>(ref r);
             s.plinthH = r.Opt(); s.foundation = r.Opt(); s.foundationH = r.Opt(); s.foundationOut = r.Opt(); s.bricks = r.Opt(); s.mansard = r.Opt(); s.dormers = r.Opt();
             if (r.Bool())
             {
@@ -262,6 +263,15 @@ namespace Triband.Storey
                 }
             }
             else s.details = null;
+        }
+
+        // a style's set of windows or doors: null when it has none
+        List<OpeningEntry>? Entries(ref Reader r)
+        {
+            int n = r.Count(); if (n == 0) return null;
+            var set = new List<OpeningEntry>(n - 1);
+            for (int i = 1; i < n; i++) set.Add(new OpeningEntry { kind = Str(ref r), none = r.Bool(), weight = r.F64() });
+            return set;
         }
 
         // ---- baking ------------------------------------------------------------------------
@@ -402,6 +412,12 @@ namespace Triband.Storey
             w.E(s.head); w.Bool(s.sills); w.Bool(s.heads); w.OptInt(s.paneCols); w.OptInt(s.paneRows); w.Bool(s.frames);
             w.Opt(s.bandH); w.Opt(s.bandDepth); w.Bool(s.bandWall);
             w.Count(S(s.windowKind)); w.Count(S(s.doorKind)); w.Opt(s.sillH);
+            foreach (var set in new[] { s.windowSet, s.groundSet, s.doorSet })
+            {
+                w.Count(set == null ? 0 : set.Count + 1);
+                if (set != null) foreach (var e in set) { w.Count(S(e.kind)); w.Bool(e.none); w.F64(e.weight); }
+            }
+            w.E(s.windowPick);
             w.Opt(s.plinthH); w.Opt(s.foundation); w.Opt(s.foundationH); w.Opt(s.foundationOut); w.Opt(s.bricks); w.Opt(s.mansard); w.Opt(s.dormers);
             w.Bool(s.details != null);
             if (s.details != null)

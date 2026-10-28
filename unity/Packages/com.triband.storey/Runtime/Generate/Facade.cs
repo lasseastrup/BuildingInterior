@@ -9,7 +9,15 @@ namespace Triband.Storey.Generate
     {
         public sealed class WinSpec { public double sp, w, y0, y1; public double? full; }
 
-        public static WinSpec? WindowSpec(WindowType kind, double h, FacadeStyle st, bool storefront = false) => Fit(RawSpec(kind, h, st, storefront), h, st, null);
+        /// <summary>
+        /// The window spec of a style's upper floors, for the window that stands for its set (<see cref="OpeningSets.Representative"/>):
+        /// the one window of a style without a set. None where every window it can pick is none.
+        /// </summary>
+        public static WinSpec? WindowSpec(WindowType kind, double h, FacadeStyle st, bool storefront = false) =>
+            OpeningSets.Representative(st, false, out var k) ? Fit(RawSpec(kind, h, st, storefront), h, st, null, k) : null;
+
+        /// <summary>The window spec of a style's upper floors for window <paramref name="k"/> (null: the generator's), one of its set's.</summary>
+        public static WinSpec? WindowSpec(WindowType kind, double h, FacadeStyle st, OpeningKind? k) => Fit(RawSpec(kind, h, st, false), h, st, null, k);
 
         static WinSpec? RawSpec(WindowType kind, double h, FacadeStyle st, bool storefront)
         {
@@ -28,13 +36,16 @@ namespace Triband.Storey.Generate
         /// <summary>How high a window type's windows start over the floor (metres): what an artist's window of its own size takes without <see cref="FacadeStyle.sillH"/>.</summary>
         public static double SillOf(WindowType kind) => kind switch { WindowType.Tall => 0.4, WindowType.Ribbon => 0.95, WindowType.Curtain => 0.1, _ => 0.9 };
 
-        /// <summary>The ground floor's window spec: the style's own, none, or a storefront.</summary>
-        public static WinSpec? GroundSpec(FacadeStyle st, double h)
+        /// <summary>The ground floor's window spec: the style's own, none, or a storefront; for the window that stands for its set, as <see cref="WindowSpec(WindowType, double, FacadeStyle, bool)"/>.</summary>
+        public static WinSpec? GroundSpec(FacadeStyle st, double h) => OpeningSets.Representative(st, true, out var k) ? GroundSpec(st, h, k) : null;
+
+        /// <summary>The ground floor's window spec for window <paramref name="k"/> (null: the generator's), one of its set's.</summary>
+        public static WinSpec? GroundSpec(FacadeStyle st, double h, OpeningKind? k)
         {
             var ws = st.ground == GroundType.Match ? RawSpec(st.windows, h, st, false) : st.ground == GroundType.Solid ? null : RawSpec(st.windows, h, st, true);
             // a plinth (or foundation) of the style's own height: the ground floor's windows start above it
             double? plinth = st.plinthH.HasValue || st.foundation.HasValue ? Math.Max(st.plinthH ?? 0.45, st.foundation.HasValue ? Math.Max(0.02, st.foundationH ?? 0.2) : 0) : (double?)null;
-            return Fit(ws, h, st, plinth);
+            return Fit(ws, h, st, plinth, k);
         }
 
         /// <summary>
@@ -43,12 +54,11 @@ namespace Triband.Storey.Generate
         /// sill's height (<see cref="FacadeStyle.sillH"/>, or its type's); and its dressing stays clear of the floor, of a
         /// plinth (<paramref name="plinth"/>: its top, on the ground floor), of the storey's top and of a band. The generator's
         /// own windows, and their arched heads, stay under a band, and over a plinth. A hole left 40 cm high or less is none:
-        /// <see cref="Ops"/> lays out no windows there, and LOD2 paints none.
+        /// <see cref="Ops"/> lays out no windows there, and LOD2 paints none. <paramref name="k"/>: the window in it (null: the generator's).
         /// </summary>
-        static WinSpec? Fit(WinSpec? ws, double h, FacadeStyle st, double? plinth)
+        static WinSpec? Fit(WinSpec? ws, double h, FacadeStyle st, double? plinth, OpeningKind? k)
         {
             if (ws == null) return null;
-            var k = OpeningKinds.Of(st, false);
             if (k != null && !k.stretch && st.sillH is double sill) ws.y0 = sill;
             double sy = k != null && OpeningKinds.Stretched(k) ? (ws.y1 - ws.y0) / Math.Max(1e-3, k.h) : 1, rb = (k?.reachB ?? 0) * sy, rt = (k?.reachT ?? 0) * sy;
             if (plinth is double p) ws.y0 = Math.Max(ws.y0, p + Math.Max(0.15, rb + 0.05));
@@ -70,6 +80,13 @@ namespace Triband.Storey.Generate
         /// </summary>
         public static (double, double) WindowSpan(OpeningKind? wk, double uS, double uE) => (uS + (wk?.reachL ?? 0), uE - (wk?.reachR ?? 0));
 
+        /// <summary>The span a style's ground-floor (<paramref name="ground"/>) or upper windows are laid out in: less the most any of its set reaches (<see cref="OpeningSets.Reach"/>).</summary>
+        public static (double, double) WindowSpan(FacadeStyle st, bool ground, double uS, double uE)
+        {
+            var (l, r) = OpeningSets.Reach(st, ground);
+            return (uS + l, uE - r);
+        }
+
         /// <summary>A street door's top: 2.6 m, or an artist's door's own height when it keeps its size; with its dressing, under the storey's top and a band (<paramref name="band"/>: its height).</summary>
         static double DoorTop(OpeningKind? dk, double h, double? band)
         {
@@ -80,9 +97,10 @@ namespace Triband.Storey.Generate
             return band is double b ? Math.Min(top, h - b - over) : top;
         }
 
-        /// <summary>An opening's dressing: how far the artist's window or door in it reaches past it, as it is fitted there.</summary>
+        /// <summary>The artist's window or door in an opening (null: the generator's), and its dressing: how far it reaches past it, as it is fitted there.</summary>
         public static void Dressing(Opening o, OpeningKind? k)
         {
+            o.kind = k;
             if (k == null) { o.rl = o.rr = o.rb = o.rt = 0; return; }
             bool whole = OpeningKinds.Stretched(k);   // sliced, what is round the hole keeps its size
             double sx = whole ? (o.u1 - o.u0) / Math.Max(1e-3, k.w) : 1, sy = whole ? (o.y1 - o.y0) / Math.Max(1e-3, k.h) : 1;
@@ -158,22 +176,25 @@ namespace Triband.Storey.Generate
         public static List<Opening> Ops(Site site, BuildingData b, int k, int i, double L, double uS, double uE, List<Opening> ops, OpeningPool? pool)
         {
             var st = Derived.StyleAt(b, k); double h = Derived.FloorH(b, k), spn = uE - uS;
-            var wk = OpeningKinds.Of(st, false); var dk = OpeningKinds.Of(st, true);
+            var doorSet = OpeningSets.Doors(st); var dk = doorSet == null ? OpeningKinds.Of(st, true) : null;
             // a band of the style's own height: doors stay under it as windows do (WindowSpec), their posts too (Dress: 8 cm
             // above the door, standing out as far as a band does by default, so they would lie in its face)
             double? band = st.bandH is double bh && st.bands ? bh : (double?)null;
             double under = band is double b0 ? h - b0 - 0.08 : double.MaxValue;
             ops.Clear();
             Opening New() => pool != null ? pool.Take() : new Opening();
-            // a door's dressing keeps the span's 14 cm from a neighbouring wall, as a window's does
-            double sl = Math.Max(0.3, dk?.reachL ?? 0), sr = Math.Max(0.3, dk?.reachR ?? 0);
             foreach (var e in b.entrances)
             {
-                if (e.k != k || e.edge != i || spn <= Dim.DOOR_EXT + sl + sr || !DoorOpen(site, b, e)) continue;
+                if (e.k != k || e.edge != i) continue;
+                // the style's street door, or the one its set picks for this wall (docs/OPENINGS.md §7.1)
+                var ek = doorSet == null ? dk : OpeningSets.Door(st, OpeningSets.DoorSeed(b.id, k, i));
+                // a door's dressing keeps the span's 14 cm from a neighbouring wall, as a window's does
+                double sl = Math.Max(0.3, ek?.reachL ?? 0), sr = Math.Max(0.3, ek?.reachR ?? 0);
+                if (spn <= Dim.DOOR_EXT + sl + sr || !DoorOpen(site, b, e)) continue;
                 double c = Math.Max(uS + Dim.DOOR_EXT / 2 + sl, Math.Min(uE - Dim.DOOR_EXT / 2 - sr, e.t * L));
                 var land = k > 0 && !TerraceAt(b, k, i, e.t) ? LandingAt(site, b, k, i, e.t) : null;
-                var o = New().Set(c - Dim.DOOR_EXT / 2, c + Dim.DOOR_EXT / 2, 0, DoorTop(dk, h, band), door: true, thr: land != null && land.y < Derived.FloorBase(b, k) - 0.02);
-                Dressing(o, dk);
+                var o = New().Set(c - Dim.DOOR_EXT / 2, c + Dim.DOOR_EXT / 2, 0, DoorTop(ek, h, band), door: true, thr: land != null && land.y < Derived.FloorBase(b, k) - 0.02);
+                Dressing(o, ek);
                 ops.Add(o);
             }
             foreach (var (bk, bi, bt) in Bridges.Doors(site, b))
@@ -189,30 +210,71 @@ namespace Triband.Storey.Generate
                 foreach (var f in Cores.CoreFlush(Derived.OutlineAt(b, k), s)) if (f != null && f.i == i) (shaftHere ??= new List<Cores.Flush>()).Add(f);
             }
             var blank = Derived.TierStart(b, k) > 0 ? b.floors[Derived.TierStart(b, k)].blank : b.blank;
-            if (!blank.Contains(i))
-            {
-                var ws = k == 0 ? GroundSpec(st, h) : WindowSpec(st.windows, h, st);
-                var (wS, wE) = WindowSpan(wk, uS, uE);
-                var (n, bay) = BayLayout(st, wS, wE);
-                if (ws != null && ws.y1 - ws.y0 > 0.4 && n > 0)
-                {
-                    for (int j = 0; j < n; j++)
-                    {
-                        double c = wS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : Math.Min(ws.w, bay - 0.5);
-                        if (ww < 0.45) continue;
-                        double u0 = c - ww / 2, u1 = c + ww / 2, sx = wk != null && OpeningKinds.Stretched(wk) ? ww / Math.Max(1e-3, wk.w) : 1;
-                        bool blocked = false;
-                        foreach (var o in ops) if (o.door && NearDoor(o, u0, u1, (wk?.reachL ?? 0) * sx, (wk?.reachR ?? 0) * sx)) blocked = true;
-                        if (shaftHere != null) foreach (var f in shaftHere) if (u1 > f.s0 - 0.1 && u0 < f.s1 + 0.1) blocked = true;
-                        if (blocked) continue;
-                        var w = New().Set(u0, u1, ws.y0, ws.y1, full: ws.full != null);
-                        Dressing(w, wk);
-                        ops.Add(w);
-                    }
-                }
-            }
+            if (!blank.Contains(i)) Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, shaftHere);
             ops.Sort((p, q) => p.u0.CompareTo(q.u0));
             return ops;
+        }
+
+        /// <summary>
+        /// A wall's windows into <paramref name="ops"/> (its doors already there), from <paramref name="pool"/> (new ones when
+        /// null): the style's bays along the span, each with the window its set picks (docs/OPENINGS.md §7.1), or none, each
+        /// opening the size that window makes it. The bays are laid out once for every window the set can pick, so a pick
+        /// never moves another window. <paramref name="ground"/>: the ground floor (its spec, and its own set); the pick is
+        /// seeded by <paramref name="id"/>, the storey <paramref name="k"/> of the tier from <paramref name="k0"/>, and edge
+        /// <paramref name="edge"/>. Windows keep clear of doors and of <paramref name="shafts"/> (lifts flush with the wall).
+        /// </summary>
+        internal static void Windows(List<Opening> ops, OpeningPool? pool, FacadeStyle st, double h, bool ground, string id, int k, int k0, int edge, double uS, double uE,
+            List<Cores.Flush>? shafts)
+        {
+            var set = OpeningSets.Windows(st, ground);
+            var (wS, wE) = WindowSpan(st, ground, uS, uE);
+            var (n, bay) = BayLayout(st, wS, wE);
+            if (n == 0) return;
+            // one window: its spec once; a set: each window's it picks, once each, in specs lent for the wall
+            OpeningKind? one = set == null ? OpeningKinds.Of(st, false) : null;
+            WinSpec? oneSpec = set == null ? ground ? GroundSpec(st, h, one) : WindowSpec(st.windows, h, st, one) : null;
+            var specs = set != null ? SpecCache.Lent.Take() : null;
+            uint wall = set != null ? OpeningSets.WallSeed(id, k, edge) : 0;
+            for (int j = 0; j < n; j++)
+            {
+                OpeningKind? wk = one;
+                if (set != null && !OpeningSets.Window(st, ground, st.windowPick == WindowPick.Window ? OpeningSets.At(wall, j) : OpeningSets.WindowSeed(id, st.windowPick, k, k0, edge, j), out wk)) continue;
+                var ws = specs != null ? specs.Of(wk, st, h, ground) : oneSpec;
+                if (ws == null || ws.y1 - ws.y0 <= 0.4) continue;
+                double c = wS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : Math.Min(ws.w, bay - 0.5);
+                if (ww < 0.45) continue;
+                double u0 = c - ww / 2, u1 = c + ww / 2, sx = wk != null && OpeningKinds.Stretched(wk) ? ww / Math.Max(1e-3, wk.w) : 1;
+                bool blocked = false;
+                foreach (var o in ops) if (o.door && NearDoor(o, u0, u1, (wk?.reachL ?? 0) * sx, (wk?.reachR ?? 0) * sx)) blocked = true;
+                if (shafts != null) foreach (var f in shafts) if (u1 > f.s0 - 0.1 && u0 < f.s1 + 0.1) blocked = true;
+                if (blocked) continue;
+                var w = (pool != null ? pool.Take() : new Opening()).Set(u0, u1, ws.y0, ws.y1, full: ws.full != null);
+                Dressing(w, wk);
+                ops.Add(w);
+            }
+            if (specs != null) { specs.Clear(); SpecCache.Lent.Give(specs); }
+        }
+
+        /// <summary>
+        /// The window specs of one wall's windows, one for each window its set picks there, made once each (a set's few
+        /// windows on a wall of many): lent for the wall, and given back emptied.
+        /// </summary>
+        sealed class SpecCache
+        {
+            public static readonly Lender<SpecCache> Lent = new Lender<SpecCache>(8);
+
+            readonly List<OpeningKind?> kinds = new List<OpeningKind?>(4);
+            readonly List<WinSpec?> specs = new List<WinSpec?>(4);
+
+            public WinSpec? Of(OpeningKind? k, FacadeStyle st, double h, bool ground)
+            {
+                for (int i = 0; i < kinds.Count; i++) if (ReferenceEquals(kinds[i], k)) return specs[i];
+                var ws = ground ? GroundSpec(st, h, k) : WindowSpec(st.windows, h, st, k);
+                kinds.Add(k); specs.Add(ws);
+                return ws;
+            }
+
+            public void Clear() { kinds.Clear(); specs.Clear(); }
         }
 
         /// <summary>
@@ -230,12 +292,12 @@ namespace Triband.Storey.Generate
             bool bars = st != null && (st.paneCols > 1 || st.paneRows > 1);
             bool sills = st == null || st.sills, heads = st == null || st.heads;
             var trim = frames ? C.frame : C.trim;
-            // an artist's window or door (OpeningKinds) stands in for all of the generator's dressing
-            var wk = OpeningKinds.Of(st, false); var dk = OpeningKinds.Of(st, true);
+            // an artist's window or door (OpeningKinds), the one picked for the opening, stands in for all of the generator's dressing
             foreach (var o in ops)
             {
-                if (o.door && dk != null && !o.bare) { OpeningKinds.Place(op, gl, F, dk, dk.lod0, o.u0, o.u1, y, y + o.y1, C, shell); if (!shell) op.SeeThrough++; continue; }   // its leaf is left out
-                if (!o.door && wk != null) { OpeningKinds.Place(op, gl, F, wk, wk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell); continue; }
+                var kk = o.kind;
+                if (o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y, y + o.y1, C, shell); if (!shell) op.SeeThrough++; continue; }   // its leaf is left out
+                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell); continue; }
                 if (o.door)
                 {
                     // the generator's door: the wall's recess, with a flat panel at its back where the doorway is closed

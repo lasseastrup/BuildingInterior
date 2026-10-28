@@ -94,6 +94,8 @@ namespace Triband.Storey.Editor
                     if (s == null) continue;
                     if (s.windowKind != null) used.Add(s.windowKind);
                     if (s.doorKind != null) used.Add(s.doorKind);
+                    foreach (var set in new[] { s.windowSet, s.groundSet, s.doorSet })
+                        if (set != null) foreach (var en in set) if (en.kind != null && !en.none) used.Add(en.kind);
                 }
             }
             var want = All().Where(o => used.Contains(o.Id)).ToList();

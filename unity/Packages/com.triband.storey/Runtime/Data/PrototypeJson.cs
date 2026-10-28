@@ -272,6 +272,10 @@ namespace Triband.Storey
             s.bricks = c.Opt(o, "bricks", path);
             s.windowKind = c.OptStr(o, "windowKind", path);
             s.doorKind = c.OptStr(o, "doorKind", path);
+            s.windowSet = Entries(c, o, "windowSet", path);
+            s.groundSet = Entries(c, o, "groundSet", path);
+            s.doorSet = Entries(c, o, "doorSet", path);
+            s.windowPick = c.Enum<WindowPick>(o, "windowPick", WindowPick.Window, path);
             s.sillH = c.Opt(o, "sillH", path);
             if (o.TryGetValue("panes", out var pn) && pn != null)
             {
@@ -295,6 +299,34 @@ namespace Triband.Storey
             }
             c.Check(o, path, Keys.Style);
             return s;
+        }
+
+        /// <summary>A style's set of windows or doors (docs/OPENINGS.md §7.1); absent is null. An entry is <c>{"kind": id}</c>, <c>{"none": true}</c> or <c>{}</c> (the generator's), with a <c>"weight"</c> when not 1.</summary>
+        static List<OpeningEntry>? Entries(Ctx c, Dictionary<string, object?> o, string key, Where path)
+        {
+            if (!o.TryGetValue(key, out var v) || v == null) return null;
+            var items = c.Array(o, key, path); var set = new List<OpeningEntry>(items.Count); int i = 0;
+            foreach (var it in items)
+            {
+                var at = path.In(key, i++); var eo = c.Obj(it, at);
+                set.Add(new OpeningEntry { kind = c.OptStr(eo, "kind", at), none = c.Bool(eo, "none", false, at), weight = c.Num(eo, "weight", 1, at) });
+                c.Check(eo, at, Keys.OpeningEntry);
+            }
+            return set;
+        }
+
+        static List<object?> Entries(List<OpeningEntry> set)
+        {
+            var l = new List<object?>(set.Count);
+            foreach (var e in set)
+            {
+                var eo = new Dictionary<string, object?>();
+                if (e.none) eo["none"] = true;
+                else if (!string.IsNullOrEmpty(e.kind)) eo["kind"] = e.kind;
+                if (e.weight != 1) eo["weight"] = e.weight;
+                l.Add(eo);
+            }
+            return l;
         }
 
         // ---- writing -----------------------------------------------------------------
@@ -424,6 +456,10 @@ namespace Triband.Storey
             if (s.bricks.HasValue) o["bricks"] = s.bricks.Value;
             if (!string.IsNullOrEmpty(s.windowKind)) o["windowKind"] = s.windowKind;
             if (!string.IsNullOrEmpty(s.doorKind)) o["doorKind"] = s.doorKind;
+            if (s.windowSet is { Count: > 0 }) o["windowSet"] = Entries(s.windowSet);
+            if (s.groundSet is { Count: > 0 }) o["groundSet"] = Entries(s.groundSet);
+            if (s.doorSet is { Count: > 0 }) o["doorSet"] = Entries(s.doorSet);
+            if (s.windowPick != WindowPick.Window) o["windowPick"] = Lower(s.windowPick);
             if (s.sillH.HasValue) o["sillH"] = s.sillH.Value;
             if (s.door != null) o["door"] = s.door;
             if (s.rail != null) o["rail"] = s.rail;
@@ -521,11 +557,13 @@ namespace Triband.Storey
             public static readonly string[] Terrace = { "pitch" };
             public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof" };
             public static readonly string[] DetailRules = { "ac", "vents" };
+            public static readonly string[] OpeningEntry = { "kind", "none", "weight" };
             public static readonly string[] Point = { "x", "z" };
             public static readonly string[] Style =
             {
                 "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "details",
                 "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "plinthH", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind", "sillH",
+                "windowSet", "groundSet", "doorSet", "windowPick",
                 "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth",
                 "doorType",   // street doors' Canopy or Glazed, gone (every generated door is plain): read and dropped, not reported
             };
