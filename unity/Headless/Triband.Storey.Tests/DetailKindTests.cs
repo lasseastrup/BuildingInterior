@@ -17,7 +17,7 @@ namespace Triband.Storey.Tests
         /// its body in Detail metal, its front in <paramref name="front"/>; front faces wound as the generator's. Without
         /// <paramref name="caps"/> it has no top or bottom, as a pipe going up the wall.
         /// </summary>
-        static DetailKind.Mesh Box(double w, double h, double d, ColorSlot front = ColorSlot.Grille, double y0 = 0, bool caps = true)
+        internal static DetailKind.Mesh Box(double w, double h, double d, ColorSlot front = ColorSlot.Grille, double y0 = 0, bool caps = true)
         {
             var m = new DetailKind.Mesh(); var P = new List<P3>(); var N = new List<P3>();
             var body = new List<int>(); var face = new List<int>();
@@ -43,7 +43,7 @@ namespace Triband.Storey.Tests
             return m;
         }
 
-        static DetailKind Kind(Details.Anchor anchor = Details.Anchor.Wall, Details.Rule rule = Details.Rule.None,
+        internal static DetailKind Kind(Details.Anchor anchor = Details.Anchor.Wall, Details.Rule rule = Details.Rule.None,
             double w = 0.8, double h = 0.6, double d = 0.3, bool stretch = false, bool lod1 = false, double y0 = 0, string? id = null)
         {
             id ??= Guid.NewGuid().ToString("N");
@@ -58,7 +58,7 @@ namespace Triband.Storey.Tests
         }
 
         /// <summary>A 14 × 10 m brick block of three storeys, its door on edge 0, and none of the generator's own details by rule.</summary>
-        static (BuildingData b, Site site) Block(Action<BuildingData>? f = null)
+        internal static (BuildingData b, Site site) Block(Action<BuildingData>? f = null)
         {
             var d = new StoreyDocument();
             var b = Buildings.Add(d, "rect", new Vec2(0, 0)); b.pos = new Vec2(0, 0);
@@ -69,10 +69,10 @@ namespace Triband.Storey.Tests
             return (b, new Site(d.buildings));
         }
 
-        static void Rule(BuildingData b, string id, double percent) =>
+        internal static void Rule(BuildingData b, string id, double percent) =>
             (b.style.details!.kinds ??= new SortedDictionary<string, double>(StringComparer.Ordinal))[id] = percent;
 
-        static List<int> Slot(MeshBuilder m, ColorSlot s) => Enumerable.Range(0, m.Verts).Where(i => m.C[i].slot == s).ToList();
+        internal static List<int> Slot(MeshBuilder m, ColorSlot s) => Enumerable.Range(0, m.Verts).Where(i => m.C[i].slot == s).ToList();
 
         static List<Opening> Ops(Site s, BuildingData b, int k, int i) { var f = Details.EdgeFrameAt(b, k, i); return Facade.Ops(s, b, k, i, f.e.L, f.uS, f.uE); }
 

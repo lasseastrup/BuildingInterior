@@ -286,11 +286,27 @@ namespace Triband.Storey
                 // the artist's kinds, by their ids (32 hex digits)
                 string[] known = Keys.DetailRules;
                 foreach (var key in dob.Keys)
-                    if (Generate.DetailKinds.IsAssetId(key) && c.Opt(dob, key, dp) is double pct)
+                {
+                    if (!Generate.DetailKinds.IsAssetId(key) || dob[key] == null) continue;
+                    double? pct;
+                    if (dob[key] is Dictionary<string, object?> ro)
                     {
-                        (s.details.kinds ??= new SortedDictionary<string, double>(StringComparer.Ordinal))[key] = pct;
-                        System.Array.Resize(ref known, known.Length + 1); known[known.Length - 1] = key;   // a copy: the shared set stays
+                        // a kind with settings of its own: its chance among them (Storey's own)
+                        var rp = dp.In(key);
+                        pct = c.Opt(ro, "p", rp);
+                        var kr = new KindRule
+                        {
+                            density = c.Opt(ro, "density", rp), spacing = c.Opt(ro, "spacing", rp),
+                            per = ro.TryGetValue("per", out var pv) && pv != null ? c.Int(ro, "per", 1, rp) : (int?)null,
+                            floors = c.Enum(ro, "floors", DetailFloors.All, rp), corners = c.Enum(ro, "corners", DetailCorners.Outward, rp), color = c.OptColor(ro, "color", rp),
+                        };
+                        c.Check(ro, rp, Keys.KindRule);
+                        if (!kr.IsEmpty) (s.details.rules ??= new SortedDictionary<string, KindRule>(StringComparer.Ordinal))[key] = kr;
                     }
+                    else pct = c.Opt(dob, key, dp);
+                    if (pct is double v) (s.details.kinds ??= new SortedDictionary<string, double>(StringComparer.Ordinal))[key] = v;
+                    System.Array.Resize(ref known, known.Length + 1); known[known.Length - 1] = key;   // a copy: the shared set stays
+                }
                 c.Check(dob, dp, known);
             }
             c.Check(o, path, Keys.Style);
@@ -444,6 +460,21 @@ namespace Triband.Storey
                 if (s.details.ac.HasValue) d["ac"] = s.details.ac.Value;
                 if (s.details.vents.HasValue) d["vents"] = s.details.vents.Value;
                 if (s.details.kinds != null) foreach (var kv in s.details.kinds) d[kv.Key] = kv.Value;
+                // a kind with settings of its own is an object in place of its chance (Storey's own)
+                if (s.details.rules != null)
+                    foreach (var kv in s.details.rules)
+                    {
+                        var r = kv.Value; if (r.IsEmpty) continue;
+                        var ro = new Dictionary<string, object?>();
+                        if (s.details.kinds != null && s.details.kinds.TryGetValue(kv.Key, out var p)) ro["p"] = p;
+                        if (r.density.HasValue) ro["density"] = r.density.Value;
+                        if (r.spacing.HasValue) ro["spacing"] = r.spacing.Value;
+                        if (r.per.HasValue) ro["per"] = r.per.Value;
+                        if (r.floors != DetailFloors.All) ro["floors"] = Lower(r.floors);
+                        if (r.corners != DetailCorners.Outward) ro["corners"] = Lower(r.corners);
+                        if (r.color != null) ro["color"] = r.color;
+                        d[kv.Key] = ro;
+                    }
                 o["details"] = d;
             }
             return o;
@@ -521,6 +552,7 @@ namespace Triband.Storey
             public static readonly string[] Terrace = { "pitch" };
             public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof" };
             public static readonly string[] DetailRules = { "ac", "vents" };
+            public static readonly string[] KindRule = { "p", "density", "spacing", "per", "floors", "corners", "color" };
             public static readonly string[] Point = { "x", "z" };
             public static readonly string[] Style =
             {

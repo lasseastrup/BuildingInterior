@@ -362,6 +362,53 @@ namespace Triband.Storey
         /// by hand only. Layouts write them beside <c>ac</c> and <c>vents</c>. Storey's own.
         /// </summary>
         public SortedDictionary<string, double>? kinds;
-        public DetailRules Clone() { var c = (DetailRules)MemberwiseClone(); if (kinds != null) c.kinds = new SortedDictionary<string, double>(kinds, System.StringComparer.Ordinal); return c; }
+        /// <summary>
+        /// How the style places each artist-made kind beyond its chance (<see cref="KindRule"/>), by kind id; a kind not here
+        /// takes the defaults. Layouts write a kind's as an object in place of its chance (<c>{"p": 50, "density": 1}</c>),
+        /// and the chance alone as before when it has none. Storey's own.
+        /// </summary>
+        public SortedDictionary<string, KindRule>? rules;
+        public DetailRules Clone()
+        {
+            var c = (DetailRules)MemberwiseClone();
+            if (kinds != null) c.kinds = new SortedDictionary<string, double>(kinds, System.StringComparer.Ordinal);
+            if (rules != null) { c.rules = new SortedDictionary<string, KindRule>(System.StringComparer.Ordinal); foreach (var kv in rules) c.rules[kv.Key] = kv.Value.Clone(); }
+            return c;
+        }
+    }
+
+    /// <summary>Which storeys a kind placed by rule goes on (docs/EDITOR.md §6.12): every one, all but the ground floor, or the ground floor alone. Storey's own.</summary>
+    public enum DetailFloors { All, Upper, Ground }
+
+    /// <summary>Which corners a kind up the corners goes on: those that stand out (convex), those set in (concave), or both. Storey's own.</summary>
+    public enum DetailCorners { Outward, Inward, All }
+
+    /// <summary>
+    /// A style's settings for one artist-made kind placed by rule (docs/EDITOR.md §6.12), beside its chance in
+    /// <see cref="DetailRules.kinds"/>; each null or default takes the rule's own. What each means depends on the kind's
+    /// rule. Storey's own.
+    /// </summary>
+    public sealed class KindRule
+    {
+        /// <summary>Scattered: how many to the square metre of wall at 100 %; null = 0.5.</summary>
+        public double? density;
+        /// <summary>Scattered: the clear gap kept round each, metres (null = 0.3). Up the corners: how far apart they are up the corner (null = 1 m).</summary>
+        public double? spacing;
+        /// <summary>Along the top or foot of the wall: how many to each bay; null = 1.</summary>
+        public int? per;
+        /// <summary>Scattered or up the corners: which storeys it goes on.</summary>
+        public DetailFloors floors;
+        /// <summary>Up the corners: which corners.</summary>
+        public DetailCorners corners;
+        /// <summary>
+        /// The colour its main colour (the one most of its triangles have) takes in this style: a palette id or a CSS colour;
+        /// null keeps the kind's own. One detail then serves many styles.
+        /// </summary>
+        public string? color;
+
+        /// <summary>Nothing set: the kind's chance alone says it all.</summary>
+        public bool IsEmpty => density == null && spacing == null && per == null && floors == DetailFloors.All && corners == DetailCorners.Outward && color == null;
+
+        public KindRule Clone() => (KindRule)MemberwiseClone();
     }
 }

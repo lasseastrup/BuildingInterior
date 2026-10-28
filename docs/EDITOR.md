@@ -528,7 +528,22 @@ The details in Facade ▸ *Place on walls* are **Facade Detail** assets. Storey'
    - *Between windows*: as vents, in a stretch of wall with 25 cm to spare each side, its top 45 cm under the ceiling.
    - *Over ground-floor windows*: one put over a door is placed by hand.
 
-   Then give it a chance per style in Facade ▸ *Details by rule*. Each detail has its own seed, so a rebuild puts every one back where it was. It keeps clear of what is already on the wall: what was put by hand, the AC units and vents, then the other details by rule in id order.
+   - *Scattered on the walls* (Storey's own): as brick patches, an even spread over every wall, so many to the square metre, each keeping a gap from the openings and the heads over them, the band, the plinth, the wall's ends, party walls and everything else on the wall. Its pivot can be anywhere: its size places it.
+   - *Along the top of the wall* (Storey's own): in a row along the top of each tier's wall, so many to a bay (the style's *Bay*), the bays centred on the edge as the old generator laid its tiles. Its pivot goes at the top of the storey's wall, so the mesh hangs below it. Not where the tier above carries the wall on.
+   - *Along the foot of the wall* (Storey's own): the same along the foot of the ground floor, its pivot on the ground, never across a doorway.
+   - *Up the corners* (Storey's own): stacked up each corner of the building, so far apart, a step at a time centred on each storey, each one middled in its step. It faces out along the corner's bisector, from where the two walls' outer faces meet: x along the bisector's normal, +Z out. Not where a party wall meets the corner.
+
+   Then give it a chance per style in Facade ▸ *Details by rule*. Each detail has its own seed, so a rebuild puts every one back where it was. It keeps clear of what is already on the wall: what was put by hand, the AC units and vents, then the other details by rule in id order. Details in a row or up the corners share their places: at each place one draw picks at most one of them, each by its chance, so their chances act as the weights of a list (two at 50% fill every place between them; one at 30% leaves the rest bare).
+
+   A style's settings for each detail, beside its chance (`KindRule`, Storey's own; under the detail's slider):
+   - *Per m²* (`density`, scattered; 0.5): how many to the square metre of wall at 100%. Its chance scales it, so two patches at 50% each share a density as the old generator's weighted list did.
+   - *Gap* (`spacing`, scattered; 0.3 m): the clear gap kept round each. Up the corners, *Every* (`spacing`; 1 m): how far apart they are up the corner.
+   - *Per bay* (`per`, in a row; 1): how many to each bay, 1 to 16.
+   - *Storeys* (`floors`, scattered or up the corners): *All*, *Upper* (not the ground floor) or *Ground* alone.
+   - *Corners* (`corners`, up the corners): *Outward* (standing out), *Inward* (set in) or *All*.
+   - *Colour* (`color`, any rule): the colour the detail's main colour (the one most of its triangles have) takes in this style, as the old generator's per-theme detail colours did. So one detail serves many styles. Unset, it keeps its own.
+
+   A style writes a detail's chance alone as before (`"details": {"<id>": 50}`), and an object in its place when it has settings: `"<id>": {"p": 50, "density": 1.2, "spacing": 0.12, "floors": "upper", "color": "#9A4B38"}`.
 5. In the Facade tab, pick it under *Place on walls* and click a wall. Click a placed one to remove it. Placing one refuses where it doesn't fit, and says why.
 
 Each part takes one of the style's colours, so the building's palette colours it, or keeps a palette colour of its own whatever the style (*Its own colour*, as a window's part can: §6.9). The model's materials only name the parts (docs/COLOURS.md §3.9).
@@ -536,6 +551,7 @@ Each part takes one of the style's colours, so the building's palette colours it
 LODs:
 - LOD0 places the mesh.
 - LOD1 places *LOD1 mesh* if there is one, otherwise the mesh itself. Give a heavy mesh a LOD1 mesh: many buildings are seen in LOD1 at once, and the inspector warns past 300 triangles.
+- *Leave out of LOD1* (`DetailKind.noLod1`, Storey's own) leaves it out of LOD1 altogether: for small details, brick patches above all, that LOD1's distance can't show. The generator's own brick patches are LOD0's alone too. Measured (`DetailRuleTests.BrickPatchesCostLodZeroLittleAndLodOneNothing`): a two-brick patch as the old generator's Bricks01 (20 triangles, 40 vertices) on a 20 × 12 m block of six storeys (6,210 LOD0 triangles) gives 65 patches at 0.15/m², 190 at 0.5/m² and 501 at 2/m²: +1,300, +3,800 and +10,020 LOD0 triangles (+2,600, +7,600, +20,040 vertices). In LOD1, whose shell is about 1,000 triangles, the same would more than double or treble it; left out, it costs LOD1 nothing. LOD0's meshes are split at 65,535 vertices, so even the densest stays in one or two parts.
 - LOD2 has none.
 
 The site lists the details its layout uses (*Facade Details*, under Site settings), so builds include them. The editor keeps the list: when you place one, give one a chance, and when the layout saves.
@@ -550,7 +566,8 @@ Engine-free:
 - `DetailKind`, `DetailKinds` (`Register`, `Get`, `Place`, `BuiltIn`), `Details.Rule`, `Details.OverLift`.
 - `DetailData.kind`: the detail's id, `ac`, `vent`, `dish`, `escape` and `awning` for the five, as before.
 - `DetailRules.kinds`: layout key, the detail's id beside `ac` and `vents` in a style's `details`.
-- Tests: `DetailKindTests`, `FacadeDetailAssetTests`.
+- `DetailRules.rules` (`KindRule`: `density`, `spacing`, `per`, `floors`, `corners`, `color`), the rules `Scatter`, `AlongTop`, `AlongFoot` and `Corners`, `DetailKind.noLod1` and `DetailKind.main`, `Details.Item.corner`. Baked layout format version 4.
+- Tests: `DetailKindTests`, `DetailRuleTests`, `FacadeDetailAssetTests`.
 
 Unity: `StoreyDetail`, `StoreySite.facadeDetails`. Editor: `StoreyDetails`.
 

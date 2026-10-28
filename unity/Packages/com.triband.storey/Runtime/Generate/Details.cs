@@ -20,9 +20,11 @@ namespace Triband.Storey.Generate
         /// <summary>
         /// Where a style's rules put a kind: under upper-floor windows (as AC units), in the stretches of wall between
         /// windows (as vents), or over ground-floor windows (as awnings over shop windows; a door's is put by hand). The
-        /// first two are for kinds on a wall, the last for kinds over an opening.
+        /// first two are for kinds on a wall, the third for kinds over an opening. Then Storey's own, for kinds on a wall
+        /// (docs/EDITOR.md §6.12): scattered over the walls (as brick patches), in a row along the top of each tier's wall or
+        /// along the foot of the ground floor's (so many to a bay), and stacked up the building's corners.
         /// </summary>
-        public enum Rule { None, UnderWindows, BareWall, OverOpenings }
+        public enum Rule { None, UnderWindows, BareWall, OverOpenings, Scatter, AlongTop, AlongFoot, Corners }
 
         /// <summary>
         /// How far above an opening's top an artist's detail over it has its pivot: clear of a window's head (6 cm, or an
@@ -71,6 +73,21 @@ namespace Triband.Storey.Generate
         /// <summary>The chance, 0 to 1, a style's rules give an artist's kind; 0 when the style doesn't name it.</summary>
         public static double Density(FacadeStyle st, string id) => st.details?.kinds != null && st.details.kinds.TryGetValue(id, out var p) ? p / 100 : 0;
 
+        /// <summary>A style's settings for an artist's kind beyond its chance; null when it has none (the rule's own then). Storey's own.</summary>
+        public static KindRule? RuleOf(FacadeStyle st, string id) => st.details?.rules != null && st.details.rules.TryGetValue(id, out var r) ? r : null;
+
+        /// <summary>Scattered: how many to the square metre at 100 %, and the gap kept round each (<see cref="KindRule"/>'s defaults).</summary>
+        public static (double density, double gap) ScatterOf(KindRule? r) => (Math.Max(0, r?.density ?? 0.5), Math.Max(0, r?.spacing ?? 0.3));
+
+        /// <summary>Up the corners: how far apart, at least 10 cm (1 m by default).</summary>
+        public static double CornerStep(KindRule? r) => Math.Max(0.1, r?.spacing ?? 1.0);
+
+        /// <summary>Along the top or the foot of the wall: how many to a bay, 1 to 16.</summary>
+        public static int PerBay(KindRule? r) => Math.Min(16, Math.Max(1, r?.per ?? 1));
+
+        /// <summary>Whether a kind by rule goes on storey k, by its <see cref="KindRule.floors"/>.</summary>
+        public static bool OnFloor(KindRule? r, int k) => (r?.floors ?? DetailFloors.All) switch { DetailFloors.Upper => k > 0, DetailFloors.Ground => k == 0, _ => true };
+
         /// <summary>A detail resolved to metres along its edge on one storey.</summary>
         public sealed class Item
         {
@@ -83,6 +100,8 @@ namespace Triband.Storey.Generate
             public int ka, k1; public bool ladder;
             /// <summary>The hand-placed record this came from; null for a rule's item.</summary>
             public DetailData? man;
+            /// <summary>Up a corner (<see cref="Rule.Corners"/>): at the corner where edge <see cref="i"/> starts, on the outside of its walls, facing out along the corner's bisector.</summary>
+            public bool corner;
             /// <summary>As wide as its opening's span (an awning, or an artist's kind fitted across).</summary>
             public bool Spans => hasSpan && (kind.stretch || kind.w <= 0);
             public double Width => Spans ? u1 - u0 : kind.w > 0 ? kind.w : 1;
@@ -207,11 +226,27 @@ namespace Triband.Storey.Generate
                 else { var it = Mk(kind, d.edge, u, d); it.y = d.y ?? 0; Push(it); }
             }
             Trim();
-            // the artist's kinds the style places by rule, in id order
-            List<(DetailKind kind, double p)>? more = null;
+            // the artist's kinds the style places by rule, in id order. Those in a row along the top or foot of the wall, or up
+            // the corners, share their places with the others of their rule and spacing: each takes its chance's share of one
+            // draw a place (from), so their chances together are weights, as several prefabs on one role (Storey's own)
+            List<(DetailKind kind, double p, KindRule? r, double from)>? more = null;
             if (st.details?.kinds != null)
+            {
+                List<(Rule rule, double step, double taken)>? shared = null;
                 foreach (var kv in st.details.kinds)
-                    if (kv.Value > 0 && DetailKinds.Get(kv.Key) is DetailKind dk && RuleFits(dk)) (more ??= new List<(DetailKind, double)>()).Add((dk, kv.Value / 100));
+                {
+                    if (kv.Value <= 0 || !(DetailKinds.Get(kv.Key) is DetailKind dk) || !RuleFits(dk)) continue;
+                    var kr = RuleOf(st, kv.Key); double p = kv.Value / 100, from = 0;
+                    if (dk.rule == Rule.AlongTop || dk.rule == Rule.AlongFoot || dk.rule == Rule.Corners)
+                    {
+                        double step = dk.rule == Rule.Corners ? CornerStep(kr) : PerBay(kr);
+                        shared ??= new List<(Rule, double, double)>(); int g = shared.FindIndex(x => x.rule == dk.rule && x.step == step);
+                        if (g < 0) { g = shared.Count; shared.Add((dk.rule, step, 0)); }
+                        from = shared[g].taken; shared[g] = (dk.rule, step, from + p);
+                    }
+                    (more ??= new List<(DetailKind, double, KindRule?, double)>()).Add((dk, p, kr, from));
+                }
+            }
             bool spans = false;
             // an artist's kind keeps clear of everything already on the wall (spans over two openings meet in the middle instead)
             void PushClear(Item d)
@@ -246,7 +281,7 @@ namespace Triband.Storey.Generate
                         if (Hash01(b.id, "vent", k, i, j) < R.vents) { var it = Mk(vent, i, (gaps[j].Item1 + gaps[j].Item2) / 2, null); it.y = h - 0.95; Push(it); }
                 }
                 if (more == null) continue;
-                foreach (var (dk, p) in more)
+                foreach (var (dk, p, kr, from) in more)
                 {
                     if (dk.rule == Rule.UnderWindows && k > 0)
                         for (int j = 0; j < ops.Count; j++)
@@ -268,12 +303,125 @@ namespace Triband.Storey.Generate
                         }
                     }
                     else if (dk.rule == Rule.OverOpenings && k == 0)
+                    {
                         for (int j = 0; j < ops.Count; j++)
                             if (!ops[j].door && !ops[j].full && Hash01(b.id, dk.id, k, i, j) < p) PushClear(Over(dk, i, ops[j], null));
+                    }
+                    else if (dk.rule == Rule.Scatter && OnFloor(kr, k)) Scatter(dk, p, kr, i, f, ops);
+                    else if (dk.rule == Rule.AlongTop || (dk.rule == Rule.AlongFoot && k == 0)) Along(dk, p, from, kr, i, f, ops);
                 }
             }
+            if (more != null)
+                foreach (var (dk, p, kr, from) in more)
+                    if (dk.rule == Rule.Corners && OnFloor(kr, k)) Corners(dk, p, from, kr);
             if (spans) Trim();
             return out_;
+
+            // scattered over a wall, as brick patches (Storey's own): an even spread, a grid of about as many cells as it
+            // wants with one tried at random in each of them, in a shuffled order, rather than at random anywhere (which
+            // clumps and leaves holes, and wants many more tries). Each keeps its gap from the openings (and the heads over
+            // them), the band, the plinth, the wall's ends, party walls and everything already on the wall.
+            void Scatter(DetailKind dk, double p, KindRule? kr, int i, EdgeFrame f, List<Opening> ops)
+            {
+                var (density, gap) = ScatterOf(kr);
+                double lo = k == 0 ? Math.Max(st.plinthH ?? 0.45, st.foundation.HasValue ? Lod0.Shared.FoundationH(st) : 0) : 0;
+                double band = st.bands && k < N - 1 ? Math.Max(0.05, st.bandH ?? 0.22) : 0;   // as Lod0.Band
+                double y0 = Math.Max(0.2, lo + 0.15), y1 = h - (band > 0 ? band + 0.12 : 0.25), u0 = f.uS + 0.25, u1 = f.uE - 0.25;
+                // the room its middle has
+                double w = dk.w, hh = dk.h, cu0 = u0 + w / 2, cu1 = u1 - w / 2, cv0 = y0 + hh / 2, cv1 = y1 - hh / 2;
+                if (cu1 < cu0 || cv1 < cv0) return;
+                uint s = Facade.Seed(b.id, k, i, 0); foreach (char c in dk.id) s = (s ^ c) * 16777619; if (s == 0) s = 1;
+                double R() { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return (s & 0xFFFFFF) / (double)0x1000000; }
+                double want = (u1 - u0) * (y1 - y0) * density * p;
+                int n = (int)Math.Floor(want) + (R() < want - Math.Floor(want) ? 1 : 0);
+                if (n <= 0) return;
+                double W = cu1 - cu0, H = cv1 - cv0;
+                int cols = Math.Max(1, Math.Min(n, (int)Math.Round(Math.Sqrt(n * (W + 0.01) / (H + 0.01))))), rows = (n + cols - 1) / cols;
+                var order = new int[cols * rows];
+                for (int c = 0; c < order.Length; c++) order[c] = c;
+                for (int c = order.Length - 1; c > 0; c--) { int x = (int)(R() * (c + 1)); (order[c], order[x]) = (order[x], order[c]); }
+                var party = Party.Ranges(site, b, k0, i);
+                for (int c = 0; c < n; c++)
+                    for (int tries = 0; tries < 4; tries++)
+                    {
+                        int cell = order[c];
+                        double uc = cu0 + (cell % cols + R()) * W / cols, vc = cv0 + (cell / cols + R()) * H / rows;
+                        double a0 = uc - w / 2 - gap, a1 = uc + w / 2 + gap, b0 = vc - hh / 2 - gap, b1 = vc + hh / 2 + gap;
+                        if (!Clear(a0, a1, b0, b1, i, ops)) continue;
+                        bool onParty = false; foreach (var r in party) if (a0 < r.e + 0.3 && a1 > r.s - 0.3) { onParty = true; break; }
+                        if (onParty) break;
+                        var it = Mk(dk, i, uc, null); it.y = vc - hh / 2 - dk.bottom; out_.Add(it);
+                        break;
+                    }
+            }
+
+            // whether a box (u across, v up from the floor) is clear of the openings with their heads, and of what is on the wall
+            bool Clear(double a0, double a1, double b0, double b1, int i, List<Opening> ops)
+            {
+                foreach (var o in ops) if (a0 < o.Right + 0.12 && a1 > o.Left - 0.12 && b0 < o.Top + 0.45 && b1 > o.Bottom - 0.15) return false;
+                foreach (var m in out_)
+                {
+                    if (m.i != i || m.corner) continue;
+                    double half = m.Width / 2; var (mlo, mhi) = Rise(m, h);
+                    if (a0 < m.u + half && a1 > m.u - half && b0 < mhi && b1 > mlo) return false;
+                }
+                return true;
+            }
+
+            // in a row along the top of the tier's wall (its pivot at the top of the storey's wall: it hangs below it), or
+            // along the foot of the ground floor's (its pivot at the floor), so many to a bay: the bays as the style lays
+            // them out along the whole edge, centred. Never across a doorway, past the wall's end or where the tier above goes on.
+            void Along(DetailKind dk, double p, double from, KindRule? kr, int i, EdgeFrame f, List<Opening> ops)
+            {
+                bool top = dk.rule == Rule.AlongTop;
+                List<(double, double)>? open = null;
+                if (top && k < N - 1)
+                {
+                    if (Derived.TierStart(b, k + 1) == k0) return;   // the wall goes on up
+                    open = Geo.ExposedRanges(fp, Derived.OutlineAt(b, k + 1), i);
+                    if (open.Count == 0) return;
+                }
+                int per = PerBay(kr); double bay = Math.Max(0.5, st.bay), L = f.e.L;
+                int slots = (int)Math.Floor(L / bay); if (slots == 0) return;
+                double off = (L - slots * bay) / 2, sp = bay / per, half = dk.w / 2;
+                var (fs, fe) = f.m.Span(Dim.T_EXT, Dim.T_EXT);
+                for (int j = 0; j < slots * per; j++)
+                {
+                    double u = off + j * sp + sp / 2, x = Hash01(b.id, top ? "top" : "foot", k, i, j * 32 + per);
+                    if (x < from || x >= from + p || u - half < fs - 1e-6 || u + half > fe + 1e-6) continue;
+                    bool ok = open == null;
+                    if (open != null) foreach (var (s0, e0) in open) if (u > s0 && u < e0) { ok = true; break; }
+                    if (!top) foreach (var o in ops) if (o.door && u + half > o.Left && u - half < o.Right) { ok = false; break; }
+                    if (!ok) continue;
+                    var it = Mk(dk, i, u, null); it.y = top ? h : 0; Push(it);
+                }
+            }
+
+            // stacked up the corners, steps of the kind's spacing centred on each storey, each one middled in its step; facing
+            // out along the corner's bisector, on the outside of its walls. Not where a party wall meets the corner.
+            void Corners(DetailKind dk, double p, double from, KindRule? kr)
+            {
+                double step = CornerStep(kr); int steps = (int)Math.Floor(h / step); if (steps == 0) return;
+                double off = (h - steps * step) / 2; var mode = kr?.corners ?? DetailCorners.Outward;
+                for (int i = 0; i < n; i++)
+                {
+                    int ip = (i - 1 + n) % n;
+                    var a = fp[ip]; var c = fp[i]; var e = fp[(i + 1) % n];
+                    double ax = c.x - a.x, az = c.z - a.z, cx = e.x - c.x, cz = e.z - c.z, la = Geo.Hypot(ax, az), lc = Geo.Hypot(cx, cz);
+                    if (la < 1e-6 || lc < 1e-6) continue;
+                    double turn = (ax * cz - az * cx) / (la * lc) * (ccw ? 1 : -1);
+                    if (Math.Abs(turn) < 1e-4) continue;   // no corner: the walls run on
+                    bool outward = turn > 0;
+                    if ((mode == DetailCorners.Outward && !outward) || (mode == DetailCorners.Inward && outward)) continue;
+                    if (OnParty(i, 0) || OnParty(ip, la)) continue;
+                    for (int j = 0; j < steps; j++)
+                    {
+                        double x = Hash01(b.id, "corner", k, i, j * 32 + (int)Math.Min(31, Math.Round(step * 10)));
+                        if (x < from || x >= from + p) continue;
+                        var it = Mk(dk, i, 0, null); it.corner = true; it.y = off + (j + 0.5) * step - dk.bottom - dk.h / 2; out_.Add(it);
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -296,12 +444,13 @@ namespace Triband.Storey.Generate
             var items = At(site, b, k); if (items.Count == 0) return;
             var fp = Derived.OutlineAt(b, k); bool ccw = Geo.Area2(fp) > 0;
             var Wp = new List<Vec2>(fp.Count); foreach (var p in fp) Wp.Add(new Vec2(p.x + b.pos.x, p.z + b.pos.z));
-            double y = Derived.FloorBase(b, k), h = Derived.FloorH(b, k), T = Dim.T_EXT;
+            double y = Derived.FloorBase(b, k), h = Derived.FloorH(b, k), T = Dim.T_EXT; var st = Derived.StyleAt(b, k);
             Swatch metal = C.detailMetal, grille = C.grille, dark = C.detailDark, rail = C.rail, canvas = C.trim, canvasIn = C.trimShade, disc = C.dish;
             foreach (var d in items)
             {
                 var e = Geo.EdgeInfo(Wp, d.i, ccw); var F = e.F; var u = e.u; var w = e.w; op.Ctx(Geo.WallCtx(e.a, u, w, e.L), 1);
                 if (op.ShapeOnly) continue;   // the wall is numbered; the rest is faces
+                if (lod != 0 && d.kind.noLod1) continue;   // too small to see at LOD1's distance (Storey's own)
                 P3 X(double uu, double yy, double ww) => F.At(uu, yy, ww);
                 void Bx(double u0, double u1, double y0, double y1, double w0, double w1, Swatch c, Swatch? cIn = null, Skip sk = Skip.None) => op.OBox(F, u0, u1, y0, y1, w0, w1, c, cIn, sk);
                 double uc = d.u;
@@ -311,7 +460,19 @@ namespace Triband.Storey.Generate
                     double sx = 1, sy = 1, um = uc, y0 = y + d.y;
                     if (d.kind.anchor == Anchor.Opening && d.Spans) { um = (d.u0 + d.u1) / 2; sx = (d.u1 - d.u0) / Math.Max(0.05, d.kind.w); }
                     else if (d.kind.anchor == Anchor.Tier) { y0 = y; if (d.kind.stretch && d.kind.h > 0.05) sy = h / d.kind.h; }
-                    DetailKinds.Place(op, F, lod == 0 || d.kind.lod1 == null ? full : d.kind.lod1, um, y0, sx, sy, C);
+                    if (d.corner)
+                    {
+                        // up a corner: a frame out along the bisector of its two walls' outward normals, from where their outer
+                        // faces meet
+                        var pe = Geo.EdgeInfo(Wp, (d.i - 1 + Wp.Count) % Wp.Count, ccw);
+                        double dot = pe.w.x * w.x + pe.w.z * w.z, bx = pe.w.x + w.x, bz = pe.w.z + w.z, bl = Geo.Hypot(bx, bz);
+                        if (1 + dot < 1e-6 || bl < 1e-9) continue;   // a wall doubling back on itself
+                        double ox = e.a.x + bx * T / (1 + dot), oz = e.a.z + bz * T / (1 + dot); bx /= bl; bz /= bl;
+                        F = new Frame(new Vec2(ox - bx * T, oz - bz * T), new Vec2(bz, -bx), new Vec2(bx, bz)); um = 0;
+                    }
+                    // the style's colour for its main colour, where the style gives one (Storey's own)
+                    ColorSlot? to = RuleOf(st, d.kind.id)?.color is string cr ? KindColors.SlotOf(cr) : null;
+                    DetailKinds.Place(op, F, lod == 0 || d.kind.lod1 == null ? full : d.kind.lod1, um, y0, sx, sy, C, to.HasValue ? d.kind.main : null, to);
                     continue;
                 }
                 switch (d.kind.id)

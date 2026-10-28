@@ -51,6 +51,17 @@ namespace Triband.Storey.Generate
         public Mesh? lod0;
         /// <summary>LOD1's mesh; null takes <see cref="lod0"/>.</summary>
         public Mesh? lod1;
+        /// <summary>
+        /// Left out of LOD1, whatever its meshes: for small details (brick patches) that LOD1's distance can't show, where
+        /// many would cost the lean shell more than its walls do (docs/EDITOR.md §6.12). Storey's own.
+        /// </summary>
+        public bool noLod1;
+        /// <summary>
+        /// The colour most of its LOD0 triangles have (a part's own or its style colour), found when it is registered: what a
+        /// style's colour for it replaces (<see cref="KindRule.color"/>), as the old generator recoloured a detail's most used
+        /// palette colour. Null for the generator's own.
+        /// </summary>
+        public ColorSlot? main;
     }
 
     /// <summary>
@@ -116,8 +127,23 @@ namespace Triband.Storey.Generate
                         KindPart.Of(m.P, m.N, part.tris, ref part.ready);
                         part.ownSlot = part.own != null ? KindColors.SlotOf(part.own) : null;
                     }
+            k.main = Main(k.lod0);
             all[k.id] = k; Version++;
         }
+        // the colour of the most triangles, its parts' colours as placed; the first part's wins a tie
+        static ColorSlot? Main(DetailKind.Mesh? m)
+        {
+            if (m == null) return null;
+            ColorSlot? best = null; int most = 0;
+            foreach (var part in m.parts)
+            {
+                var c = part.ownSlot ?? part.slot; int tris = 0;
+                foreach (var q in m.parts) if ((q.ownSlot ?? q.slot) == c) tris += q.tris.Length / 3;
+                if (tris > most) { most = tris; best = c; }
+            }
+            return best;
+        }
+
         public static void Remove(string id) { if (!IsBuiltIn(id) && all.TryRemove(id, out _)) Version++; }
         public static DetailKind? Get(string? id) => id != null && all.TryGetValue(id, out var k) ? k : null;
         public static IEnumerable<DetailKind> All => all.Values;
@@ -125,16 +151,19 @@ namespace Triband.Storey.Generate
         /// <summary>
         /// Put an artist's mesh on a wall: its pivot at <paramref name="u"/> along the wall and <paramref name="y0"/> up
         /// (site heights), on the wall's outer face; stretched by <paramref name="sx"/> across and <paramref name="sy"/>
-        /// up. Each part takes its colour from the style.
+        /// up. Each part takes its colour from the style; those of colour <paramref name="from"/> take <paramref name="to"/>
+        /// instead (a style's colour for the kind's main colour).
         /// </summary>
-        public static void Place(MeshBuilder op, Frame F, DetailKind.Mesh m, double u, double y0, double sx, double sy, Palette C)
+        public static void Place(MeshBuilder op, Frame F, DetailKind.Mesh m, double u, double y0, double sx, double sy, Palette C, ColorSlot? from = null, ColorSlot? to = null)
         {
             if (op.ShapeOnly || m.P.Length == 0) return;
             var at = new KindPlace(F, u, y0, sx, sy);
             foreach (var whole in m.parts)
             {
                 var part = KindPart.Of(m.P, m.N, whole.tris, ref whole.ready);
-                if (part.Tris > 0) part.Put(op, at, new Swatch(C.style, whole.ownSlot ?? whole.slot));
+                var c = whole.ownSlot ?? whole.slot;
+                if (to.HasValue && c == from) c = to.Value;
+                if (part.Tris > 0) part.Put(op, at, new Swatch(C.style, c));
             }
         }
     }
