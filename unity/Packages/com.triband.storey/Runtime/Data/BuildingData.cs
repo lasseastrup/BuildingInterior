@@ -392,7 +392,7 @@ namespace Triband.Storey
     {
         /// <summary>Scattered: how many to the square metre of wall at 100 %; null = 0.5.</summary>
         public double? density;
-        /// <summary>Scattered: the clear gap kept round each, metres (null = 0.3). Up the corners: how far apart they are up the corner (null = 1 m).</summary>
+        /// <summary>Scattered: the clear gap kept round each, metres (null = 0.1). Up the corners: how far apart they are up the corner (null = 1 m).</summary>
         public double? spacing;
         /// <summary>Along the top or foot of the wall: how many to each bay; null = 1.</summary>
         public int? per;

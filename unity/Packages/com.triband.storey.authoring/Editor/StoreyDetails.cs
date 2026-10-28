@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Triband.Storey.Generate;
 using Triband.Storey.Unity;
+using Triband.Storey.Validate;
 using UnityEditor;
 using UnityEngine;
 
@@ -47,14 +48,13 @@ namespace Triband.Storey.Editor
         /// <summary>Search again next time (the project changed).</summary>
         public static void Changed() => all = null;
 
-        /// <summary>The artist's details made from a model just reimported, baked again.</summary>
+        /// <summary>The artist's details made from what was just imported, baked again: a model, a prefab, or anything a prefab uses.</summary>
         public static void Rebake(ISet<string> imported)
         {
+            StoreyOpenings.Forget(imported);
             foreach (var d in All())
             {
-                if (d.BuiltIn) continue;
-                bool hit = (d.mesh != null && imported.Contains(AssetDatabase.GetAssetPath(d.mesh))) || (d.lod1Mesh != null && imported.Contains(AssetDatabase.GetAssetPath(d.lod1Mesh)));
-                if (!hit) continue;
+                if (d.BuiltIn || !StoreyOpenings.MadeFrom(imported, d.prefab, d.lod1Prefab, d.mesh, d.lod1Mesh)) continue;
                 d.Bake(); EditorUtility.SetDirty(d);
             }
         }
@@ -131,6 +131,10 @@ namespace Triband.Storey.Editor
                 (Details.Rule.None, new GUIContent("By hand only")),
                 (Details.Rule.UnderWindows, new GUIContent("Under upper-floor windows", "As AC units: under a share of the upper floors' windows, never on glass curtain walls")),
                 (Details.Rule.BareWall, new GUIContent("Between windows", "As vents: in the stretches of wall between windows, near the ceiling")),
+                (Details.Rule.Scatter, new GUIContent("Scattered on the walls", "As brick patches: spread evenly over every wall, so many to the square metre, clear of the openings, the band and the plinth. Its size places it, wherever its pivot is")),
+                (Details.Rule.AlongTop, new GUIContent("Along the top of the wall", "In a row along the top of each tier's wall, so many to a bay; its pivot at the top of the wall, so it hangs below it")),
+                (Details.Rule.AlongFoot, new GUIContent("Along the foot of the wall", "In a row along the foot of the ground floor's wall, so many to a bay, never across a doorway; its pivot on the ground")),
+                (Details.Rule.Corners, new GUIContent("Up the corners", "Stacked up the building's corners, so far apart, facing out along each corner's bisector; its pivot where the corner's walls meet")),
             },
             Details.Anchor.Opening => new[]
             {
@@ -149,6 +153,9 @@ namespace Triband.Storey.Editor
     [CustomEditor(typeof(StoreyDetail))]
     internal sealed class StoreyDetailEditor : UnityEditor.Editor
     {
+        // the last Check on a building of each asset, until it is baked again
+        static readonly Dictionary<StoreyDetail, KindTrial.Result> trials = new Dictionary<StoreyDetail, KindTrial.Result>();
+
         public override void OnInspectorGUI()
         {
             var d = (StoreyDetail)target;
@@ -158,11 +165,12 @@ namespace Triband.Storey.Editor
                 var k = DetailKinds.Get(d.Id)!;
                 string rule = StoreyDetails.Rules(k.anchor).FirstOrDefault(r => r.rule == k.rule).label?.text ?? "By hand only";
                 EditorGUILayout.HelpBox($"One of Storey's own details: the generator draws it. {StoreyDetails.Anchors[(int)k.anchor].text}; {rule.ToLowerInvariant()}.", MessageType.Info);
-                EditorGUILayout.LabelField("Make your own with Assets ▸ Create ▸ Storey ▸ Facade Detail, or duplicate this one and give the copy a mesh.", StoreyInspectorUI.Caption);
+                EditorGUILayout.LabelField("Make your own with Assets ▸ Create ▸ Storey ▸ Facade Detail (or Facade Detail from Prefab), or duplicate this one and give the copy a mesh or a prefab.", StoreyInspectorUI.Caption);
                 return;
             }
             var before = d.mesh;
             bool changed = false;
+            if (d.prefab != null) d.mesh = null;   // the prefab wins
             EditorGUI.BeginChangeCheck();
             int a = EditorGUILayout.Popup(new GUIContent("Goes", "Where it goes on a building"), (int)d.anchor, StoreyDetails.Anchors);
             if (a != (int)d.anchor) { Undo.RecordObject(d, "Where the detail goes"); d.anchor = (Details.Anchor)a; changed = true; }
@@ -172,33 +180,57 @@ namespace Triband.Storey.Editor
             int r = EditorGUILayout.Popup(new GUIContent("Placed by rule", "Where a style's rules put it, at the density the style gives it (Facade tab ▸ Details by rule)"), at, rules.Select(x => x.label).ToArray());
             if (r != at) { Undo.RecordObject(d, "The detail's rule"); d.rule = rules[r].rule; changed = true; }
             serializedObject.Update();
-            foreach (var f in new[] { "mesh", "lod1Mesh", "facesBack", "size" }) EditorGUILayout.PropertyField(serializedObject.FindProperty(f), true);
+            var fields = d.prefab != null ? new[] { "prefab", "lod1Prefab", "facesBack" } : new[] { "prefab", "mesh", "lod1Mesh", "facesBack", "size" };
+            foreach (var f in fields) EditorGUILayout.PropertyField(serializedObject.FindProperty(f), true);
             if (d.anchor != Details.Anchor.Wall) EditorGUILayout.PropertyField(serializedObject.FindProperty("stretch"), true);
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("leaveOutOfLod1"), new GUIContent("Leave out of LOD1", "For a small detail (a brick patch) that LOD1's distance can't show: many would cost the lean shell more than its walls do"));
             serializedObject.ApplyModifiedProperties();
             changed |= EditorGUI.EndChangeCheck();
-            if (d.parts.Count > 0) EditorGUILayout.LabelField(new GUIContent("Parts", "Each submesh takes one of the style's colours, or keeps a palette colour of its own whatever the style: the model's materials only name them."), EditorStyles.boldLabel);
+            if (d.parts.Count > 0) EditorGUILayout.LabelField(new GUIContent("Parts", d.prefab != null
+                ? "Each of the prefab's materials, or each palette colour of a model the Model Remapper coloured, takes one of the style's colours or keeps its own: the materials themselves aren't used. A style can give its main colour another (Facade tab ▸ Details by rule)."
+                : "Each submesh takes one of the style's colours, or keeps a palette colour of its own whatever the style: the model's materials only name them."), EditorStyles.boldLabel);
             for (int i = 0; i < d.parts.Count; i++)
             {
                 var p = d.parts[i];
-                changed |= StoreyPartColours.Row(d, "#" + i, p.label.Length > 0 ? p.label : "Part " + (i + 1), ref p.colour, ref p.own, false, null);
+                changed |= StoreyPartColours.Row(d, p.key.Length > 0 ? p.key : "#" + i, p.label.Length > 0 ? p.label : "Part " + (i + 1), ref p.colour, ref p.own, false, StoreyPartColours.PaletteOf(p.key));
             }
-            if (d.mesh != before && d.mesh != null) Fill(d);
-            if (changed || (d.Id.Length > 0 && DetailKinds.Get(d.Id) == null)) { d.Bake(); EditorUtility.SetDirty(d); }
-            if (d.mesh == null) { EditorGUILayout.HelpBox(Pivot(d.anchor) + " Each submesh is one part.", MessageType.Info); return; }
-            var b = d.mesh.bounds;
-            int tris = 0; for (int s = 0; s < d.mesh.subMeshCount; s++) tris += d.mesh.GetTriangles(s).Length / 3;
-            EditorGUILayout.HelpBox($"{tris} triangles in {d.mesh.subMeshCount} part{(d.mesh.subMeshCount == 1 ? "" : "s")}; {b.size.x:0.00} × {b.size.y:0.00} m, {b.size.z:0.00} m out of the wall. Pick it in the Facade tab's Place on walls.", MessageType.None);
-            if (Mathf.Abs(b.center.x) > 0.05f || (d.anchor != Details.Anchor.Opening && Mathf.Abs(b.min.y) > 0.05f))
+            if (d.prefab == null && d.mesh != before && d.mesh != null) Fill(d);
+            if (changed || (d.Id.Length > 0 && DetailKinds.Get(d.Id) == null)) { d.Bake(); EditorUtility.SetDirty(d); trials.Remove(d); }
+            if (d.mesh == null && d.prefab == null) { EditorGUILayout.HelpBox(Pivot(d.anchor) + " Each submesh is one part. Or give it a prefab: every object under it with a mesh, its root's origin the pivot.", MessageType.Info); return; }
+            var (tris, b) = d.Made();
+            string what = d.prefab != null ? $"{d.objects} object{(d.objects == 1 ? "" : "s")}, {d.parts.Count} part{(d.parts.Count == 1 ? "" : "s")}" : $"{d.parts.Count} part{(d.parts.Count == 1 ? "" : "s")}";
+            EditorGUILayout.HelpBox($"{tris} triangles ({what}); {b.size.x:0.00} × {b.size.y:0.00} m, {b.max.z:0.00} m out of the wall{(d.leaveOutOfLod1 ? "; left out of LOD1" : "")}. Pick it in the Facade tab's Place on walls.", MessageType.None);
+            if (d.prefab != null)
+            {
+                foreach (var line in d.notes.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)) EditorGUILayout.HelpBox(line, MessageType.Info);
+                if (d.hiddenFaces > 0) EditorGUILayout.LabelField($"{d.hiddenFaces} face{(d.hiddenFaces == 1 ? "" : "s")} in the wall, or on its face turned into it, left out.", StoreyInspectorUI.Caption);
+                if (d.wallFaces > 0) EditorGUILayout.HelpBox($"{d.wallFaces} face{(d.wallFaces == 1 ? " lies" : "s lie")} on the wall's outer face, facing out: {(d.wallFaces == 1 ? "it flickers" : "they flicker")} against the wall. Move {(d.wallFaces == 1 ? "it" : "them")} a centimetre out.", MessageType.Warning);
+            }
+            bool placedBySize = d.rule == Details.Rule.Scatter || d.rule == Details.Rule.Corners;   // its bounds place it, wherever its pivot is
+            if (!placedBySize && (Mathf.Abs(b.center.x) > 0.05f || (d.anchor != Details.Anchor.Opening && d.rule != Details.Rule.AlongTop && Mathf.Abs(b.min.y) > 0.05f)))
                 EditorGUILayout.HelpBox("The pivot looks off. " + Pivot(d.anchor), MessageType.Warning);
+            if (!d.leaveOutOfLod1 && StoreyDetailBake.Small(d.size) && (d.rule == Details.Rule.Scatter || d.rule == Details.Rule.Corners))
+                EditorGUILayout.HelpBox("A small detail many go on: LOD1's distance can't show it, and it costs every building at LOD1. Tick Leave out of LOD1.", MessageType.Info);
             if (b.min.z < -0.05f)
                 EditorGUILayout.HelpBox("The mesh goes into the wall: keep it at Z 0 and out (+Z), or it shows through the wall inside.", MessageType.Warning);
             if (d.anchor == Details.Anchor.Tier && d.stretch && d.FlatEnds())
                 EditorGUILayout.HelpBox("Fitted to each storey, its flat top and bottom lie on the floor line, where the floor band's top is, and flicker: leave them out (a pipe needs no caps), or turn off Stretch.", MessageType.Warning);
-            if (d.mesh.subMeshCount > d.parts.Count)
+            if (d.mesh != null && d.mesh.subMeshCount > d.parts.Count)
                 EditorGUILayout.HelpBox("Some parts have no colour set: they take Detail metal.", MessageType.Warning);
-            if (d.lod1Mesh == null && tris > 300)
-                EditorGUILayout.HelpBox("LOD1 draws the full mesh: give it a much simpler LOD1 mesh, as many buildings are seen in LOD1 at once.", MessageType.Warning);
-            if (GUILayout.Button(new GUIContent("Name the parts from the model again", "Guess each part's colour from its material's name, and the size from the mesh"))) { Undo.RecordObject(d, "Name the parts"); Fill(d); d.Bake(); EditorUtility.SetDirty(d); }
+            if (d.lod1Mesh == null && d.lod1Prefab == null && !d.leaveOutOfLod1 && tris > 300)
+                EditorGUILayout.HelpBox("LOD1 draws the full mesh: give it a much simpler LOD1, or leave it out of LOD1, as many buildings are seen in LOD1 at once.", MessageType.Warning);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (d.prefab != null && GUILayout.Button(new GUIContent("Open Prefab", "Edit the prefab; saving it bakes this again"))) AssetDatabase.OpenAsset(d.prefab);
+                if (GUILayout.Button(new GUIContent("Check on a building", "Build a 20 × 12 m block of six storeys with it (by its rule at 100 %, or put by hand), count its triangles against the block's own, and look for faces that flicker")))
+                    trials[d] = KindTrial.Run(DetailKinds.Get(d.Id) ?? d.ToKind());
+                if (d.prefab == null && GUILayout.Button(new GUIContent("Name the parts again", "Guess each part's colour from its material's name, and the size from the mesh"))) { Undo.RecordObject(d, "Name the parts"); Fill(d); d.Bake(); EditorUtility.SetDirty(d); trials.Remove(d); }
+            }
+            if (trials.TryGetValue(d, out var t))
+            {
+                string flicker = t.overlaps.Count == 0 ? "No faces overlap." : $"{t.overlaps.Count} pair{(t.overlaps.Count == 1 ? "" : "s")} of faces overlap and flicker, the first at {t.overlaps[0].At}.";
+                EditorGUILayout.HelpBox($"On a 20 × 12 m block of six storeys, {t.placed} of it: LOD0 {t.lod0:N0} triangles ({t.plainLod0:N0} without), LOD1 {t.lod1:N0} ({t.plainLod1:N0}). {flicker}", t.overlaps.Count == 0 ? MessageType.Info : MessageType.Warning);
+            }
         }
 
         static string Pivot(Details.Anchor a) => a == Details.Anchor.Opening

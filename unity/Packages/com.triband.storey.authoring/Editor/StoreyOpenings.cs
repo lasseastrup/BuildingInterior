@@ -46,7 +46,7 @@ namespace Triband.Storey.Editor
         /// <summary>The openings made from what was just imported, baked again: a model, a prefab, or anything a prefab uses.</summary>
         public static void Rebake(ISet<string> imported)
         {
-            foreach (var p in imported) dependencies.Remove(p);   // a prefab saved may use other things now
+            Forget(imported);
             foreach (var o in All())
             {
                 if (!MadeFrom(o, imported)) continue;
@@ -54,9 +54,12 @@ namespace Triband.Storey.Editor
             }
         }
 
-        static bool MadeFrom(StoreyOpening o, ISet<string> imported)
+        static bool MadeFrom(StoreyOpening o, ISet<string> imported) => MadeFrom(imported, o.prefab, o.lod1Prefab, o.mesh, o.lod1Mesh);
+
+        /// <summary>Whether any of <paramref name="sources"/> was just imported: a model or a prefab, or anything a prefab uses (a facade detail's too).</summary>
+        internal static bool MadeFrom(ISet<string> imported, params UnityEngine.Object?[] sources)
         {
-            foreach (var src in new UnityEngine.Object?[] { o.prefab, o.lod1Prefab, o.mesh, o.lod1Mesh })
+            foreach (var src in sources)
             {
                 if (src == null) continue;
                 string path = AssetDatabase.GetAssetPath(src);
@@ -65,6 +68,9 @@ namespace Triband.Storey.Editor
             }
             return false;
         }
+
+        /// <summary>What the prefabs just imported use is asked again: a prefab saved may use other things now.</summary>
+        internal static void Forget(ISet<string> imported) { foreach (var p in imported) dependencies.Remove(p); }
 
         // what each prefab uses (its meshes, materials, nested prefabs and a variant's base), asked once
         static readonly Dictionary<string, string[]> dependencies = new Dictionary<string, string[]>(StringComparer.Ordinal);

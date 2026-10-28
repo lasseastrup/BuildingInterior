@@ -43,6 +43,15 @@ namespace Triband.Storey.Generate
         {
             public double cx, cy, w, h, wallZ;
             public Hole(double cx, double cy, double w, double h, double wallZ = 0) { this.cx = cx; this.cy = cy; this.w = w; this.h = h; this.wallZ = wallZ; }
+
+            /// <summary>
+            /// No hole: the wall is whole, its outer face on the root's Z 0, and the root's origin is the pivot. A facade detail's
+            /// (<see cref="DetailKind"/>): what lies in the wall, or on its face turned into it, is left out. Storey's own.
+            /// </summary>
+            public static Hole None => new Hole(0, 0, 0, 0);
+
+            /// <summary>Whether this is <see cref="None"/>: a whole wall.</summary>
+            public bool Whole => w <= 0 || h <= 0;
         }
 
         /// <summary>
@@ -105,7 +114,7 @@ namespace Triband.Storey.Generate
                 var cr = P3.Cross(B - A, C - A); double area = cr.Length;
                 if (area < 1e-10) { if (counted) r.degenerate++; return; }
                 var fn = cr * (1 / area);
-                switch (Where(A, B, C, fn, hole.w, hole.h))
+                switch (Where(A, B, C, fn, hole.w, hole.h, hole.Whole))
                 {
                     case Place.Hidden: r.hidden++; return;
                     case Place.OnWall: r.onWall++; break;
@@ -275,25 +284,27 @@ namespace Triband.Storey.Generate
         /// <paramref name="h"/> high: buried in the wall (or on one of its faces, turned into it), lying on its outer face
         /// turned out, or anywhere else. The wall fills z from −<see cref="Dim.T_EXT"/> to 0 all round the hole.
         /// </summary>
-        static Place Where(P3 a, P3 b, P3 c, P3 n, double w, double h)
+        /// <paramref name="whole"/>: there is no hole, the wall is whole (a facade detail's).
+        static Place Where(P3 a, P3 b, P3 c, P3 n, double w, double h, bool whole = false)
         {
             double T = Dim.T_EXT, hw = w / 2;
             double xmin = Math.Min(a.x, Math.Min(b.x, c.x)), xmax = Math.Max(a.x, Math.Max(b.x, c.x));
             double ymin = Math.Min(a.y, Math.Min(b.y, c.y)), ymax = Math.Max(a.y, Math.Max(b.y, c.y));
             double zmin = Math.Min(a.z, Math.Min(b.z, c.z)), zmax = Math.Max(a.z, Math.Max(b.z, c.z));
             // round the hole: wholly to one side of it (beside, under or over), within the wall's depth
-            bool round = xmax <= -hw + Eps || xmin >= hw - Eps || ymax <= Eps || ymin >= h - Eps;
+            bool round = whole || xmax <= -hw + Eps || xmin >= hw - Eps || ymax <= Eps || ymin >= h - Eps;
             if (!round) return Place.Kept;
             bool onFace = zmax <= Eps && zmin >= -Eps;
             if (onFace && n.z > 0.5) return Place.OnWall;
             if (zmin < -T - Eps || zmax > Eps) return Place.Kept;
             // its middle strictly inside the wall: buried, whichever way it faces
             double cx = (a.x + b.x + c.x) / 3, cy = (a.y + b.y + c.y) / 3, cz = (a.z + b.z + c.z) / 3;
-            bool inside = cz < -Eps && cz > -T + Eps && (cx < -hw - Eps || cx > hw + Eps || cy < -Eps || cy > h + Eps);
+            bool inside = cz < -Eps && cz > -T + Eps && (whole || cx < -hw - Eps || cx > hw + Eps || cy < -Eps || cy > h + Eps);
             if (inside) return Place.Hidden;
             // on one of the wall's faces (its middle is, so all of it is): hidden when turned into the wall
             if (onFace) return n.z < -0.5 ? Place.Hidden : Place.Kept;
             if (zmax <= -T + Eps) return n.z > 0.5 ? Place.Hidden : Place.Kept;   // the wall's back
+            if (whole) return Place.Kept;
             if (xmax <= -hw + Eps && xmin >= -hw - Eps) return n.x < -0.5 ? Place.Hidden : Place.Kept;   // the hole's sides
             if (xmin >= hw - Eps && xmax <= hw + Eps) return n.x > 0.5 ? Place.Hidden : Place.Kept;
             if (ymax <= Eps && ymin >= -Eps) return n.y < -0.5 ? Place.Hidden : Place.Kept;   // its bottom and top

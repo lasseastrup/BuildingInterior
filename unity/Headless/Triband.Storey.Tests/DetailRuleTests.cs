@@ -20,9 +20,9 @@ namespace Triband.Storey.Tests
         readonly ITestOutputHelper output;
         public DetailRuleTests(ITestOutputHelper o) { output = o; }
 
-        static DetailKind Kind(Details.Rule rule, double w = 0.6, double h = 0.3, double d = 0.05, double y0 = 0, bool noLod1 = false)
+        static DetailKind Kind(Details.Rule rule, double w = 0.6, double h = 0.3, double d = 0.05, double y0 = 0, bool noLod1 = false, string? id = null)
         {
-            var k = DetailKindTests.Kind(Details.Anchor.Wall, rule, w, h, d, y0: y0);
+            var k = DetailKindTests.Kind(Details.Anchor.Wall, rule, w, h, d, y0: y0, id: id);
             if (noLod1) { k.noLod1 = true; DetailKinds.Register(k); }
             return k;
         }
@@ -86,7 +86,7 @@ namespace Triband.Storey.Tests
         [Fact]
         public void ScatteredDetailsSpreadOverTheWallsClearOfOpeningsAndOneAnother()
         {
-            var k = Kind(Details.Rule.Scatter);
+            var k = Kind(Details.Rule.Scatter, id: "5ca77e2ed0000000000000000000a001");   // its seed, the same every run
             var (b, s) = DetailKindTests.Block(bb => { Floors.SetCount(bb, 4); Set(bb, k.id, 100, new KindRule { density = 0.6, spacing = 0.2 }); });
             var all = ItemsByFloor(s, b, k);
             Assert.True(all.Count > 40, $"{all.Count} scattered");
@@ -268,6 +268,41 @@ namespace Triband.Storey.Tests
             }
         }
 
+        [Fact]
+        public void APrefabsDetailBakesAgainstAWholeWallItsPivotTheRootsOrigin()
+        {
+            // a 40 × 20 cm block from 10 cm into the wall to 5 cm out of it, its pivot 1 m left and 2 m up of the root's origin
+            var P = new List<P3>(); var N = new List<P3>(); var T = new List<int>();
+            void Q(P3 a, P3 b, P3 c, P3 e, P3 n)
+            {
+                var x = P3.Cross(b - a, c - a); if (x.x * n.x + x.y * n.y + x.z * n.z > 0) (b, e) = (e, b);
+                int at = P.Count; P.AddRange(new[] { a, b, c, e }); N.AddRange(new[] { n, n, n, n }); T.AddRange(new[] { at, at + 1, at + 2, at, at + 2, at + 3 });
+            }
+            double x0 = -0.2, x1 = 0.2, y0 = 0, y1 = 0.2, z0 = -0.1, z1 = 0.05;
+            Q(new P3(x0, y0, z1), new P3(x0, y1, z1), new P3(x1, y1, z1), new P3(x1, y0, z1), new P3(0, 0, 1));    // front
+            Q(new P3(x0, y0, z0), new P3(x0, y1, z0), new P3(x1, y1, z0), new P3(x1, y0, z0), new P3(0, 0, -1));   // back, in the wall
+            Q(new P3(x0, y1, z0), new P3(x0, y1, z1), new P3(x1, y1, z1), new P3(x1, y1, z0), new P3(0, 1, 0));    // top, half in the wall
+            var src = new KindBake.Source { P = P.ToArray(), N = N.ToArray(), M = new double[] { 1, 0, 0, 1, 0, 1, 0, 2, 0, 0, 1, 0 } };
+            src.subs.Add(new KindBake.Sub { tris = T.ToArray(), key = "m" });
+            var r = KindBake.Bake(new[] { src }, KindBake.Hole.None, false);
+            Assert.Equal(2, r.hidden);   // the back
+            Assert.Equal(4, r.Tris);     // the front and the top, which shows where it stands out
+            Assert.Equal(1.0, (r.min.x + r.max.x) / 2, 9); Assert.Equal(2.0, r.min.y, 9); Assert.Equal(0.05, r.max.z, 9);
+        }
+
+        [Fact]
+        public void CheckOnABuildingTriesADetailByItsRule()
+        {
+            var k = Kind(Details.Rule.Scatter, noLod1: true, id: "5ca77e2ed0000000000000000000a002");
+            var t = KindTrial.Run(k);
+            Assert.True(t.placed > 20, $"{t.placed} placed");
+            Assert.True(t.lod0 > t.plainLod0);
+            Assert.Equal(t.plainLod1, t.lod1);
+            Assert.Empty(t.overlaps);
+            var byHand = KindTrial.Run(DetailKindTests.Kind());
+            Assert.Equal(6, byHand.placed);
+        }
+
         /// <summary>
         /// What brick patches cost, as the old generator's industrial themes used them (Bricks01: two bricks, five faces each,
         /// 20 triangles): on a 20 × 12 m block of six storeys at its densities, against the block's own triangles.
@@ -286,7 +321,7 @@ namespace Triband.Storey.Tests
             }
             Brick(-0.3, 0.1, 0, 0.12); Brick(-0.1, 0.3, 0.16, 0.28);
             brick.P = P.ToArray(); brick.N = N.ToArray(); brick.parts.Add(new DetailKind.Part { slot = ColorSlot.Trim, tris = tris.ToArray() });
-            var k = new DetailKind { id = Guid.NewGuid().ToString("N"), name = "Bricks", anchor = Details.Anchor.Wall, rule = Details.Rule.Scatter, w = 0.6, h = 0.28, d = 0.04, lod0 = brick, noLod1 = true };
+            var k = new DetailKind { id = "b51c4500000000000000000000000001", name = "Bricks", anchor = Details.Anchor.Wall, rule = Details.Rule.Scatter, w = 0.6, h = 0.28, d = 0.04, lod0 = brick, noLod1 = true };
             DetailKinds.Register(k);
             int bt = tris.Count / 3;
             (BuildingData b, Site s) Block(double? density)

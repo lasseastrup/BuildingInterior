@@ -537,7 +537,7 @@ The details in Facade ▸ *Place on walls* are **Facade Detail** assets. Storey'
 
    A style's settings for each detail, beside its chance (`KindRule`, Storey's own; under the detail's slider):
    - *Per m²* (`density`, scattered; 0.5): how many to the square metre of wall at 100%. Its chance scales it, so two patches at 50% each share a density as the old generator's weighted list did.
-   - *Gap* (`spacing`, scattered; 0.3 m): the clear gap kept round each. Up the corners, *Every* (`spacing`; 1 m): how far apart they are up the corner.
+   - *Gap* (`spacing`, scattered; 0.1 m): the clear gap kept round each. Up the corners, *Every* (`spacing`; 1 m): how far apart they are up the corner.
    - *Per bay* (`per`, in a row; 1): how many to each bay, 1 to 16.
    - *Storeys* (`floors`, scattered or up the corners): *All*, *Upper* (not the ground floor) or *Ground* alone.
    - *Corners* (`corners`, up the corners): *Outward* (standing out), *Inward* (set in) or *All*.
@@ -551,7 +551,7 @@ Each part takes one of the style's colours, so the building's palette colours it
 LODs:
 - LOD0 places the mesh.
 - LOD1 places *LOD1 mesh* if there is one, otherwise the mesh itself. Give a heavy mesh a LOD1 mesh: many buildings are seen in LOD1 at once, and the inspector warns past 300 triangles.
-- *Leave out of LOD1* (`DetailKind.noLod1`, Storey's own) leaves it out of LOD1 altogether: for small details, brick patches above all, that LOD1's distance can't show. The generator's own brick patches are LOD0's alone too. Measured (`DetailRuleTests.BrickPatchesCostLodZeroLittleAndLodOneNothing`): a two-brick patch as the old generator's Bricks01 (20 triangles, 40 vertices) on a 20 × 12 m block of six storeys (6,210 LOD0 triangles) gives 65 patches at 0.15/m², 190 at 0.5/m² and 501 at 2/m²: +1,300, +3,800 and +10,020 LOD0 triangles (+2,600, +7,600, +20,040 vertices). In LOD1, whose shell is about 1,000 triangles, the same would more than double or treble it; left out, it costs LOD1 nothing. LOD0's meshes are split at 65,535 vertices, so even the densest stays in one or two parts.
+- *Leave out of LOD1* (`DetailKind.noLod1`, Storey's own) leaves it out of LOD1 altogether: for small details, brick patches above all, that LOD1's distance can't show. The generator's own brick patches are LOD0's alone too. Measured (`DetailRuleTests.BrickPatchesCostLodZeroLittleAndLodOneNothing`): a two-brick patch as the old generator's Bricks01 (20 triangles, 40 vertices) on a 20 × 12 m block of six storeys (6,210 LOD0 triangles) gives 67 patches at 0.15/m², 202 at 0.5/m² and 487 at 2/m² (a 5 cm gap): +1,340, +4,040 and +9,740 LOD0 triangles (+2,680, +8,080, +19,480 vertices). In LOD1, whose shell is about 1,000 triangles, the same would more than double or treble it; left out, it costs LOD1 nothing. LOD0's meshes are split at 65,535 vertices, so even the densest stays in one or two parts.
 - LOD2 has none.
 
 The site lists the details its layout uses (*Facade Details*, under Site settings), so builds include them. The editor keeps the list: when you place one, give one a chance, and when the layout saves.
@@ -560,16 +560,19 @@ The mesh is copied into the asset when it's set, and baked again when its model 
 
 A new Facade Detail takes its asset's GUID as its id, and a copy, of one of the five too, gets one of its own as soon as it's imported, so it's a detail of its own (the rule in §6.9). A layout keeps a detail whose asset is gone: it isn't built, and the style's chance for it shows as *Missing detail* until set to 0.
 
-Not done: palette icons, LOD2 meshes, colliders (the five have none either), triangle budgets beyond the LOD1 warning, and details made from prefabs or from models the Model Remapper coloured (windows and doors take both: §6.9).
+**From a prefab** (Storey's own): select prefabs and use *Assets › Create › Storey › Facade Detail from Prefab*, or give a Facade Detail a *Prefab* (it wins over *Mesh*). The prefab is flattened into the detail as a window's is (docs/OPENINGS.md §3, `KindBake`): every active object under it with a mesh, where it is in the prefab (its root's position and rotation don't count, its scale does). Its root's origin is the pivot and its Z 0 the wall's outer face, +Z out of the wall. Against a whole wall: what lies in the wall, or on its face turned into it, is left out, and a face lying on the wall's face turned out is counted and warned of. Each material is a part, and a model the Model Remapper coloured (palette indices in UV channel 3) gives a part for each palette colour, which keeps that colour as its own. So the old generator's detail prefabs (Color Palette material, indices baked into the mesh) come over with their colours, and a style's *Colour* for the detail recolours its main one. *LOD1 prefab*, or else the prefab's LOD Group's LOD 1, is LOD1's. Size comes from what the bake kept. One made from the menu that is small and shallow (no deeper than 10 cm, at most 0.5 m² across) starts *Left out of LOD1*. Saving the prefab, or reimporting anything it uses, bakes it again. Components other than meshes (colliders) aren't carried over, and the inspector says so. *Check on a building* tries it on a 20 × 12 m block of six storeys, by its rule at 100% or put by hand, and counts triangles and flickering faces (`KindTrial.Run(DetailKind)`).
+
+Not done: palette icons, LOD2 meshes, colliders (the five have none either), and triangle budgets beyond the LOD1 warning.
 
 Engine-free:
 - `DetailKind`, `DetailKinds` (`Register`, `Get`, `Place`, `BuiltIn`), `Details.Rule`, `Details.OverLift`.
 - `DetailData.kind`: the detail's id, `ac`, `vent`, `dish`, `escape` and `awning` for the five, as before.
 - `DetailRules.kinds`: layout key, the detail's id beside `ac` and `vents` in a style's `details`.
 - `DetailRules.rules` (`KindRule`: `density`, `spacing`, `per`, `floors`, `corners`, `color`), the rules `Scatter`, `AlongTop`, `AlongFoot` and `Corners`, `DetailKind.noLod1` and `DetailKind.main`, `Details.Item.corner`. Baked layout format version 4.
+- `KindBake.Hole.None`: a detail's bake against a whole wall. `KindTrial.Run(DetailKind)`.
 - Tests: `DetailKindTests`, `DetailRuleTests`, `FacadeDetailAssetTests`.
 
-Unity: `StoreyDetail`, `StoreySite.facadeDetails`. Editor: `StoreyDetails`.
+Unity: `StoreyDetail` (`prefab`, `lod1Prefab`, `leaveOutOfLod1`, `Part.key`), `StoreySite.facadeDetails`. Editor: `StoreyDetails`, `StoreyDetailBake`.
 
 **Checks:**
 1. Make a detail from a model with Metal and Grille materials. Its parts say Detail metal and Grille, and its size matches the model.

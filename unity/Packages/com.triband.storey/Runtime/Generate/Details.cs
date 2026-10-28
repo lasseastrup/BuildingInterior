@@ -77,7 +77,7 @@ namespace Triband.Storey.Generate
         public static KindRule? RuleOf(FacadeStyle st, string id) => st.details?.rules != null && st.details.rules.TryGetValue(id, out var r) ? r : null;
 
         /// <summary>Scattered: how many to the square metre at 100 %, and the gap kept round each (<see cref="KindRule"/>'s defaults).</summary>
-        public static (double density, double gap) ScatterOf(KindRule? r) => (Math.Max(0, r?.density ?? 0.5), Math.Max(0, r?.spacing ?? 0.3));
+        public static (double density, double gap) ScatterOf(KindRule? r) => (Math.Max(0, r?.density ?? 0.5), Math.Max(0, r?.spacing ?? 0.1));
 
         /// <summary>Up the corners: how far apart, at least 10 cm (1 m by default).</summary>
         public static double CornerStep(KindRule? r) => Math.Max(0.1, r?.spacing ?? 1.0);

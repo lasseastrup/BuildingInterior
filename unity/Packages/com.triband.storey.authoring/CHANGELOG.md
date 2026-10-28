@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- *Assets › Create › Storey › Facade Detail from Prefab* (`StoreyDetailBake`): a Facade Detail for each prefab selected, its parts from its materials (a Model Remapper model's palette colours kept as its own), a small shallow one left out of LOD1. The Facade Detail inspector takes a *Prefab* and *LOD1 prefab*, *Leave out of LOD1*, says what the bake found and left out, suggests leaving a small scattered detail out of LOD1, and has *Check on a building*. Its rules include *Scattered on the walls*, *Along the top of the wall*, *Along the foot of the wall* and *Up the corners*. A detail's prefab, and anything it uses, bakes it again when reimported.
 - A Storey Opening's inspector says how LOD1 places its LOD1: on the flat wall, or in a hole cut in the wall, and with the plain pane where it leaves the hole open. A window whose LOD1 reaches into the wall gets a note that LOD1 cuts the wall round every window.
 - A Storey Opening's **Fit**: *Stretch*, *Slice* or *Keep size* (it was the *Stretch* toggle). One made from a prefab starts as *Slice*. The Storey Cutout has *Borders* (the slice lines, drawn dotted in the Scene view) and *Keep shape*.
 - The Facade tab greys out *Window width* when the style's artist window keeps its own size, and says so.
