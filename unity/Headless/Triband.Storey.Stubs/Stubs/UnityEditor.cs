@@ -303,6 +303,7 @@ namespace UnityEditor
         public static int DelayedIntField(string label, int value, params GUILayoutOption[] options) => value;
         public static int DelayedIntField(int value, params GUILayoutOption[] options) => value;
         public static string DelayedTextField(string label, string text, params GUILayoutOption[] options) => text;
+        public static string DelayedTextField(string text, params GUILayoutOption[] options) => text;
         public static double DelayedDoubleField(string label, double value, params GUILayoutOption[] options) => value;
         public static float Slider(string label, float value, float leftValue, float rightValue, params GUILayoutOption[] options) => value;
         public static float Slider(GUIContent label, float value, float leftValue, float rightValue, params GUILayoutOption[] options) => value;

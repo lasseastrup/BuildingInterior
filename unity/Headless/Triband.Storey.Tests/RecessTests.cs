@@ -155,6 +155,106 @@ namespace Triband.Storey.Tests
             Assert.Equal(PrototypeJson.WriteStyle(b.style), PrototypeJson.WriteStyle(BakedLayout.Of(BakedLayout.Bake(d))!.Document().buildings[0].style));
         }
 
+        // a street door set of one plain door with a recess of its own (null: the style's)
+        static void OwnDoor(FacadeStyle st, double? recess, string? kind = null) => st.doorSet = new List<OpeningEntry> { new OpeningEntry { kind = kind, recess = recess } };
+
+        static List<double> DoorDepths(MeshBuilder m) =>
+            Enumerable.Range(0, m.Verts).Where(v => m.C[v].slot == ColorSlot.Door && m.N[v].z < -0.9).Select(v => Math.Round(-m.P[v].z, 6)).Distinct().ToList();
+
+        [Fact]
+        public void ADoorSetWithoutRecessesBuildsAsTheStylesDoor()
+        {
+            foreach (double? style in new double?[] { null, 0.12 })
+            {
+                var (_, b0, s0) = Block(st => st.doorRecess = style);
+                var (_, b1, s1) = Block(st => { st.doorRecess = style; OwnDoor(st, null); });
+                var p0 = Lod0.Build(s0, b0); var p1 = Lod0.Build(s1, b1);
+                foreach (var (m0, m1) in new[] { (p0.Op, p1.Op), (p0.Glass, p1.Glass), (Lod1.Build(s0, b0), Lod1.Build(s1, b1)) })
+                {
+                    Assert.Equal(m0.Verts, m1.Verts);
+                    for (int v = 0; v < m0.Verts; v++) { Assert.True((m0.P[v] - m1.P[v]).Length < 1e-9, $"{m0.P[v]} moved to {m1.P[v]}"); Assert.Equal(m0.C[v].slot, m1.C[v].slot); }
+                }
+            }
+            // an opening taken again from a pool loses the recess it had; a copy keeps it
+            var o = new Opening().Set(0, 1, 0, 2, door: true, recess: 0.2);
+            Assert.Equal(0.2, new Opening().Set(o).recess);
+            Assert.Null(o.Set(0, 1, 0, 2, door: true).recess);
+        }
+
+        [Fact]
+        public void AnEntrysRecessPushesItsDoorsBackFurtherThanTheStyles()
+        {
+            // the style's doors 5 cm in, this entry's 25: its panel at the back, its threshold in the foundation colour, the windows as they were
+            foreach (double? style in new double?[] { 0.05, null })
+            {
+                var (_, b, site) = Block(st => { st.doorRecess = style; OwnDoor(st, 0.25); });
+                var (_, bw, sw) = Block(st => st.doorRecess = style);
+                foreach (var (m, plain) in new[] { (Lod0.Build(site, b).Op, Lod0.Build(sw, bw).Op), (Lod1.Build(site, b), Lod1.Build(sw, bw)) })
+                {
+                    Assert.Equal(new[] { Math.Round(T - 0.25, 6) }, DoorDepths(m));
+                    Assert.NotEqual(DoorDepths(plain), DoorDepths(m));
+                    var thr = Enumerable.Range(0, m.Verts).Where(v => m.C[v].slot == ColorSlot.Foundation && m.N[v].y > 0.9 && Math.Abs(m.P[v].y) < 1e-9).Select(v => -m.P[v].z).ToList();
+                    Assert.Contains(thr, w => Math.Abs(w - (T - 0.25)) < 1e-9); Assert.Contains(thr, w => Math.Abs(w - T) < 1e-9);
+                    var glass = Enumerable.Range(0, m.Verts).Where(v => m.C[v].slot == ColorSlot.Glass).Select(v => m.P[v]).ToList();
+                    Assert.Equal(Enumerable.Range(0, plain.Verts).Where(v => plain.C[v].slot == ColorSlot.Glass).Select(v => plain.P[v]).ToList(), glass);
+                }
+            }
+            // an artist's door from the entry is pushed back as far
+            var door = OpeningKindTestsKind("t-recess-entry-door", true);
+            OpeningKinds.Register(door);
+            try
+            {
+                var (_, b, site) = Block(st => { st.doorRecess = 0.05; OwnDoor(st, 0.2, door.id); });
+                var op = Lod0.Build(site, b).Op;
+                Assert.Equal(-T + 0.05 + 0.2, Enumerable.Range(0, op.Verts).Where(v => op.C[v].slot == ColorSlot.Door && op.P[v].z < 0).Min(v => op.P[v].z), 6);
+            }
+            finally { OpeningKinds.Remove(door.id); }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void DoorsWithRecessesOfTheirOwnBuildWithoutFacesThatFlicker(bool interior)
+        {
+            var door = OpeningKindTestsKind("t-recess-entry-flicker", true);
+            OpeningKinds.Register(door);
+            try
+            {
+                foreach (double? style in new double?[] { null, 0.1 })
+                    foreach (double r in new[] { 0.0, 0.08, 0.29 })
+                        foreach (string? kind in new[] { null, door.id })
+                        {
+                            var (_, b, site) = Block(st => { st.recess = 0.1; st.doorRecess = style; OwnDoor(st, r, kind); }, interior);
+                            var lod0 = Lod0.Build(site, b, solids: true);
+                            var rep = CoplanarCheck.Run(new[] { lod0.Op, lod0.Glass });
+                            Assert.True(rep.Overlaps.Count == 0, string.Join("\n", rep.Overlaps.Take(10)));
+                            foreach (bool recessed in new[] { false, true })
+                            {
+                                var r1 = CoplanarCheck.Run(Lod1.Build(site, b, solids: true, recessed: recessed));
+                                Assert.True(r1.Overlaps.Count == 0, string.Join("\n", r1.Overlaps.Take(10)));
+                            }
+                        }
+            }
+            finally { OpeningKinds.Remove(door.id); }
+        }
+
+        [Fact]
+        public void AnEntrysRecessRoundTripsAndBakes()
+        {
+            var (d, b, _) = Block(st => st.doorSet = new List<OpeningEntry> { new OpeningEntry { recess = 0.22 }, new OpeningEntry { weight = 2 } });
+            var json = PrototypeJson.WriteStyle(b.style);
+            var back = PrototypeJson.ReadStyle(json);
+            Assert.Equal(new double?[] { 0.22, null }, back.doorSet!.Select(e => e.recess));
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(json, "\"recess\""));   // written only where set
+            Assert.Equal(json, PrototypeJson.WriteStyle(BakedLayout.Of(BakedLayout.Bake(d))!.Document().buildings[0].style));
+            // a set of one door with a recess of its own stays a set; without it, it is the style's one door again
+            var st = Styles.Preset("brick");
+            WindowSets.Recess(st, SetOf.Doors, 0, 0.4);
+            Assert.Equal(0.29, st.doorSet![0].recess);
+            WindowSets.Recess(st, SetOf.Doors, 0, null);
+            Assert.Null(st.doorSet);
+        }
+
         /// <summary>Recessed windows and doors on every building of the prototype's corpora, at LOD0 and LOD1, with nothing that flickers.</summary>
         [Theory]
         [InlineData("demo.json")]

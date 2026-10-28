@@ -342,7 +342,7 @@ namespace Triband.Storey
             return s;
         }
 
-        /// <summary>A style's set of windows or doors (docs/OPENINGS.md §7.1); absent is null. An entry is <c>{"kind": id}</c>, <c>{"none": true}</c> or <c>{}</c> (the generator's), with a <c>"weight"</c> when not 1.</summary>
+        /// <summary>A style's set of windows or doors (docs/OPENINGS.md §7.1); absent is null. An entry is <c>{"kind": id}</c>, <c>{"none": true}</c> or <c>{}</c> (the generator's), with a <c>"weight"</c> when not 1 and a door's <c>"recess"</c> when set.</summary>
         static List<OpeningEntry>? Entries(Ctx c, Dictionary<string, object?> o, string key, Where path)
         {
             if (!o.TryGetValue(key, out var v) || v == null) return null;
@@ -350,7 +350,7 @@ namespace Triband.Storey
             foreach (var it in items)
             {
                 var at = path.In(key, i++); var eo = c.Obj(it, at);
-                set.Add(new OpeningEntry { kind = c.OptStr(eo, "kind", at), none = c.Bool(eo, "none", false, at), weight = c.Num(eo, "weight", 1, at) });
+                set.Add(new OpeningEntry { kind = c.OptStr(eo, "kind", at), none = c.Bool(eo, "none", false, at), weight = c.Num(eo, "weight", 1, at), recess = c.Opt(eo, "recess", at) });
                 c.Check(eo, at, Keys.OpeningEntry);
             }
             return set;
@@ -365,6 +365,7 @@ namespace Triband.Storey
                 if (e.none) eo["none"] = true;
                 else if (!string.IsNullOrEmpty(e.kind)) eo["kind"] = e.kind;
                 if (e.weight != 1) eo["weight"] = e.weight;
+                if (e.recess.HasValue) eo["recess"] = e.recess.Value;
                 l.Add(eo);
             }
             return l;
@@ -636,7 +637,7 @@ namespace Triband.Storey
             public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof" };
             public static readonly string[] DetailRules = { "ac", "vents" };
             public static readonly string[] KindRule = { "p", "density", "spacing", "per", "floors", "corners", "color" };
-            public static readonly string[] OpeningEntry = { "kind", "none", "weight" };
+            public static readonly string[] OpeningEntry = { "kind", "none", "weight", "recess" };
             public static readonly string[] Point = { "x", "z" };
             public static readonly string[] Style =
             {

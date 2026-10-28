@@ -972,9 +972,10 @@ namespace Triband.Storey.Editor
                         double w = Math.Max(0, EditorGUILayout.DelayedFloatField((float)en.weight, GUILayout.Width(36)));
                         if (EditorGUI.EndChangeCheck() && w != en.weight) e.ApplyTo(label + " weight", bb => { WindowSets.Weigh(Styles.Edited(bb, k0), which, at, w); return true; });
                         EditorGUILayout.LabelField(total > 0 ? $"{OpeningSets.Weight(set, i) / total * 100:0}%" : "", StoreyInspectorUI.Caption, GUILayout.Width(30));
-                        if (GUILayout.Button(new GUIContent("×", "Remove it from the set"), EditorStyles.miniButton, GUILayout.Width(22)))
-                            e.ApplyTo(label + " removed", bb => { WindowSets.Remove(Styles.Edited(bb, k0), which, at); return true; });
                     }
+                    if (door && (many || en.recess.HasValue)) DoorRecess(e, k0, en, at, label);
+                    if (many && GUILayout.Button(new GUIContent("×", "Remove it from the set"), EditorStyles.miniButton, GUILayout.Width(22)))
+                        e.ApplyTo(label + " removed", bb => { WindowSets.Remove(Styles.Edited(bb, k0), which, at); return true; });
                 }
             }
             using (new EditorGUILayout.HorizontalScope())
@@ -983,6 +984,24 @@ namespace Triband.Storey.Editor
                 if (GUILayout.Button(new GUIContent(door ? "+ Another door" : "+ Another window", door ? "Add a door: each wall's doors are picked from the set" : "Add a window (or none): each opening is picked from the set"), EditorStyles.miniButton))
                     e.ApplyTo(label + " added", bb => { WindowSets.Add(Styles.Edited(bb, k0), which, null); return true; });
             }
+        }
+
+        static readonly GUIContent DoorRecessLabel = new GUIContent("recess",
+            "How deep this door sits in the wall, in metres from its face (0 to 0.29), in place of Door recess; empty: Door recess's");
+
+        /// <summary>
+        /// A street door entry's own recess (docs/EDITOR.md §6.7, <see cref="OpeningEntry.recess"/>), in metres: empty, the
+        /// style's <see cref="FacadeStyle.doorRecess"/>. One undo step, as every style edit.
+        /// </summary>
+        static void DoorRecess(StoreyEdit e, int k0, OpeningEntry en, int at, string label)
+        {
+            EditorGUILayout.LabelField(DoorRecessLabel, StoreyInspectorUI.Caption, GUILayout.Width(36));
+            string was = en.recess is double r ? r.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : "";
+            string x = EditorGUILayout.DelayedTextField(was, GUILayout.Width(40)).Trim();
+            if (x == was) return;
+            double? to = x.Length == 0 ? (double?)null
+                : double.TryParse(x.Replace(',', '.'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v) ? v : en.recess;
+            if (to != en.recess) e.ApplyTo(label + " recess", bb => { WindowSets.Recess(Styles.Edited(bb, k0), SetOf.Doors, at, to); return true; });
         }
 
         /// <summary>The ground floor's windows: the floors above's, or a set of its own (docs/OPENINGS.md §7.1). Solid ground floors have none.</summary>

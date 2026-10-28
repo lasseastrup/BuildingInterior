@@ -399,6 +399,12 @@ namespace Triband.Storey
         public bool none;
         /// <summary>How often it is picked, against the others' weights; 0 leaves it out, unless every weight is 0 (then each is picked as often).</summary>
         public double weight = 1;
+        /// <summary>
+        /// A street door's own recess, in metres from the wall's face: a door picked from this entry is set that deep in place of
+        /// the style's <see cref="FacadeStyle.doorRecess"/> (as the old BuildingGenerator's door entries override their inset);
+        /// null = the style's. Windows' entries leave it null. Storey's own.
+        /// </summary>
+        public double? recess;
 
         public OpeningEntry Clone() => (OpeningEntry)MemberwiseClone();
 

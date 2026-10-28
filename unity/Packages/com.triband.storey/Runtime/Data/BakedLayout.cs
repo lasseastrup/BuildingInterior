@@ -288,7 +288,7 @@ namespace Triband.Storey
         {
             int n = r.Count(); if (n == 0) return null;
             var set = new List<OpeningEntry>(n - 1);
-            for (int i = 1; i < n; i++) set.Add(new OpeningEntry { kind = Str(ref r), none = r.Bool(), weight = r.F64() });
+            for (int i = 1; i < n; i++) set.Add(new OpeningEntry { kind = Str(ref r), none = r.Bool(), weight = r.F64(), recess = r.Opt() });
             return set;
         }
 
@@ -435,7 +435,7 @@ namespace Triband.Storey
             foreach (var set in new[] { s.windowSet, s.groundSet, s.doorSet })
             {
                 w.Count(set == null ? 0 : set.Count + 1);
-                if (set != null) foreach (var e in set) { w.Count(S(e.kind)); w.Bool(e.none); w.F64(e.weight); }
+                if (set != null) foreach (var e in set) { w.Count(S(e.kind)); w.Bool(e.none); w.F64(e.weight); w.Opt(e.recess); }
             }
             w.E(s.windowPick);
             w.Opt(s.plinthH); w.Opt(s.foundation); w.Opt(s.foundationH); w.Opt(s.foundationOut); w.Opt(s.bricks); w.Opt(s.mansard); w.Opt(s.dormers);

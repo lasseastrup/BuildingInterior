@@ -82,6 +82,18 @@ namespace Triband.Storey.Edit
             Tidy(st, which);
         }
 
+        /// <summary>
+        /// Street door entry i's own recess (<see cref="OpeningEntry.recess"/>, 0 to 29 cm as <see cref="Generate.Facade.PaneW(FacadeStyle, bool)"/>
+        /// has a door's; null: the style's). Only doors' entries have one.
+        /// </summary>
+        public static void Recess(FacadeStyle st, SetOf which, int i, double? recess)
+        {
+            if (which != SetOf.Doors) return;
+            var set = Own(st, which);
+            if (i >= 0 && i < set.Count) set[i].recess = recess is double r ? System.Math.Max(0, System.Math.Min(0.29, r)) : (double?)null;
+            Tidy(st, which);
+        }
+
         /// <summary>The ground floor's windows the floors above's again.</summary>
         public static void FollowAbove(FacadeStyle st) => st.groundSet = null;
 
@@ -97,7 +109,8 @@ namespace Triband.Storey.Edit
                     if (st.groundSet is { Count: 0 }) st.groundSet = null;
                     break;
                 case SetOf.Doors:
-                    if (st.doorSet is { Count: <= 1 } d) { st.doorKind = d.Count == 1 ? d[0].kind : null; st.doorSet = null; }
+                    // one with a recess of its own stays a set: the style's one door has none
+                    if (st.doorSet is { Count: <= 1 } d && !(d.Count == 1 && d[0].recess.HasValue)) { st.doorKind = d.Count == 1 ? d[0].kind : null; st.doorSet = null; }
                     break;
                 default:
                     if (st.windowSet is { Count: 0 }) st.windowSet = null;

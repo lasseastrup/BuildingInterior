@@ -134,14 +134,14 @@ namespace Triband.Storey.Generate
             var (de, dt) = Door(v);
             // its walls' picks are the building's, with edges of their own (below the outline's: -1 and down, a thousand a courtyard)
             int edge = -1 - i - 1000 * b.voids.IndexOf(v);
-            var dk = OpeningSets.Door(st, OpeningSets.DoorSeed(b.id, k, edge));
+            var dk = OpeningSets.Door(st, OpeningSets.DoorSeed(b.id, k, edge), out var dr);
             double sl = Math.Max(0.3, dk?.reachL ?? 0), sr = Math.Max(0.3, dk?.reachR ?? 0);
             if (k == v.bottom && i == de && spn > Dim.DOOR_EXT + sl + sr)
             {
                 double c = Math.Max(uS + Dim.DOOR_EXT / 2 + sl, Math.Min(uE - Dim.DOOR_EXT / 2 - sr, dt * L));
                 double top = dk != null && !dk.stretch ? Math.Min(dk.h, h - 0.4) : Math.Min(2.6, h - 0.4);
                 if (dk != null) top = Math.Min(top, h - Math.Max(0.1, dk.reachT + 0.05));
-                var d = new Opening { u0 = c - Dim.DOOR_EXT / 2, u1 = c + Dim.DOOR_EXT / 2, y0 = 0, y1 = top, door = true };
+                var d = new Opening { u0 = c - Dim.DOOR_EXT / 2, u1 = c + Dim.DOOR_EXT / 2, y0 = 0, y1 = top, door = true, recess = dr };
                 Facade.Dressing(d, dk);
                 ops.Add(d);
             }
@@ -170,7 +170,7 @@ namespace Triband.Storey.Generate
                 {
                     var stk = Derived.StyleAt(b, k);
                     Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.wall, new Facade.PanelOpt { inner = false, revealFrom = Facade.PaneW(stk, false), doorRevealFrom = Facade.PaneW(stk, true), threshold = k == v.bottom });
-                    foreach (var o in ops) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, Facade.PaneW(stk, o.door), o.door ? C.door : C.glassDark, false);
+                    foreach (var o in ops) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, Facade.PaneW(stk, o), o.door ? C.door : C.glassDark, false);
                 }
                 else
                 {
