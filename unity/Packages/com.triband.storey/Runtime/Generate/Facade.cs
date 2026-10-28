@@ -72,17 +72,27 @@ namespace Triband.Storey.Generate
                 else if (st.sillH is double sill) ws.y0 = sill;
             }
             double sy = k != null && OpeningKinds.Stretched(k) ? (ws.y1 - ws.y0) / Math.Max(1e-3, k.h) : 1, rb = (k?.reachB ?? 0) * sy, rt = (k?.reachT ?? 0) * sy;
-            if (plinth is double p) ws.y0 = Math.Max(ws.y0, p + Math.Max(0.15, rb + 0.05));
+            double low = double.MinValue;   // as low as it may start: clear of the plinth and the floor, dressing and all
+            if (plinth is double p) low = p + Math.Max(0.15, rb + 0.05);
+            if (k != null) low = Math.Max(low, rb + 0.05);
+            ws.y0 = Math.Max(ws.y0, low);
             if (k != null)
             {
-                ws.y0 = Math.Max(ws.y0, rb + 0.05);
                 if (!k.stretch) { ws.full = null; ws.w = k.w; ws.y1 = ws.y0 + k.h; }
                 ws.y1 = Math.Min(ws.y1, h - Math.Max(0.1, rt + 0.05));
             }
             // a band of the style's own height, and a cornice: windows (and their heads) stay under them
-            double under = k != null ? Math.Max(0.1, rt + 0.05) : st.head == HeadType.Arch ? 0.3 : 0.1;
-            if (st.bandH is double bh && st.bands && (!st.bandGround || ground)) ws.y1 = Math.Min(ws.y1, h - bh - under);
-            if (cornice is double cu) ws.y1 = Math.Min(ws.y1, h - cu - under);
+            double under = k != null ? Math.Max(0.1, rt + 0.05) : st.head == HeadType.Arch ? 0.3 : 0.1, top = double.MaxValue;
+            if (st.bandH is double bh && st.bands && (!st.bandGround || ground)) top = h - bh - under;
+            if (cornice is double cu) top = Math.Min(top, h - cu - under);
+            if (ws.y1 > top && k != null && !k.stretch && st.winCentre)
+            {
+                // an artist's window centred in its storey goes down under them whole, as far as it may (Storey's own: the
+                // old generator's showed behind its bands), and is cut short only where it can't
+                double down = Math.Min(ws.y1 - top, Math.Max(0, ws.y0 - low));
+                ws.y0 -= down; ws.y1 -= down;
+            }
+            ws.y1 = Math.Min(ws.y1, top);
             return ws.y1 - ws.y0 > 0.4 ? ws : null;
         }
 

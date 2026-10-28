@@ -194,24 +194,27 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
-        public void ACentredWindowStillStaysUnderABandAndACornice()
+        public void ACentredWindowGoesDownUnderABandAndACorniceWhole()
         {
             With(Dressed("t-fit-centre-tall", 0.9, 2.4, keep: true), () =>
             {
-                // 2.4 m centred in a 3 m storey would reach 2.7 m: a 30 cm band, and a 50 cm cornice on the top storey, cut it
-                // down to 10 cm under them, its foot still where centring put it
+                // 2.4 m centred in a 3 m storey would reach 2.7 m: under a 30 cm band, and a 50 cm cornice on the top storey,
+                // it goes down whole, as far as the floor lets it, and is cut short only where it still can't fit
                 var (b, s) = Block(st => { st.windowKind = "t-fit-centre-tall"; st.winCentre = true; st.bandH = 0.3; st.corniceH = 0.5; });
-                int windows = 0, cut = 0;
+                int windows = 0, moved = 0, cut = 0;
                 foreach (var (k, _, _, ops) in Walls(b, s))
                     foreach (var o in ops.Where(o => !o.door))
                     {
                         windows++;
                         double h = Derived.FloorH(b, k), top = h - Math.Max(0.3, Facade.CorniceUnder(b, k) ?? 0) - 0.1;
-                        if ((h + 2.4) / 2 > top) cut++;   // the 3.6 m ground storey's reaches only 3 m, under its band
-                        Assert.InRange(o.y0, (h - 2.4) / 2 - 1e-9, (h - 2.4) / 2 + 1e-9);
-                        Assert.InRange(o.y1, Math.Min((h + 2.4) / 2, top) - 1e-9, Math.Min((h + 2.4) / 2, top) + 1e-9);
+                        Assert.True(o.y1 <= top + 1e-9, $"storey {k}: its top {o.y1:0.###} over the band or cornice ({top:0.###})");
+                        Assert.True(o.y0 >= 0.05 - 1e-9, $"storey {k}: its foot {o.y0:0.###} under the floor");
+                        if (o.y0 < (h - 2.4) / 2 - 1e-6) moved++;
+                        if (Math.Abs(o.y1 - o.y0 - 2.4) > 1e-6) { cut++; Assert.InRange(o.y1, top - 1e-9, top + 1e-9); }
+                        else Assert.InRange((o.y0 + o.y1) / 2, 0, h / 2 + 1e-9);   // whole, no higher than centred
                     }
-                Assert.True(windows > 10 && cut > 5, $"{windows} windows, {cut} cut down");
+                Assert.True(windows > 10 && moved > 5, $"{windows} windows, {moved} moved down");
+                Assert.True(cut > 0, "the top storey's, under its cornice, is cut short too");
                 Assert.NotNull(Facade.CorniceUnder(b, b.floors.Count - 1));
             });
         }
