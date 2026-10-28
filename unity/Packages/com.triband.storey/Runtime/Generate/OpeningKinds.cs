@@ -263,11 +263,13 @@ namespace Triband.Storey.Generate
         /// <summary>
         /// Put kind <paramref name="k"/>'s mesh into an opening (u0..u1 along the wall, y0..y1 up). Glass goes in the
         /// see-through glass <paramref name="gl"/> on a walk-in storey (both faces), opaque with the window shader's pane
-        /// coordinates on a <paramref name="shell"/> one. A door's leaf is left out where the doorway stays open.
+        /// coordinates on a <paramref name="shell"/> one. A door's leaf is left out where the doorway stays open. Pushed
+        /// <paramref name="back"/> metres into the wall where the style recesses it (<see cref="Facade.KindBack"/>); its pane
+        /// coordinates still name the window by its place on the wall's face.
         /// </summary>
-        public static void Place(MeshBuilder op, MeshBuilder? gl, Frame F, OpeningKind k, OpeningKind.Mesh m, double u0, double u1, double y0, double y1, Palette C, bool shell)
+        public static void Place(MeshBuilder op, MeshBuilder? gl, Frame F, OpeningKind k, OpeningKind.Mesh m, double u0, double u1, double y0, double y1, Palette C, bool shell, double back = 0)
         {
-            var fitted = At(F, k, u0, u1, y0, y1);
+            var fitted = At(back != 0 ? new Frame(new Vec2(F.O.x - F.w.x * back, F.O.z - F.w.z * back), F.u, F.w) : F, k, u0, u1, y0, y1);
             foreach (var whole in m.parts)
             {
                 if (whole.leaf && !shell) continue;

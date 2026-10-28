@@ -716,10 +716,26 @@ namespace Triband.Storey.Editor
                 StyleToggle(e, k0, "Frames", st.frames, (s, x) => s.frames = x);
             }
             if (artist) EditorGUILayout.LabelField("The artist's window brings its own head, frame and bars.", StoreyInspectorUI.Caption);
+            Recess(e, k0, "Window recess", "How deep windows sit in the wall, from its face: the generator's glass and frame, or an artist's window pushed back that far", st.recess, 0.25, (s, x) => s.recess = x);
             if (k0 == 0)
             {
                 KindPopup(e, k0, "Street door", st.doorKind, true);
             }
+            Recess(e, k0, "Door recess", "How deep doors sit in the wall, from its face: the plain door's panel, or an artist's door pushed back that far; a recessed street door's threshold is in the Foundation colour", st.doorRecess, 0.29, (s, x) => s.doorRecess = x);
+        }
+
+        /// <summary>
+        /// A recess (docs/EDITOR.md §6.7, <see cref="FacadeStyle.recess"/>, <see cref="FacadeStyle.doorRecess"/>): off, as before
+        /// (the generator's 16.5 cm, an artist's at the wall's face); on, how deep.
+        /// </summary>
+        static void Recess(StoreyEdit e, int k0, string label, string tip, double? value, double max, Action<FacadeStyle, double?> set)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool on = EditorGUILayout.Toggle(new GUIContent(label, tip), value.HasValue);
+                if (on != value.HasValue) e.ApplyTo(label, bb => { set(Styles.Edited(bb, k0), on ? Generate.OpeningKinds.ShellReveal : (double?)null); return true; });
+            }
+            if (value is double v) StyleSlider(e, k0, "   Depth", v, 0, max, 0.01, (s, x) => set(s, x));
         }
 
         /// <summary>

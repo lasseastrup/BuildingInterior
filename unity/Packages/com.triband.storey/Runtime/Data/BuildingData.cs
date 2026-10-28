@@ -306,6 +306,15 @@ namespace Triband.Storey
         /// sill of its <see cref="windows"/> type (<see cref="Generate.Facade.SillOf"/>). Other windows take their type's.
         /// </summary>
         public double? sillH;
+        /// <summary>
+        /// How deep windows (<see cref="recess"/>) and street doors (<see cref="doorRecess"/>) are set into the wall, in metres
+        /// from its face (docs/EDITOR.md §6.7): the generator's pane or door panel goes that deep (its frame and bars with it), a
+        /// shell storey's reveal as deep, and an artist's window or door is pushed back that far (its wall face to the
+        /// recess's back). A recessed street door's threshold is in the foundation colour. Null = as before: the generator's
+        /// at 16.5 cm (<see cref="Generate.OpeningKinds.ShellReveal"/>), an artist's at the wall's face. Storey's own (the old
+        /// BuildingGenerator's window and door insets).
+        /// </summary>
+        public double? recess, doorRecess;
         /// <summary>The ground floor's plinth height; null = 0.45 m.</summary>
         public double? plinthH;
         /// <summary>How far the plinth stands out from the wall, in metres; null = 0.04 m. Storey's own.</summary>

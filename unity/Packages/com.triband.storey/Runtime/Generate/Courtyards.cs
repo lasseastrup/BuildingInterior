@@ -179,12 +179,13 @@ namespace Triband.Storey.Generate
                 op.Ctx(wc, 1); gl?.Ctx(wc, 1);
                 if (lod1)
                 {
-                    Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.wall, new Facade.PanelOpt { inner = false, revealFrom = T * 0.45, threshold = k == v.bottom });
-                    foreach (var o in ops) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, o.door ? C.door : C.glassDark, false);
+                    var stk = Derived.StyleAt(b, k);
+                    Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.wall, new Facade.PanelOpt { inner = false, revealFrom = Facade.PaneW(stk, false), doorRevealFrom = Facade.PaneW(stk, true), threshold = k == v.bottom });
+                    foreach (var o in ops) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, Facade.PaneW(stk, o.door), o.door ? C.door : C.glassDark, false);
                 }
                 else
                 {
-                    Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.inner, new Facade.PanelOpt { inner = !shell, threshold = k == v.bottom, revealFrom = shell ? T * 0.45 : 0, rooms = rooms });
+                    Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.inner, new Facade.PanelOpt { inner = !shell, threshold = k == v.bottom, revealFrom = shell ? Facade.PaneW(Derived.StyleAt(b, k), false) : 0, doorRevealFrom = shell ? Facade.PaneW(Derived.StyleAt(b, k), true) : (double?)null, rooms = rooms });
                     Facade.Dress(op, gl!, F, ops, y, C, shell, Derived.StyleAt(b, k));
                     if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
                 }

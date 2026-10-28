@@ -284,28 +284,31 @@ namespace Triband.Storey.Generate
             var trim = frames ? C.frame : C.trim;
             // an artist's window or door (OpeningKinds) stands in for all of the generator's dressing
             var wk = OpeningKinds.Of(st, false); var dk = OpeningKinds.Of(st, true);
+            // how deep the style sets its windows and doors (FacadeStyle.recess, doorRecess): the pane, and the frame and bars
+            // round it, go with it
+            double pw = PaneW(st, false), dw = PaneW(st, true), shift = pw - T * 0.45, wb = KindBack(st, false), db = KindBack(st, true);
             foreach (var o in ops)
             {
-                if (o.door && dk != null && !o.bare) { OpeningKinds.Place(op, gl, F, dk, dk.lod0, o.u0, o.u1, y, y + o.y1, C, shell); if (!shell) op.SeeThrough++; continue; }   // its leaf is left out
-                if (!o.door && wk != null) { OpeningKinds.Place(op, gl, F, wk, wk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell); continue; }
+                if (o.door && dk != null && !o.bare) { OpeningKinds.Place(op, gl, F, dk, dk.lod0, o.u0, o.u1, y, y + o.y1, C, shell, db); if (!shell) op.SeeThrough++; continue; }   // its leaf is left out
+                if (!o.door && wk != null) { OpeningKinds.Place(op, gl, F, wk, wk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell, wb); continue; }
                 if (o.door)
                 {
                     // the generator's door: the wall's recess, with a flat panel at its back where the doorway is closed
-                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, T * 0.45, C.door, false);
+                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, dw, C.door, false);
                     else op.SeeThrough++;
                 }
                 else
                 {
-                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, C.glassDark, false);
-                    else Facade.Pane(gl, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, C.glass, true);
+                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, pw, C.glassDark, false);
+                    else Facade.Pane(gl, F, o.u0, o.u1, y + o.y0, y + o.y1, pw, C.glass, true);
                     double ex = o.full ? 0 : 0.06, eh = o.full ? 0 : 0.04;
                     if (sills) op.OBox(F, o.u0 - ex, o.u1 + ex, y + o.y0 - 0.07, y + o.y0, T, T + 0.07, trim, trim, Skip.In);
                     if (heads && arch && !o.full) Hood(op, F, o.u0 - HoodOver, o.u1 + HoodOver, y + o.y1, trim);
                     else if (heads) op.OBox(F, o.u0 - eh, o.u1 + eh, y + o.y1, y + o.y1 + 0.06, T, T + 0.04, trim, trim, Skip.In);
                     double fw = frames ? FrameW : 0;
-                    if (frames) WindowFrame(op, F, o.u0, o.u1, y + o.y0, y + o.y1, fw, C.frame);
-                    if (bars) Bars(op, F, o.u0 + fw, o.u1 - fw, y + o.y0 + fw, y + o.y1 - fw, st!.paneCols ?? 1, st.paneRows ?? 1, C.frame);
-                    else if (CentreBar(st, o)) { double mm = (o.u0 + o.u1) / 2; op.OBox(F, mm - BarHalf, mm + BarHalf, y + o.y0, y + o.y1, T * 0.3, T * 0.6, C.trim, C.trim, Skip.Top | Skip.Bot); }
+                    if (frames) WindowFrame(op, F, o.u0, o.u1, y + o.y0, y + o.y1, fw, C.frame, shift);
+                    if (bars) Bars(op, F, o.u0 + fw, o.u1 - fw, y + o.y0 + fw, y + o.y1 - fw, st!.paneCols ?? 1, st.paneRows ?? 1, C.frame, shift);
+                    else if (CentreBar(st, o)) { double mm = (o.u0 + o.u1) / 2; op.OBox(F, mm - BarHalf, mm + BarHalf, y + o.y0, y + o.y1, T * 0.3 + shift, T * 0.6 + shift, C.trim, C.trim, Skip.Top | Skip.Bot); }
                 }
             }
         }
@@ -375,6 +378,37 @@ namespace Triband.Storey.Generate
                 }
         }
 
+        /// <summary>
+        /// How far out from the wall's inner face the generator's pane (or a shell storey's door panel) is: 45% of the wall,
+        /// as the prototype has it (16.5 cm in from the face), or as deep as the style recesses its windows
+        /// (<see cref="FacadeStyle.recess"/>, up to 25 cm, so a frame round the pane stays in the wall) or doors
+        /// (<see cref="FacadeStyle.doorRecess"/>, up to 29 cm). A centimetre at least: a strip's back over the opening
+        /// (<see cref="StripBacks"/>) lies in the wall's face. Storey's own.
+        /// </summary>
+        public static double PaneW(FacadeStyle? st, bool door)
+        {
+            double? r = door ? st?.doorRecess : st?.recess;
+            return r is double d ? Dim.T_EXT - Math.Max(0.01, Math.Min(door ? 0.29 : 0.25, d)) : Dim.T_EXT * 0.45;
+        }
+
+        /// <summary>How far an artist's window or door is pushed back into the wall: as deep as the style recesses it (null: none).</summary>
+        public static double KindBack(FacadeStyle? st, bool door)
+        {
+            double? r = door ? st?.doorRecess : st?.recess;
+            return r is double d ? Math.Max(0, Math.Min(Dim.T_EXT, d)) : 0;
+        }
+
+        /// <summary>
+        /// Where a shell storey's reveal starts, out from the wall's inner face: at the generator's pane (<see cref="PaneW"/>), or
+        /// for an artist's window or door pushed back by a recess, the depth a shell storey leaves it
+        /// (<see cref="OpeningKinds.ShellReveal"/>) behind that; never behind the wall.
+        /// </summary>
+        public static double ShellRevealFrom(FacadeStyle? st, bool door, OpeningKind? k)
+        {
+            double back = KindBack(st, door);
+            return k != null && back > 0 ? Math.Max(0, Dim.T_EXT - back - OpeningKinds.ShellReveal) : PaneW(st, door);
+        }
+
         /// <summary>A frame member's width, and a glazing bar's.</summary>
         public const double FrameW = 0.06, BarW = 0.035;
 
@@ -414,10 +448,10 @@ namespace Triband.Storey.Generate
         /// <summary>How far a hood stands out from the wall, and how far past the opening it reaches each side.</summary>
         public const double HoodOut = 0.14, HoodOver = 0.1;
 
-        /// <summary>A frame all round an opening, in its reveal, around the pane.</summary>
-        public static void WindowFrame(MeshBuilder op, Frame F, double u0, double u1, double ya, double yb, double fw, Swatch c)
+        /// <summary>A frame all round an opening, in its reveal, around the pane (<paramref name="shift"/>: how far a recess moves the pane from where the prototype has it).</summary>
+        public static void WindowFrame(MeshBuilder op, Frame F, double u0, double u1, double ya, double yb, double fw, Swatch c, double shift = 0)
         {
-            double T = Dim.T_EXT, wa = T * 0.3, wb = T * 0.6;
+            double T = Dim.T_EXT, wa = T * 0.3 + shift, wb = T * 0.6 + shift;
             op.OBox(F, u0, u0 + fw, ya, yb, wa, wb, c, null, Skip.UStart | Skip.Top | Skip.Bot);
             op.OBox(F, u1 - fw, u1, ya, yb, wa, wb, c, null, Skip.UEnd | Skip.Top | Skip.Bot);
             op.OBox(F, u0 + fw, u1 - fw, yb - fw, yb, wa, wb, c, null, Skip.Top | Skip.UStart | Skip.UEnd);
@@ -425,9 +459,9 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>Glazing bars dividing the pane inside (ua..ub, ya..yb) into columns × rows.</summary>
-        public static void Bars(MeshBuilder op, Frame F, double ua, double ub, double ya, double yb, int cols, int rows, Swatch c)
+        public static void Bars(MeshBuilder op, Frame F, double ua, double ub, double ya, double yb, int cols, int rows, Swatch c, double shift = 0)
         {
-            double T = Dim.T_EXT, wa = T * 0.36, wb = T * 0.54, h = BarW / 2;
+            double T = Dim.T_EXT, wa = T * 0.36 + shift, wb = T * 0.54 + shift, h = BarW / 2;
             cols = Math.Max(1, Math.Min(8, cols)); rows = Math.Max(1, Math.Min(8, rows));
             var xs = new double[cols + 1];
             for (int i = 0; i <= cols; i++) xs[i] = ua + (ub - ua) * i / cols;
@@ -521,11 +555,14 @@ namespace Triband.Storey.Generate
             /// <summary>The inner face is the rooms' (<see cref="MeshBuilder.Inside"/>): an outside wall's, seen only through its windows.</summary>
             public bool rooms;
             public double? revealFrom; public Swatch? revealC;
+            /// <summary>Where a door's reveal starts, where it isn't <see cref="revealFrom"/> (a style's door recess); and its threshold's colour (a recessed street door's). Storey's own.</summary>
+            public double? doorRevealFrom; public Swatch? thresholdC;
 
             /// <summary>Every option set, as a new one with these would be (for options used again panel after panel).</summary>
-            public PanelOpt Set(bool outer = true, bool inner = true, bool ends = false, bool threshold = false, double? revealFrom = null, Swatch? revealC = null, bool rooms = false)
+            public PanelOpt Set(bool outer = true, bool inner = true, bool ends = false, bool threshold = false, double? revealFrom = null, Swatch? revealC = null, bool rooms = false, double? doorRevealFrom = null, Swatch? thresholdC = null)
             {
                 this.outer = outer; this.inner = inner; this.ends = ends; this.threshold = threshold; this.revealFrom = revealFrom; this.revealC = revealC; this.rooms = rooms;
+                this.doorRevealFrom = doorRevealFrom; this.thresholdC = thresholdC;
                 return this;
             }
         }
@@ -589,10 +626,11 @@ namespace Triband.Storey.Generate
             var nu = new P3(F.u.x, 0, F.u.z);
             foreach (var o in os)
             {
-                gb.Quad(X(o.u0, o.y0, rw), X(o.u0, o.y0, w1), X(o.u0, o.y1, w1), X(o.u0, o.y1, rw), nu, rc);
-                gb.Quad(X(o.u1, o.y0, rw), X(o.u1, o.y0, w1), X(o.u1, o.y1, w1), X(o.u1, o.y1, rw), new P3(-nu.x, 0, -nu.z), rc);
-                if (o.y0 > 1e-3 || opt.threshold || o.thr) gb.Quad(X(o.u0, o.y0, rw), X(o.u1, o.y0, rw), X(o.u1, o.y0, w1), X(o.u0, o.y0, w1), new P3(0, 1, 0), rc);
-                if (o.y1 < h - 1e-3) gb.Quad(X(o.u0, o.y1, rw), X(o.u1, o.y1, rw), X(o.u1, o.y1, w1), X(o.u0, o.y1, w1), new P3(0, -1, 0), rc);
+                double ro = o.door && opt.doorRevealFrom is double dr ? dr : rw;
+                gb.Quad(X(o.u0, o.y0, ro), X(o.u0, o.y0, w1), X(o.u0, o.y1, w1), X(o.u0, o.y1, ro), nu, rc);
+                gb.Quad(X(o.u1, o.y0, ro), X(o.u1, o.y0, w1), X(o.u1, o.y1, w1), X(o.u1, o.y1, ro), new P3(-nu.x, 0, -nu.z), rc);
+                if (o.y0 > 1e-3 || opt.threshold || o.thr) gb.Quad(X(o.u0, o.y0, ro), X(o.u1, o.y0, ro), X(o.u1, o.y0, w1), X(o.u0, o.y0, w1), new P3(0, 1, 0), o.y0 <= 1e-3 && o.door && opt.thresholdC is Swatch tc ? tc : rc);
+                if (o.y1 < h - 1e-3) gb.Quad(X(o.u0, o.y1, ro), X(o.u1, o.y1, ro), X(o.u1, o.y1, w1), X(o.u0, o.y1, w1), new P3(0, -1, 0), rc);
             }
             if (opt.ends)
             {
