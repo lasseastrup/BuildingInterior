@@ -7,8 +7,9 @@ using Xunit.Abstractions;
 namespace Triband.Storey.Tests
 {
     /// <summary>
-    /// The upload's mesh hygiene: welding exact duplicate vertices changes no triangle, and every LOD0 wall vertex has a
-    /// wall id, through which the shader now reads the wall's cutaway data (the vertex carries only kind and id).
+    /// The upload's mesh hygiene: welding the vertices the upload can't tell apart changes no triangle as uploaded, and every
+    /// LOD0 wall vertex has a wall id, through which the shader now reads the wall's cutaway data (the vertex carries only
+    /// kind and id).
     /// </summary>
     public class MeshTopologyTests
     {
@@ -18,8 +19,9 @@ namespace Triband.Storey.Tests
 
         static (StoreyDocument doc, Site site) Load(string file) { var d = PrototypeJson.Read(Fixtures.Text(file)).Document; return (d, new Site(d.buildings)); }
 
+        // each triangle's corners as uploaded: the position's floats, the normal's packed bytes (MeshPack)
         static List<string> Corners(MeshBuilder m) =>
-            Enumerable.Range(0, m.I.Count).Select(t => { int i = m.I[t]; return $"{m.P[i].x},{m.P[i].y},{m.P[i].z}|{m.N[i].x},{m.N[i].y},{m.N[i].z}|{m.C[i]}" + (m.Lean ? "" : $"|{m.K[i]}|{m.WI[i]}"); }).ToList();
+            Enumerable.Range(0, m.I.Count).Select(t => { int i = m.I[t]; return $"{(float)m.P[i].x},{(float)m.P[i].y},{(float)m.P[i].z}|{MeshPack.S8(m.N[i].x)},{MeshPack.S8(m.N[i].y)},{MeshPack.S8(m.N[i].z)}|{m.C[i]}" + (m.Lean ? "" : $"|{m.K[i]}|{m.WI[i]}"); }).ToList();
 
         [Theory, MemberData(nameof(Core))]
         public void WeldingChangesNoTriangle(string file, int i)
@@ -34,6 +36,29 @@ namespace Triband.Storey.Tests
                 Assert.Equal(before, Corners(m));   // the same corners, in the same order: the same triangles
                 Assert.Equal(0, m.Weld());           // nothing left to merge
             }
+        }
+
+        /// <summary>
+        /// LOD1 as packed (welded) and the massing have no vertex the upload can't tell from another: a strip's corner, worked
+        /// out from each of the two walls it mitres between, and a parapet's top where it turns a corner, are one vertex.
+        /// </summary>
+        [Theory, MemberData(nameof(Core))]
+        public void NoVertexOfAShellOrAMassingIsThereTwice(string file, int i)
+        {
+            var (doc, site) = Load(file);
+            var b = doc.buildings[i];
+            foreach (var pm in MeshPack.Pack(Lod1.Build(site, b), windows: true))
+            {
+                var seen = new HashSet<string>();
+                for (int v = 0; v < pm.Verts; v++) { var q = pm.V[v]; Assert.True(seen.Add($"{q.x:R},{q.y:R},{q.z:R}|{q.nx},{q.ny},{q.nz},{q.nw}|{q.r},{q.g},{q.b},{q.a}|{q.tag:R}"), $"{b.name}: LOD1 vertex {v} twice"); }
+            }
+            var m = Lod2.Build(site, b); var at = new HashSet<string>();
+            for (int v = 0; v < m.Verts; v++)
+            {
+                string F(double x) => ((float)x + 0f).ToString("R");
+                Assert.True(at.Add($"{F(m.P[v].x)},{F(m.P[v].y)},{F(m.P[v].z)}|{m.N[v]}|{F(m.Fac[4 * v])},{F(m.Fac[4 * v + 1])},{F(m.Fac[4 * v + 2])},{F(m.Fac[4 * v + 3])}|{F(m.Fac2[2 * v])},{F(m.Fac2[2 * v + 1])}|{m.Slot[v]}"), $"{b.name}: massing vertex {v} twice");
+            }
+            Assert.Equal(0, m.Weld());
         }
 
         [Theory, MemberData(nameof(Core))]

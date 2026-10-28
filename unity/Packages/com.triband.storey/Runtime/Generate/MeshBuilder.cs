@@ -185,16 +185,25 @@ namespace Triband.Storey.Generate
         public int Verts => P.Count;
 
         /// <summary>
-        /// Merge vertices that are the same in every attribute (position, normal, colour, and the cutaway's wall, kind and
-        /// id), keeping the first of each, and rewrite the indices. Faces are flat-shaded, so only vertices of coplanar
-        /// faces of one colour ever meet; the generator already shares those within a polygon, this catches the rest.
-        /// Returns how many went. The triangles are unchanged.
+        /// Merge vertices that are the same in every attribute as uploaded (position, normal, colour, and the cutaway's wall,
+        /// kind and id), keeping the first of each, and rewrite the indices. Faces are flat-shaded, so only vertices of
+        /// coplanar faces of one colour ever meet; the generator already shares those within a polygon, this catches the
+        /// rest. Returns how many went. The triangles are unchanged, as uploaded.
         /// </summary>
+        /// <remarks>
+        /// As uploaded: a position as its floats, a normal as its packed bytes (<see cref="MeshPack"/>). A strip's corner is
+        /// worked out from each of the two walls it mitres between, a few ulps apart as doubles and the same as floats: the
+        /// exact doubles left 12 % of the converted scenes' LOD1 vertices twice (Storey's own).
+        /// </remarks>
         public int Weld()
         {
             Welded = true;
             int n = P.Count;
             if (n == 0) return 0;
+            // each normal of the builder's table as packed, its three bytes in an int (the builder's own, kept for the next weld)
+            var nv = N.Values; var packed = weldNormals;
+            if (packed == null || packed.Length < nv.Count) weldNormals = packed = new int[Math.Max(nv.Count, 2 * (packed?.Length ?? 0))];
+            for (int e = 0; e < nv.Count; e++) packed[e] = (byte)MeshPack.S8(nv[e].x) | (byte)MeshPack.S8(nv[e].y) << 8 | (byte)MeshPack.S8(nv[e].z) << 16;
             // each vertex's first equal, through a table of vertex indices (open addressing, at least twice as many slots as
             // vertices; 0 is empty, else the index + 1): no keys copied, a few bytes a vertex, in chunks given back after
             int size = 4; while (size < n * 2) size <<= 1;
@@ -239,28 +248,31 @@ namespace Triband.Storey.Generate
         }
 
         ChunkList<int>? weldSlots, weldMap;
+        int[]? weldNormals;
         List<KeyValuePair<int, (double u, double v, byte id, bool flat, bool bar)>>? weldPanes;
 
         /// <summary>Set by <see cref="Weld"/> (a build thread welds before the upload; the upload then skips it). Add nothing after.</summary>
         public bool Welded { get; private set; }
 
         // a vertex's identity for Weld: position, normal, colour, and the cutaway's kind and wall id (the id stands for
-        // the wall's data: one id, one wall). Exact: the same doubles, as the generator made them (0 and −0 alike, as == has
-        // them); a colour by its entry in the builder's table, which holds each swatch once, equal as Swatch.Equals has it
+        // the wall's data: one id, one wall). As uploaded: the position's floats (0 and −0 alike, as == has them), the
+        // normal's packed bytes (weldNormals, by its entry); a colour by its entry in the builder's table, which holds each
+        // swatch once, equal as Swatch.Equals has it. A pane's vertex keeps its place on the pane apart (PaneUV)
         int Hash(int i)
         {
-            var p = P[i]; var q = N[i];
-            return HashCode.Combine(p.x, p.y, p.z, q.x, q.y, q.z, C.Index[i], Lean ? 0 : HashCode.Combine(K[i], WI[i]));
+            var p = P[i];
+            return HashCode.Combine((float)p.x + 0f, (float)p.y + 0f, (float)p.z + 0f, weldNormals![N.Index[i]], C.Index[i], Lean ? 0 : HashCode.Combine(K[i], WI[i]));
         }
 
         bool Same(int i, int j)
         {
             P3 a = P[i], b = P[j];
-            if (a.x != b.x || a.y != b.y || a.z != b.z) return false;
+            if ((float)a.x != (float)b.x || (float)a.y != (float)b.y || (float)a.z != (float)b.z) return false;
             if (C.Index[i] != C.Index[j] || (!Lean && (K[i] != K[j] || WI[i] != WI[j]))) return false;
-            if (N.Index[i] == N.Index[j]) return true;
-            a = N[i]; b = N[j];
-            return a.x == b.x && a.y == b.y && a.z == b.z;
+            if (N.Index[i] != N.Index[j] && weldNormals![N.Index[i]] != weldNormals[N.Index[j]]) return false;
+            if (PaneUV.Count == 0) return true;
+            bool pi = PaneUV.TryGetValue(i, out var ui), pj = PaneUV.TryGetValue(j, out var uj);
+            return pi == pj && (!pi || ui.Equals(uj));
         }
 
         /// <summary>Set the cutaway context for what follows. A wall (kind 1) gets an id so it can slide.</summary>

@@ -130,6 +130,66 @@ namespace Triband.Storey.Generate
 
         /// <summary>Let go of the massings kept (the tests' allocation counts start from none).</summary>
         public static void ForgetSpares() { lock (spares) spares.Clear(); }
+
+        /// <summary>
+        /// Merge vertices the upload can't tell apart (every attribute as a float, as <see cref="MeshBuilder.Weld"/> has it),
+        /// keeping the first of each, and rewrite the indices; the triangles are unchanged. Where a parapet's top or a lid's
+        /// rim turns a corner, the two walls' quads meet: a tenth to a seventh of a massing's vertices (the converted scenes',
+        /// the test city's). Returns how many went. Storey's own.
+        /// </summary>
+        public int Weld()
+        {
+            int n = P.Count;
+            if (n == 0 || Tags != null) return 0;
+            // each vertex's first equal, through a table of vertex indices (open addressing, at least twice as many slots as
+            // vertices; 0 is empty, else the index + 1), kept with the massing for its next build
+            int size = 4; while (size < n * 2) size <<= 1;
+            if (weldSlots == null || weldSlots.Length < size) weldSlots = new int[size]; else Array.Clear(weldSlots, 0, size);
+            if (weldMap == null || weldMap.Length < n) weldMap = new int[Math.Max(n, 2 * (weldMap?.Length ?? 0))];
+            var slots = weldSlots; var map = weldMap;
+            int kept = 0;
+            for (int i = 0; i < n; i++)
+            {
+                var q = P[i];
+                int hash = unchecked(BitConverter.SingleToInt32Bits((float)q.x + 0f) * 73856093 ^ BitConverter.SingleToInt32Bits((float)q.y + 0f) * 19349663 ^ BitConverter.SingleToInt32Bits((float)q.z + 0f) * 83492791);
+                for (int h = (hash ^ hash >> 15) & (size - 1); ; h = (h + 1) & (size - 1))
+                {
+                    int sl = slots[h];
+                    if (sl == 0) { slots[h] = i + 1; map[i] = kept++; break; }
+                    if (Same(i, sl - 1)) { map[i] = map[sl - 1]; break; }
+                }
+            }
+            int gone = n - kept;
+            if (gone == 0) return 0;
+            // in place: the kept vertices move down, in order
+            for (int i = 0, at = 0; i < n; i++)
+            {
+                if (map[i] != at) continue;
+                if (at != i)
+                {
+                    P[at] = P[i]; N[at] = N[i]; Slot[at] = Slot[i];
+                    for (int c = 0; c < 4; c++) Fac[4 * at + c] = Fac[4 * i + c];
+                    Fac2[2 * at] = Fac2[2 * i]; Fac2[2 * at + 1] = Fac2[2 * i + 1];
+                }
+                at++;
+            }
+            P.RemoveRange(kept, n - kept); N.RemoveRange(kept, n - kept); Slot.RemoveRange(kept, n - kept);
+            Fac.RemoveRange(4 * kept, 4 * (n - kept)); Fac2.RemoveRange(2 * kept, 2 * (n - kept));
+            for (int t = 0; t < I.Count; t++) I[t] = map[I[t]];
+            return gone;
+        }
+
+        int[]? weldSlots, weldMap;
+
+        // the same as uploaded: every attribute as a float
+        bool Same(int i, int j)
+        {
+            static bool F(double a, double b) => (float)a == (float)b;
+            P3 a = P[i], b = P[j], m = N[i], o = N[j];
+            if (!F(a.x, b.x) || !F(a.y, b.y) || !F(a.z, b.z) || !F(m.x, o.x) || !F(m.y, o.y) || !F(m.z, o.z) || Slot[i] != Slot[j]) return false;
+            for (int c = 0; c < 4; c++) if (!F(Fac[4 * i + c], Fac[4 * j + c])) return false;
+            return F(Fac2[2 * i], Fac2[2 * j]) && F(Fac2[2 * i + 1], Fac2[2 * j + 1]);
+        }
     }
 
     /// <summary>
@@ -448,6 +508,7 @@ namespace Triband.Storey.Generate
                 Quad(At(0, hw, y0), At(0, hw, y1), At(s.sRight, hw, y1), At(s.sRight, hw, y0), lft, 0, 4);
                 Quad(At(0, -hw, y0), At(s.sLeft, -hw, y0), At(s.sLeft, -hw, y1), At(0, -hw, y1), lft * -1, 0, 4);
             }
+            M.Weld();
             return M;
         }
     }

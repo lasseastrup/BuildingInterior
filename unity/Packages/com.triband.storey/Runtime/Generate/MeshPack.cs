@@ -124,7 +124,8 @@ namespace Triband.Storey.Generate
         /// <summary>The most vertices 16-bit indices reach.</summary>
         public const int MaxVerts = 65535;
 
-        static sbyte S8(double v) => (sbyte)Math.Round(Math.Max(-1, Math.Min(1, v)) * 127);
+        /// <summary>A normal's component as the upload packs it (SNorm8).</summary>
+        internal static sbyte S8(double v) => (sbyte)Math.Round(Math.Max(-1, Math.Min(1, v)) * 127);
 
         /// <summary>
         /// A value as a 16-bit float's bits (IEEE 754 binary16, rounded to nearest, ties to even, as the GPU reads it):
