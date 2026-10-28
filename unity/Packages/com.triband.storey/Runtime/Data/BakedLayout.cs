@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 5;
+        public const int Version = 6;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -193,7 +193,7 @@ namespace Triband.Storey
             var b = new BuildingData
             {
                 id = Str(ref r)!, name = Str(ref r)!, pos = r.Vec(), elevation = r.F64(), groundHeight = r.F64(), floorHeight = r.F64(),
-                interior = r.Bool(), gen = r.Bool(),
+                interior = r.Bool(), gen = r.Bool(), colliders = r.Bool(),
             };
             Style(r.Count(), b.style);
             Points(ref r, b.footprint);
@@ -388,7 +388,7 @@ namespace Triband.Storey
         static void WriteBuilding(Writer w, BuildingData b, Func<string?, int> S, Func<FacadeStyle, int> St)
         {
             w.Count(S(b.id)); w.Count(S(b.name)); w.Vec(b.pos); w.F64(b.elevation); w.F64(b.groundHeight); w.F64(b.floorHeight);
-            w.Bool(b.interior); w.Bool(b.gen);
+            w.Bool(b.interior); w.Bool(b.gen); w.Bool(b.colliders);
             w.Count(St(b.style));
             w.Points(b.footprint);
             WriteCorners(w, b.corners);

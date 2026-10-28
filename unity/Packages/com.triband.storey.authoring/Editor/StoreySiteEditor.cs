@@ -205,7 +205,14 @@ namespace Triband.Storey.Editor
                 if (iso != v.isolate) { v.isolate = iso; SceneView.RepaintAll(); }
                 if (GUILayout.Button(new GUIContent("Save as template…", "Keep this building as an asset to place again, in this layout or another"), EditorStyles.miniButton, GUILayout.Width(110))) SaveTemplate(sb);
             }
+            // its collider (docs/PLAY.md §5): one undo step, and the building is built again without it, or with it
+            bool col = EditorGUILayout.Toggle(CollidersLabel, sb.colliders);
+            if (col != sb.colliders) e.ApplyTo(col ? "Colliders on" : "Colliders off", bb => { bb.colliders = col; return true; });
         }
+
+        static readonly GUIContent CollidersLabel = new GUIContent("Colliders",
+            "The building's MeshCollider, made with its LOD0, at load or in edit mode as Site settings say. Off, it gets none, as the old " +
+            "BuildingGenerator's Generate Colliders off: physics and raycasts pass through it, and nothing waits for it. Storey's own play kit still walks it");
 
         /// <summary>Save a building as a template asset: a new one, or over one picked in the save panel.</summary>
         static void SaveTemplate(BuildingData b)

@@ -498,7 +498,7 @@ Engine-free: `OpeningKind`, `OpeningKinds` (`Register`, `Of`, `Place`, `Check`),
 The site's inspector reads top to bottom in the order you work: which layout, which building, what's wrong, which mode, then that mode's settings. The rare settings come last.
 
 1. **Layout**: the `.storey` file. Selecting the site starts editing it (§4).
-2. **Building** card: pick a building, *New ▾* (a template: the package's five shapes, or the project's), *Duplicate*, *Delete*, its name, *Isolate* and *Save as template…*. A box is kept for controls that act together; everything in this card acts on the building picked at its top.
+2. **Building** card: pick a building, *New ▾* (a template: the package's five shapes, or the project's), *Duplicate*, *Delete*, its name, *Isolate* and *Save as template…*, and *Colliders* (on: the building gets its collider as Site settings say; off: none, as the old BuildingGenerator's *Generate Colliders* off; docs/PLAY.md §5). A box is kept for controls that act together; everything in this card acts on the building picked at its top.
 3. **Problems**: one quiet line when there are none, or a warning foldout with the count.
 4. **Shape / Facade / Interior**: three large buttons, each with an icon and a line saying what it's for. The selected one is tinted, with an accent bar along its bottom. On a narrow inspector the line moves under the bar.
 5. The mode's settings in named groups, each a header with a hairline and space above it, not a box:
@@ -521,6 +521,7 @@ Code: `StoreyInspectorUI` (`Section`, `Fold`, `ModeBar`, the three icons, drawn 
 2. Click each mode: the button tints and the Scene view's tool changes.
 3. Narrow the inspector: the mode buttons keep their icons and names, and the description moves below them.
 4. Switch the editor to the light skin: the icons and accents are still readable.
+5. With *Colliders in edit mode* on in Site settings, turn a building's *Colliders* off on its card: its MeshCollider goes and the others stay; one Undo brings it back. In Play mode with *Colliders At Load*, it has none either.
 
 ### 6.11 Buildings at different heights
 

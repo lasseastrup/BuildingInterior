@@ -76,6 +76,12 @@ namespace Triband.Storey
         public FacadeStyle style = new FacadeStyle();
         /// <summary>True for buildings the prototype's city generator made; they are not part of the layout proper.</summary>
         public bool gen;
+        /// <summary>
+        /// False: the site makes no collider for this building (docs/PLAY.md §5), with its LOD0, at load or in edit mode
+        /// alike, and whatever waits for colliders takes it as ready. For the old BuildingGenerator's buildings with
+        /// <c>_generateColliders</c> off. The walk model still walks it. Storey's own.
+        /// </summary>
+        public bool colliders = true;
         /// <summary>Courtyards and atria: openings through the storeys from <see cref="VoidData.bottom"/> up. Storey's own.</summary>
         public List<VoidData> voids = new List<VoidData>();
         /// <summary>Bridges from this building's walls to other buildings'. Storey's own.</summary>

@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- The building card has **Colliders** (docs/EDITOR.md §6.10, docs/PLAY.md §5): off, the site makes the building no collider, as the old BuildingGenerator's *Generate Colliders* off. One undo step, through the layout's edit like any other.
 - A prefab's submesh drawn with a material that doesn't draw from the palette (a window's own glass shader) is a part by its material, though its mesh carries Model Remapper indices (`StoreyColorField.PaletteMaterial`: Color Pipeline's lit shader, by its `_ColorPaletteOffset`). The old generator's window glass came over as a palette colour.
 - A window, door or facade detail baked from a prefab keeps a Color Pipeline *Color Remap* on its renderers: the colours it remaps become that renderer's parts' own (`StoreyColorField.RemapOf`, installed by the Color Pipeline integration), where the bake used to leave it out with a note. The old generator's window prefabs remap their glass this way.
 - The Facade tab's *Details by rule* shows, under each detail's chance, the style's settings its rule takes: *Per m²* and *Gap* (scattered), *Per bay* (in a row), *Every* and *Corners* (up the corners), *Storeys*, and *Colour* for its main colour in this style (`StoreyDetails.EditRule`: settings back at their defaults are taken out, so the layout writes the chance alone).

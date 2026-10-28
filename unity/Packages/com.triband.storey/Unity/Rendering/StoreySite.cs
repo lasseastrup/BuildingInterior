@@ -34,7 +34,7 @@ namespace Triband.Storey.Unity
         public bool lodTint;
         [Tooltip("Automatic LOD: show its numbers (LOD counts, resident meshes, cells, build time) in the Game view in Play mode, and in the Scene view while the site is selected.")]
         public bool showLodStats;
-        [Tooltip("Give every building a MeshCollider from a collision mesh of its floors, stairs, walls and roofs, for physics characters and raycasts. Storey's own play kit walks without them.")]
+        [Tooltip("Give every building a MeshCollider from a collision mesh of its floors, stairs, walls and roofs, for physics characters and raycasts; a building whose Colliders are off on its card gets none. Storey's own play kit walks without them.")]
         public bool generateColliders = true;
         [Tooltip("Colliders in edit mode too, rebuilt with every edit (raycasts and physics previews in the editor). Off, edits cook nothing.")]
         public bool collidersInEditMode;
@@ -122,8 +122,9 @@ namespace Triband.Storey.Unity
         /// §5): a physics character or rigid body put there has floors, stairs and walls to meet. A building's collider comes
         /// with its LOD0, cooked off the main thread a frame or two after it, so a spawn or teleport asks for detail there
         /// first (<see cref="PrefetchAround"/>) and waits for this behind its fade, as for <see cref="DetailReadyAround"/>.
-        /// True when the site makes no colliders: there are none to wait for. A Storey Prop with a rigid body waits for its
-        /// building's by itself (docs/PROPS.md §2.6).
+        /// True when the site makes no colliders: there are none to wait for, as for a building with its colliders off
+        /// (<see cref="BuildingData.colliders"/>). A Storey Prop with a rigid body waits for its building's by itself
+        /// (docs/PROPS.md §2.6).
         /// </summary>
         public bool CollidersReadyAround(Vector3 world, float radius = 8)
         {
