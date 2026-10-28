@@ -25,6 +25,10 @@ namespace Triband.Storey.Generate
         Band,
         /// <summary>The cornice round the top of a tier's walls (otherwise the trim). Storey's own.</summary>
         Cornice,
+        /// <summary>The roof cap's sides and strip (otherwise the trim). Storey's own.</summary>
+        Cap,
+        /// <summary>The underside of the roof cap's overhang (otherwise the cap's colour, shaded). Storey's own.</summary>
+        CapRim,
     }
 
     /// <summary>
@@ -101,6 +105,7 @@ namespace Triband.Storey.Generate
                 ColorSlot.Plinth => st.plinth ?? d.plinth,
                 // these follow another of the style's colours, not a project default: a style without one draws with that slot
                 ColorSlot.GroundWall => st.groundWall ?? st.wall, ColorSlot.Band => st.band ?? st.trim, ColorSlot.Cornice => st.cornice ?? st.trim,
+                ColorSlot.Cap => st.cap ?? st.trim, ColorSlot.CapRim => st.capRim ?? st.cap ?? st.trim,
                 _ => throw new ArgumentOutOfRangeException(nameof(slot)),
             };
         }

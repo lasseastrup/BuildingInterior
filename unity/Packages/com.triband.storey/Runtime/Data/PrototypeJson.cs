@@ -250,6 +250,8 @@ namespace Triband.Storey
             s.groundWall = c.OptColor(o, "groundWall", path);
             s.band = c.OptColor(o, "band", path);
             s.cornice = c.OptColor(o, "cornice", path);
+            s.cap = c.OptColor(o, "cap", path);
+            s.capRim = c.OptColor(o, "capRim", path);
             s.windows = c.Enum<WindowType>(o, "windows", WindowType.Punched, path);
             s.winW = c.Num(o, "winW", 1.2, path);
             s.bay = c.Num(o, "bay", 2.6, path);
@@ -261,6 +263,9 @@ namespace Triband.Storey
             s.eave = c.Opt(o, "eave", path);
             s.mansard = c.Opt(o, "mansard", path);
             s.dormers = c.Opt(o, "dormers", path);
+            s.capH = c.Opt(o, "capH", path);
+            s.capDepth = c.Opt(o, "capDepth", path);
+            s.capStrip = c.Opt(o, "capStrip", path);
             s.head = c.Enum<HeadType>(o, "head", HeadType.Flat, path);
             s.frames = c.Bool(o, "frames", false, path);
             s.sills = c.Bool(o, "sills", true, path);
@@ -416,6 +421,9 @@ namespace Triband.Storey
             if (s.eave.HasValue) o["eave"] = s.eave.Value;
             if (s.mansard.HasValue) o["mansard"] = s.mansard.Value;
             if (s.dormers.HasValue) o["dormers"] = s.dormers.Value;
+            if (s.capH.HasValue) o["capH"] = s.capH.Value;
+            if (s.capDepth.HasValue) o["capDepth"] = s.capDepth.Value;
+            if (s.capStrip.HasValue) o["capStrip"] = s.capStrip.Value;
             if (s.head != HeadType.Flat) o["head"] = Lower(s.head);
             if (!s.sills) o["sills"] = false;
             if (!s.heads) o["heads"] = false;
@@ -452,6 +460,8 @@ namespace Triband.Storey
             if (s.groundWall != null) o["groundWall"] = s.groundWall;
             if (s.band != null) o["band"] = s.band;
             if (s.cornice != null) o["cornice"] = s.cornice;
+            if (s.cap != null) o["cap"] = s.cap;
+            if (s.capRim != null) o["capRim"] = s.capRim;
             if (s.details != null)
             {
                 var d = new Dictionary<string, object?>();
@@ -538,9 +548,9 @@ namespace Triband.Storey
             public static readonly string[] Point = { "x", "z" };
             public static readonly string[] Style =
             {
-                "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "details",
+                "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "capH", "capDepth", "capStrip", "details",
                 "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "bandGround", "corniceH", "corniceDepth", "plinthH", "plinthDepth", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind", "sillH",
-                "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth", "groundWall", "band", "cornice",
+                "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth", "groundWall", "band", "cornice", "cap", "capRim",
                 "doorType",   // street doors' Canopy or Glazed, gone (every generated door is plain): read and dropped, not reported
             };
         }

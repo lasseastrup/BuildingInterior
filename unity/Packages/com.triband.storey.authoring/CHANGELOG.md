@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- The Facade tab's *Roof* section has **Roof cap** for a flat roof (docs/EDITOR.md §6.7): *Height*, *In from the wall*, *Strip*, *Colour* and, for an overhang, *Underside*, with a line saying which kind of cap the numbers make.
 - The Facade tab's *Walls* section has the strips top to bottom (docs/EDITOR.md §6.7): **Cornice** (height, stands out, colour), the band's *Over the ground floor only* and *Band colour*, the plinth's *Stands out*; *Colours* has *Ground floor walls* on the base. An unset strip colour shows the colour it follows.
 - A Storey Opening's inspector says how LOD1 places its LOD1: on the flat wall, or in a hole cut in the wall, and with the plain pane where it leaves the hole open. A window whose LOD1 reaches into the wall gets a note that LOD1 cuts the wall round every window.
 - A Storey Opening's **Fit**: *Stretch*, *Slice* or *Keep size* (it was the *Stretch* toggle). One made from a prefab starts as *Slice*. The Storey Cutout has *Borders* (the slice lines, drawn dotted in the Scene view) and *Keep shape*.

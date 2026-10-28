@@ -4,7 +4,7 @@
 // Each facade quad covers a run of storeys with one height and window type. fac = (u along the wall, height
 // above the run's base, window span start, window span end); fac2 = (bay width, kind); slot = the run's row in
 // _StoreyParams: six texels ((colour row, wall, trim and glass shades), (roof shade, walls' slot, cornice height and
-// slot), (band), one unused, window spec, run data). Wall, trim, glass and roof come from the palette through the colour
+// slot), (band), (roof cap: read only over the top run), window spec, run data). Wall, trim, glass and roof come from the palette through the colour
 // row (StoreyPalette.hlsl); a ground storey's own wall colour, the band's and the cornice's from the same row by slot
 // (ParamRow.wallSlot, band, corniceSlot), looked up only where a row has them.
 #ifndef STOREY_FACADE_INCLUDED
@@ -36,7 +36,19 @@ float3 StoreyFacadeColor(float4 fac, float2 fac2, float slot)
     if (kind > 1.5) return kind < 2.5 ? roof : (kind < 3.5 ? trim : wall);
     float4 sp = StoreyParam(slot, 4), run = StoreyParam(slot, 5);   // sp.x: gap for full-width styles (<0: fixed width), y: width, z: sill, w: head
     float u = fac.x, v = fac.y, uS = fac.z, uE = fac.w, bay = fac2.x, h = run.x;
-    if (v >= run.z) return (run.w > 1.5 || v > run.z + 1.0) ? trim : wall;   // parapet (or curb) above the top run
+    if (v >= run.z)
+    {
+        // above the top run: a raised roof cap (run.w 3, or 4 with a parapet on it: texel 3, its height and colour's slot),
+        // then the parapet (wall, then its coping in the trim) or the curb (trim)
+        float pz = run.z, pw = run.w;
+        [branch] if (pw > 2.5)
+        {
+            float4 cp = StoreyParam(slot, 3);
+            if (v < pz + cp.x) return StoreyPaletteColor(row, (uint)(cp.y + 0.5), 1.0);
+            pz += cp.x; pw = pw > 3.5 ? 1.0 : 2.0;
+        }
+        return (pw > 1.5 || v > pz + 1.0) ? trim : wall;   // parapet (or curb) above the top run
+    }
     float fl = floor(v / h), lv = v - fl * h;
     float3 c = wall;
     if (bay > 0.0 && sp.w > sp.z + 0.4)

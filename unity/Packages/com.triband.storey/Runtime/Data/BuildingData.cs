@@ -262,6 +262,10 @@ namespace Triband.Storey
         public string? band;
         /// <summary>The cornice's own colour (<see cref="corniceH"/>); null = the trim. Storey's own.</summary>
         public string? cornice;
+        /// <summary>The roof cap's colour (<see cref="capH"/>): its sides and strip; null = the trim. Storey's own.</summary>
+        public string? cap;
+        /// <summary>The underside of the roof cap's overhang; null = the cap's colour, shaded. Storey's own.</summary>
+        public string? capRim;
         public WindowType windows = WindowType.Punched;
         public double winW = 1.2;
         public double bay = 2.6;
@@ -317,6 +321,13 @@ namespace Triband.Storey
         public double? mansard;
         /// <summary>Dormers along every eave of a pitched roof, this far apart (metres, centre to centre); null = none. Storey's own.</summary>
         public double? dormers;
+        /// <summary>
+        /// A cap on a flat roof's edge (docs/EDITOR.md §6.7; the old BuildingGenerator's roof insert): its height (null = none;
+        /// above 0 it stands up from the roof, below 0 it hangs from the roof's edge as a fascia), how far its outer side is
+        /// in from the wall's face (null = 0; below 0 it overhangs the wall), and the width of the strip round its top in its
+        /// colour (null = none: its top is the roof's colour). Storey's own.
+        /// </summary>
+        public double? capH, capDepth, capStrip;
 
         /// <summary>Densities for details placed by rule, as the prototype stores them (percentages); null = the defaults.</summary>
         public DetailRules? details;

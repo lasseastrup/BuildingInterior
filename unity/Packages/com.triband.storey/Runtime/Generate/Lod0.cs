@@ -612,7 +612,10 @@ namespace Triband.Storey.Generate
         {
             if (Roofs.Draw(op, Roofs.Parts(site, b), C, Derived.StyleAt(b, N))) { WallTops(op, g, C); return; }   // hip, gable or shed (no roof access, no parapet)
             double y = Derived.RoofY(b), T = Dim.T_EXT; int n = g.Wp.Count, k0 = Derived.TierStart(b, N);
-            bool parapet = Derived.StyleAt(b, N).parapet;
+            var stN = Derived.StyleAt(b, N); bool parapet = stN.parapet;
+            // a cap on the roof's edge (RoofCap): a raised one takes the curb's place and lifts the parapet
+            var cap = RoofCap.Of(stN); double yp = y + (cap?.Lift ?? 0);
+            Swatch capC = C.CapOf(stN), rimC = C.CapRimOf(stN);
             for (int i = 0; i < n; i++)
             {
                 var e = Geo.EdgeInfo(g.Wp, i, g.ccw); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L);
@@ -625,12 +628,13 @@ namespace Triband.Storey.Generate
                 op.Ctx(Geo.WallCtx(e.a, e.u, e.w, e.L), 1);
                 void Edge(Func<(double, double), List<(double, double)>> ranges)
                 {
+                    if (cap is RoofCap c && !c.inset) Cap(op, F, m, ranges, c, y, C.roof, capC, rimC, parapet);
                     if (parapet)
                     {
-                        Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), y, y + 1.0, 0, T, C.wall, C.inner, Skip.Top | Skip.Bot);
-                        Facade.StripPieces(op, F, m, ranges(m.Span(-0.04, T + 0.05)), y + 1.0, y + 1.1, -0.04, T + 0.05, C.trim, null);
+                        Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), yp, yp + 1.0, 0, T, C.wall, C.inner, Skip.Top | Skip.Bot);
+                        Facade.StripPieces(op, F, m, ranges(m.Span(-0.04, T + 0.05)), yp + 1.0, yp + 1.1, -0.04, T + 0.05, C.trim, null);
                     }
-                    else Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), y, y + 0.3, 0, T, C.trim, C.trim, Skip.Bot);
+                    else if (cap?.raised != true) Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), y, y + 0.3, 0, T, C.trim, C.trim, Skip.Bot);
                 }
                 Edge(R);
                 // the parapet stops where a core stands flush against the wall, whose bulkhead (LOD0's) takes the wall up. A
@@ -646,6 +650,107 @@ namespace Triband.Storey.Generate
                 if (sg != null) foreach (var (cs, ce) in R(m.Span(T / 2, T / 2))) Facade.PushSeg(sg, F, cs, ce, T / 2, T / 2);
             }
             foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && Courtyards.HoleAt(b, v, N)) Courtyards.RoofEdge(op, sg, b, v, C);
+            if (cap is RoofCap ci && ci.inset) InsetCap(op, ci, y, stN.capStrip > 0 ? capC : C.roof, capC);
+        }
+
+        /// <summary>
+        /// A raised cap or a fascia along one edge of the roof (<see cref="RoofCap"/>), over <paramref name="ranges"/> as the
+        /// parapet: its sides in the cap's colour, its top the cap's colour for the strip's width and the roof's in from
+        /// there (none of it under a parapet), and the underside of its overhang the rim's.
+        /// </summary>
+        static void Cap(MeshBuilder op, Frame F, Miter m, Func<(double, double), List<(double, double)>> ranges, RoofCap c, double y, Swatch roofC, Swatch capC, Swatch rimC, bool parapet)
+        {
+            double T = Dim.T_EXT;
+            var rs = ranges(m.Span(c.wIn, c.wOut));
+            double y0 = c.raised ? y : y - c.h, y1 = c.raised ? y + c.h : y;
+            // a fascia's inner side is against the wall and under the curb
+            Facade.StripPieces(op, F, m, rs, y0, y1, c.wIn, c.wOut, capC, capC, Skip.Top | Skip.Bot | (c.fascia ? Skip.In : Skip.None));
+            void Top(double wa, double wb, Swatch col)
+            {
+                if (parapet && c.raised) { Facade.StripFace(op, F, m, rs, c.wIn, c.wOut, y1, wa, Math.Min(wb, 0), true, col); Facade.StripFace(op, F, m, rs, c.wIn, c.wOut, y1, Math.Max(wa, T), wb, true, col); }
+                else Facade.StripFace(op, F, m, rs, c.wIn, c.wOut, y1, wa, wb, true, col);
+            }
+            Top(c.wStrip, c.wOut, capC);
+            Top(c.wIn, c.wStrip, roofC);
+            // the overhang's underside: where it rests on the wall and the roof there is none
+            Facade.StripFace(op, F, m, rs, c.wIn, c.wOut, y0, Math.Max(c.wIn, T), c.wOut, false, rimC);
+        }
+
+        /// <summary>
+        /// An inset cap (<see cref="RoofCap.inset"/>): the region <see cref="InsetCapRegion"/> gives, standing on the roof,
+        /// its sides in the cap's colour and its top <paramref name="topC"/>.
+        /// </summary>
+        void InsetCap(MeshBuilder op, RoofCap c, double y, Swatch topC, Swatch capC)
+        {
+            if (op.ShapeOnly) return;
+            op.Ctx(null, 0);
+            double y1 = y + c.h;
+            foreach (var (ring, holes) in InsetCapRegion(c))
+            {
+                var tris = Triangulate.Shape(ring, holes);
+                var pts = new List<P3>(); foreach (var p in ring) pts.Add(new P3(p.x, y1, p.z)); foreach (var hl in holes) foreach (var p in hl) pts.Add(new P3(p.x, y1, p.z));
+                op.PolyTris(pts, tris, new P3(0, 1, 0), topC);
+                foreach (var (a, e, nx, nz) in InsetCapSides(ring, holes))
+                    op.Quad(new P3(a.x, y, a.z), new P3(e.x, y, e.z), new P3(e.x, y1, e.z), new P3(a.x, y1, a.z), new P3(nx, 0, nz), capC);
+            }
+        }
+
+        /// <summary>The sides of an inset cap's region, each with its normal out of the region (into a hole for a hole's).</summary>
+        public static IEnumerable<(Vec2 a, Vec2 e, double nx, double nz)> InsetCapSides(List<Vec2> ring, List<List<Vec2>> holes)
+        {
+            for (int r = -1; r < holes.Count; r++)
+            {
+                var loop = r < 0 ? ring : holes[r];
+                for (int i = 0; i < loop.Count; i++)
+                {
+                    var a = loop[i]; var e = loop[(i + 1) % loop.Count]; double dx = e.x - a.x, dz = e.z - a.z, L = Geo.Hypot(dx, dz); if (L < 1e-5) continue;
+                    double nx = dz / L, nz = -dx / L;
+                    // out of the region: off the outer ring's inside, into a hole
+                    bool inLoop = Geo.Pip(loop, (a.x + e.x) / 2 + nx * 1e-3, (a.z + e.z) / 2 + nz * 1e-3);
+                    if (inLoop != (r >= 0)) { nx = -nx; nz = -nz; }
+                    yield return (a, e, nx, nz);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Where an inset cap stands, in site space: the top outline offset in to the cap's outer side, less the outline offset
+        /// in to its inner side (Clipper, mitred), less where the parapet stops along the edge (party walls, bulkheads flush
+        /// with the wall), round every bulkhead and stair opening on the roof, and round courtyards and atria opening through
+        /// it. Each polygon with its holes.
+        /// </summary>
+        public List<(List<Vec2> ring, List<List<Vec2>> holes)> InsetCapRegion(RoofCap c)
+        {
+            var g = At(N); double T = Dim.T_EXT, y = Derived.RoofY(b); int k0 = Derived.TierStart(b, N);
+            var fp = Derived.OutlineAt(b, N);
+            Clipper2Lib.PathsD Off(List<Vec2> poly, double d)
+            {
+                var o = new Clipper2Lib.PathsD();
+                foreach (var r in Courtyards.Offset(Courtyards.World(b, poly), d)) o.Add(Path(r));
+                return o;
+            }
+            var ring = Clipper2Lib.Clipper.Difference(Off(fp, c.wOut), Off(fp, c.wIn), Clipper2Lib.FillRule.NonZero, 6);
+            var cut = new Clipper2Lib.PathsD();
+            for (int i = 0; i < g.Wp.Count; i++)
+            {
+                var e = Geo.EdgeInfo(g.Wp, i, g.ccw);
+                var skips = new List<(double, double)>(Party.Skips(site, b, k0, i, y)); skips.AddRange(CoreRoofSkips(i));
+                foreach (var (s0, e0) in skips) cut.Add(Path(new List<Vec2> { e.F.At2(s0, c.wIn - 1), e.F.At2(e0, c.wIn - 1), e.F.At2(e0, T + 1), e.F.At2(s0, T + 1) }));
+            }
+            foreach (var s in b.shafts)
+            {
+                if (!Cores.ShaftRoof(b, s) && !Cores.StairHoleAt(b, s, N)) continue;
+                var f = Cores.FrameOf(b, s);
+                double hx = s.type == CoreType.Stairs ? 1.6 : s.type == CoreType.Flight ? Dim.FLIGHT_W / 2 + 0.1 : 1.5, hz = s.type == CoreType.Stairs ? 2.9 : s.type == CoreType.Flight ? Dim.FLIGHT_D / 2 + 0.1 : 1.5;
+                var box = new List<Vec2> { f.At2(-hx, -hz), f.At2(hx, -hz), f.At2(hx, hz), f.At2(-hx, hz) };
+                cut.Add(Path(box));   // the core's frame is in site space
+            }
+            foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, N)) cut.AddRange(Off(v.shape, T + 0.05));
+            // each the same way round: under the non-zero rule a ring the other way would cancel one it overlaps
+            foreach (var p in cut) if (!Clipper2Lib.Clipper.IsPositive(p)) p.Reverse();
+            var tree = new Clipper2Lib.PolyTreeD();
+            Clipper2Lib.Clipper.BooleanOp(Clipper2Lib.ClipType.Difference, ring, cut, tree, Clipper2Lib.FillRule.NonZero, 6);
+            return Rings(tree);
         }
 
         /// <summary>

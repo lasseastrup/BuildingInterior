@@ -583,7 +583,11 @@ namespace Triband.Storey.Editor
                         if (st.dormers is double every) StyleSlider(e, k0, "Dormers every", every, 2.2, 10, 0.1, (s, x) => s.dormers = x);
                         if (mans) EditorGUILayout.HelpBox("A mansard: a steep 70° slope rises from the eaves to the break, then a shallow hip at the top pitch.", MessageType.None);
                     }
-                    else StyleToggle(e, k0, "Parapet", st.parapet, (s, x) => s.parapet = x);
+                    else
+                    {
+                        StyleToggle(e, k0, "Parapet", st.parapet, (s, x) => s.parapet = x);
+                        RoofCapFields(e, b, k0, st);
+                    }
                 }
                 if (StoreyInspectorUI.Fold("rules", "Details by rule", false, "Details scattered on the walls by the style (AC units, vents, and your own Facade Details with a rule); place any by hand below"))
                     RuleDetails(e, k0, st);
@@ -602,6 +606,27 @@ namespace Triband.Storey.Editor
                     }
             if (v.facadeTool == "bridge") EditorGUILayout.HelpBox("Click an upper floor's wall: a bridge goes straight out to the building facing it, to its floor nearest this one. Click a bridge's door to remove it.", MessageType.None);
             BridgeList(e, b);
+        }
+
+        /// <summary>
+        /// A flat roof's cap (docs/EDITOR.md §6.7, <see cref="FacadeStyle.capH"/>): its height (below 0 it hangs from the edge as
+        /// a fascia), how far in from the wall's face it stands (below 0 it overhangs), the strip round its top, and its colours.
+        /// </summary>
+        void RoofCapFields(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool on = EditorGUILayout.Toggle(new GUIContent("Roof cap", "A cap on the roof's edge: a slab standing out over the walls, a fascia hanging from the edge, or a ring set in on the roof. A raised one takes the curb's place, and a parapet stands on it"), st.capH.HasValue);
+                if (on != st.capH.HasValue) e.ApplyTo(on ? "Roof cap" : "No roof cap", bb => { var s = Styles.Edited(bb, k0); s.capH = on ? 0.4 : (double?)null; if (on && !s.capDepth.HasValue) s.capDepth = -0.25; return true; });
+            }
+            if (!(st.capH is double h)) return;
+            StyleSlider(e, k0, "   Height", h, -1.5, 4, 0.01, (s, x) => s.capH = x);
+            StyleSlider(e, k0, "   In from the wall", st.capDepth ?? 0, -1, 5, 0.01, (s, x) => s.capDepth = x);
+            StyleSlider(e, k0, "   Strip", st.capStrip ?? 0, 0, 2, 0.01, (s, x) => s.capStrip = x > 0 ? x : (double?)null);
+            Colour(e, b, k0, "   Colour", "cap", optional: true);
+            if ((st.capDepth ?? 0) < 0) Colour(e, b, k0, "   Underside", "capRim", optional: true);
+            string what = Generate.RoofCap.Of(st) is Generate.RoofCap c ? c.inset ? "A ring set in on the roof, round the bulkheads and openings." : c.fascia ? "A fascia hanging from the roof's edge, under the curb or parapet." : "A slab on the walls' top, standing out over them; it takes the curb's place." : "A cap below the roof needs an overhang (In from the wall below 0).";
+            EditorGUILayout.LabelField(what + " Above 0, In from the wall sets it in; below 0 it overhangs.", StoreyInspectorUI.Caption);
         }
 
         /// <summary>
@@ -1050,7 +1075,7 @@ namespace Triband.Storey.Editor
             "core" => ColorSlot.Core, "glass" => ColorSlot.Glass, "door" => ColorSlot.Door, "rail" => ColorSlot.Rail, "metal" => ColorSlot.Metal,
             "ceiling" => ColorSlot.Ceiling, "liftInterior" => ColorSlot.LiftInterior, "liftButton" => ColorSlot.LiftButton, "detailMetal" => ColorSlot.DetailMetal,
             "grille" => ColorSlot.Grille, "detailDark" => ColorSlot.DetailDark, "frame" => ColorSlot.Frame, "foundationColor" => ColorSlot.Foundation, "plinth" => ColorSlot.Plinth,
-            "groundWall" => ColorSlot.GroundWall, "band" => ColorSlot.Band, "cornice" => ColorSlot.Cornice, _ => ColorSlot.Dish,
+            "groundWall" => ColorSlot.GroundWall, "band" => ColorSlot.Band, "cornice" => ColorSlot.Cornice, "cap" => ColorSlot.Cap, "capRim" => ColorSlot.CapRim, _ => ColorSlot.Dish,
         };
 
         static void Slider(StoreyEdit e, string label, double value, double min, double max, double step, Action<BuildingData, double> set)

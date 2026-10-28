@@ -48,6 +48,10 @@ namespace Triband.Storey.Generate
         /// <summary>A style's cornice colour: its own, or the trim.</summary>
         public Swatch CorniceOf(FacadeStyle st) => st.cornice != null ? cornice : trim;
 
+        /// <summary>A style's roof cap colour (its own, or the trim), and its overhang's underside (its own, or the cap's shaded as a soffit is).</summary>
+        public Swatch CapOf(FacadeStyle st) => new Swatch(style, st.cap != null ? ColorSlot.Cap : ColorSlot.Trim);
+        public Swatch CapRimOf(FacadeStyle st) => st.capRim != null ? new Swatch(style, ColorSlot.CapRim) : CapOf(st).Shade(0.8);
+
         public Palette(StyleRef s)
         {
             style = s;
