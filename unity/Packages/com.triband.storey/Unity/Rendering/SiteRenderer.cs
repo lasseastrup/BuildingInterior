@@ -51,6 +51,8 @@ namespace Triband.Storey.Unity
             public Parts? parts;
             // the buildings whose party walls its LOD0's meshes carry
             public int[] mates = Array.Empty<int>();
+            // its colliders on (BuildingData.colliders): one with them off never gets one, and counts as ready (docs/PLAY.md §5)
+            public bool collider = true;
             // its own object, made with its first collider (docs/PERFORMANCE.md §3.4)
             public GameObject? root;
             public Mesh? collision;
@@ -534,23 +536,28 @@ namespace Triband.Storey.Unity
         /// <summary>
         /// The building has its collider, cooked and assigned (<see cref="Colliders"/>): a rigid body can rest on it. Not yet
         /// while the building waits for its first LOD0, which brings it, or while that is cooked (a frame or two after), and no
-        /// longer once let go past <see cref="LodSettings.MaxColliders"/>.
+        /// longer once let go past <see cref="LodSettings.MaxColliders"/>. Never for a building with its colliders off
+        /// (<see cref="BuildingData.colliders"/>), which <see cref="CollidersUpNear"/> and the props take as ready.
         /// </summary>
         public bool HasCollider(string id) => built.TryGetValue(id, out var b) && b.collision != null;
 
-        /// <summary><see cref="HasCollider"/> by table index (<see cref="TableIndexOf"/>), for the props manager.</summary>
-        internal bool ColliderUp(int idx) => byIdx.TryGetValue(idx, out var b) && b.collision != null;
+        /// <summary>
+        /// <see cref="HasCollider"/> by table index (<see cref="TableIndexOf"/>), for the props manager: or none is coming, the
+        /// building's colliders being off.
+        /// </summary>
+        internal bool ColliderUp(int idx) => byIdx.TryGetValue(idx, out var b) && (b.collision != null || !b.collider);
 
         /// <summary>
         /// Every building whose box comes within <paramref name="radius"/> metres of a point (site space, x and z) has its
-        /// collider (<see cref="HasCollider"/>). The boxes are the layout's (its outlines'), so the fixed LOD answers too.
+        /// collider (<see cref="HasCollider"/>), or has its colliders off. The boxes are the layout's (its outlines'), so the
+        /// fixed LOD answers too.
         /// </summary>
         public bool CollidersUpNear(double x, double z, double radius)
         {
             if (site == null) return false;
             foreach (var bt in built.Values)
             {
-                if (bt.collision != null || !(site.ById(bt.id) is BuildingData b)) continue;
+                if (bt.collision != null || !bt.collider || !(site.ById(bt.id) is BuildingData b)) continue;
                 var (x0, z0, x1, z1) = site.Bounds(b);
                 double dx = Math.Max(Math.Max(x0 - x, 0), x - x1), dz = Math.Max(Math.Max(z0 - z, 0), z - z1);
                 if (dx * dx + dz * dz <= radius * radius) return false;
@@ -665,7 +672,7 @@ namespace Triband.Storey.Unity
             {
                 if (colliders == value) return;
                 colliders = value;
-                if (value) { foreach (var id in built.Keys) colliderPending.Add(id); if (allColliders && load == null) MakeColliders(); }
+                if (value) { foreach (var bt in built.Values) if (bt.collider) colliderPending.Add(bt.id); if (allColliders && load == null) MakeColliders(); }
                 else { FinishBake(true, discard: true); colliderPending.Clear(); foreach (var b in built.Values) { RemoveCollider(b); b.collisionMade = null; } }
             }
         }
@@ -955,13 +962,37 @@ namespace Triband.Storey.Unity
             book?.SetRemap(building, original, overwrite);
         }
 
+        /// <summary>
+        /// Hide a building, or show it again (docs/PLAY.md §6, <see cref="StoreySite.SetHidden"/>): hidden, it draws nothing in
+        /// the colour and depth passes at any LOD, in its cell too, while its shadow is cast as before and its collider stays.
+        /// Its state row's displayed LOD goes past <see cref="StateRow.Hidden"/> (<see cref="BuildingTable.SetHidden"/>) and the
+        /// shaders do the rest: the LOD, the cross-fades, residency and the cells carry on under it, so shown again it draws
+        /// what it would have, and nothing is looked at per frame. Kept by id: a building built later (a layout loading over
+        /// frames) or again (an edit) is hidden as it is built. No garbage.
+        /// </summary>
+        public void SetHidden(string id, bool hide)
+        {
+            if (hide ? !hiddenIds.Add(id) : !hiddenIds.Remove(id)) return;
+            if (built.TryGetValue(id, out var bt)) table.SetHidden(bt.idx, hide);
+        }
+
+        /// <summary>Whether a building is hidden (<see cref="SetHidden"/>).</summary>
+        public bool IsHidden(string id) => hiddenIds.Count > 0 && hiddenIds.Contains(id);
+
+        /// <summary>The buildings hidden, by id: drawing nothing, they are never in the way of the occlusion system.</summary>
+        internal ICollection<string> Hidden => hiddenIds;
+
+        // SetHidden's buildings: room for a few at once, so hiding and showing them make no garbage
+        readonly HashSet<string> hiddenIds = new HashSet<string>(16, StringComparer.Ordinal);
+
         /// <summary>A building's table row, root object and massing (<paramref name="made"/> when made already), and its detail if it showed one.</summary>
         void Build(BuildingData b, Lod2Mesh? made = null)
         {
             // the table row is the site's block plus the building's index in the layout: party walls carry their
             // neighbour's layout index, moved into the block at upload (MeshUpload's mates), and the shader looks it up
-            var bt = new Built { id = b.id, idx = blockStart + site!.IndexOf(b) };
+            var bt = new Built { id = b.id, idx = blockStart + site!.IndexOf(b), collider = b.colliders };
             built[b.id] = bt; byIdx[bt.idx] = bt;
+            if (hiddenIds.Count > 0 && hiddenIds.Contains(b.id)) table.SetHidden(bt.idx, true);   // hidden before it was built (again)
 
             StoreyTimings.Count("buildings built");
             var t2 = StoreyTimings.Time("build: massing and its rows");
@@ -977,7 +1008,7 @@ namespace Triband.Storey.Unity
                 Add(bt, 2, n2, MeshUpload.Upload(l2, n2, rowMap), massing, true);
                 l2.Recycle();   // uploaded: its lists go to the next massing
                 table.SetLod(bt.idx, lod, lod, 1);
-                if (colliders) colliderPending.Add(b.id);
+                if (colliders && bt.collider) colliderPending.Add(b.id);
                 return;
             }
 
@@ -1015,7 +1046,7 @@ namespace Triband.Storey.Unity
         void BuildDetail(Built bt, BuildingData b, int which)
         {
             object made;
-            using (StoreyTimings.Time(which == 0 ? "build: LOD0 on the main thread" : "build: LOD1 on the main thread", b.name)) made = Generate(site!, b, bt.idx, which, (blockStart, blockSize), colliders && bt.collision == null)!;
+            using (StoreyTimings.Time(which == 0 ? "build: LOD0 on the main thread" : "build: LOD1 on the main thread", b.name)) made = Generate(site!, b, bt.idx, which, (blockStart, blockSize), colliders && bt.collider && bt.collision == null)!;
             FinishDetail(bt, b.name, which, made);
         }
 
@@ -1132,7 +1163,7 @@ namespace Triband.Storey.Unity
             if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 up: {name} ({bt.wallCount} walls at {bt.wallBase}, {d.opaque.Count} + {d.glass.Count} + {d.rooms.Count} meshes, {nv + nr:N0} vertices, {nr:N0} of them the rooms')");
             // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
             if (d.collision != null && bt.collision == null) bt.collisionMade = d.collision;
-            if (lods != null && colliders && bt.collision == null) colliderPending.Add(bt.id);
+            if (lods != null && colliders && bt.collider && bt.collision == null) colliderPending.Add(bt.id);
         }
 
         /// <summary>
@@ -1437,7 +1468,7 @@ namespace Triband.Storey.Unity
         // (hundreds of buildings a frame wanting detail: about 14 KB of garbage a frame)
         void StartJob(Built bt, BuildingData b, int which, BuildLane lane)
         {
-            var s0 = site!; int ix = bt.idx; var mates = (blockStart, blockSize); bool collider = which == 0 && colliders && bt.collision == null;
+            var s0 = site!; int ix = bt.idx; var mates = (blockStart, blockSize); bool collider = which == 0 && colliders && bt.collider && bt.collision == null;
             var job = new Job { bt = bt, site = s0, name = b.name, which = which, lane = lane, started = System.Diagnostics.Stopwatch.GetTimestamp() };
             Func<bool> between = job.Between;
             job.task = BuildThreads.Shared.Run(() => Generate(s0, b, ix, which, mates, collider, between), lane);
@@ -1555,7 +1586,7 @@ namespace Triband.Storey.Unity
                     ShowDetail(cb); if (cb.inCell) shownCells.Add(cb.cell);
                     // a LOD0 shown again after it was kept may have lost its collider past the cap meanwhile (one prefetched
                     // and never shown is the first to): made again from its shape, so one showing its LOD0 has its collider
-                    if (colliders && cb.collision == null && cb.shape != null && e.Visible(0) && !Baking(cb)) colliderPending.Add(cb.id);
+                    if (colliders && cb.collider && cb.collision == null && cb.shape != null && e.Visible(0) && !Baking(cb)) colliderPending.Add(cb.id);
                 }
                 // a late LOD0's windows clearing (LodManager.Entry.Hold): its row alone, nothing shown or hidden
                 foreach (int idx in f.Held) { var e = l.Get(idx)!; table.SetLod(idx, e.Shown, e.From, e.RowFade); fading = true; }
@@ -1884,7 +1915,7 @@ namespace Triband.Storey.Unity
             making.Clear(); makingFor.Clear(); makingFrom.Clear();
             foreach (var bt in built.Values)
             {
-                if (bt.collision != null) continue;
+                if (bt.collision != null || !bt.collider) continue;   // made, or never: its colliders are off
                 colliderPending.Add(bt.id);
                 if (bt.collisionMade == null && site.ById(bt.id) is BuildingData b) { making.Add(bt); makingFor.Add(b); makingFrom.Add(bt.shape); }
             }
@@ -1920,7 +1951,7 @@ namespace Triband.Storey.Unity
             using var _t = StoreyTimings.Time("site: colliders");
             foreach (var id in colliderPending)
             {
-                if (!built.TryGetValue(id, out var bt) || (bt.shape == null && bt.collisionMade == null) || site == null) continue;
+                if (!built.TryGetValue(id, out var bt) || !bt.collider || (bt.shape == null && bt.collisionMade == null) || site == null) continue;
                 var b = site.ById(id); if (b == null) continue;
                 RemoveCollider(bt);
                 var cm = bt.collisionMade ?? CollisionMesh.Build(site, b, bt.shape!);   // made on the worker, as a rule

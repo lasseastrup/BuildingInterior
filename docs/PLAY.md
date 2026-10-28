@@ -92,6 +92,8 @@ The play kit depends on the Input System package. With the project's *Active Inp
 
 For a project's own physics character, raycasts or props, every building gets one `MeshCollider` on its root GameObject, on the site's layer. Every object the site makes (each building, its LODs and collider, the merged cells, Sink's footprints) is on the Storey Site's layer, so set the layer on the site for cameras' culling masks, lights and physics; changing it moves the objects already made. **Generate colliders** on the Storey Site switches it (on by default). Storey's play kit does not use them: it walks the walk model.
 
+**A building without colliders** (Storey's own, for the old BuildingGenerator's buildings with `_generateColliders` off). **Colliders** on the building card (docs/EDITOR.md §6.10; `BuildingData.colliders`, layout key `colliders`, written only when off) takes that one building's out, as one edit like any other: the site makes it none, whichever way it would have come (with its LOD0, on a build thread or the main thread; a kept LOD0 shown again; **Colliders At Load**; **Colliders in edit mode**), so physics and raycasts pass through it. Nothing waits for it: `CollidersReadyAround` and the Storey Props take it as ready, there being none to come, and `SiteRenderer.HasCollider` says false. The walk model still walks it. With the switch on everywhere, every building gets its collider as before.
+
 **The mesh.** `Play/CollisionMesh` builds it from the walk model's own data, so the collider and the walk model agree:
 - **Walls:** a thin box round every collision segment (LOD0's segments, at their radius), storey by storey, merged into one box where a segment repeats on the storeys above.
 - **Floors and terraces:** the outlines at each slab, grown by the walk model's margin, with the stair holes cut. Interior slabs that only separate two storeys of a shell building are left out.
@@ -124,7 +126,7 @@ Each triangle is tagged Floor, Stair, Wall or Roof (`CollisionMesh.Kind`). The d
 
     PhysX keeps a cooked copy of each besides, and every building gets its own object for its collider. An iPhone 7 core is about a third of a desktop core, with two build threads. So it suits a level's layout; a streamed city leaves it off and lets its colliders come with LOD0, and a district streamed in with it on holds the frame it loads in. `CollisionMeshTests.ManyAtOnceAreTheSameAsOneByOne` checks the meshes made at once against those made one by one.
 - **Storey Props** with a Rigidbody are held still until then (docs/PROPS.md §2.6).
-- **Anything else** (a physics character, a rigid body that isn't a prop) waits on `StoreySite.CollidersReadyAround(position, radius)`: true once every building within the radius has its collider, and when the site makes none. A spawn or teleport asks for detail there first (`PrefetchAround`) and waits for this behind its fade, as it waits for `DetailReadyAround`. `SiteRenderer.HasCollider(id)` asks about one building.
+- **Anything else** (a physics character, a rigid body that isn't a prop) waits on `StoreySite.CollidersReadyAround(position, radius)`: true once every building within the radius has its collider (or has its colliders off), and when the site makes none. A spawn or teleport asks for detail there first (`PrefetchAround`) and waits for this behind its fade, as it waits for `DetailReadyAround`. `SiteRenderer.HasCollider(id)` asks about one building.
 - **A building showing its LOD0 has its collider.** One whose collider went past the cap while its LOD0 was kept has it made again from that LOD0 when it's shown. A LOD0 prefetched round the player and never shown is the first collider to go past the cap, and it was shown later without one.
 
 **Limits.**
@@ -132,3 +134,31 @@ Each triangle is tagged Floor, Stair, Wall or Roof (`CollisionMesh.Kind`). The d
 - Lift shafts are solid floor: the walk model does not let the player fall down them either.
 - Gable ends above the top storey are not walls in the collision mesh. The pitched roof itself is.
 - Without Colliders At Load, a building out of view or far away has no collider until its LOD0 is built. Storey Props there stay held; any other rigid body falls through it.
+
+## 6. Hiding a building at run time
+
+A game with its own occlusion (a converted scene's dollhouse, `OccludedBuilding`) switches off the building the player is behind: its GameObject and its rooftop props go, while a collider of its own (the raycast target) and shadow-only renderers stay, so its shadow does. Under Storey a building is part of its site, with no GameObject of its own, so the site hides it instead (Storey's own).
+
+**`StoreySite.SetHidden(buildingId, hidden)`** hides one building of the layout, or shows it again; `IsHidden(buildingId)` says whether it is.
+- **Hidden**, it draws nothing in the colour pass or the depth prepass, at any LOD: LOD0 with its glass and rooms, LOD1, and its massing inside its merged cell, whose other buildings draw as before. Its shadow is cast as before (LOD0's own, and at LOD1 and LOD2 its massing's, docs/CITY.md §3). Its collider (§5) and the walk model are untouched.
+- **Shown again**, it draws exactly what it would have. Its LOD carries on while it's hidden: the LOD manager picks, builds, cross-fades and drops its meshes as for any building, so its shadow follows the camera and it comes back at the LOD the buildings round it show.
+- **Kept by id** on the site: a building not built yet (a layout loading over frames, a district streamed in) is hidden as it's built, and an edit, the site switched off and on or given other materials keep it hidden.
+- **Nothing per frame, no garbage.** Hiding or showing writes one number into the building table, and the shaders do the rest.
+- **Its party walls** at LOD0 stay while the neighbour they're built for shows (they're its walls too, as Sink keeps them), so the neighbour stays closed; they go when both are hidden.
+- **Its Storey Props** go with it from the colour pass and keep casting their shadows; one drawn whole (*Hide Whole*) is switched off, shadow and all (docs/PROPS.md).
+- **Storey's own occlusion** (§4, every mode) never takes a hidden building for one in the way, and one hidden while in the way comes back up with no footprint.
+
+**How it's done.** A building's row in the building table says which LOD it shows, which fades out and how far (docs/CITY.md §2), and every Storey shader draws a mesh's vertices, in a building's own renderers or in a cell, only where its building's row says that LOD shows. Hiding adds 4 to the LOD it shows (`Lod.StateRow.Hidden`, `BuildingTable.SetHidden`): the colour and depth passes then draw none of its vertices (`StoreyVertex`, StoreyOcclusion.hlsl), and the shadow caster takes the LOD less 4. The rest of the row (the LOD fading out, the fade, the occluder slot) is left alone and every write of its LOD keeps the 4, so the cross-fades, the steady variant and the occlusion carry on under it, and showing it takes the 4 off again. Switching the building's renderers to shadows only would leave its massing drawn in its cell, one mesh for many buildings, which only the shader can tell apart; a table of its own would be one more read for every vertex, hidden or not. The row is read already: a building that isn't hidden costs a compare a vertex, and only a hidden one's vertices read its party walls' neighbours.
+
+**The handle.** **Storey Building Handle** (`StoreyBuildingHandle`, *Add Component ▸ Storey ▸ Storey Building Handle*) stands for one building: its **Site** and **Building Id**. Switching its GameObject off (the object, a parent, or the component) hides the building, and switching it on shows it, so a game system that switches a building's object off works unchanged: put the handle on the object it switches (the converted building's own). Whatever goes first is safe: a site not loaded yet hides the building as it's built, and a site destroyed first is left alone. Play mode only; in the editor, selected, it draws its building's box and a line to it, and moves nothing (a converted building's object may carry the game's own children).
+
+**Limits.**
+- A handle whose object is saved switched off hides nothing until it's switched on and off: Unity calls neither `OnEnable` nor `OnDisable` for it. One handle a building: the last one switched wins.
+- At LOD1 a hidden building's party walls go with it (LOD1's vertices don't name their neighbour), so a neighbour at LOD1 shows a gap there until the hidden one is at LOD0 again or shown. A building in the player's way is near the camera, at LOD0. Party walls across a district edge go with it too, as their neighbour isn't named (docs/CITY.md §5).
+- A hidden building's LOD0 still goes through the colour pass's vertex shader, its vertices dropped there, as a LOD cross-fading out does. If a profile shows it, its LOD0's renderers could be switched to shadows only besides (not done).
+
+**Checks** (in the editor):
+1. In Play mode, hide a building near the camera (`site.SetHidden(id, true)`, or a handle switched off): it's gone, its shadow stays on the street and its neighbours, a raycast still hits its collider, and a neighbour it shares a wall with stays closed.
+2. Walk away while it's hidden, so it goes to LOD1 and to its cell, and back: nothing of it shows, its shadow follows its LOD, and the other buildings of its cell are drawn. Show it again: it matches the buildings round it.
+3. Hide a building before the site loads (a handle switched off as the scene starts, then on): it's never drawn until shown.
+4. With Storey Occlusion in each mode, walk behind a hidden building: nothing sinks, slices or fades for it.

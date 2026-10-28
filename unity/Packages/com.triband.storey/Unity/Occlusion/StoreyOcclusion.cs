@@ -175,7 +175,7 @@ namespace Triband.Storey.Unity
             // before the player is close enough to touch), or made ahead round the player (Prepare)
             var shown = s;
             w.world.Source = b => ReferenceEquals(r.Site, shown) ? r.ShapeOf(b.id) : null;
-            w.occ = new OcclusionCore(w.world, core);
+            w.occ = new OcclusionCore(w.world, core) { Hidden = r.Hidden };   // a hidden building is never in the way (docs/PLAY.md §6)
             return true;
         }
 
@@ -287,8 +287,9 @@ namespace Triband.Storey.Unity
                     changed |= Put(table.Occ, at + i, new Vector4(o.Rows[q] + (i <= n ? lift : 0), o.Rows[q + 1], o.Rows[q + 2], o.Rows[q + 3]));
                 }
                 if (changed) table.MarkOccDirty(oc.slot);
-                // the footprint stands in once the building starts to go: Sink's at once, Dissolve's fading in as it fades out
-                if (oc.k < oc.b.floors.Count && (core.mode == OccluderMode.Sink ? oc.t > 0 : core.mode == OccluderMode.Dissolve && oc.a > 0))
+                // the footprint stands in once the building starts to go: Sink's at once, Dissolve's fading in as it fades out.
+                // None for a building hidden meanwhile (docs/PLAY.md §6): nothing of it is drawn while it comes back up
+                if (oc.k < oc.b.floors.Count && (core.mode == OccluderMode.Sink ? oc.t > 0 : core.mode == OccluderMode.Dissolve && oc.a > 0) && !r.IsHidden(oc.b.id))
                 {
                     ShowFootprint(r, w, oc.b, oc.k, oc.slot);
                     table.SetLod(BuildingTable.FootprintRow(oc.slot), 0, 0, core.mode == OccluderMode.Dissolve ? (float)oc.a : 1);

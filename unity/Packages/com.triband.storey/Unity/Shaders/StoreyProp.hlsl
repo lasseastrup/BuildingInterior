@@ -12,7 +12,8 @@
 //                                       Color through it, and Alpha into the master stack's Alpha with Alpha Clipping
 //                                       on (threshold 0.5), so the depth and shadow passes run it too.
 // Its clipping is in the colour pass only, as the buildings' is (the light indoors doesn't change with the cutaway);
-// the LOD cross-fade and Dissolve reach the depth and shadow passes.
+// the LOD cross-fade and Dissolve reach the depth and shadow passes. A hidden building's props (StoreySite.SetHidden,
+// docs/PLAY.md §6) go with it from the colour and depth passes, and cast their shadows as it does.
 #ifndef STOREY_PROP_INCLUDED
 #define STOREY_PROP_INCLUDED
 
@@ -26,6 +27,12 @@
         #define STOREY_DEPTH
     #elif defined(SHADERPASS_DEPTHNORMALS) && SHADERPASS == SHADERPASS_DEPTHNORMALS
         #define STOREY_DEPTH
+    #endif
+#endif
+// and the shadow caster's own, as the buildings' shadow caster passes define it: a hidden building's props keep their shadows
+#if defined(SHADERPASS) && defined(SHADERPASS_SHADOWCASTER) && !defined(STOREY_SHADOW)
+    #if SHADERPASS == SHADERPASS_SHADOWCASTER
+        #define STOREY_SHADOW
     #endif
 #endif
 
@@ -71,11 +78,15 @@ bool StoreyPropGone(int ib, float pivotY)
 #endif
 }
 
-// The prop shows at its building's current LOD: as an LOD0 mesh (shown at LOD0, fading in and out with it).
+// The prop shows at its building's current LOD: as an LOD0 mesh (shown at LOD0, fading in and out with it). Hidden with
+// its building, but for the shadow caster.
 bool StoreyPropShown(int ib)
 {
     float4 st = _StoreyState[StoreyRow(ib)];
-    return st.x < 0.5 || (st.z < 1.0 && st.y < 0.5);
+#ifndef STOREY_SHADOW
+    if (StoreyHidden(st)) return false;
+#endif
+    return StoreyShownLod(st) < 0.5 || (st.z < 1.0 && st.y < 0.5);
 }
 #endif
 
@@ -117,7 +128,7 @@ void StoreyPropFragment_float(float3 PositionWS, float3 BaseColor, out float3 Co
     if (_StoreyPropDebug > 0.5) Color = StoreyPropDebugColor(ib);
     if (ib < 0) return;
     float4 st = _StoreyState[StoreyRow(ib)];
-    bool isDisp = st.x < 0.5, isFrom = st.z < 1.0 && st.y < 0.5;
+    bool isDisp = StoreyShownLod(st) < 0.5, isFrom = st.z < 1.0 && st.y < 0.5;
     StoreyVarying v;
     v.worldPos = PositionWS; v.wall = 0; v.kind = 0; v.wid = 0; v.bid = (float)ib; v.lod = 0; v.hold = 0;
     v.fade = st.z >= 1.0 ? 3.0 : (isDisp ? st.z : -1.0 - st.z);

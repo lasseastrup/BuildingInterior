@@ -28,6 +28,7 @@ A prop that knows its building's index goes through the same `StoreySink` and `S
 | Dissolve | The same dither, the same darkening |
 | LOD cross-fade | A prop counts as LOD0: it fades in and out with the building's LOD0 |
 | Isolate (editor) | Ghosts with its building |
+| Hidden at run time (`StoreySite.SetHidden`, docs/PLAY.md §6) | Gone from the colour and depth passes with it, its shadow kept |
 
 Two consequences:
 - **Moving props need little handling.** A dropped object is re-filed under whichever building it's now in. Within its building it's tested by height every frame, so a fall to another floor needs nothing at all.
@@ -113,7 +114,8 @@ A Storey Prop with **Hide Whole** is switched off while its point is in a storey
 - above the ceiling clip of the player's building;
 - a Sink storey gone or squashed past half;
 - above Slice's plane;
-- above Cutout's, Fade's or Dissolve's base once half faded.
+- above Cutout's, Fade's or Dissolve's base once half faded;
+- anywhere in a building hidden at run time (docs/PLAY.md §6), shadow and all.
 
 It's all or nothing: no dither, no squash.
 
@@ -129,7 +131,7 @@ So in Play mode a Storey Prop's Rigidbody is **held**: kinematic while there may
 - **Decided before the physics step.** A prop that registers (a scene starting, a district streamed in, an instantiated prefab) is looked at in the props manager's `FixedUpdate`, which runs before Unity's physics steps, or its `LateUpdate`, whichever comes first. Not as it registers: a game that instantiates a prop and sets its velocity right after keeps that velocity.
 - **What a hold keeps.** The body's velocities, given back when it's let go, so a body held in flight goes on. Continuous collision detection (Continuous, Continuous Dynamic) is Continuous Speculative while held, the most a kinematic body takes, and given back after.
 - **Out of view or far.** A building gets its LOD0, and with it its collider, only in view and near enough (docs/CITY.md §2), so its props stay held until then. They're hidden meanwhile anyway: a building's props are drawn only with its LOD0. A body that moves into a building with no collider (thrown onto a roof out of view, say) is held where it is, and that building's LOD0 is asked for at once (`StoreySite.PrefetchAround`), so it goes on a moment later.
-- **Never held:** a body that's kinematic already (the game's), a prop with **Wait For Collider** off, the props of a site with **Generate colliders** off, and anything outside Play mode.
+- **Never held:** a body that's kinematic already (the game's), a prop with **Wait For Collider** off, the props of a site with **Generate colliders** off or of a building with its **Colliders** off (docs/PLAY.md §5: none is coming), and anything outside Play mode.
 - **Several props on one body** (a Rigidbody on their parent) share its hold: it's held while any of them is.
 - **A held prop isn't looked for again,** since nothing moves it. A script that teleports one calls `Refresh()`, as for a still prop.
 - **A script that makes a held body kinematic itself** does so again once it's let go: letting go makes it dynamic.

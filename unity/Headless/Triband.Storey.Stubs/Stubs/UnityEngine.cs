@@ -129,6 +129,13 @@ namespace UnityEngine
         public static bool isDebugBuild => false;
     }
 
+    public static class Gizmos
+    {
+        public static Color color { get => default; set { } }
+        public static void DrawWireCube(Vector3 center, Vector3 size) { }
+        public static void DrawLine(Vector3 from, Vector3 to) { }
+    }
+
     public class PropertyAttribute : System.Attribute
     {
     }

@@ -66,7 +66,10 @@ namespace Triband.Storey.Unity
         public const int ParamRowsStart = 1024, ParamTexels = 6;
         public const int ColorRowsStart = 1024;
 
-        /// <summary>Per building: displayed LOD, previous LOD, cross-fade 0..1, occluder slot + 1 (0 = none).</summary>
+        /// <summary>
+        /// Per building: displayed LOD (past <see cref="Lod.StateRow.Hidden"/> while hidden, <see cref="SetHidden"/>), previous
+        /// LOD, cross-fade 0..1, occluder slot + 1 (0 = none).
+        /// </summary>
         public readonly Vector4[] State = new Vector4[MaxBuildings];
         /// <summary>Per occluder slot, OccWidth texels: header (segments, dark, clip height, base height) then storey rows.</summary>
         public readonly Vector4[] Occ = new Vector4[OccSlots * OccWidth];
@@ -244,7 +247,24 @@ namespace Triband.Storey.Unity
 
         // ---- writes ---------------------------------------------------------------------------
 
-        public void SetLod(int idx, int displayed, int from, float fade) => SetState(idx, new Vector4(displayed, from, fade, State[idx].w));
+        /// <summary>A building's LOD state: what it shows, what fades out and how far. A hidden one stays hidden.</summary>
+        public void SetLod(int idx, int displayed, int from, float fade)
+        {
+            var s = State[idx];
+            SetState(idx, new Vector4(Lod.StateRow.Displayed(displayed, Lod.StateRow.IsHidden(s.x)), from, fade, s.w));
+        }
+
+        /// <summary>
+        /// A building hidden, or shown again (docs/PLAY.md §6, <see cref="SiteRenderer.SetHidden"/>): its displayed LOD moved past
+        /// <see cref="Lod.StateRow.Hidden"/> or back, the rest of its row as it is. The shaders draw none of it in the colour and
+        /// depth passes, at any LOD and in its cell, and cast its shadow as before. A row given back (a building let go, a
+        /// site's block released) is shown again.
+        /// </summary>
+        public void SetHidden(int idx, bool hidden)
+        {
+            var s = State[idx];
+            SetState(idx, new Vector4(Lod.StateRow.Hide(s.x, hidden), s.y, s.z, s.w));
+        }
         public void SetOccluder(int idx, int slotOrMinusOne) { var s = State[idx]; SetState(idx, new Vector4(s.x, s.y, s.z, slotOrMinusOne + 1)); }
 
         /// <summary>

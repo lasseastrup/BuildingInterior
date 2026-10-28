@@ -98,6 +98,7 @@ namespace Triband.Storey
                 floorHeight = c.Num(o, "floorHeight", 3.0, w),
                 interior = c.Bool(o, "interior", true, w),
                 gen = c.Bool(o, "gen", false, w),
+                colliders = c.Bool(o, "colliders", true, w),
             };
             c.Points(o, "footprint", w, b.footprint);
             c.Ints(o, "blank", w, b.blank);
@@ -438,6 +439,7 @@ namespace Triband.Storey
             o["interior"] = b.interior;
             o["style"] = Style(b.style);
             if (b.gen) o["gen"] = true;
+            if (!b.colliders) o["colliders"] = false;   // only when off: a layout whose buildings all have colliders reads as before
             if (b.voids.Count > 0)
             {
                 var vs = new List<object?>();
@@ -626,7 +628,7 @@ namespace Triband.Storey
         {
             public static readonly string[] Root = { "v", "seq", "spawn", "buildings", "palette" };
             public static readonly string[] PaletteEntry = { "name", "hex" };
-            public static readonly string[] Building = { "id", "name", "pos", "elevation", "footprint", "floors", "shafts", "entrances", "details", "blank", "quiet", "bare", "groundHeight", "floorHeight", "interior", "style", "gen", "voids", "bridges", "corners" };
+            public static readonly string[] Building = { "id", "name", "pos", "elevation", "footprint", "floors", "shafts", "entrances", "details", "blank", "quiet", "bare", "groundHeight", "floorHeight", "interior", "style", "gen", "colliders", "voids", "bridges", "corners" };
             public static readonly string[] Entrance = { "edge", "t", "k" };
             public static readonly string[] Detail = { "kind", "k", "edge", "t", "y" };
             public static readonly string[] Void = { "id", "kind", "shape", "bottom" };

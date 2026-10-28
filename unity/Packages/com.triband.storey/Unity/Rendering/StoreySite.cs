@@ -34,7 +34,7 @@ namespace Triband.Storey.Unity
         public bool lodTint;
         [Tooltip("Automatic LOD: show its numbers (LOD counts, resident meshes, cells, build time) in the Game view in Play mode, and in the Scene view while the site is selected.")]
         public bool showLodStats;
-        [Tooltip("Give every building a MeshCollider from a collision mesh of its floors, stairs, walls and roofs, for physics characters and raycasts. Storey's own play kit walks without them.")]
+        [Tooltip("Give every building a MeshCollider from a collision mesh of its floors, stairs, walls and roofs, for physics characters and raycasts; a building whose Colliders are off on its card gets none. Storey's own play kit walks without them.")]
         public bool generateColliders = true;
         [Tooltip("Colliders in edit mode too, rebuilt with every edit (raycasts and physics previews in the editor). Off, edits cook nothing.")]
         public bool collidersInEditMode;
@@ -122,8 +122,9 @@ namespace Triband.Storey.Unity
         /// §5): a physics character or rigid body put there has floors, stairs and walls to meet. A building's collider comes
         /// with its LOD0, cooked off the main thread a frame or two after it, so a spawn or teleport asks for detail there
         /// first (<see cref="PrefetchAround"/>) and waits for this behind its fade, as for <see cref="DetailReadyAround"/>.
-        /// True when the site makes no colliders: there are none to wait for. A Storey Prop with a rigid body waits for its
-        /// building's by itself (docs/PROPS.md §2.6).
+        /// True when the site makes no colliders: there are none to wait for, as for a building with its colliders off
+        /// (<see cref="BuildingData.colliders"/>). A Storey Prop with a rigid body waits for its building's by itself
+        /// (docs/PROPS.md §2.6).
         /// </summary>
         public bool CollidersReadyAround(Vector3 world, float radius = 8)
         {
@@ -135,6 +136,26 @@ namespace Triband.Storey.Unity
         }
         readonly List<(Vector3 at, float radius, float until)> prefetchAt = new List<(Vector3, float, float)>();
         readonly List<string> nearIds = new List<string>();
+
+        /// <summary>
+        /// Hide one building of the layout, or show it again, at run time (docs/PLAY.md §6): for a game's own occlusion, which
+        /// switches a building off while the player is behind it. Hidden, the building draws nothing in the colour pass at any
+        /// LOD, in its cell's merged massing too, while its shadow is cast as before and its collider stays; shown again, it
+        /// draws what it would have. Kept by id, so it holds while the layout loads, through LOD changes, edits and the site
+        /// switched off and on, and a building not built yet is hidden as it is built. Nothing is done per frame, and no
+        /// garbage is made. <see cref="StoreyBuildingHandle"/> calls it as its GameObject is switched on and off.
+        /// </summary>
+        public void SetHidden(string buildingId, bool hidden)
+        {
+            if (hidden ? !hiddenIds.Add(buildingId) : !hiddenIds.Remove(buildingId)) return;
+            site?.SetHidden(buildingId, hidden);
+        }
+
+        /// <summary>Whether a building is hidden (<see cref="SetHidden"/>).</summary>
+        public bool IsHidden(string buildingId) => hiddenIds.Count > 0 && hiddenIds.Contains(buildingId);
+
+        // the buildings hidden, given again to every renderer the site makes; room for a few, so hiding makes no garbage
+        readonly HashSet<string> hiddenIds = new HashSet<string>(16, StringComparer.Ordinal);
 
         /// <summary>The editor's camera (the Scene view's), set by the authoring package; the automatic LOD picks for it outside Play mode.</summary>
         public static Func<Camera?>? EditorCamera { get; set; }
@@ -293,6 +314,7 @@ namespace Triband.Storey.Unity
                     auto ? (quality != null ? quality.ToLodSettings() : new Lod.LodSettings()) : null);
                 builtWith = new Material?[] { opaque, glass, massing }; builtAuto = auto;
                 shownJson = null; pendingAll = true;
+                foreach (var id in hiddenIds) site.SetHidden(id, true);   // before any building is built: each is hidden as it is
             }
             site.Layer = gameObject.layer;   // everything the site makes is on its layer
             site.LoadOverFrames = OverFrames;

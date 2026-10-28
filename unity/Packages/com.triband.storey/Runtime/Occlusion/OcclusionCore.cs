@@ -115,6 +115,11 @@ namespace Triband.Storey.Occlusion
         public const double CutBand = 8;
         /// <summary>The camera's extra pitch while the player is hidden (camera assist).</summary>
         public double Assist;
+        /// <summary>
+        /// The buildings hidden at run time, by id (docs/PLAY.md §6): they draw nothing, so none is ever in the way, and one
+        /// hidden while in the way comes back up as one out of it does. Null or empty for none. Storey's own.
+        /// </summary>
+        public ICollection<string>? Hidden;
 
         readonly Occluder?[] slots = new Occluder?[Slots];
         readonly List<Occluder> active = new List<Occluder>();
@@ -511,7 +516,7 @@ namespace Triband.Storey.Occlusion
                 }
                 foreach (var b in cand)
                 {
-                    if (b == held || AtDoorOf(b, p)) continue;
+                    if (b == held || AtDoorOf(b, p) || (Hidden != null && Hidden.Count > 0 && Hidden.Contains(b.id))) continue;
                     if (AnyHits(b, c, tg))
                     {
                         var r = Record(b); hits.Add(r);

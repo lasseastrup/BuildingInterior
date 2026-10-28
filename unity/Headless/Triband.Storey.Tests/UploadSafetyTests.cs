@@ -144,8 +144,9 @@ namespace Triband.Storey.Tests
             var renderer = Text("Unity", "Rendering", "SiteRenderer.cs");
             int a = renderer.IndexOf("foreach (int idx in f.Changed)", System.StringComparison.Ordinal), b = renderer.IndexOf("foreach (int idx in f.Held)", a, System.StringComparison.Ordinal);
             Assert.True(a > 0 && b > a);
-            Assert.Contains("if (colliders && cb.collision == null && cb.shape != null && e.Visible(0) && !Baking(cb)) colliderPending.Add(cb.id);", renderer.Substring(a, b - a));
-            Assert.Contains("internal bool ColliderUp(int idx) => byIdx.TryGetValue(idx, out var b) && b.collision != null;", renderer);
+            Assert.Contains("if (colliders && cb.collider && cb.collision == null && cb.shape != null && e.Visible(0) && !Baking(cb)) colliderPending.Add(cb.id);", renderer.Substring(a, b - a));
+            // (or none is coming: its colliders are off, CollidersOffTests)
+            Assert.Contains("internal bool ColliderUp(int idx) => byIdx.TryGetValue(idx, out var b) && (b.collision != null || !b.collider);", renderer);
         }
 
         [Fact]

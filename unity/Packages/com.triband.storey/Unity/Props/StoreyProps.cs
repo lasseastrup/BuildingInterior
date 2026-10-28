@@ -335,13 +335,15 @@ namespace Triband.Storey.Unity
                 }
             }
 
-            // props drawn whole: off while their point is in a storey the occlusion hides
+            // props drawn whole: off while their point is in a storey the occlusion hides, or their building is hidden (docs/
+            // PLAY.md §6: shadow and all, as their shaders can't leave the colour pass alone)
             for (int i = 0; i < whole.Count; i++)
             {
                 var e = whole[i];
                 var core = e.site != null && e.site.Occlusion != null ? e.site.Occlusion.Core : null;
-                var b = e.buildingId != null && e.site != null ? e.site.Renderer?.Site?.ById(e.buildingId) : null;
-                bool off = playing && core != null && b != null && core.HidesPoint(b, e.last.y - e.site!.transform.position.y);
+                var r = e.site != null ? e.site.Renderer : null;
+                var b = e.buildingId != null ? r?.Site?.ById(e.buildingId) : null;
+                bool off = playing && b != null && ((core != null && core.HidesPoint(b, e.last.y - e.site!.transform.position.y)) || r!.IsHidden(b.id));
                 if (off == e.wholeOff) continue;
                 e.wholeOff = off; Apply(e);
             }
