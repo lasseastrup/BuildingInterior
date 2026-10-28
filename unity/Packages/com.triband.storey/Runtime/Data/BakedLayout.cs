@@ -255,7 +255,7 @@ namespace Triband.Storey
             s.plinthH = r.Opt(); s.foundation = r.Opt(); s.foundationH = r.Opt(); s.foundationOut = r.Opt(); s.bricks = r.Opt(); s.mansard = r.Opt(); s.dormers = r.Opt();
             s.groundWall = Str(ref r); s.band = Str(ref r); s.cornice = Str(ref r); s.bandGround = r.Bool(); s.corniceH = r.Opt(); s.corniceDepth = r.Opt(); s.plinthDepth = r.Opt();
             s.cap = Str(ref r); s.capRim = Str(ref r); s.capH = r.Opt(); s.capDepth = r.Opt(); s.capStrip = r.Opt(); s.recess = r.Opt(); s.doorRecess = r.Opt();
-            s.winCentre = r.Bool();
+            s.winCentre = r.Bool(); s.bayFit = E<BayFit>(ref r);
             if (r.Bool())
             {
                 var dr = s.details = new DetailRules { ac = r.Opt(), vents = r.Opt() };
@@ -441,7 +441,7 @@ namespace Triband.Storey
             w.Opt(s.plinthH); w.Opt(s.foundation); w.Opt(s.foundationH); w.Opt(s.foundationOut); w.Opt(s.bricks); w.Opt(s.mansard); w.Opt(s.dormers);
             w.Count(S(s.groundWall)); w.Count(S(s.band)); w.Count(S(s.cornice)); w.Bool(s.bandGround); w.Opt(s.corniceH); w.Opt(s.corniceDepth); w.Opt(s.plinthDepth);
             w.Count(S(s.cap)); w.Count(S(s.capRim)); w.Opt(s.capH); w.Opt(s.capDepth); w.Opt(s.capStrip); w.Opt(s.recess); w.Opt(s.doorRecess);
-            w.Bool(s.winCentre);
+            w.Bool(s.winCentre); w.E(s.bayFit);
             w.Bool(s.details != null);
             if (s.details != null)
             {

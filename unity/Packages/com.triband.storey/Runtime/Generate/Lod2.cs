@@ -141,6 +141,20 @@ namespace Triband.Storey.Generate
     {
         public static double[] SpecOf(Facade.WinSpec? ws) => ws != null ? new[] { ws.full ?? -1, ws.w, ws.y0, ws.y1 } : new[] { -1.0, 0, 1, 0 };
 
+        /// <summary>
+        /// <see cref="SpecOf(Facade.WinSpec?)"/> for a run of style <paramref name="st"/> (<paramref name="ground"/>: the ground
+        /// storey's): with fixed bays (<see cref="FacadeStyle.bayFit"/>) an artist's window that keeps its size keeps it however
+        /// narrow the bay, as <see cref="Facade.Windows"/> lays it out, so it is painted as a full-width window is, the bay less
+        /// a gap (the shader would take a window of a fixed width to the bay less 50 cm). Storey's own.
+        /// </summary>
+        public static double[] SpecOf(Facade.WinSpec? ws, FacadeStyle st, bool ground)
+        {
+            var sp = SpecOf(ws);
+            if (ws != null && ws.full == null && st.bayFit == BayFit.Fixed && OpeningSets.Representative(st, ground, out var k) && k != null && !k.stretch)
+                sp[0] = Math.Max(0, st.bay - ws.w);
+            return sp;
+        }
+
         public static Lod2Mesh Build(Site site, BuildingData b)
         {
             double T = Dim.T_EXT; int N = b.floors.Count; double ox = b.pos.x, oz = b.pos.z, top = Derived.RoofY(b);
@@ -264,7 +278,7 @@ namespace Triband.Storey.Generate
                     // the storeys with a band, from the run's first (Facade.BandAt: all but the building's top, or the ground's
                     // alone); a cornice's storey has none
                     int banded = 0; for (int k = r.k0; k < r.k1 && Facade.BandAt(b, k) && !(cn && k == r.k1 - 1); k++) banded++;
-                    r.slot = Row(C, SpecOf(ws), new[] { r.h, banded, topRun && !pitched ? H : 1e9, topRun ? (lift > 0 ? (st.parapet ? 4 : 3) : st.parapet ? 1 : 2) : 0 });
+                    r.slot = Row(C, SpecOf(ws, st, r.g), new[] { r.h, banded, topRun && !pitched ? H : 1e9, topRun ? (lift > 0 ? (st.parapet ? 4 : 3) : st.parapet ? 1 : 2) : 0 });
                     var row = M.Rows[r.slot];
                     if (topRun && lift > 0) row.cap = new[] { lift, (double)(int)C.CapOf(st).slot, 0, 0 };
                     if (st.bandH.HasValue || st.bandWall || st.band != null) row.band = new[] { Lod0.Shared.Band(st, C).h, st.bandWall ? 1 : 0, C.wallBand.tone, st.band != null ? (int)ColorSlot.Band : 0 };
@@ -286,9 +300,17 @@ namespace Triband.Storey.Generate
                         var r = runs[ri];
                         double y0 = Derived.FloorBase(b, r.k0), y1 = r.top ? yTop : Derived.FloorBase(b, r.k1), H = y1 - y0; slot = r.slot;
                         // the windows' span, as Facade.Ops lays them out (narrowed by the dressing of the artist's windows the run can pick)
+                        // (fixed bays: the whole bays on the wall's outer face, as Facade.Ops works it out from the outline)
                         var (uS, uE) = Facade.WindowSpan(st, r.g, sS, sE);
                         var es = Derived.EdgeStateAt(b, t.k0, i);
-                        double bay = es != EdgeState.Open ? 0 : Facade.BayLayout(st, uS, uE).bay;
+                        double bay = 0;
+                        if (es == EdgeState.Open)
+                        {
+                            var (oS, oE) = st.bayFit == BayFit.Fixed ? Facade.OuterFace(fp, g.ccw, i) : (uS, uE);
+                            var (nb, wb, bS) = Facade.Bays(st, uS, uE, oS, oE);
+                            bay = nb > 0 ? wb : 0;
+                            if (st.bayFit == BayFit.Fixed) { uS = bS; uE = bS + nb * wb; }
+                        }
                         if (es == EdgeState.Bare && M.Rows[r.slot].run[1] > 0)
                         {
                             bareSlots ??= new int[runs.Count];   // a row's index + 1; 0 = none yet

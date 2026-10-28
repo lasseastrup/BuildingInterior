@@ -80,16 +80,20 @@ namespace Triband.Storey.Generate
         public static Corner[] Corners(List<Vec2> fp, bool ccw)
         {
             int n = fp.Count; var out_ = new Corner[n];
-            for (int i = 0; i < n; i++)
-            {
-                var p = fp[i]; var a = fp[(i - 1 + n) % n]; var c = fp[(i + 1) % n];
-                double ax = p.x - a.x, az = p.z - a.z, cx = c.x - p.x, cz = c.z - p.z;
-                double la = Hypot(ax, az), lc = Hypot(cx, cz); if (la == 0) la = 1; if (lc == 0) lc = 1;
-                double cr = ax * cz - az * cx, cs = Math.Max(-1, Math.Min(1, (ax * cx + az * cz) / (la * lc)));
-                bool convex = ccw ? cr > 1e-9 : cr < -1e-9;
-                out_[i] = new Corner { sg = convex ? 1 : -1, t = Math.Min(1.5, Math.Sqrt(Math.Max(0, 1 - cs) / (1 + cs + 1e-9))) };
-            }
+            for (int i = 0; i < n; i++) out_[i] = CornerAt(fp, i, ccw);
             return out_;
+        }
+
+        /// <summary>Corner i of <see cref="Corners"/> alone, for a caller that needs an edge's two and nothing else.</summary>
+        public static Corner CornerAt(List<Vec2> fp, int i, bool ccw)
+        {
+            int n = fp.Count;
+            var p = fp[i]; var a = fp[(i - 1 + n) % n]; var c = fp[(i + 1) % n];
+            double ax = p.x - a.x, az = p.z - a.z, cx = c.x - p.x, cz = c.z - p.z;
+            double la = Hypot(ax, az), lc = Hypot(cx, cz); if (la == 0) la = 1; if (lc == 0) lc = 1;
+            double cr = ax * cz - az * cx, cs = Math.Max(-1, Math.Min(1, (ax * cx + az * cz) / (la * lc)));
+            bool convex = ccw ? cr > 1e-9 : cr < -1e-9;
+            return new Corner { sg = convex ? 1 : -1, t = Math.Min(1.5, Math.Sqrt(Math.Max(0, 1 - cs) / (1 + cs + 1e-9))) };
         }
 
         public static Miter MiterOf(Corner[] cor, int i, double L)

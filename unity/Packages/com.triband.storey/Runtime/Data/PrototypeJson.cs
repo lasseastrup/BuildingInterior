@@ -298,6 +298,7 @@ namespace Triband.Storey
             s.groundSet = Entries(c, o, "groundSet", path);
             s.doorSet = Entries(c, o, "doorSet", path);
             s.windowPick = c.Enum<WindowPick>(o, "windowPick", WindowPick.Window, path);
+            s.bayFit = c.Enum<BayFit>(o, "bayFit", BayFit.Spread, path);
             s.sillH = c.Opt(o, "sillH", path);
             s.winCentre = c.Bool(o, "winCentre", false, path);
             s.recess = c.Opt(o, "recess", path);
@@ -516,6 +517,7 @@ namespace Triband.Storey
             if (s.groundSet is { Count: > 0 }) o["groundSet"] = Entries(s.groundSet);
             if (s.doorSet is { Count: > 0 }) o["doorSet"] = Entries(s.doorSet);
             if (s.windowPick != WindowPick.Window) o["windowPick"] = Lower(s.windowPick);
+            if (s.bayFit != BayFit.Spread) o["bayFit"] = Lower(s.bayFit);
             if (s.sillH.HasValue) o["sillH"] = s.sillH.Value;
             if (s.winCentre) o["winCentre"] = true;
             if (s.recess.HasValue) o["recess"] = s.recess.Value;
@@ -643,7 +645,7 @@ namespace Triband.Storey
             {
                 "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "capH", "capDepth", "capStrip", "details",
                 "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "bandGround", "corniceH", "corniceDepth", "plinthH", "plinthDepth", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind", "sillH", "winCentre", "recess", "doorRecess",
-                "windowSet", "groundSet", "doorSet", "windowPick",
+                "windowSet", "groundSet", "doorSet", "windowPick", "bayFit",
                 "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth", "groundWall", "band", "cornice", "cap", "capRim",
                 "doorType",   // street doors' Canopy or Glazed, gone (every generated door is plain): read and dropped, not reported
             };
