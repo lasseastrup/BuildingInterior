@@ -142,11 +142,16 @@ namespace Triband.Storey.Generate
             int n = P.Count;
             if (n == 0 || Tags != null) return 0;
             // each vertex's first equal, through a table of vertex indices (open addressing, at least twice as many slots as
-            // vertices; 0 is empty, else the index + 1), kept with the massing for its next build
+            // vertices; 0 is empty, else the index + 1), lent for the weld: a massing waiting for its cell holds none
             int size = 4; while (size < n * 2) size <<= 1;
-            if (weldSlots == null || weldSlots.Length < size) weldSlots = new int[size]; else Array.Clear(weldSlots, 0, size);
-            if (weldMap == null || weldMap.Length < n) weldMap = new int[Math.Max(n, 2 * (weldMap?.Length ?? 0))];
-            var slots = weldSlots; var map = weldMap;
+            var sc = welds.Take();
+            try { return Merge(n, size, sc.Slots(size), sc.Map(n)); }
+            finally { welds.Give(sc); }
+        }
+
+        // Weld's work, in tables lent for it
+        int Merge(int n, int size, int[] slots, int[] map)
+        {
             int kept = 0;
             for (int i = 0; i < n; i++)
             {
@@ -179,7 +184,16 @@ namespace Triband.Storey.Generate
             return gone;
         }
 
-        int[]? weldSlots, weldMap;
+        // what Weld works in, lent out for each
+        static readonly Lender<WeldScratch> welds = new Lender<WeldScratch>(8);
+
+        sealed class WeldScratch
+        {
+            int[] slots = Array.Empty<int>(), map = Array.Empty<int>();
+            /// <summary>At least <paramref name="size"/> slots, the first so many empty.</summary>
+            public int[] Slots(int size) { if (slots.Length < size) slots = new int[size]; else Array.Clear(slots, 0, size); return slots; }
+            public int[] Map(int n) { if (map.Length < n) map = new int[Math.Max(n, 2 * map.Length)]; return map; }
+        }
 
         // the same as uploaded: every attribute as a float
         bool Same(int i, int j)
