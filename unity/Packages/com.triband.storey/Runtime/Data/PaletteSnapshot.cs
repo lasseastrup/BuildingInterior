@@ -6,7 +6,7 @@ namespace Triband.Storey
 {
     /// <summary>
     /// Every colour field of a style by name, read and written alike: the seven a style always has and the
-    /// ten optional ones (null = the project default).
+    /// optional ones (null = the project default, or for the facade's strips and ground wall the colour they follow).
     /// </summary>
     public static class StyleColorFields
     {
@@ -22,6 +22,9 @@ namespace Triband.Storey
             ("dish", s => s.dish, (s, v) => s.dish = v),
             ("frame", s => s.frame, (s, v) => s.frame = v), ("foundationColor", s => s.foundationColor, (s, v) => s.foundationColor = v),
             ("plinth", s => s.plinth, (s, v) => s.plinth = v),
+            ("groundWall", s => s.groundWall, (s, v) => s.groundWall = v), ("band", s => s.band, (s, v) => s.band = v),
+            ("cornice", s => s.cornice, (s, v) => s.cornice = v),
+            ("cap", s => s.cap, (s, v) => s.cap = v), ("capRim", s => s.capRim, (s, v) => s.capRim = v),
         };
 
         /// <summary>Every style of a layout: each building's and each setback's own.</summary>

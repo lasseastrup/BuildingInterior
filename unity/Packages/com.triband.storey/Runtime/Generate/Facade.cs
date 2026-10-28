@@ -13,11 +13,14 @@ namespace Triband.Storey.Generate
         /// The window spec of a style's upper floors, for the window that stands for its set (<see cref="OpeningSets.Representative"/>):
         /// the one window of a style without a set. None where every window it can pick is none.
         /// </summary>
-        public static WinSpec? WindowSpec(WindowType kind, double h, FacadeStyle st, bool storefront = false) =>
-            OpeningSets.Representative(st, false, out var k) ? Fit(RawSpec(kind, h, st, storefront), h, st, null, k) : null;
+        /// <param name="cornice">The storey is its tier's top, under a cornice: how far under its top the cornice's foot is
+        /// (<see cref="CorniceUnder"/>). Its windows stay under it.</param>
+        /// <param name="ground">The ground storey: the only one with a band where the style has <see cref="FacadeStyle.bandGround"/>.</param>
+        public static WinSpec? WindowSpec(WindowType kind, double h, FacadeStyle st, bool storefront = false, double? cornice = null, bool ground = false) =>
+            OpeningSets.Representative(st, false, out var k) ? Fit(RawSpec(kind, h, st, storefront), h, st, null, k, cornice, ground) : null;
 
-        /// <summary>The window spec of a style's upper floors for window <paramref name="k"/> (null: the generator's), one of its set's.</summary>
-        public static WinSpec? WindowSpec(WindowType kind, double h, FacadeStyle st, OpeningKind? k) => Fit(RawSpec(kind, h, st, false), h, st, null, k);
+        /// <summary>The window spec of a style's upper floors for window <paramref name="k"/> (null: the generator's), one of its set's; <paramref name="cornice"/> and <paramref name="ground"/> as above.</summary>
+        public static WinSpec? WindowSpec(WindowType kind, double h, FacadeStyle st, OpeningKind? k, double? cornice = null, bool ground = false) => Fit(RawSpec(kind, h, st, false), h, st, null, k, cornice, ground);
 
         static WinSpec? RawSpec(WindowType kind, double h, FacadeStyle st, bool storefront)
         {
@@ -36,16 +39,16 @@ namespace Triband.Storey.Generate
         /// <summary>How high a window type's windows start over the floor (metres): what an artist's window of its own size takes without <see cref="FacadeStyle.sillH"/>.</summary>
         public static double SillOf(WindowType kind) => kind switch { WindowType.Tall => 0.4, WindowType.Ribbon => 0.95, WindowType.Curtain => 0.1, _ => 0.9 };
 
-        /// <summary>The ground floor's window spec: the style's own, none, or a storefront; for the window that stands for its set, as <see cref="WindowSpec(WindowType, double, FacadeStyle, bool)"/>.</summary>
-        public static WinSpec? GroundSpec(FacadeStyle st, double h) => OpeningSets.Representative(st, true, out var k) ? GroundSpec(st, h, k) : null;
+        /// <summary>The ground floor's window spec: the style's own, none, or a storefront; for the window that stands for its set, as <see cref="WindowSpec(WindowType, double, FacadeStyle, bool, double?, bool)"/>. <paramref name="cornice"/>: under a cornice.</summary>
+        public static WinSpec? GroundSpec(FacadeStyle st, double h, double? cornice = null) => OpeningSets.Representative(st, true, out var k) ? GroundSpec(st, h, k, cornice) : null;
 
-        /// <summary>The ground floor's window spec for window <paramref name="k"/> (null: the generator's), one of its set's.</summary>
-        public static WinSpec? GroundSpec(FacadeStyle st, double h, OpeningKind? k)
+        /// <summary>The ground floor's window spec for window <paramref name="k"/> (null: the generator's), one of its set's; under a cornice as above.</summary>
+        public static WinSpec? GroundSpec(FacadeStyle st, double h, OpeningKind? k, double? cornice = null)
         {
             var ws = st.ground == GroundType.Match ? RawSpec(st.windows, h, st, false) : st.ground == GroundType.Solid ? null : RawSpec(st.windows, h, st, true);
             // a plinth (or foundation) of the style's own height: the ground floor's windows start above it
             double? plinth = st.plinthH.HasValue || st.foundation.HasValue ? Math.Max(st.plinthH ?? 0.45, st.foundation.HasValue ? Math.Max(0.02, st.foundationH ?? 0.2) : 0) : (double?)null;
-            return Fit(ws, h, st, plinth, k);
+            return Fit(ws, h, st, plinth, k, cornice, true);
         }
 
         /// <summary>
@@ -54,9 +57,11 @@ namespace Triband.Storey.Generate
         /// sill's height (<see cref="FacadeStyle.sillH"/>, or its type's); and its dressing stays clear of the floor, of a
         /// plinth (<paramref name="plinth"/>: its top, on the ground floor), of the storey's top and of a band. The generator's
         /// own windows, and their arched heads, stay under a band, and over a plinth. A hole left 40 cm high or less is none:
-        /// <see cref="Ops"/> lays out no windows there, and LOD2 paints none. <paramref name="k"/>: the window in it (null: the generator's).
+        /// <see cref="Ops"/> lays out no windows there, and LOD2 paints none. <paramref name="k"/>: the window in it (null: the generator's). On a tier's top storey under a cornice
+        /// (<paramref name="cornice"/>: how far under the storey's top its foot is) they stay under it as under a band; a band of the style's own height, only on the ground storey with
+        /// <see cref="FacadeStyle.bandGround"/> (<paramref name="ground"/>).
         /// </summary>
-        static WinSpec? Fit(WinSpec? ws, double h, FacadeStyle st, double? plinth, OpeningKind? k)
+        static WinSpec? Fit(WinSpec? ws, double h, FacadeStyle st, double? plinth, OpeningKind? k, double? cornice = null, bool ground = false)
         {
             if (ws == null) return null;
             if (k != null && !k.stretch && st.sillH is double sill) ws.y0 = sill;
@@ -68,10 +73,55 @@ namespace Triband.Storey.Generate
                 if (!k.stretch) { ws.full = null; ws.w = k.w; ws.y1 = ws.y0 + k.h; }
                 ws.y1 = Math.Min(ws.y1, h - Math.Max(0.1, rt + 0.05));
             }
-            // a band of the style's own height: windows (and their heads) stay under it
-            if (st.bandH is double bh && st.bands) ws.y1 = Math.Min(ws.y1, h - bh - (k != null ? Math.Max(0.1, rt + 0.05) : st.head == HeadType.Arch ? 0.3 : 0.1));
+            // a band of the style's own height, and a cornice: windows (and their heads) stay under them
+            double under = k != null ? Math.Max(0.1, rt + 0.05) : st.head == HeadType.Arch ? 0.3 : 0.1;
+            if (st.bandH is double bh && st.bands && (!st.bandGround || ground)) ws.y1 = Math.Min(ws.y1, h - bh - under);
+            if (cornice is double cu) ws.y1 = Math.Min(ws.y1, h - cu - under);
             return ws.y1 - ws.y0 > 0.4 ? ws : null;
         }
+
+        /// <summary>
+        /// Whether storey k has a band under its ceiling (docs/EDITOR.md §6.7): with the style's bands, every storey but the
+        /// top, or only the ground storey with <see cref="FacadeStyle.bandGround"/>. Where a cornice tops the storey
+        /// (<see cref="CorniceAt"/>), the band gives way to it on the walls the cornice runs along.
+        /// </summary>
+        public static bool BandAt(BuildingData b, int k)
+        {
+            var st = Derived.StyleAt(b, k);
+            return st.bands && k < b.floors.Count - 1 && (!st.bandGround || k == 0);
+        }
+
+        /// <summary>
+        /// Whether storey k is its tier's top and its style has a cornice (<see cref="FacadeStyle.corniceH"/>): round the
+        /// top of the walls under the roof, or under a terrace's parapet where a setback starts above. Storey's own.
+        /// </summary>
+        public static bool CorniceAt(BuildingData b, int k) =>
+            Derived.StyleAt(b, k).corniceH.HasValue && (k == b.floors.Count - 1 || Derived.IsSetback(b, k + 1));
+
+        /// <summary>
+        /// How far under storey k's top its cornice's top is: 0, or under a pitched roof (the building's, or a terrace's over
+        /// the storey) its eave's soffit, which hangs below the wall's top (<see cref="Roofs.SoffitDrop"/>), or under a flat
+        /// roof's fascia (<see cref="RoofCap.fascia"/>) the fascia's foot.
+        /// </summary>
+        public static double CorniceDrop(BuildingData b, int k)
+        {
+            int N = b.floors.Count;
+            if (k == N - 1)
+            {
+                var st = Derived.StyleAt(b, N);
+                return st.roofType != RoofType.Flat ? Roofs.SoffitDrop(st.roofType, st.pitch, st.eave) : RoofCap.Of(st) is RoofCap c && c.fascia ? c.h : 0;
+            }
+            return k + 1 < N && b.floors[k + 1].terraceRoof is TerraceRoofData tr ? Roofs.SoffitDrop(RoofType.Hip, tr.pitch, Roofs.TerraceEave) : 0;
+        }
+
+        /// <summary>How far under storey k's top its cornice's foot is (<see cref="CorniceDrop"/> and its height), or null with no cornice.</summary>
+        public static double? CorniceUnder(BuildingData b, int k) =>
+            CorniceAt(b, k) ? CorniceDrop(b, k) + CorniceH(Derived.StyleAt(b, k).corniceH!.Value) : (double?)null;
+
+        /// <summary>A cornice's height (2 cm to 3 m).</summary>
+        public static double CorniceH(double h) => Math.Max(0.02, Math.Min(3, h));
+        /// <summary>How far a cornice stands out: at least a centimetre, so it never lies on the wall; null = 10 cm.</summary>
+        public static double CorniceDepth(FacadeStyle st) => Math.Max(0.01, Math.Min(1.5, st.corniceDepth ?? 0.1));
 
         /// <summary>
         /// Where windows are laid out along a wall: the span (<see cref="Span"/>) less how far an artist's window reaches past
@@ -178,8 +228,10 @@ namespace Triband.Storey.Generate
             var st = Derived.StyleAt(b, k); double h = Derived.FloorH(b, k), spn = uE - uS;
             var doorSet = OpeningSets.Doors(st); var dk = doorSet == null ? OpeningKinds.Of(st, true) : null;
             // a band of the style's own height: doors stay under it as windows do (WindowSpec), their posts too (Dress: 8 cm
-            // above the door, standing out as far as a band does by default, so they would lie in its face)
-            double? band = st.bandH is double bh && st.bands ? bh : (double?)null;
+            // above the door, standing out as far as a band does by default, so they would lie in its face); and under a cornice
+            double? cornice = CorniceUnder(b, k);
+            double? band = st.bandH is double bh && st.bands && (!st.bandGround || k == 0) ? bh : (double?)null;
+            if (cornice is double cu) band = Math.Max(band ?? 0, cu);
             double under = band is double b0 ? h - b0 - 0.08 : double.MaxValue;
             ops.Clear();
             Opening New() => pool != null ? pool.Take() : new Opening();
@@ -209,7 +261,7 @@ namespace Triband.Storey.Generate
                 if (s.type != CoreType.Lift || !Cores.Serves(b, s, k)) continue;
                 foreach (var f in Cores.CoreFlush(Derived.OutlineAt(b, k), s)) if (f != null && f.i == i) (shaftHere ??= new List<Cores.Flush>()).Add(f);
             }
-            if (Derived.EdgeStateAt(b, k, i) == EdgeState.Open) Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, shaftHere);
+            if (Derived.EdgeStateAt(b, k, i) == EdgeState.Open) Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, shaftHere, cornice);
             ops.Sort((p, q) => p.u0.CompareTo(q.u0));
             return ops;
         }
@@ -220,10 +272,11 @@ namespace Triband.Storey.Generate
         /// opening the size that window makes it. The bays are laid out once for every window the set can pick, so a pick
         /// never moves another window. <paramref name="ground"/>: the ground floor (its spec, and its own set); the pick is
         /// seeded by <paramref name="id"/>, the storey <paramref name="k"/> of the tier from <paramref name="k0"/>, and edge
-        /// <paramref name="edge"/>. Windows keep clear of doors and of <paramref name="shafts"/> (lifts flush with the wall).
+        /// <paramref name="edge"/>. Windows keep clear of doors and of <paramref name="shafts"/> (lifts flush with the wall), and stay
+        /// under a <paramref name="cornice"/> (<see cref="CorniceUnder"/>), and under a band only the ground storey has.
         /// </summary>
         internal static void Windows(List<Opening> ops, OpeningPool? pool, FacadeStyle st, double h, bool ground, string id, int k, int k0, int edge, double uS, double uE,
-            List<Cores.Flush>? shafts)
+            List<Cores.Flush>? shafts, double? cornice = null)
         {
             var set = OpeningSets.Windows(st, ground);
             var (wS, wE) = WindowSpan(st, ground, uS, uE);
@@ -231,14 +284,14 @@ namespace Triband.Storey.Generate
             if (n == 0) return;
             // one window: its spec once; a set: each window's it picks, once each, in specs lent for the wall
             OpeningKind? one = set == null ? OpeningKinds.Of(st, false) : null;
-            WinSpec? oneSpec = set == null ? ground ? GroundSpec(st, h, one) : WindowSpec(st.windows, h, st, one) : null;
+            WinSpec? oneSpec = set == null ? ground ? GroundSpec(st, h, one, cornice) : WindowSpec(st.windows, h, st, one, cornice, k == 0) : null;
             var specs = set != null ? SpecCache.Lent.Take() : null;
             uint wall = set != null ? OpeningSets.WallSeed(id, k, edge) : 0;
             for (int j = 0; j < n; j++)
             {
                 OpeningKind? wk = one;
                 if (set != null && !OpeningSets.Window(st, ground, st.windowPick == WindowPick.Window ? OpeningSets.At(wall, j) : OpeningSets.WindowSeed(id, st.windowPick, k, k0, edge, j), out wk)) continue;
-                var ws = specs != null ? specs.Of(wk, st, h, ground) : oneSpec;
+                var ws = specs != null ? specs.Of(wk, st, h, ground, cornice, k == 0) : oneSpec;
                 if (ws == null || ws.y1 - ws.y0 <= 0.4) continue;
                 double c = wS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : Math.Min(ws.w, bay - 0.5);
                 if (ww < 0.45) continue;
@@ -265,10 +318,10 @@ namespace Triband.Storey.Generate
             readonly List<OpeningKind?> kinds = new List<OpeningKind?>(4);
             readonly List<WinSpec?> specs = new List<WinSpec?>(4);
 
-            public WinSpec? Of(OpeningKind? k, FacadeStyle st, double h, bool ground)
+            public WinSpec? Of(OpeningKind? k, FacadeStyle st, double h, bool ground, double? cornice, bool storey0)
             {
                 for (int i = 0; i < kinds.Count; i++) if (ReferenceEquals(kinds[i], k)) return specs[i];
-                var ws = ground ? GroundSpec(st, h, k) : WindowSpec(st.windows, h, st, k);
+                var ws = ground ? GroundSpec(st, h, k, cornice) : WindowSpec(st.windows, h, st, k, cornice, storey0);
                 kinds.Add(k); specs.Add(ws);
                 return ws;
             }
@@ -291,30 +344,33 @@ namespace Triband.Storey.Generate
             bool bars = st != null && (st.paneCols > 1 || st.paneRows > 1);
             bool sills = st == null || st.sills, heads = st == null || st.heads;
             var trim = frames ? C.frame : C.trim;
-            // an artist's window or door (OpeningKinds), the one picked for the opening, stands in for all of the generator's dressing
+            // an artist's window or door (OpeningKinds), the one picked for the opening, stands in for all of the generator's dressing;
+            // how deep the style sets its windows and doors (FacadeStyle.recess, doorRecess): the pane, and the frame and bars
+            // round it, go with it
+            double pw = PaneW(st, false), dw = PaneW(st, true), shift = pw - T * 0.45, wb = KindBack(st, false), db = KindBack(st, true);
             foreach (var o in ops)
             {
                 var kk = o.kind;
-                if (o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y, y + o.y1, C, shell); if (!shell) op.SeeThrough++; continue; }   // its leaf is left out
-                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell); continue; }
+                if (o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y, y + o.y1, C, shell, db); if (!shell) op.SeeThrough++; continue; }   // its leaf is left out
+                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell, wb); continue; }
                 if (o.door)
                 {
                     // the generator's door: the wall's recess, with a flat panel at its back where the doorway is closed
-                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, T * 0.45, C.door, false);
+                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, dw, C.door, false);
                     else op.SeeThrough++;
                 }
                 else
                 {
-                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, C.glassDark, false);
-                    else Facade.Pane(gl, F, o.u0, o.u1, y + o.y0, y + o.y1, T * 0.45, C.glass, true);
+                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, pw, C.glassDark, false);
+                    else Facade.Pane(gl, F, o.u0, o.u1, y + o.y0, y + o.y1, pw, C.glass, true);
                     double ex = o.full ? 0 : 0.06, eh = o.full ? 0 : 0.04;
                     if (sills) op.OBox(F, o.u0 - ex, o.u1 + ex, y + o.y0 - 0.07, y + o.y0, T, T + 0.07, trim, trim, Skip.In);
                     if (heads && arch && !o.full) Hood(op, F, o.u0 - HoodOver, o.u1 + HoodOver, y + o.y1, trim);
                     else if (heads) op.OBox(F, o.u0 - eh, o.u1 + eh, y + o.y1, y + o.y1 + 0.06, T, T + 0.04, trim, trim, Skip.In);
                     double fw = frames ? FrameW : 0;
-                    if (frames) WindowFrame(op, F, o.u0, o.u1, y + o.y0, y + o.y1, fw, C.frame);
-                    if (bars) Bars(op, F, o.u0 + fw, o.u1 - fw, y + o.y0 + fw, y + o.y1 - fw, st!.paneCols ?? 1, st.paneRows ?? 1, C.frame);
-                    else if (CentreBar(st, o)) { double mm = (o.u0 + o.u1) / 2; op.OBox(F, mm - BarHalf, mm + BarHalf, y + o.y0, y + o.y1, T * 0.3, T * 0.6, C.trim, C.trim, Skip.Top | Skip.Bot); }
+                    if (frames) WindowFrame(op, F, o.u0, o.u1, y + o.y0, y + o.y1, fw, C.frame, shift);
+                    if (bars) Bars(op, F, o.u0 + fw, o.u1 - fw, y + o.y0 + fw, y + o.y1 - fw, st!.paneCols ?? 1, st.paneRows ?? 1, C.frame, shift);
+                    else if (CentreBar(st, o)) { double mm = (o.u0 + o.u1) / 2; op.OBox(F, mm - BarHalf, mm + BarHalf, y + o.y0, y + o.y1, T * 0.3 + shift, T * 0.6 + shift, C.trim, C.trim, Skip.Top | Skip.Bot); }
                 }
             }
         }
@@ -384,6 +440,37 @@ namespace Triband.Storey.Generate
                 }
         }
 
+        /// <summary>
+        /// How far out from the wall's inner face the generator's pane (or a shell storey's door panel) is: 45% of the wall,
+        /// as the prototype has it (16.5 cm in from the face), or as deep as the style recesses its windows
+        /// (<see cref="FacadeStyle.recess"/>, up to 25 cm, so a frame round the pane stays in the wall) or doors
+        /// (<see cref="FacadeStyle.doorRecess"/>, up to 29 cm). A centimetre at least: a strip's back over the opening
+        /// (<see cref="StripBacks"/>) lies in the wall's face. Storey's own.
+        /// </summary>
+        public static double PaneW(FacadeStyle? st, bool door)
+        {
+            double? r = door ? st?.doorRecess : st?.recess;
+            return r is double d ? Dim.T_EXT - Math.Max(0.01, Math.Min(door ? 0.29 : 0.25, d)) : Dim.T_EXT * 0.45;
+        }
+
+        /// <summary>How far an artist's window or door is pushed back into the wall: as deep as the style recesses it (null: none).</summary>
+        public static double KindBack(FacadeStyle? st, bool door)
+        {
+            double? r = door ? st?.doorRecess : st?.recess;
+            return r is double d ? Math.Max(0, Math.Min(Dim.T_EXT, d)) : 0;
+        }
+
+        /// <summary>
+        /// Where a shell storey's reveal starts, out from the wall's inner face: at the generator's pane (<see cref="PaneW"/>), or
+        /// for an artist's window or door pushed back by a recess, the depth a shell storey leaves it
+        /// (<see cref="OpeningKinds.ShellReveal"/>) behind that; never behind the wall.
+        /// </summary>
+        public static double ShellRevealFrom(FacadeStyle? st, bool door, OpeningKind? k)
+        {
+            double back = KindBack(st, door);
+            return k != null && back > 0 ? Math.Max(0, Dim.T_EXT - back - OpeningKinds.ShellReveal) : PaneW(st, door);
+        }
+
         /// <summary>A frame member's width, and a glazing bar's.</summary>
         public const double FrameW = 0.06, BarW = 0.035;
 
@@ -423,10 +510,10 @@ namespace Triband.Storey.Generate
         /// <summary>How far a hood stands out from the wall, and how far past the opening it reaches each side.</summary>
         public const double HoodOut = 0.14, HoodOver = 0.1;
 
-        /// <summary>A frame all round an opening, in its reveal, around the pane.</summary>
-        public static void WindowFrame(MeshBuilder op, Frame F, double u0, double u1, double ya, double yb, double fw, Swatch c)
+        /// <summary>A frame all round an opening, in its reveal, around the pane (<paramref name="shift"/>: how far a recess moves the pane from where the prototype has it).</summary>
+        public static void WindowFrame(MeshBuilder op, Frame F, double u0, double u1, double ya, double yb, double fw, Swatch c, double shift = 0)
         {
-            double T = Dim.T_EXT, wa = T * 0.3, wb = T * 0.6;
+            double T = Dim.T_EXT, wa = T * 0.3 + shift, wb = T * 0.6 + shift;
             op.OBox(F, u0, u0 + fw, ya, yb, wa, wb, c, null, Skip.UStart | Skip.Top | Skip.Bot);
             op.OBox(F, u1 - fw, u1, ya, yb, wa, wb, c, null, Skip.UEnd | Skip.Top | Skip.Bot);
             op.OBox(F, u0 + fw, u1 - fw, yb - fw, yb, wa, wb, c, null, Skip.Top | Skip.UStart | Skip.UEnd);
@@ -434,9 +521,9 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>Glazing bars dividing the pane inside (ua..ub, ya..yb) into columns × rows.</summary>
-        public static void Bars(MeshBuilder op, Frame F, double ua, double ub, double ya, double yb, int cols, int rows, Swatch c)
+        public static void Bars(MeshBuilder op, Frame F, double ua, double ub, double ya, double yb, int cols, int rows, Swatch c, double shift = 0)
         {
-            double T = Dim.T_EXT, wa = T * 0.36, wb = T * 0.54, h = BarW / 2;
+            double T = Dim.T_EXT, wa = T * 0.36 + shift, wb = T * 0.54 + shift, h = BarW / 2;
             cols = Math.Max(1, Math.Min(8, cols)); rows = Math.Max(1, Math.Min(8, rows));
             var xs = new double[cols + 1];
             for (int i = 0; i <= cols; i++) xs[i] = ua + (ub - ua) * i / cols;
@@ -530,11 +617,14 @@ namespace Triband.Storey.Generate
             /// <summary>The inner face is the rooms' (<see cref="MeshBuilder.Inside"/>): an outside wall's, seen only through its windows.</summary>
             public bool rooms;
             public double? revealFrom; public Swatch? revealC;
+            /// <summary>Where a door's reveal starts, where it isn't <see cref="revealFrom"/> (a style's door recess); and its threshold's colour (a recessed street door's). Storey's own.</summary>
+            public double? doorRevealFrom; public Swatch? thresholdC;
 
             /// <summary>Every option set, as a new one with these would be (for options used again panel after panel).</summary>
-            public PanelOpt Set(bool outer = true, bool inner = true, bool ends = false, bool threshold = false, double? revealFrom = null, Swatch? revealC = null, bool rooms = false)
+            public PanelOpt Set(bool outer = true, bool inner = true, bool ends = false, bool threshold = false, double? revealFrom = null, Swatch? revealC = null, bool rooms = false, double? doorRevealFrom = null, Swatch? thresholdC = null)
             {
                 this.outer = outer; this.inner = inner; this.ends = ends; this.threshold = threshold; this.revealFrom = revealFrom; this.revealC = revealC; this.rooms = rooms;
+                this.doorRevealFrom = doorRevealFrom; this.thresholdC = thresholdC;
                 return this;
             }
         }
@@ -598,10 +688,11 @@ namespace Triband.Storey.Generate
             var nu = new P3(F.u.x, 0, F.u.z);
             foreach (var o in os)
             {
-                gb.Quad(X(o.u0, o.y0, rw), X(o.u0, o.y0, w1), X(o.u0, o.y1, w1), X(o.u0, o.y1, rw), nu, rc);
-                gb.Quad(X(o.u1, o.y0, rw), X(o.u1, o.y0, w1), X(o.u1, o.y1, w1), X(o.u1, o.y1, rw), new P3(-nu.x, 0, -nu.z), rc);
-                if (o.y0 > 1e-3 || opt.threshold || o.thr) gb.Quad(X(o.u0, o.y0, rw), X(o.u1, o.y0, rw), X(o.u1, o.y0, w1), X(o.u0, o.y0, w1), new P3(0, 1, 0), rc);
-                if (o.y1 < h - 1e-3) gb.Quad(X(o.u0, o.y1, rw), X(o.u1, o.y1, rw), X(o.u1, o.y1, w1), X(o.u0, o.y1, w1), new P3(0, -1, 0), rc);
+                double ro = o.door && opt.doorRevealFrom is double dr ? dr : rw;
+                gb.Quad(X(o.u0, o.y0, ro), X(o.u0, o.y0, w1), X(o.u0, o.y1, w1), X(o.u0, o.y1, ro), nu, rc);
+                gb.Quad(X(o.u1, o.y0, ro), X(o.u1, o.y0, w1), X(o.u1, o.y1, w1), X(o.u1, o.y1, ro), new P3(-nu.x, 0, -nu.z), rc);
+                if (o.y0 > 1e-3 || opt.threshold || o.thr) gb.Quad(X(o.u0, o.y0, ro), X(o.u1, o.y0, ro), X(o.u1, o.y0, w1), X(o.u0, o.y0, w1), new P3(0, 1, 0), o.y0 <= 1e-3 && o.door && opt.thresholdC is Swatch tc ? tc : rc);
+                if (o.y1 < h - 1e-3) gb.Quad(X(o.u0, o.y1, ro), X(o.u1, o.y1, ro), X(o.u1, o.y1, w1), X(o.u0, o.y1, w1), new P3(0, -1, 0), rc);
             }
             if (opt.ends)
             {
@@ -726,6 +817,26 @@ namespace Triband.Storey.Generate
                 }
             }
             gb.Inside = wasIn; gb.Backing = was;
+        }
+
+        /// <summary>
+        /// The top (<paramref name="up"/>) or underside of a strip's pieces at height y, between <paramref name="wa"/> and
+        /// <paramref name="wb"/> across it: for a strip <see cref="StripPieces"/> drew from <paramref name="w0"/> to
+        /// <paramref name="w1"/> with its top and bottom left out, whose ends it takes (mitred where a piece reaches the
+        /// strip's corner). For a face in two colours, or one in part covered. Storey's own (the roof cap).
+        /// </summary>
+        public static void StripFace(MeshBuilder gb, Frame F, Miter m, List<(double, double)> ranges, double w0, double w1, double y, double wa, double wb, bool up, Swatch c)
+        {
+            if (wb - wa < 1e-4 || gb.ShapeOnly) return;
+            var (s0, e0) = m.Span(w0, w1); var n = new P3(0, up ? 1 : -1, 0);
+            foreach (var (a, bb) in ranges)
+            {
+                bool ms = a <= s0 + 1e-6, me = bb >= e0 - 1e-6;
+                double sA = ms ? m.S.s : a, kA = ms ? m.S.k : 0, eB = me ? m.E.s : bb, kB = me ? m.E.k : 0;
+                double sa = sA + kA * wa, sb = sA + kA * wb, ea = eB + kB * wa, eb = eB + kB * wb;
+                if (ea - sa < 1e-4 || eb - sb < 1e-4) continue;
+                gb.Quad(F.At(sa, y, wa), F.At(ea, y, wa), F.At(eb, y, wb), F.At(sb, y, wb), n, c);
+            }
         }
 
         /// <summary>A strip split into pieces at ranges; the first and last take the mitred ends.</summary>

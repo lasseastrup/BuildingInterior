@@ -16,12 +16,13 @@
 TEXTURE2D(_GlobalColorPaletteTex);          // ColorMappingManager's atlas (512 x 1024 RGBAHalf, linear), or Storey's hex palette
 uint _ColorAtlasWidth;                      // 512 in 2.1.11
 #endif
-StructuredBuffer<uint4> _StoreyColors;      // per colour row, 3 x uint4: 24 x uint16 (20 style slots, spare, remap row)
-StructuredBuffer<uint>  _StoreyDetailColors; // per facade-detail colour (slot - 24): palette index; one for every slot a byte names
+StructuredBuffer<uint4> _StoreyColors;      // per colour row, 4 x uint4: 32 x uint16 (the style's slots, spare, remap row)
+StructuredBuffer<uint>  _StoreyDetailColors; // per facade-detail colour (slot - 32): palette index; one for every slot a byte names
 
-#define STOREY_REMAP_ENTRY 23
-#define STOREY_ROW_SLOTS 24
-#define STOREY_DETAIL_COLORS 232   // _StoreyDetailColors' entries: one for each slot from 24 to 255 (BuildingTable.DetailColors)
+#define STOREY_REMAP_ENTRY 31
+#define STOREY_ROW_SLOTS 32
+#define STOREY_ROW_UINT4S 4
+#define STOREY_DETAIL_COLORS 224   // _StoreyDetailColors' entries: one for each slot from 32 to 255 (BuildingTable.DetailColors)
 
 // The tables that grow, their sizes now (BuildingTable.Upload): x wall ids, y parameter rows, z colour rows
 #ifndef STOREY_TABLE_SIZE_DECLARED
@@ -62,7 +63,7 @@ uint StoreyRowEntry(uint row, uint e)
 {
     e = min(e, STOREY_ROW_SLOTS - 1u);
     row = min(row, (uint)max((int)_StoreyTableSize.z - 1, 0));
-    uint4 r = _StoreyColors[row * 3 + (e >> 3)];
+    uint4 r = _StoreyColors[row * STOREY_ROW_UINT4S + (e >> 3)];
     uint q = (e >> 1) & 3;
     uint w = q == 0 ? r.x : (q == 1 ? r.y : (q == 2 ? r.z : r.w));
     return (e & 1) ? (w >> 16) : (w & 0xFFFF);
@@ -70,22 +71,22 @@ uint StoreyRowEntry(uint row, uint e)
 
 float3 StoreyPaletteColor(uint row, uint slot, float tone)
 {
-    // both sides are read, whichever is used: a style's slot reads detail colour 0, not slot - 24 wrapped round
+    // both sides are read, whichever is used: a style's slot reads detail colour 0, not slot - 32 wrapped round
     uint detail = _StoreyDetailColors[min(slot >= STOREY_ROW_SLOTS ? slot - STOREY_ROW_SLOTS : 0u, STOREY_DETAIL_COLORS - 1u)];
     uint index = slot < STOREY_ROW_SLOTS ? StoreyRowEntry(row, slot) : detail;
     return StoreyAtlas(StoreyRowEntry(row, STOREY_REMAP_ENTRY) * _ColorAtlasWidth + index).rgb * tone;
 }
 
 // A style's four facade colours at once, shaded, for the massing's every pixel (StoreyFacade.hlsl): wall, trim, roof and
-// glass are entries 0, 1, 4 and 6 of the colour row, all four in its first uint4, and the remap row (entry 23) is the
-// high half of its third uint4's w (ColorRows.Pack). Two buffer loads where four StoreyPaletteColor lookups made eight,
+// glass are entries 0, 1, 4 and 6 of the colour row, all four in its first uint4, and the remap row (entry 31) is the
+// high half of its last uint4's w (ColorRows.Pack). Two buffer loads where four StoreyPaletteColor lookups made eight,
 // and four detail-colour loads that a style's slot never uses, besides finding the atlas's size once, not four times
 // (docs/PERFORMANCE.md §7.4). A row past the table reads its last row.
 void StoreyStyleColors(uint row, float4 tones, out float3 wall, out float3 trim, out float3 roof, out float3 glass)
 {
     row = min(row, (uint)max((int)_StoreyTableSize.z - 1, 0));
-    uint4 slots = _StoreyColors[row * 3];
-    uint4 last = _StoreyColors[row * 3 + 2];
+    uint4 slots = _StoreyColors[row * STOREY_ROW_UINT4S];
+    uint4 last = _StoreyColors[row * STOREY_ROW_UINT4S + STOREY_ROW_UINT4S - 1];
     StoreyAtlasSize a = StoreyAtlasSizeNow();
     uint base = (last.w >> 16) * _ColorAtlasWidth;
     wall = StoreyAtlasAt(base + (slots.x & 0xFFFF), a).rgb * tones.x;
@@ -100,7 +101,7 @@ void StoreyStyleColors(uint row, float4 tones, out float3 wall, out float3 trim,
 float3 StoreyWallOrTrim(uint row, bool trim)
 {
     row = min(row, (uint)max((int)_StoreyTableSize.z - 1, 0));
-    uint first = _StoreyColors[row * 3].x, remap = _StoreyColors[row * 3 + 2].w >> 16;
+    uint first = _StoreyColors[row * STOREY_ROW_UINT4S].x, remap = _StoreyColors[row * STOREY_ROW_UINT4S + STOREY_ROW_UINT4S - 1].w >> 16;
     return StoreyAtlasAt(remap * _ColorAtlasWidth + (trim ? first >> 16 : first & 0xFFFF), StoreyAtlasSizeNow()).rgb;
 }
 

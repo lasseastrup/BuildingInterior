@@ -60,6 +60,24 @@ namespace Triband.Storey.Tests
             }
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void ABareWallHasNoCorniceAndItsNeighboursEndSquareWithNothingOverlapping(bool ccw)
+        {
+            var (bq, sq) = Block(EdgeState.Quiet, 1, ccw); var (bx, sx) = Block(EdgeState.Bare, 1, ccw);
+            foreach (var b in new[] { bq, bx }) { b.style.corniceH = 0.4; b.style.corniceDepth = 0.2; b.style.cornice = "#405060"; }
+            // the cornice's faces in its own colour: none along the bare wall, the quiet wall keeps its own
+            static int Cornice(MeshBuilder m) => Enumerable.Range(0, m.Verts).Count(v => m.C[v].slot == ColorSlot.Cornice);
+            Assert.True(Cornice(Lod0.Build(sx, bx).Op) < Cornice(Lod0.Build(sq, bq).Op));
+            Assert.True(Cornice(Lod0.Build(sx, bx).Op) > 0);
+            foreach (var m in new[] { Lod0.Build(sx, bx).Op, Lod1.Build(sx, bx) })
+            {
+                var rep = CoplanarCheck.Run(m);
+                Assert.True(rep.Overlaps.Count == 0, string.Join("\n", rep.Overlaps.Take(10)));
+            }
+        }
+
         [Fact]
         public void LodTwoPaintsABareWallWithoutItsBand()
         {

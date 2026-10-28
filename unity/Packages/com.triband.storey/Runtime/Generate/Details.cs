@@ -263,6 +263,9 @@ namespace Triband.Storey.Generate
                 int was = out_.Count; Push(d);
                 spans |= out_.Count > was && d.Spans;
             }
+            // what is placed under the ceiling (vents, an artist's on bare wall) has its top 45 cm under it, or 5 cm under a
+            // cornice's foot (Facade.CorniceUnder)
+            double clear = Facade.CorniceUnder(b, k) is double cu ? Math.Max(0.45, cu + 0.05) : 0.45;
             for (int i = 0; i < n; i++)
             {
                 if (Derived.EdgeStateAt(b, k, i) >= EdgeState.Quiet) continue;   // a quiet or bare wall has no details by rule (docs/EDITOR.md §6.7)
@@ -279,7 +282,7 @@ namespace Triband.Storey.Generate
                     foreach (var o in ops) { if (o.Left - prev >= 1.0) gaps.Add((prev, o.Left)); prev = Math.Max(prev, o.Right); }
                     if (uE - prev >= 1.0) gaps.Add((prev, uE));
                     for (int j = 0; j < gaps.Count; j++)
-                        if (Hash01(b.id, "vent", k, i, j) < R.vents) { var it = Mk(vent, i, (gaps[j].Item1 + gaps[j].Item2) / 2, null); it.y = h - 0.95; Push(it); }
+                        if (Hash01(b.id, "vent", k, i, j) < R.vents && h - clear - 0.5 >= 0.25) { var it = Mk(vent, i, (gaps[j].Item1 + gaps[j].Item2) / 2, null); it.y = h - clear - 0.5; Push(it); }
                 }
                 if (more == null) continue;
                 foreach (var (dk, p, kr, from) in more)
@@ -294,7 +297,7 @@ namespace Triband.Storey.Generate
                     else if (dk.rule == Rule.BareWall)
                     {
                         // as a vent: in a stretch of wall it fits with 25 cm to spare each side, its top 45 cm under the ceiling
-                        double need = Math.Max(1.0, dk.w + 0.5), y = h - 0.45 - dk.h, prev = uS; int j = 0;
+                        double need = Math.Max(1.0, dk.w + 0.5), y = h - clear - dk.h, prev = uS; int j = 0;
                         if (y < 0.15) continue;
                         for (int g = 0; g <= ops.Count; g++)   // the gaps before each opening, then after the last
                         {

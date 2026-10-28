@@ -556,6 +556,7 @@ namespace Triband.Storey.Editor
                 WallDetails(e, b, k0, st);
                 StoreyInspectorUI.Section("Colours", "From the project's palette");
                 Colour(e, b, k0, "Walls", "wall");
+                if (k0 == 0) Colour(e, b, k0, "Ground floor walls", "groundWall", optional: true);
                 Colour(e, b, k0, "Trim", "trim");
                 Colour(e, b, k0, "Roof", "roof");
                 Colour(e, b, k0, "Glass", "glass");
@@ -585,7 +586,11 @@ namespace Triband.Storey.Editor
                         if (st.dormers is double every) StyleSlider(e, k0, "Dormers every", every, 2.2, 10, 0.1, (s, x) => s.dormers = x);
                         if (mans) EditorGUILayout.HelpBox("A mansard: a steep 70° slope rises from the eaves to the break, then a shallow hip at the top pitch.", MessageType.None);
                     }
-                    else StyleToggle(e, k0, "Parapet", st.parapet, (s, x) => s.parapet = x);
+                    else
+                    {
+                        StyleToggle(e, k0, "Parapet", st.parapet, (s, x) => s.parapet = x);
+                        RoofCapFields(e, b, k0, st);
+                    }
                 }
                 if (StoreyInspectorUI.Fold("rules", "Details by rule", false, "Details scattered on the walls by the style (AC units, vents, and your own Facade Details with a rule); place any by hand below"))
                     RuleDetails(e, b, k0, st);
@@ -638,6 +643,27 @@ namespace Triband.Storey.Editor
                     }
             }
             EditorGUILayout.LabelField("Click a wall to make it so; click it again for its windows back.", StoreyInspectorUI.Caption);
+        }
+
+        /// <summary>
+        /// A flat roof's cap (docs/EDITOR.md §6.7, <see cref="FacadeStyle.capH"/>): its height (below 0 it hangs from the edge as
+        /// a fascia), how far in from the wall's face it stands (below 0 it overhangs), the strip round its top, and its colours.
+        /// </summary>
+        void RoofCapFields(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool on = EditorGUILayout.Toggle(new GUIContent("Roof cap", "A cap on the roof's edge: a slab standing out over the walls, a fascia hanging from the edge, or a ring set in on the roof. A raised one takes the curb's place, and a parapet stands on it"), st.capH.HasValue);
+                if (on != st.capH.HasValue) e.ApplyTo(on ? "Roof cap" : "No roof cap", bb => { var s = Styles.Edited(bb, k0); s.capH = on ? 0.4 : (double?)null; if (on && !s.capDepth.HasValue) s.capDepth = -0.25; return true; });
+            }
+            if (!(st.capH is double h)) return;
+            StyleSlider(e, k0, "   Height", h, -1.5, 4, 0.01, (s, x) => s.capH = x);
+            StyleSlider(e, k0, "   In from the wall", st.capDepth ?? 0, -1, 5, 0.01, (s, x) => s.capDepth = x);
+            StyleSlider(e, k0, "   Strip", st.capStrip ?? 0, 0, 2, 0.01, (s, x) => s.capStrip = x > 0 ? x : (double?)null);
+            Colour(e, b, k0, "   Colour", "cap", optional: true);
+            if ((st.capDepth ?? 0) < 0) Colour(e, b, k0, "   Underside", "capRim", optional: true);
+            string what = Generate.RoofCap.Of(st) is Generate.RoofCap c ? c.inset ? "A ring set in on the roof, round the bulkheads and openings." : c.fascia ? "A fascia hanging from the roof's edge, under the curb or parapet." : "A slab on the walls' top, standing out over them; it takes the curb's place." : "A cap below the roof needs an overhang (In from the wall below 0).";
+            EditorGUILayout.LabelField(what + " Above 0, In from the wall sets it in; below 0 it overhangs.", StoreyInspectorUI.Caption);
         }
 
         /// <summary>
@@ -795,22 +821,56 @@ namespace Triband.Storey.Editor
                 StyleToggle(e, k0, "Frames", st.frames, (s, x) => s.frames = x);
             }
             if (artist) EditorGUILayout.LabelField("The artist's window brings its own head, frame and bars.", StoreyInspectorUI.Caption);
+            Recess(e, k0, "Window recess", "How deep windows sit in the wall, from its face: the generator's glass and frame, or an artist's window pushed back that far", st.recess, 0.25, (s, x) => s.recess = x);
             if (k0 == 0) SetRows(e, k0, st, SetOf.Doors, "Street door");
+            Recess(e, k0, "Door recess", "How deep doors sit in the wall, from its face: the plain door's panel, or an artist's door pushed back that far; a recessed street door's threshold is in the Foundation colour", st.doorRecess, 0.29, (s, x) => s.doorRecess = x);
         }
 
-        /// <summary>The style's wall details (docs/EDITOR.md §6.7): bands, and on the base the plinth and foundation; brick patches on any.</summary>
+        /// <summary>
+        /// A recess (docs/EDITOR.md §6.7, <see cref="FacadeStyle.recess"/>, <see cref="FacadeStyle.doorRecess"/>): off, as before
+        /// (the generator's 16.5 cm, an artist's at the wall's face); on, how deep.
+        /// </summary>
+        static void Recess(StoreyEdit e, int k0, string label, string tip, double? value, double max, Action<FacadeStyle, double?> set)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool on = EditorGUILayout.Toggle(new GUIContent(label, tip), value.HasValue);
+                if (on != value.HasValue) e.ApplyTo(label, bb => { set(Styles.Edited(bb, k0), on ? Generate.OpeningKinds.ShellReveal : (double?)null); return true; });
+            }
+            if (value is double v) StyleSlider(e, k0, "   Depth", v, 0, max, 0.01, (s, x) => set(s, x));
+        }
+
+        /// <summary>
+        /// The style's wall details (docs/EDITOR.md §6.7), top to bottom as they stand on the wall: the cornice, bands, and on
+        /// the base the plinth and foundation; brick patches on any. Each strip's colour is with it.
+        /// </summary>
         void WallDetails(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
         {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool cn = EditorGUILayout.Toggle(new GUIContent("Cornice", "A strip round the top of the walls, under the roof (and under a terrace's parapet where a setback starts above); the top storey's windows stay under it"), st.corniceH.HasValue);
+                if (cn != st.corniceH.HasValue) e.ApplyTo(cn ? "Cornice" : "No cornice", bb => { Styles.Edited(bb, k0).corniceH = cn ? 0.3 : (double?)null; return true; });
+            }
+            if (st.corniceH is double ch)
+            {
+                StyleSlider(e, k0, "   Height", ch, 0.05, 2, 0.01, (s, x) => s.corniceH = x);
+                StyleSlider(e, k0, "   Stands out", st.corniceDepth ?? 0.1, 0.01, 1, 0.01, (s, x) => s.corniceDepth = x);
+                Colour(e, b, k0, "   Colour", "cornice", optional: true);
+            }
             StyleToggle(e, k0, "Floor bands", st.bands, (s, x) => s.bands = x);
             if (st.bands)
             {
+                if (k0 == 0) StyleToggle(e, k0, "   Over the ground floor only", st.bandGround, (s, x) => s.bandGround = x);
                 StyleSlider(e, k0, "   Band height", st.bandH ?? 0.22, 0.05, 1.5, 0.01, (s, x) => s.bandH = x);
                 StyleSlider(e, k0, "   Band stands out", st.bandDepth ?? 0.06, 0.01, 0.2, 0.01, (s, x) => s.bandDepth = x);
-                StyleToggle(e, k0, "   Band in a wall shade", st.bandWall, (s, x) => s.bandWall = x);
+                using (new EditorGUI.DisabledScope(st.band != null))
+                    StyleToggle(e, k0, "   Band in a wall shade", st.bandWall, (s, x) => s.bandWall = x);
+                Colour(e, b, k0, "   Band colour", "band", optional: true);
             }
             if (k0 == 0)
             {
                 StyleSlider(e, k0, "Plinth height", st.plinthH ?? 0.45, 0, 2, 0.05, (s, x) => s.plinthH = x);
+                StyleSlider(e, k0, "   Stands out", st.plinthDepth ?? 0.04, 0.01, 1, 0.01, (s, x) => s.plinthDepth = x);
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     bool fd = EditorGUILayout.Toggle(new GUIContent("Foundation", "A foundation along the foot of the ground floor"), st.foundation.HasValue);
@@ -1150,7 +1210,7 @@ namespace Triband.Storey.Editor
                     id => doc.palette.TryGetValue(id, out var pe) ? pe : null);
                 if (picked != null && picked != value)
                     e.ApplyTo(label + " colour", bb => { spec.set(baseStyle ? bb.style : Styles.Edited(bb, k0), picked); return true; });
-                if (optional && value != null && GUILayout.Button(new GUIContent("Default", "Use the project's default colour"), EditorStyles.miniButton, GUILayout.Width(56)))
+                if (optional && value != null && GUILayout.Button(new GUIContent("Default", "Use the project's default colour, or the colour it follows"), EditorStyles.miniButton, GUILayout.Width(56)))
                     e.ApplyTo(label + " colour", bb => { spec.set(baseStyle ? bb.style : Styles.Edited(bb, k0), null!); return true; });
             }
         }
@@ -1177,7 +1237,8 @@ namespace Triband.Storey.Editor
             "wall" => ColorSlot.Wall, "trim" => ColorSlot.Trim, "interior" => ColorSlot.Interior, "floor" => ColorSlot.Floor, "roof" => ColorSlot.Roof,
             "core" => ColorSlot.Core, "glass" => ColorSlot.Glass, "door" => ColorSlot.Door, "rail" => ColorSlot.Rail, "metal" => ColorSlot.Metal,
             "ceiling" => ColorSlot.Ceiling, "liftInterior" => ColorSlot.LiftInterior, "liftButton" => ColorSlot.LiftButton, "detailMetal" => ColorSlot.DetailMetal,
-            "grille" => ColorSlot.Grille, "detailDark" => ColorSlot.DetailDark, "frame" => ColorSlot.Frame, "foundationColor" => ColorSlot.Foundation, "plinth" => ColorSlot.Plinth, _ => ColorSlot.Dish,
+            "grille" => ColorSlot.Grille, "detailDark" => ColorSlot.DetailDark, "frame" => ColorSlot.Frame, "foundationColor" => ColorSlot.Foundation, "plinth" => ColorSlot.Plinth,
+            "groundWall" => ColorSlot.GroundWall, "band" => ColorSlot.Band, "cornice" => ColorSlot.Cornice, "cap" => ColorSlot.Cap, "capRim" => ColorSlot.CapRim, _ => ColorSlot.Dish,
         };
 
         static void Slider(StoreyEdit e, string label, double value, double min, double max, double step, Action<BuildingData, double> set)

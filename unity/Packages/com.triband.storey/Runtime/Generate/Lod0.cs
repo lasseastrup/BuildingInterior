@@ -95,6 +95,7 @@ namespace Triband.Storey.Generate
         internal readonly Facade.PanelOpt Panel = new Facade.PanelOpt();
         List<BridgeSpan>? bridges;   // the bridges that meet this building, looked up when a band first asks
         static readonly List<BridgeSpan> NoBridges = new List<BridgeSpan>();
+        static readonly List<(double, double)> NoRanges = new List<(double, double)>();   // read only
 
         /// <summary>The openings of a piece of wall: those of <paramref name="all"/> between lo and hi, in order (none on a party wall).</summary>
         internal List<Opening> Piece(List<Opening> all, bool party, double lo, double hi)
@@ -403,15 +404,17 @@ namespace Triband.Storey.Generate
                     var ops = Piece(all, party, pc.lo, pc.hi);
                     var wc = Geo.WallCtx(e.a, e.u, e.w, e.L);
                     op.Ctx(wc, party ? 1 + 8 * (pc.r!.pIdx + 1) : 1); gl.Ctx(wc, 1);
-                    Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : C.wall, C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? T * 0.45 : 0, rooms: rooms));
                     var stk = Derived.StyleAt(b, k);
+                    Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : Wall(stk, C, k == 0), C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? Facade.ShellRevealFrom(stk, false, OpeningKinds.Of(stk, false)) : 0, rooms: rooms,
+                        doorRevealFrom: shell ? Facade.ShellRevealFrom(stk, true, OpeningKinds.Of(stk, true)) : (double?)null, thresholdC: k == 0 && stk.doorRecess.HasValue ? C.foundation : (Swatch?)null));
                     Facade.Dress(op, gl, F, ops, y, C, shell, stk);
                     if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
                     if (!party && stk.bricks is double density && density > 0)
                     {
                         var (bs0, be0) = pm.Span(T, T);
                         Facade.Bricks(op, F, Math.Max(bs0, pc.lo), Math.Min(be0, pc.hi), y, h, k == 0 ? Math.Max(stk.plinthH ?? 0.45, stk.foundation.HasValue ? FoundationH(stk) : 0) : 0,
-                            stk.bands && k < N - 1 ? Band(stk, C).h : 0, ops, density, Facade.Seed(b.id, k, i, pc.lo), C.brick);
+                            Math.Max(Facade.BandAt(b, k) ? Band(stk, C).h : 0, Facade.CorniceUnder(b, k) ?? 0), ops, density, Facade.Seed(b.id, k, i, pc.lo),
+                            k == 0 && stk.groundWall != null ? C.groundWall.Shade(0.8) : C.brick);
                     }
                     if (!party) { op.Ctx(wc, 1); PieceStrips(op, k, F, m, pc, ops, y, h, C, rooms && !shell); }
                     var (cs, ce) = pm.Span(T / 2, T / 2);
@@ -421,7 +424,11 @@ namespace Triband.Storey.Generate
             }
         }
 
-        /// <summary>Floor bands and the ground-floor plinth along one facade piece (ends against a party wall are left open).</summary>
+        /// <summary>
+        /// Floor bands, the cornice at a tier's top and the ground-floor plinth along one facade piece (ends against a party
+        /// wall are left open). The cornice runs where nothing stands on the wall above: under the roof, or along a terrace
+        /// where a setback starts; elsewhere on that storey (where the setback's wall goes on up) the band stays.
+        /// </summary>
         /// <param name="rooms">The strips' backs over openings are the rooms' (<see cref="Facade.StripBacks"/>).</param>
         public void PieceStrips(MeshBuilder op, int k, Frame F, Miter m, Party.Piece pc, List<Opening> ops, double y, double h, Palette C, bool rooms = false)
         {
@@ -432,17 +439,31 @@ namespace Triband.Storey.Generate
                 pc.s > 0.02 ? Math.Max(r.Item1, pc.s) : c0 != null ? c0.Value.At(T) + 1e-4 : r.Item1,
                 pc.e < L - 0.02 ? Math.Min(r.Item2, pc.e) : c1 != null ? c1.Value.At(T) - 1e-4 : r.Item2);
             var st = Derived.StyleAt(b, k);
-            // a bare wall (docs/EDITOR.md §6.7) has no band or plinth; next to one, they end square at the corner
+            // a bare wall (docs/EDITOR.md §6.7) has no band, cornice or plinth; next to one, they end square at the corner
             int n = Derived.OutlineAt(b, k).Count;
             bool bare = Derived.EdgeStateAt(b, k, i) == EdgeState.Bare;
             bool sqS = !bare && Derived.EdgeStateAt(b, k, (i - 1 + n) % n) == EdgeState.Bare, sqE = !bare && Derived.EdgeStateAt(b, k, (i + 1) % n) == EdgeState.Bare;
-            if (st.bands && k < N - 1 && !bare)
+            // the cornice: along the parts of the edge nothing stands on (all of it under the roof; along a setback's terrace)
+            List<(double, double)>? cornice = null;
+            if (Facade.CorniceAt(b, k) && !bare)
             {
-                var (bh, bd, bc) = Band(st, C);
+                double ch = Facade.CorniceH(st.corniceH!.Value), cd = Facade.CorniceDepth(st), drop = Facade.CorniceDrop(b, k);
+                cornice = new List<(double, double)>();
+                if (k == N - 1) cornice.Add((-1e9, 1e9));
+                else foreach (var (s0, e0) in Geo.ExposedRanges(Derived.OutlineAt(b, k), Derived.OutlineAt(b, k + 1), i)) cornice.Add((s0 < 0.06 ? -1e9 : s0, e0 > L - 0.06 ? 1e9 : e0));
+                var span = new List<(double, double)> { Clip(m.Span(T, T + cd)) };
+                var rc = Geo.MinusRanges(Geo.MinusRanges(span, Geo.MinusRanges(span, cornice)), Decks(k + 1, F, T, T + cd) ?? NoRanges);
+                rc.RemoveAll(r => r.Item2 - r.Item1 <= 0.02);
+                if (rc.Count > 0) { Facade.StripPieces(op, F, m, rc, y + h - drop - ch, y + h - drop, T, T + cd, C.CorniceOf(st), C.CorniceOf(st), Skip.In, sqS, sqE); Facade.StripBacks(op, F, rc, ops, y, y + h - drop - ch, y + h - drop, T, C.CorniceOf(st), rooms); }
+            }
+            if (Facade.BandAt(b, k) && !bare)
+            {
+                var (bh, bd, bc) = Band(st, C, k == 0);
                 var under = new List<(double, double)>();
                 if (Derived.IsSetback(b, k + 1))
                     foreach (var (s0, e0) in Geo.ExposedRanges(Derived.OutlineAt(b, k), Derived.OutlineAt(b, k + 1), i, true))
                         under.Add((s0 < 0.06 ? -1e9 : s0, e0 > L - 0.06 ? 1e9 : e0));
+                if (cornice != null) under.AddRange(cornice);
                 var band = Geo.MinusRanges(new List<(double, double)> { Clip(m.Span(T, T + bd)) }, under);
                 // a bridge's deck at the floor above lies where the band's top would: the band stops at the deck's sides,
                 // and one deeper than the deck goes on beneath it
@@ -470,11 +491,12 @@ namespace Triband.Storey.Generate
                 }
                 if (pTop > fTop + 0.01 && !bare)
                 {
-                    var r = Clip(m.Span(T, T + 0.04));
+                    double pd = PlinthDepth(st);
+                    var r = Clip(m.Span(T, T + pd));
                     var widened = ops.ConvertAll(o => { if (!o.door) return o; var d = o.Clone(); d.u0 -= 0.08; d.u1 += 0.08; return d; });
-                    var pc0 = st.plinth != null ? new Swatch(C.style, ColorSlot.Plinth) : C.plinth;
+                    var pc0 = st.plinth != null ? new Swatch(C.style, ColorSlot.Plinth) : st.groundWall != null ? C.groundWall.Shade(0.72) : C.plinth;
                     var rp = Facade.SolidRanges(r.Item1, r.Item2, widened);
-                    Facade.StripPieces(op, F, m, rp, y + fTop, y + pTop, T, T + 0.04, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart, sqS, sqE);
+                    Facade.StripPieces(op, F, m, rp, y + fTop, y + pTop, T, T + pd, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart, sqS, sqE);
                     Facade.StripBacks(op, F, rp, ops, y, y + fTop, y + pTop, T, pc0, rooms);
                 }
             }
@@ -523,9 +545,22 @@ namespace Triband.Storey.Generate
             }
         }
 
-        /// <summary>The band under a storey's ceiling: height, how far it stands out (at least a centimetre, so it never lies on the wall), colour.</summary>
-        public static (double h, double depth, Swatch c) Band(FacadeStyle st, Palette C) =>
-            (Math.Max(0.05, st.bandH ?? 0.22), Math.Max(0.01, st.bandDepth ?? 0.06), st.bandWall ? C.wallBand : C.trim);
+        /// <summary>
+        /// The band under a storey's ceiling: height, how far it stands out (at least a centimetre, so it never lies on the
+        /// wall), colour: its own (<see cref="FacadeStyle.band"/>), or a shade of the wall (the ground storey's own wall colour
+        /// on the <paramref name="ground"/> storey) or the trim.
+        /// </summary>
+        public static (double h, double depth, Swatch c) Band(FacadeStyle st, Palette C, bool ground = false) =>
+            (Math.Max(0.05, st.bandH ?? 0.22), Math.Max(0.01, st.bandDepth ?? 0.06), st.band != null ? C.band : st.bandWall ? (ground ? Wall(st, C, true).Shade(0.72) : C.wallBand) : C.trim);
+
+        /// <summary>
+        /// A storey's wall colour: the walls', or on the <paramref name="ground"/> storey the style's own ground-floor colour
+        /// (<see cref="FacadeStyle.groundWall"/>) when it has one. Its plinth, band and brick patches are shades of it.
+        /// </summary>
+        public static Swatch Wall(FacadeStyle st, Palette C, bool ground) => ground && st.groundWall != null ? C.groundWall : C.wall;
+
+        /// <summary>How far the plinth stands out from the wall: at least a centimetre (null = 4 cm).</summary>
+        public static double PlinthDepth(FacadeStyle st) => Math.Max(0.01, Math.Min(1.5, st.plinthDepth ?? 0.04));
 
         /// <summary>How high the foundation shows above the ground.</summary>
         public static double FoundationH(FacadeStyle st) => Math.Max(0.02, st.foundationH ?? 0.2);
@@ -582,7 +617,10 @@ namespace Triband.Storey.Generate
         {
             if (Roofs.Draw(op, Roofs.Parts(site, b), C, Derived.StyleAt(b, N))) { WallTops(op, g, C); return; }   // hip, gable or shed (no roof access, no parapet)
             double y = Derived.RoofY(b), T = Dim.T_EXT; int n = g.Wp.Count, k0 = Derived.TierStart(b, N);
-            bool parapet = Derived.StyleAt(b, N).parapet;
+            var stN = Derived.StyleAt(b, N); bool parapet = stN.parapet;
+            // a cap on the roof's edge (RoofCap): a raised one takes the curb's place and lifts the parapet
+            var cap = RoofCap.Of(stN); double yp = y + (cap?.Lift ?? 0);
+            Swatch capC = C.CapOf(stN), rimC = C.CapRimOf(stN);
             for (int i = 0; i < n; i++)
             {
                 var e = Geo.EdgeInfo(g.Wp, i, g.ccw); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L);
@@ -595,12 +633,13 @@ namespace Triband.Storey.Generate
                 op.Ctx(Geo.WallCtx(e.a, e.u, e.w, e.L), 1);
                 void Edge(Func<(double, double), List<(double, double)>> ranges)
                 {
+                    if (cap is RoofCap c && !c.inset) Cap(op, F, m, ranges, c, y, C.roof, capC, rimC, parapet);
                     if (parapet)
                     {
-                        Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), y, y + 1.0, 0, T, C.wall, C.inner, Skip.Top | Skip.Bot);
-                        Facade.StripPieces(op, F, m, ranges(m.Span(-0.04, T + 0.05)), y + 1.0, y + 1.1, -0.04, T + 0.05, C.trim, null);
+                        Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), yp, yp + 1.0, 0, T, C.wall, C.inner, Skip.Top | Skip.Bot);
+                        Facade.StripPieces(op, F, m, ranges(m.Span(-0.04, T + 0.05)), yp + 1.0, yp + 1.1, -0.04, T + 0.05, C.trim, null);
                     }
-                    else Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), y, y + 0.3, 0, T, C.trim, C.trim, Skip.Bot);
+                    else if (cap?.raised != true) Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), y, y + 0.3, 0, T, C.trim, C.trim, Skip.Bot);
                 }
                 Edge(R);
                 // the parapet stops where a core stands flush against the wall, whose bulkhead (LOD0's) takes the wall up. A
@@ -616,6 +655,107 @@ namespace Triband.Storey.Generate
                 if (sg != null) foreach (var (cs, ce) in R(m.Span(T / 2, T / 2))) Facade.PushSeg(sg, F, cs, ce, T / 2, T / 2);
             }
             foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && Courtyards.HoleAt(b, v, N)) Courtyards.RoofEdge(op, sg, b, v, C);
+            if (cap is RoofCap ci && ci.inset) InsetCap(op, ci, y, stN.capStrip > 0 ? capC : C.roof, capC);
+        }
+
+        /// <summary>
+        /// A raised cap or a fascia along one edge of the roof (<see cref="RoofCap"/>), over <paramref name="ranges"/> as the
+        /// parapet: its sides in the cap's colour, its top the cap's colour for the strip's width and the roof's in from
+        /// there (none of it under a parapet), and the underside of its overhang the rim's.
+        /// </summary>
+        static void Cap(MeshBuilder op, Frame F, Miter m, Func<(double, double), List<(double, double)>> ranges, RoofCap c, double y, Swatch roofC, Swatch capC, Swatch rimC, bool parapet)
+        {
+            double T = Dim.T_EXT;
+            var rs = ranges(m.Span(c.wIn, c.wOut));
+            double y0 = c.raised ? y : y - c.h, y1 = c.raised ? y + c.h : y;
+            // a fascia's inner side is against the wall and under the curb
+            Facade.StripPieces(op, F, m, rs, y0, y1, c.wIn, c.wOut, capC, capC, Skip.Top | Skip.Bot | (c.fascia ? Skip.In : Skip.None));
+            void Top(double wa, double wb, Swatch col)
+            {
+                if (parapet && c.raised) { Facade.StripFace(op, F, m, rs, c.wIn, c.wOut, y1, wa, Math.Min(wb, 0), true, col); Facade.StripFace(op, F, m, rs, c.wIn, c.wOut, y1, Math.Max(wa, T), wb, true, col); }
+                else Facade.StripFace(op, F, m, rs, c.wIn, c.wOut, y1, wa, wb, true, col);
+            }
+            Top(c.wStrip, c.wOut, capC);
+            Top(c.wIn, c.wStrip, roofC);
+            // the overhang's underside: where it rests on the wall and the roof there is none
+            Facade.StripFace(op, F, m, rs, c.wIn, c.wOut, y0, Math.Max(c.wIn, T), c.wOut, false, rimC);
+        }
+
+        /// <summary>
+        /// An inset cap (<see cref="RoofCap.inset"/>): the region <see cref="InsetCapRegion"/> gives, standing on the roof,
+        /// its sides in the cap's colour and its top <paramref name="topC"/>.
+        /// </summary>
+        void InsetCap(MeshBuilder op, RoofCap c, double y, Swatch topC, Swatch capC)
+        {
+            if (op.ShapeOnly) return;
+            op.Ctx(null, 0);
+            double y1 = y + c.h;
+            foreach (var (ring, holes) in InsetCapRegion(c))
+            {
+                var tris = Triangulate.Shape(ring, holes);
+                var pts = new List<P3>(); foreach (var p in ring) pts.Add(new P3(p.x, y1, p.z)); foreach (var hl in holes) foreach (var p in hl) pts.Add(new P3(p.x, y1, p.z));
+                op.PolyTris(pts, tris, new P3(0, 1, 0), topC);
+                foreach (var (a, e, nx, nz) in InsetCapSides(ring, holes))
+                    op.Quad(new P3(a.x, y, a.z), new P3(e.x, y, e.z), new P3(e.x, y1, e.z), new P3(a.x, y1, a.z), new P3(nx, 0, nz), capC);
+            }
+        }
+
+        /// <summary>The sides of an inset cap's region, each with its normal out of the region (into a hole for a hole's).</summary>
+        public static IEnumerable<(Vec2 a, Vec2 e, double nx, double nz)> InsetCapSides(List<Vec2> ring, List<List<Vec2>> holes)
+        {
+            for (int r = -1; r < holes.Count; r++)
+            {
+                var loop = r < 0 ? ring : holes[r];
+                for (int i = 0; i < loop.Count; i++)
+                {
+                    var a = loop[i]; var e = loop[(i + 1) % loop.Count]; double dx = e.x - a.x, dz = e.z - a.z, L = Geo.Hypot(dx, dz); if (L < 1e-5) continue;
+                    double nx = dz / L, nz = -dx / L;
+                    // out of the region: off the outer ring's inside, into a hole
+                    bool inLoop = Geo.Pip(loop, (a.x + e.x) / 2 + nx * 1e-3, (a.z + e.z) / 2 + nz * 1e-3);
+                    if (inLoop != (r >= 0)) { nx = -nx; nz = -nz; }
+                    yield return (a, e, nx, nz);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Where an inset cap stands, in site space: the top outline offset in to the cap's outer side, less the outline offset
+        /// in to its inner side (Clipper, mitred), less where the parapet stops along the edge (party walls, bulkheads flush
+        /// with the wall), round every bulkhead and stair opening on the roof, and round courtyards and atria opening through
+        /// it. Each polygon with its holes.
+        /// </summary>
+        public List<(List<Vec2> ring, List<List<Vec2>> holes)> InsetCapRegion(RoofCap c)
+        {
+            var g = At(N); double T = Dim.T_EXT, y = Derived.RoofY(b); int k0 = Derived.TierStart(b, N);
+            var fp = Derived.OutlineAt(b, N);
+            Clipper2Lib.PathsD Off(List<Vec2> poly, double d)
+            {
+                var o = new Clipper2Lib.PathsD();
+                foreach (var r in Courtyards.Offset(Courtyards.World(b, poly), d)) o.Add(Path(r));
+                return o;
+            }
+            var ring = Clipper2Lib.Clipper.Difference(Off(fp, c.wOut), Off(fp, c.wIn), Clipper2Lib.FillRule.NonZero, 6);
+            var cut = new Clipper2Lib.PathsD();
+            for (int i = 0; i < g.Wp.Count; i++)
+            {
+                var e = Geo.EdgeInfo(g.Wp, i, g.ccw);
+                var skips = new List<(double, double)>(Party.Skips(site, b, k0, i, y)); skips.AddRange(CoreRoofSkips(i));
+                foreach (var (s0, e0) in skips) cut.Add(Path(new List<Vec2> { e.F.At2(s0, c.wIn - 1), e.F.At2(e0, c.wIn - 1), e.F.At2(e0, T + 1), e.F.At2(s0, T + 1) }));
+            }
+            foreach (var s in b.shafts)
+            {
+                if (!Cores.ShaftRoof(b, s) && !Cores.StairHoleAt(b, s, N)) continue;
+                var f = Cores.FrameOf(b, s);
+                double hx = s.type == CoreType.Stairs ? 1.6 : s.type == CoreType.Flight ? Dim.FLIGHT_W / 2 + 0.1 : 1.5, hz = s.type == CoreType.Stairs ? 2.9 : s.type == CoreType.Flight ? Dim.FLIGHT_D / 2 + 0.1 : 1.5;
+                var box = new List<Vec2> { f.At2(-hx, -hz), f.At2(hx, -hz), f.At2(hx, hz), f.At2(-hx, hz) };
+                cut.Add(Path(box));   // the core's frame is in site space
+            }
+            foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, N)) cut.AddRange(Off(v.shape, T + 0.05));
+            // each the same way round: under the non-zero rule a ring the other way would cancel one it overlaps
+            foreach (var p in cut) if (!Clipper2Lib.Clipper.IsPositive(p)) p.Reverse();
+            var tree = new Clipper2Lib.PolyTreeD();
+            Clipper2Lib.Clipper.BooleanOp(Clipper2Lib.ClipType.Difference, ring, cut, tree, Clipper2Lib.FillRule.NonZero, 6);
+            return Rings(tree);
         }
 
         /// <summary>

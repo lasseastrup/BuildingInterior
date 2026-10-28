@@ -13,8 +13,26 @@ namespace Triband.Storey.Generate
         public double[] spec = { -1, 0, 1, 0 };
         /// <summary>Storey height, storeys with a band, run height (1e9 = not the top), parapet 0 none / 1 wall / 2 curb.</summary>
         public double[] run = { 3, 0, 1e9, 0 };
-        /// <summary>The band: height (0 = the prototype's 0.22 m), a shade of the wall (1) or the trim (0), that shade. GPU texel 2. Storey's own.</summary>
+        /// <summary>
+        /// The band: height (0 = the prototype's 0.22 m), a shade of the wall (1) or the trim (0), that shade, and its own
+        /// colour's slot (<see cref="ColorSlot.Band"/>; 0 = none). GPU texel 2. Storey's own.
+        /// </summary>
         public double[] band = { 0, 0, 0, 0 };
+        /// <summary>
+        /// The slot the run's walls take their colour from: 0 for the walls', <see cref="ColorSlot.GroundWall"/> for a ground
+        /// storey with its own (docs/EDITOR.md §6.7). GPU texel 1's y. Storey's own.
+        /// </summary>
+        public int wallSlot;
+        /// <summary>
+        /// A cornice round the top of the run's storeys (a tier's top storey, a run of its own): its height (0 = none) and its
+        /// colour's slot (the trim's or <see cref="ColorSlot.Cornice"/>). GPU texel 1's z and w. Storey's own.
+        /// </summary>
+        public double corniceH; public int corniceSlot;
+        /// <summary>
+        /// A raised roof cap on the top run's parapet zone (<see cref="RoofCap.raised"/>, run's fourth number 3, or 4 with a
+        /// parapet on it): its height and colour's slot (the trim's or <see cref="ColorSlot.Cap"/>). GPU texel 3. Storey's own.
+        /// </summary>
+        public double[] cap = { 0, 0, 0, 0 };
         /// <summary>The 24 floats as the table stores them (six texels: wall, trim, glass, roof, spec, run), colours resolved to linear RGB.</summary>
         public double[] Texels(ColorResolver colors)
         {
@@ -24,13 +42,14 @@ namespace Triband.Storey.Generate
 
         /// <summary>
         /// The 24 floats the GPU table stores (docs/COLOURS.md §3.5): texel 0 is (colour row, wall, trim and glass
-        /// shades), texel 1 (roof shade), texels 2 and 3 are unused, then spec and run as in <see cref="Texels"/>.
+        /// shades), texel 1 (roof shade, the walls' slot, the cornice's height and slot), texel 2 the band, texel 3 the roof cap,
+        /// then spec and run as in <see cref="Texels"/>.
         /// The facade shader reads wall, trim, glass and roof from <paramref name="colorRow"/>, the row of the swatches' style.
         /// </summary>
         public double[] GpuTexels(int colorRow)
         {
             Check();
-            return new[] { colorRow, wall.tone, trim.tone, glass.tone, roof.tone, 0, 0, 0, band[0], band[1], band[2], band[3], 0, 0, 0, 0, spec[0], spec[1], spec[2], spec[3], run[0], run[1], run[2], run[3] };
+            return new[] { colorRow, wall.tone, trim.tone, glass.tone, roof.tone, wallSlot, corniceH, corniceSlot, band[0], band[1], band[2], band[3], cap[0], cap[1], cap[2], cap[3], spec[0], spec[1], spec[2], spec[3], run[0], run[1], run[2], run[3] };
         }
 
         /// <summary>
@@ -41,8 +60,8 @@ namespace Triband.Storey.Generate
         {
             Check();
             into[0] = colorRow; into[1] = (float)wall.tone; into[2] = (float)trim.tone; into[3] = (float)glass.tone;
-            into[4] = (float)roof.tone; into[5] = 0; into[6] = 0; into[7] = 0;
-            for (int i = 0; i < 4; i++) { into[8 + i] = (float)band[i]; into[12 + i] = 0; into[16 + i] = (float)spec[i]; into[20 + i] = (float)run[i]; }
+            into[4] = (float)roof.tone; into[5] = wallSlot; into[6] = (float)corniceH; into[7] = corniceSlot;
+            for (int i = 0; i < 4; i++) { into[8 + i] = (float)band[i]; into[12 + i] = (float)cap[i]; into[16 + i] = (float)spec[i]; into[20 + i] = (float)run[i]; }
         }
 
         void Check()
@@ -125,7 +144,10 @@ namespace Triband.Storey.Generate
         public static Lod2Mesh Build(Site site, BuildingData b)
         {
             double T = Dim.T_EXT; int N = b.floors.Count; double ox = b.pos.x, oz = b.pos.z, top = Derived.RoofY(b);
-            var stTop = Derived.StyleAt(b, N); bool pitched = Roofs.IsPitched(b); double yTop = pitched ? top : top + (stTop.parapet ? 1.1 : 0.3);
+            var stTop = Derived.StyleAt(b, N); bool pitched = Roofs.IsPitched(b);
+            // a raised roof cap takes the curb's place and lifts the parapet (RoofCap); its overhang is too small to show here
+            var cap = pitched ? null : RoofCap.Of(stTop); double lift = cap?.Lift ?? 0;
+            double yTop = pitched ? top : top + lift + (stTop.parapet ? 1.1 : lift > 0 ? 0 : 0.3);
             // under a pitched roof, the massing's lid: LOD1's roof slab, just below the roof where it sits on the walls. It
             // shows only where the roof stops short of the walls (pulled back behind a neighbour's wall along an edge mostly
             // shared, past the neighbour's end), which a back face culled would leave open
@@ -230,15 +252,25 @@ namespace Triband.Storey.Generate
                 for (int k = t.k0; k < t.k1; k++)
                 {
                     double h = Derived.FloorH(b, k); bool gnd = k == 0;
-                    if (runs.Count > 0 && !runs[runs.Count - 1].g && !gnd && Math.Abs(runs[runs.Count - 1].h - h) < 1e-6) { var r = runs[runs.Count - 1]; r.k1 = k + 1; runs[runs.Count - 1] = r; }
+                    // a tier's top storey under a cornice is a run of its own: its windows stay under the cornice, which it paints
+                    if (runs.Count > 0 && !runs[runs.Count - 1].g && !gnd && Math.Abs(runs[runs.Count - 1].h - h) < 1e-6 && !Facade.CorniceAt(b, k)) { var r = runs[runs.Count - 1]; r.k1 = k + 1; runs[runs.Count - 1] = r; }
                     else runs.Add((k, k + 1, h, gnd, 0, false));
                 }
                 for (int ri = 0; ri < runs.Count; ri++)
                 {
                     var r = runs[ri]; double H = Derived.FloorBase(b, r.k1) - Derived.FloorBase(b, r.k0); bool topRun = last && ri == runs.Count - 1;
-                    var ws = r.g ? Facade.GroundSpec(st, r.h) : Facade.WindowSpec(st.windows, r.h, st);
-                    r.slot = Row(C, SpecOf(ws), new[] { r.h, st.bands ? Math.Max(0, Math.Min(r.k1, N - 1) - r.k0) : 0, topRun && !pitched ? H : 1e9, topRun ? (st.parapet ? 1 : 2) : 0 });
-                    if (st.bandH.HasValue || st.bandWall) M.Rows[r.slot].band = new[] { Lod0.Shared.Band(st, C).h, st.bandWall ? 1 : 0, C.wallBand.tone, 0 };
+                    double? under = Facade.CorniceUnder(b, r.k1 - 1); bool cn = under.HasValue;
+                    var ws = r.g ? Facade.GroundSpec(st, r.h, under) : Facade.WindowSpec(st.windows, r.h, st, cornice: under);
+                    // the storeys with a band, from the run's first (Facade.BandAt: all but the building's top, or the ground's
+                    // alone); a cornice's storey has none
+                    int banded = 0; for (int k = r.k0; k < r.k1 && Facade.BandAt(b, k) && !(cn && k == r.k1 - 1); k++) banded++;
+                    r.slot = Row(C, SpecOf(ws), new[] { r.h, banded, topRun && !pitched ? H : 1e9, topRun ? (lift > 0 ? (st.parapet ? 4 : 3) : st.parapet ? 1 : 2) : 0 });
+                    var row = M.Rows[r.slot];
+                    if (topRun && lift > 0) row.cap = new[] { lift, (double)(int)C.CapOf(st).slot, 0, 0 };
+                    if (st.bandH.HasValue || st.bandWall || st.band != null) row.band = new[] { Lod0.Shared.Band(st, C).h, st.bandWall ? 1 : 0, C.wallBand.tone, st.band != null ? (int)ColorSlot.Band : 0 };
+                    if (r.g && st.groundWall != null) row.wallSlot = (int)ColorSlot.GroundWall;
+                    // painted from its foot to the storey's top: under a pitched roof the eave's soffit covers the rest
+                    if (cn) { row.corniceH = under!.Value; row.corniceSlot = (int)C.CorniceOf(st).slot; }
                     r.top = topRun && !pitched; runs[ri] = r;
                 }
                 for (int i = 0; i < n; i++)
@@ -305,6 +337,19 @@ namespace Triband.Storey.Generate
                     var rings = new List<List<Vec2>> { fp };
                     foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, N)) rings.Add(v.shape);
                     Flat(rings, top, 2, false);
+                    // an inset cap: its sides in the trim's colour, its top the trim's with a strip, else the roof's
+                    if (cap is RoofCap ci && ci.inset)
+                    {
+                        double y1 = top + ci.h;
+                        foreach (var (ring, holes) in L0.InsetCapRegion(ci))
+                        {
+                            List<Vec2> Local(List<Vec2> r) { var l = new List<Vec2>(r.Count); foreach (var q in r) l.Add(new Vec2(q.x - ox, q.z - oz)); return l; }
+                            var loc = new List<List<Vec2>> { Local(ring) }; foreach (var hl in holes) loc.Add(Local(hl));
+                            Flat(loc, y1, stTop.capStrip > 0 ? 3 : 2, false);
+                            foreach (var (a, z, nx, nz) in Lod0.Shared.InsetCapSides(ring, holes))
+                                Quad(new P3(a.x, top, a.z), new P3(z.x, top, z.z), new P3(z.x, y1, z.z), new P3(a.x, y1, a.z), new P3(nx, 0, nz), 0, 3);
+                        }
+                    }
                 }
                 else if (last)
                 {

@@ -39,6 +39,18 @@ namespace Triband.Storey.Generate
         public readonly Swatch slabSide, trimShade, liftButton, detailMetal, grille, detailDark, dish;
         /// <summary>Storey's own: frames and glazing bars, the foundation, the wall's band shade and its brick patches.</summary>
         public readonly Swatch frame, foundation, wallBand, brick;
+        /// <summary>
+        /// Storey's own colours a style may leave out (docs/EDITOR.md §6.7): the ground storey's wall, the bands' and the
+        /// cornice's. Drawn with only where the style sets them, so a style without them builds the same vertices as before.
+        /// </summary>
+        public readonly Swatch groundWall, band, cornice;
+
+        /// <summary>A style's cornice colour: its own, or the trim.</summary>
+        public Swatch CorniceOf(FacadeStyle st) => st.cornice != null ? cornice : trim;
+
+        /// <summary>A style's roof cap colour (its own, or the trim), and its overhang's underside (its own, or the cap's shaded as a soffit is).</summary>
+        public Swatch CapOf(FacadeStyle st) => new Swatch(style, st.cap != null ? ColorSlot.Cap : ColorSlot.Trim);
+        public Swatch CapRimOf(FacadeStyle st) => st.capRim != null ? new Swatch(style, ColorSlot.CapRim) : CapOf(st).Shade(0.8);
 
         public Palette(StyleRef s)
         {
@@ -52,6 +64,7 @@ namespace Triband.Storey.Generate
             slabSide = W(ColorSlot.Core, 0.85); trimShade = W(ColorSlot.Trim, 0.8); liftButton = W(ColorSlot.LiftButton);
             detailMetal = W(ColorSlot.DetailMetal); grille = W(ColorSlot.Grille); detailDark = W(ColorSlot.DetailDark); dish = W(ColorSlot.Dish);
             frame = W(ColorSlot.Frame); foundation = W(ColorSlot.Foundation); wallBand = W(ColorSlot.Wall, 0.72); brick = W(ColorSlot.Wall, 0.8);
+            groundWall = W(ColorSlot.GroundWall); band = W(ColorSlot.Band); cornice = W(ColorSlot.Cornice);
         }
     }
 }

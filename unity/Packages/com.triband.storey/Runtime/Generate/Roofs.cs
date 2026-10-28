@@ -93,6 +93,23 @@ namespace Triband.Storey.Generate
         static double Clamp(double v, double a, double c) => Math.Max(a, Math.Min(c, v));
 
         /// <summary>
+        /// How far under the wall's top a pitched roof's eave soffit hangs (metres; 0 with no eave), as <see cref="Make"/>
+        /// puts it: the eave's drop at its slope, and the fascia's 15 cm. A cornice under the roof stops at it
+        /// (<see cref="Facade.CorniceDrop"/>).
+        /// </summary>
+        public static double SoffitDrop(RoofType type, double? pitch, double? eave)
+        {
+            bool mans = type == RoofType.Mansard;
+            double slope = Math.Tan(Clamp(pitch ?? (type == RoofType.Shed ? 15 : mans ? 20 : 30), 5, 60) * Math.PI / 180), e = Clamp(eave ?? 0.35, 0, 1.2);
+            double eaveSlope = mans ? Math.Tan(MansardPitch * Math.PI / 180) : slope;
+            if (mans) e = Math.Min(e, 0.2);
+            return e < 0.05 ? 0 : e * eaveSlope + 0.15;
+        }
+
+        /// <summary>The terrace roof's eave (<see cref="MakeTerraceRoof"/>), metres.</summary>
+        public const double TerraceEave = 0.3;
+
+        /// <summary>
         /// Roof parts of <paramref name="raw"/> (building-local) sitting on wall tops at <paramref name="top"/>;
         /// <paramref name="cut"/> is a world-space multipolygon the roof is cut away from (rings as x,z pairs).
         /// </summary>
@@ -543,7 +560,7 @@ namespace Triband.Storey.Generate
         {
             var tr = b.floors[k].terraceRoof; if (tr == null || !Derived.IsSetback(b, k)) return null;
             int k0 = Derived.TierStart(b, k - 1); var raw = Derived.OutlineAt(b, k - 1); var up = Derived.OutlineAt(b, k);
-            double T = Dim.T_EXT, e = 0.3, ox = b.pos.x, oz = b.pos.z;
+            double T = Dim.T_EXT, e = TerraceEave, ox = b.pos.x, oz = b.pos.z;
             var party = PartyKinds(site, b, k0, raw);
             bool uccw = Geo.Area2(up) > 0; int n = up.Count;
             var U = new List<double[]>(n); foreach (var p in up) U.Add(new[] { p.x + ox, p.z + oz });

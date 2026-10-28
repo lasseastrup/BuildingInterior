@@ -269,6 +269,19 @@ namespace Triband.Storey
         public string? frame, foundationColor;
         /// <summary>The plinth's own colour; null = a shade of the wall, as the prototype has it.</summary>
         public string? plinth;
+        /// <summary>
+        /// The ground storey's wall colour; null = the walls' (docs/EDITOR.md §6.7). Its plinth, band shade and brick patches
+        /// follow it. Storey's own (the old BuildingGenerator's ground-floor wall colour).
+        /// </summary>
+        public string? groundWall;
+        /// <summary>The floor bands' own colour; null = the trim, or a shade of the wall with <see cref="bandWall"/>. Storey's own.</summary>
+        public string? band;
+        /// <summary>The cornice's own colour (<see cref="corniceH"/>); null = the trim. Storey's own.</summary>
+        public string? cornice;
+        /// <summary>The roof cap's colour (<see cref="capH"/>): its sides and strip; null = the trim. Storey's own.</summary>
+        public string? cap;
+        /// <summary>The underside of the roof cap's overhang; null = the cap's colour, shaded. Storey's own.</summary>
+        public string? capRim;
         public WindowType windows = WindowType.Punched;
         public double winW = 1.2;
         public double bay = 2.6;
@@ -294,6 +307,14 @@ namespace Triband.Storey
         /// <summary>The band under each storey's ceiling: height (null = 0.22 m), how far it stands out (null = 0.06 m), and whether it is a shade of the wall rather than the trim.</summary>
         public double? bandH, bandDepth;
         public bool bandWall;
+        /// <summary>Only the band over the ground floor: the storeys above have none (docs/EDITOR.md §6.7). Storey's own.</summary>
+        public bool bandGround;
+        /// <summary>
+        /// A cornice round the top of each tier's walls, under its roof or terrace (docs/EDITOR.md §6.7): its height (null =
+        /// none) and how far it stands out (null = 0.1 m). It takes the band's place on that storey, whose windows stay under
+        /// it. Storey's own (the old BuildingGenerator's top strip).
+        /// </summary>
+        public double? corniceH, corniceDepth;
         /// <summary>
         /// An artist-made window and street door (<see cref="Generate.OpeningKinds"/>), by id; null = the generator's own. The
         /// style's one window and one door: a set (<see cref="windowSet"/>, <see cref="doorSet"/>) takes their place.
@@ -316,8 +337,19 @@ namespace Triband.Storey
         /// sill of its <see cref="windows"/> type (<see cref="Generate.Facade.SillOf"/>). Other windows take their type's.
         /// </summary>
         public double? sillH;
+        /// <summary>
+        /// How deep windows (<see cref="recess"/>) and street doors (<see cref="doorRecess"/>) are set into the wall, in metres
+        /// from its face (docs/EDITOR.md §6.7): the generator's pane or door panel goes that deep (its frame and bars with it), a
+        /// shell storey's reveal as deep, and an artist's window or door is pushed back that far (its wall face to the
+        /// recess's back). A recessed street door's threshold is in the foundation colour. Null = as before: the generator's
+        /// at 16.5 cm (<see cref="Generate.OpeningKinds.ShellReveal"/>), an artist's at the wall's face. Storey's own (the old
+        /// BuildingGenerator's window and door insets).
+        /// </summary>
+        public double? recess, doorRecess;
         /// <summary>The ground floor's plinth height; null = 0.45 m.</summary>
         public double? plinthH;
+        /// <summary>How far the plinth stands out from the wall, in metres; null = 0.04 m. Storey's own.</summary>
+        public double? plinthDepth;
         /// <summary>A foundation along the foot of the ground floor: how deep it goes below ground (null = none), and how high it shows (null = 0.2 m).</summary>
         public double? foundation, foundationH;
         /// <summary>How far the foundation stands out from the wall, in metres; null = 0.08 m.</summary>
@@ -329,6 +361,13 @@ namespace Triband.Storey
         public double? mansard;
         /// <summary>Dormers along every eave of a pitched roof, this far apart (metres, centre to centre); null = none. Storey's own.</summary>
         public double? dormers;
+        /// <summary>
+        /// A cap on a flat roof's edge (docs/EDITOR.md §6.7; the old BuildingGenerator's roof insert): its height (null = none;
+        /// above 0 it stands up from the roof, below 0 it hangs from the roof's edge as a fascia), how far its outer side is
+        /// in from the wall's face (null = 0; below 0 it overhangs the wall), and the width of the strip round its top in its
+        /// colour (null = none: its top is the roof's colour). Storey's own.
+        /// </summary>
+        public double? capH, capDepth, capStrip;
 
         /// <summary>Densities for details placed by rule, as the prototype stores them (percentages); null = the defaults.</summary>
         public DetailRules? details;
