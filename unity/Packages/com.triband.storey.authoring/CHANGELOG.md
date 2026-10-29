@@ -108,6 +108,7 @@
 - No keyboard shortcuts: the tool modes, Isolate, floor stepping, turning and removing are buttons (**Turn 90°** for placing stairs and lifts, **Finish wall** for a wall chain).
 
 ### Fixed
+- Unchecking **Own windows** under the Facade tab's ground floor threw a NullReferenceException (`StoreySiteEditor.SetRows`): the edit lets go of the ground floor's list at once, and the rows were drawn for it from the box's state before the click. They are drawn as the style is now, and `SetRows` draws nothing for a list there isn't.
 - A copied Window or Door asset (Ctrl+D, or its file copied in) kept its original's id, so the two were one window: every style that picked either showed whichever loaded last. A copy now gets an id of its own once it's imported, and the original keeps its id, so the styles that picked it still show it (docs/EDITOR.md §6.9). A new window or door takes its asset's GUID as its id; the ids of those made before are kept. Two that already share an id are split when the editor loads, and the Console says which got its own (`StoreyAssetIds`).
 - No more console log for every colour matched to the palette while editing (the matching itself is unchanged).
 - Making a storey shorter in the Interior tab still flashed its ceiling for a frame. The rebuilt storey was drawn with the floor clip from the frame before. The site now asks the tool for its view when it builds (`StoreySite.ViewSource`), so the clip and the meshes come from the same layout.

@@ -1193,7 +1193,8 @@ namespace Triband.Storey.Editor
         /// </summary>
         void SetRows(StoreyEdit e, int k0, FacadeStyle st, SetOf which, string label)
         {
-            var set = WindowSets.Shown(st, which)!;
+            // none: the ground floor follows the floors above's (its own may have gone earlier in this pass of the inspector)
+            if (!(WindowSets.Shown(st, which) is { } set)) return;
             bool door = which == SetOf.Doors, many = set.Count > 1;
             var kinds = StoreyOpenings.All().Where(o => o.door == door).ToList();
             var names = new List<GUIContent> { new GUIContent("Built-in") };
@@ -1265,7 +1266,8 @@ namespace Triband.Storey.Editor
             bool own = st.groundSet is { Count: > 0 };
             bool x = EditorGUILayout.Toggle(new GUIContent("Own windows", "The ground floor's openings take windows of their own, not the floors above's"), own);
             if (x != own) e.ApplyTo(x ? "Ground floor windows of its own" : "Ground floor windows as above", bb => { var s = Styles.Edited(bb, 0); if (x) WindowSets.Own(s, SetOf.Ground); else WindowSets.FollowAbove(s); return true; });
-            if (own) SetRows(e, 0, st, SetOf.Ground, "Ground window");
+            // as the style is now: the edit above changes it in place, so a list just let go of isn't there to draw
+            if (st.groundSet is { Count: > 0 }) SetRows(e, 0, st, SetOf.Ground, "Ground window");
         }
 
         static Vec2 Near()
