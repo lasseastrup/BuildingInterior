@@ -24,7 +24,9 @@ namespace Triband.Storey.Tests
                 if (!Sites.TryGetValue(file, out var s))
                 {
                     var doc = PrototypeJson.Read(Fixtures.Text(file)).Document;
-                    Sites[file] = s = (new Site(doc.buildings), doc);
+                    // the prototype keeps the windows a roof over a terrace comes up against: so does the port, for its census
+                    // (Storey leaves them out, TerraceRoofWindowTests)
+                    Sites[file] = s = (new Site(doc.buildings) { keepUnderTerraceRoofs = true }, doc);
                 }
                 return s;
             }

@@ -180,9 +180,15 @@ namespace Triband.Storey.Generate
             int k0 = Derived.TierStart(b, k); var fp = Derived.OutlineAt(b, k); int n = fp.Count; double h = Derived.FloorH(b, k);
             var st = Derived.StyleAt(b, k); var R = Rules(st);
             bool OnParty(int i, double u) { foreach (var r in Party.Ranges(site, b, k0, i)) if (u > r.s - 0.3 && u < r.e + 0.3) return true; return false; }
+            // none on the wall where the roof over the terrace below comes up to it (Roofs.TerraceRoofAt): it would stand in the
+            // roof, as a window would. Along edge i from u0 to u1, its foot lo above the floor
+            double foot = Derived.FloorBase(b, k) - Roofs.TerraceRoofClear; bool roofed = Roofs.TerraceRoofReach(site, b, k) > foot;
+            bool RoofOver(int i, double u0, double u1, double lo) => roofed && Roofs.TerraceRoofAt(site, b, k, i, u0, u1) > foot + lo;
+            bool UnderRoof(Item d) => roofed && d.kind.anchor != Anchor.Tier
+                && (d.Spans ? RoofOver(d.i, d.u0, d.u1, Rise(d, h).lo) : RoofOver(d.i, d.u - d.Width / 2, d.u + d.Width / 2, Rise(d, h).lo));
             void Push(Item d)
             {
-                if (OnParty(d.i, d.u)) return;
+                if (OnParty(d.i, d.u) || UnderRoof(d)) return;
                 if (d.man == null) foreach (var m in out_) if (m.man != null && m.i == d.i && Math.Abs(m.u - d.u) < (m.Width + d.Width) / 2 + 0.15) return;   // rules keep clear of hand-placed items
                 out_.Add(d);
             }
@@ -357,7 +363,7 @@ namespace Triband.Storey.Generate
                         int cell = order[c];
                         double uc = cu0 + (cell % cols + R()) * W / cols, vc = cv0 + (cell / cols + R()) * H / rows;
                         double a0 = uc - w / 2, a1 = uc + w / 2, b0 = vc - hh / 2, b1 = vc + hh / 2;
-                        if (!Clear(a0, a1, b0, b1, gap, i, ops)) continue;
+                        if (!Clear(a0, a1, b0, b1, gap, i, ops) || RoofOver(i, a0, a1, b0)) continue;
                         bool onParty = false; foreach (var r in party) if (a0 < r.e + 0.3 && a1 > r.s - 0.3) { onParty = true; break; }
                         if (onParty) break;
                         var it = Mk(dk, i, uc, null); it.y = vc - hh / 2 - dk.bottom; out_.Add(it);
@@ -455,7 +461,10 @@ namespace Triband.Storey.Generate
                     {
                         double x = Hash01(b.id, "corner", ka, i, j * 32 + (int)Math.Min(31, Math.Round(step * 10)));
                         if (x < from || x >= from + p) continue;
-                        var it = Mk(dk, i, 0, null); it.corner = true; it.y = y0 + off + (j + 0.5) * step - yk - dk.bottom - dk.h / 2;
+                        // its foot above the floor; none in the roof over a terrace below, by either wall as far as it reaches round the corner
+                        double lo = y0 + off + (j + 0.5) * step - yk - dk.h / 2, arm = (dk.w > 0 ? dk.w : 1) * 0.71;
+                        if (RoofOver(i, 0, arm, lo) || RoofOver(ip, la - arm, la, lo)) continue;
+                        var it = Mk(dk, i, 0, null); it.corner = true; it.y = lo - dk.bottom;
                         if (dk.cornerBend && Math.Abs(half - 45) > 1e-6)
                         {
                             // made for 90°: each half turned onto its own wall, which leaves the corner at half its angle from the

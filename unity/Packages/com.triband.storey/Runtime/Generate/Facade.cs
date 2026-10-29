@@ -359,6 +359,15 @@ namespace Triband.Storey.Generate
                 // fixed bays on the wall's outer face, from the outline (not the caller's span), so every caller has them alike
                 var (oS, oE) = st.bayFit == BayFit.Fixed && i < Derived.OutlineAt(b, k).Count ? OuterFace(b, k, i) : (uS, uE);
                 Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, oS, oE, shaftHere, cornice, shell);
+                // none the roof over the terrace below comes up to (Roofs.TerraceRoofAt): it would cover the window's foot
+                double foot = Derived.FloorBase(b, k) - Roofs.TerraceRoofClear;
+                if (Roofs.TerraceRoofReach(site, b, k) > foot)
+                {
+                    int kept = 0;
+                    for (int j = 0; j < ops.Count; j++)
+                        if (ops[j].door || !(Roofs.TerraceRoofAt(site, b, k, i, ops[j].Left, ops[j].Right) > foot + ops[j].Bottom)) ops[kept++] = ops[j];
+                    ops.RemoveRange(kept, ops.Count - kept);
+                }
             }
             ops.Sort((p, q) => p.u0.CompareTo(q.u0));
             return ops;

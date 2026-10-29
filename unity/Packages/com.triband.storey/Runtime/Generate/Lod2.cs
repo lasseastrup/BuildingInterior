@@ -229,6 +229,14 @@ namespace Triband.Storey.Generate
             return sp;
         }
 
+        // whether the roof over the terrace below storey k's tier comes up to the window painted in bay j of edge i's wall
+        // (Roofs.TerraceRoofAt), its foot at `foot`: Facade.Ops leaves that window out
+        static bool UnderTerraceRoof(Site site, BuildingData b, int k, int i, double uS, double bay, double ww, int j, double foot)
+        {
+            double c = uS + (j + 0.5) * bay;
+            return Roofs.TerraceRoofAt(site, b, k, i, c - ww / 2, c + ww / 2) > foot;
+        }
+
         public static Lod2Mesh Build(Site site, BuildingData b)
         {
             double T = Dim.T_EXT; int N = b.floors.Count; double ox = b.pos.x, oz = b.pos.z, top = Derived.RoofY(b);
@@ -367,11 +375,15 @@ namespace Triband.Storey.Generate
                 }
                 var runs = new List<(int k0, int k1, double h, bool g, int slot, bool top)>();
                 int[]? bareSlots = null;   // each run's row for a bare wall (docs/EDITOR.md §6.7): no windows and no band, made when one is first met
+                // each storey the roof over the terrace below can reach (Roofs.TerraceRoofReach) is a run of its own, below `alone`:
+                // its walls leave out the windows that roof comes up to, bay by bay, as Facade.Ops does
+                double reach = t.k0 > 0 ? Roofs.TerraceRoofReach(site, b, t.k0) : double.NegativeInfinity; int alone = t.k0;
+                while (alone < t.k1 && Derived.FloorBase(b, alone) - Roofs.TerraceRoofClear < reach) alone++;
                 for (int k = t.k0; k < t.k1; k++)
                 {
                     double h = Derived.FloorH(b, k); bool gnd = k == 0;
                     // a tier's top storey under a cornice is a run of its own: its windows stay under the cornice, which it paints
-                    if (runs.Count > 0 && !runs[runs.Count - 1].g && !gnd && Math.Abs(runs[runs.Count - 1].h - h) < 1e-6 && !Facade.CorniceAt(b, k)) { var r = runs[runs.Count - 1]; r.k1 = k + 1; runs[runs.Count - 1] = r; }
+                    if (runs.Count > 0 && k > alone && !runs[runs.Count - 1].g && !gnd && Math.Abs(runs[runs.Count - 1].h - h) < 1e-6 && !Facade.CorniceAt(b, k)) { var r = runs[runs.Count - 1]; r.k1 = k + 1; runs[runs.Count - 1] = r; }
                     else runs.Add((k, k + 1, h, gnd, 0, false));
                 }
                 for (int ri = 0; ri < runs.Count; ri++)
@@ -422,7 +434,24 @@ namespace Triband.Storey.Generate
                             if (bareSlots[ri] == 0) { var src = M.Rows[r.slot]; bareSlots[ri] = 1 + Row(C, src.spec, new[] { src.run[0], 0, src.run[2], src.run[3] }); M.Rows[bareSlots[ri] - 1].band = src.band; }
                             slot = bareSlots[ri] - 1;
                         }
-                        Quad(F.At(s1, y0, T), F.At(e1, y0, T), F.At(e1, y1, T), F.At(s1, y1, T), outN, bay, 1, s1, e1, H, uS, uE);
+                        // a storey the roof over the terrace below can reach: the bays whose painted window it comes up to are painted
+                        // without one (bay 0), the wall in pieces where that changes
+                        var sp = M.Rows[r.slot].spec; double ww = sp[0] >= 0 ? bay - sp[0] : Math.Min(sp[1], bay - 0.5);
+                        int bays = bay > 0 ? (int)Math.Round((uE - uS) / bay) : 0;
+                        if (r.k0 < alone && bays > 0 && ww >= 0.45 && sp[3] > sp[2] + 0.4)
+                        {
+                            double foot = y0 + sp[2] - Roofs.TerraceRoofClear, ua = s1;
+                            bool prev = UnderTerraceRoof(site, b, r.k0, i, uS, bay, ww, 0, foot);
+                            for (int j = 1; j <= bays; j++)
+                            {
+                                bool cur = j < bays && UnderTerraceRoof(site, b, r.k0, i, uS, bay, ww, j, foot);
+                                if (j < bays && cur == prev) continue;
+                                double ub = j < bays ? uS + j * bay : e1;
+                                Quad(F.At(ua, y0, T), F.At(ub, y0, T), F.At(ub, y1, T), F.At(ua, y1, T), outN, prev ? 0 : bay, 1, ua, ub, H, uS, uE);
+                                ua = ub; prev = cur;
+                            }
+                        }
+                        else Quad(F.At(s1, y0, T), F.At(e1, y0, T), F.At(e1, y1, T), F.At(s1, y1, T), outN, bay, 1, s1, e1, H, uS, uE);
                         ClipWall(F, m.S, T, y0, y1, 1, H); ClipWall(F, m.E, T, y0, y1, 1, H);   // a neighbour's corner cut has no clip
                         // the tier's corner is cut for a neighbour lower than the run's top: above the neighbour the cut leaves a slit
                         // to the corner, closed by Unity only (the prototype's massing has it too)

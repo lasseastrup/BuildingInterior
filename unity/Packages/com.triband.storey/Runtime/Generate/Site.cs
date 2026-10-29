@@ -30,6 +30,11 @@ namespace Triband.Storey.Generate
         // each building's pitched roofs, the top one (k = its storeys) and its terraces', made once a site and only read after
         // (docs/PERFORMANCE.md §8.5): LOD0, LOD1, LOD2, the walk shape and the collision mesh each made them
         internal readonly ConcurrentDictionary<(BuildingData b, int k), RoofParts?> roofMemo = new ConcurrentDictionary<(BuildingData, int), RoofParts?>(2, 64);
+        /// <summary>
+        /// Keep the windows and details a roof over a terrace comes up against, as the prototype does: its census has them (the
+        /// parity tests). Storey leaves them out (<see cref="Roofs.TerraceRoofAt"/>).
+        /// </summary>
+        internal bool keepUnderTerraceRoofs;
         readonly HashSet<string> bridged = new HashSet<string>(StringComparer.Ordinal);
         const double BGRID = 32;
 

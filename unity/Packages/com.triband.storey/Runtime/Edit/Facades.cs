@@ -218,6 +218,9 @@ namespace Triband.Storey.Edit
             y = Tiers.Clamp(y, 0.15, h - spec.h - 0.1);
             if (ops.Any(o => u + spec.w / 2 > o.Left - 0.05 && u - spec.w / 2 < o.Right + 0.05 && y + spec.h > o.Bottom - 0.05 && y < o.Top + 0.05))
                 return new DetailSpot { error = "That would sit across a window or door" };
+            // where the roof over the terrace below comes up the wall, it would stand in it: Details.At leaves it out
+            if (Roofs.TerraceRoofAt(site, b, k, ed.i, u - spec.w / 2, u + spec.w / 2) > fb + y + spec.bottom - Roofs.TerraceRoofClear)
+                return new DetailSpot { error = "That would sit in the roof below" };
             return new DetailSpot { add = new DetailData { kind = kind, k = k, edge = ed.i, t = u / L, y = Tiers.Fixed(y, 2) }, ghost = Box(u, fb + y, fb + y + spec.h, spec.w, spec.d) };
         }
 

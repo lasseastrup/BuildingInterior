@@ -615,6 +615,81 @@ namespace Triband.Storey.Generate
             return Make(b, tr.type == RoofType.Gable ? RoofType.Gable : RoofType.Hip, tr.pitch, e, raw, party, Derived.FloorBase(b, k), cut);
         }
 
+        /// <summary>How near the foot of a window or a detail on the wall above a roof over a terrace that roof may come: its flashing, and a sill.</summary>
+        public const double TerraceRoofClear = 0.15;
+
+        /// <summary>
+        /// The highest the roof over the terrace below storey <paramref name="k"/>'s tier (<see cref="TerraceRoof"/>) can come up its
+        /// walls (absolute): its rise over the setback's floor. -∞ where there is none, or where the site keeps what it comes up
+        /// against (<see cref="Site.keepUnderTerraceRoofs"/>).
+        /// </summary>
+        public static double TerraceRoofReach(Site site, BuildingData b, int k)
+        {
+            int k1 = Derived.TierStart(b, k);
+            return !site.keepUnderTerraceRoofs && k1 > 0 && TerraceRoof(site, b, k1) is RoofParts R ? Derived.FloorBase(b, k1) + R.Rise : double.NegativeInfinity;
+        }
+
+        /// <summary>
+        /// How high the roof over the terrace below storey <paramref name="k"/>'s tier (<see cref="TerraceRoof"/>) comes up the wall
+        /// of its outline's edge <paramref name="i"/>, from <paramref name="u0"/> to <paramref name="u1"/> along it (absolute; -∞
+        /// where it doesn't come up against it). Cut away at the wall's outer face, its slopes end there; each is flat, so the
+        /// highest is where the stretch ends on one or crosses one's edge (a hip, a valley). The windows and details on the wall
+        /// whose foot it comes within <see cref="TerraceRoofClear"/> of are left out, at every LOD (docs/EDITOR.md §6.2). Storey's own.
+        /// </summary>
+        public static double TerraceRoofAt(Site site, BuildingData b, int k, int i, double u0, double u1)
+        {
+            int k1 = Derived.TierStart(b, k);
+            if (site.keepUnderTerraceRoofs || k1 <= 0 || !(TerraceRoof(site, b, k1) is RoofParts R)) return double.NegativeInfinity;
+            var fp = Derived.OutlineAt(b, k); int n = fp.Count; if (i < 0 || i >= n) return double.NegativeInfinity;
+            var a = fp[i]; var c = fp[(i + 1) % n]; double L = Geo.Hypot(c.x - a.x, c.z - a.z); if (L < 1e-9) return double.NegativeInfinity;
+            // just out from the wall's outer face, where the cut leaves the roof (outward as Facade.TerraceAt's normal)
+            double dx = (c.x - a.x) / L, dz = (c.z - a.z) / L, w = Dim.T_EXT + 0.02, sg = Geo.Area2(fp) > 0 ? 1 : -1;
+            double ox = b.pos.x + a.x + sg * dz * w, oz = b.pos.z + a.z - sg * dx * w;
+            double ax = ox + dx * u0, az = oz + dz * u0, bx = ox + dx * u1, bz = oz + dz * u1, top = double.NegativeInfinity;
+            foreach (var p in R.Parts)
+                if (p.Kind == RoofKind.Roof && Math.Abs(p.N.y) > 0.05) top = Math.Max(top, HighestOn(p, ax, az, bx, bz));
+            return top;
+        }
+
+        // the highest a roof part (flat) is over the stretch from (ax, az) to (bx, bz) in plan: at the stretch's ends on it, and
+        // where it crosses the part's edges
+        static double HighestOn(RoofPart p, double ax, double az, double bx, double bz)
+        {
+            var o = p.Pts[0]; double top = double.NegativeInfinity, ex = bx - ax, ez = bz - az;
+            double Y(double x, double z) => o.y - (p.N.x * (x - o.x) + p.N.z * (z - o.z)) / p.N.y;
+            if (OnPart(p, ax, az)) top = Y(ax, az);
+            if (OnPart(p, bx, bz)) top = Math.Max(top, Y(bx, bz));
+            Cross(p.Pts); foreach (var h in p.Holes) Cross(h);
+            return top;
+
+            void Cross(List<P3> r)
+            {
+                for (int j = 0, m = r.Count; j < m; j++)
+                {
+                    P3 q0 = r[j], q1 = r[(j + 1) % m]; double fx = q1.x - q0.x, fz = q1.z - q0.z, den = ex * fz - ez * fx;
+                    if (Math.Abs(den) < 1e-12) continue;   // along it
+                    double gx = q0.x - ax, gz = q0.z - az, t = (gx * fz - gz * fx) / den, s = (gx * ez - gz * ex) / den;
+                    if (t >= 0 && t <= 1 && s >= 0 && s <= 1) top = Math.Max(top, Y(ax + ex * t, az + ez * t));
+                }
+            }
+        }
+
+        // in a roof part's outline in plan, and in none of its holes
+        static bool OnPart(RoofPart p, double x, double z)
+        {
+            if (!InRing(p.Pts, x, z)) return false;
+            foreach (var h in p.Holes) if (InRing(h, x, z)) return false;
+            return true;
+        }
+
+        static bool InRing(List<P3> r, double x, double z)
+        {
+            bool c = false;
+            for (int i = 0, j = r.Count - 1; i < r.Count; j = i++)
+                if ((r[i].z > z) != (r[j].z > z) && x < (r[j].x - r[i].x) * (z - r[i].z) / (r[j].z - r[i].z) + r[i].x) c = !c;
+            return c;
+        }
+
         /// <summary>
         /// Emit roof parts into a mesh. Returns false when there are none. A dormer's window is dressed by the style
         /// <paramref name="st"/> as the facade's are (LOD0), or a plain pane with the window shader's coordinates (LOD1).

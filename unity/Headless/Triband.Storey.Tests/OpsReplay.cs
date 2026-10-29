@@ -51,7 +51,8 @@ namespace Triband.Storey.Tests
                 var corpus = corpora[c.GetProperty("corpus").GetString()!];
                 int i = c.GetProperty("building").GetInt32();
                 var b = PrototypeJson.ReadBuilding(corpus.buildings[i]);
-                var site = new Site(corpus.doc.buildings.Select((x, j) => j == i ? b : x).ToList());
+                // the prototype's site keeps the windows a roof over a terrace comes up against (Storey leaves them out, TerraceRoofWindowTests)
+                var site = new Site(corpus.doc.buildings.Select((x, j) => j == i ? b : x).ToList()) { keepUnderTerraceRoofs = true };
                 object? ret = null; string? why = null;
                 foreach (var s in c.GetProperty("steps").EnumerateArray())
                 {
