@@ -150,6 +150,10 @@ bool StoreyVertex(float tag, float4 wall, float kind, float wid, float3 worldPos
     v.occ = st.w - 1.0;
     // a LOD0 that came late keeps LOD1's painted windows a moment (LodManager.Entry.Hold): the glass reads it
     v.hold = st.z < 1.0 ? 1.0 : saturate(st.z - 1.0);
+    // one way out, through a float: with an early `return false` in the branch below, the translation to Metal cast a
+    // bool to a float, which Apple's shader compiler refuses when the variant is first drawn (the massing drew with the
+    // error shader, and the compiler warned of a potentially uninitialised return)
+    float shown = (isDisp || isFrom) ? 1.0 : 0.0;
 #ifndef STOREY_SHADOW
     // hidden (docs/PLAY.md §6): nothing in the colour and depth passes, at any LOD, but LOD0's party walls while the
     // neighbour they are built for shows: they are its walls too (Sink keeps them so). The branch keeps the neighbour's
@@ -157,10 +161,10 @@ bool StoreyVertex(float tag, float4 wall, float kind, float wid, float3 worldPos
     [branch] if (StoreyHidden(st))
     {
         int im = (int)floor(kind / 8.0) - 1;
-        if (v.lod > 0.5 || im < 0 || StoreyHidden(_StoreyState[StoreyRow(im)])) return false;
+        if (v.lod > 0.5 || im < 0 || StoreyHidden(_StoreyState[StoreyRow(im)])) shown = 0.0;
     }
 #endif
-    return isDisp || isFrom;
+    return shown > 0.5;
 }
 
 // The fragment-stage test. Returns the darkening for a building in the way (0..1); clips with `clip(-1)` where the

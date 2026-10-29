@@ -83,10 +83,13 @@ bool StoreyPropGone(int ib, float pivotY)
 bool StoreyPropShown(int ib)
 {
     float4 st = _StoreyState[StoreyRow(ib)];
+    // one way out, through a float, as StoreyVertex (StoreyOcclusion.hlsl): a bool returned early became a cast Metal's
+    // shader compiler refuses
+    float shown = (StoreyShownLod(st) < 0.5 || (st.z < 1.0 && st.y < 0.5)) ? 1.0 : 0.0;
 #ifndef STOREY_SHADOW
-    if (StoreyHidden(st)) return false;
+    if (StoreyHidden(st)) shown = 0.0;
 #endif
-    return StoreyShownLod(st) < 0.5 || (st.z < 1.0 && st.y < 0.5);
+    return shown > 0.5;
 }
 #endif
 

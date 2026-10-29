@@ -193,8 +193,10 @@ namespace Triband.Storey.Tests
             var vertex = occ.Substring(at, end - at);
             Assert.Contains("float shownLod = StoreyShownLod(st);", vertex);
             Assert.Matches(new Regex(@"#if defined\(STOREY_SHADOW\) && defined\(STOREY_MASSING\)\s+bool isDisp = shownLod > 0\.5 && shownLod < 2\.5;\s+bool isFrom = st\.z < 1\.0 && st\.y > 0\.5 && st\.y < 2\.5;\s+#else\s+bool isDisp = abs\(v\.lod - shownLod\) < 0\.5;\s+bool isFrom = st\.z < 1\.0 && abs\(v\.lod - st\.y\) < 0\.5;\s+#endif"), vertex);
-            // the colour and depth passes alone, after the fade is worked out, the neighbour read only for a hidden building
-            Assert.Matches(new Regex(@"v\.hold = [^;]+;\s+#ifndef STOREY_SHADOW\s+\[branch\] if \(StoreyHidden\(st\)\)\s+\{\s+int im = \(int\)floor\(kind / 8\.0\) - 1;\s+if \(v\.lod > 0\.5 \|\| im < 0 \|\| StoreyHidden\(_StoreyState\[StoreyRow\(im\)\]\)\) return false;\s+\}\s+#endif\s+return isDisp \|\| isFrom;\s*$"), vertex);
+            // the colour and depth passes alone, after the fade is worked out, the neighbour read only for a hidden building;
+            // one way out, through a float (a bool returned from inside the branch became a cast Metal's compiler refuses)
+            Assert.Matches(new Regex(@"v\.hold = [^;]+;\s+float shown = \(isDisp \|\| isFrom\) \? 1\.0 : 0\.0;\s+#ifndef STOREY_SHADOW\s+\[branch\] if \(StoreyHidden\(st\)\)\s+\{\s+int im = \(int\)floor\(kind / 8\.0\) - 1;\s+if \(v\.lod > 0\.5 \|\| im < 0 \|\| StoreyHidden\(_StoreyState\[StoreyRow\(im\)\]\)\) shown = 0\.0;\s+\}\s+#endif\s+return shown > 0\.5;\s*$"), vertex);
+            Assert.DoesNotContain("return false", vertex);
             // every shader passes its shadow caster STOREY_SHADOW and its depth prepass not (ShadowCasterTests counts them)
             foreach (var f in Directory.GetFiles(Path.Combine(UnityAsset.Package("com.triband.storey"), "Unity", "Shaders"), "*.shader"))
                 foreach (var pass in Regex.Split(Regex.Replace(File.ReadAllText(f), @"//[^\n]*", ""), @"\bPass\s*\{").Skip(1))
@@ -210,7 +212,7 @@ namespace Triband.Storey.Tests
             // the props go with their building, but for their shadows
             var prop = Code("Unity", "Shaders", "StoreyProp.hlsl");
             Assert.Matches(new Regex(@"#if defined\(SHADERPASS\) && defined\(SHADERPASS_SHADOWCASTER\) && !defined\(STOREY_SHADOW\)\s+#if SHADERPASS == SHADERPASS_SHADOWCASTER\s+#define STOREY_SHADOW"), prop);
-            Assert.Matches(new Regex(@"bool StoreyPropShown\(int ib\)\s+\{\s+float4 st = _StoreyState\[StoreyRow\(ib\)\];\s+#ifndef STOREY_SHADOW\s+if \(StoreyHidden\(st\)\) return false;\s+#endif\s+return StoreyShownLod\(st\) < 0\.5 \|\| \(st\.z < 1\.0 && st\.y < 0\.5\);"), prop);
+            Assert.Matches(new Regex(@"bool StoreyPropShown\(int ib\)\s+\{\s+float4 st = _StoreyState\[StoreyRow\(ib\)\];\s+float shown = \(StoreyShownLod\(st\) < 0\.5 \|\| \(st\.z < 1\.0 && st\.y < 0\.5\)\) \? 1\.0 : 0\.0;\s+#ifndef STOREY_SHADOW\s+if \(StoreyHidden\(st\)\) shown = 0\.0;\s+#endif\s+return shown > 0\.5;"), prop);
         }
 
         /// <summary>
