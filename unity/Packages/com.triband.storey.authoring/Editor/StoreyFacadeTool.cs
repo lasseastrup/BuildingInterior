@@ -31,7 +31,7 @@ namespace Triband.Storey.Editor
         protected override void ToolGUI(StoreyEdit e, BuildingData b, SceneView sv)
         {
             string tool = e.View.facadeTool;
-            if (tool.Length == 0) { Hint("Pick Entrance, Blank wall, a detail or Bridge in the Facade tab, then click a wall."); return; }
+            if (tool.Length == 0) { Hint("Pick Place doors (Doors), or Blank wall, a detail or Bridge (Details), in the Facade tab, then click a wall."); return; }
             if (Event.current.type != EventType.Repaint) return;
             var hit = Hit(b); if (hit == null) return;
             var h = hit.Value; var site = new Site(e.Document.buildings);
@@ -50,6 +50,9 @@ namespace Triband.Storey.Editor
                 var fp = Derived.OutlineAt(b, d.k); var a = fp[d.edge]; var c = fp[(d.edge + 1) % fp.Count];
                 double dx = c.x - a.x, dz = c.z - a.z;
                 Box(new GhostBox { cx = a.x + dx * d.t + b.pos.x, cy = Derived.FloorBase(b, d.k) + 1.27, cz = a.z + dz * d.t + b.pos.z, sx = Dim.DOOR_EXT - 0.05, sy = 2.5, sz = Dim.T_EXT * 2.2, u = new Vec2(dx / d.L, dz / d.L) }, d.entrance >= 0 ? Bad : Accent);
+                // which door a click puts in (the Doors card's Door to place), or which it takes out
+                Label(new Vector3((float)(a.x + dx * d.t + b.pos.x), (float)(Derived.FloorBase(b, d.k) + 2.7), (float)(a.z + dz * d.t + b.pos.z)),
+                    d.entrance >= 0 ? "Take out " + StoreySiteEditor.PlacedName(b, b.entrances[d.entrance]) : "Put in " + StoreySiteEditor.PlaceName(e.View, b.style));
             }
             else if (tool == "bridge")
             {
@@ -104,7 +107,12 @@ namespace Triband.Storey.Editor
                 e.ApplyTo(on ? "Windows restored" : "Wall set to " + StoreySiteEditor.WallStateNames[(int)want - 1].ToLowerInvariant(), bb => { Facades.ToggleState(bb, h.k, h.i, want); return true; });
             }
             else if (tool == "entrance")
-                e.ApplyTo("Entrance", bb => (err = Facades.ToggleEntrance(new Site(e.Document.buildings), bb, h)) == null);
+            {
+                // the door the Doors card says, its asset kept in the site's list so builds include it
+                string? door = StoreySiteEditor.DoorToPlace(e.View, b.style);
+                e.ApplyTo("Door", bb => (err = Facades.ToggleEntrance(new Site(e.Document.buildings), bb, h, door)) == null);
+                if (err == null && door != null && StoreyOpenings.All().FirstOrDefault(o => o.Id == door) is { } asset) StoreyOpenings.Keep(e.Site, asset);
+            }
             else if (tool == "bridge")
             {
                 var at = Local(b, h); string bid = b.id; int k = h.k;

@@ -125,13 +125,16 @@ namespace Triband.Storey.Edit
             return d != null ? (d, null) : (null, "That wall is too short for an entrance");
         }
 
-        /// <summary>The Entrance tool's click: add the entrance, or remove the one there. The error says why nothing happened.</summary>
-        public static string? ToggleEntrance(Site site, BuildingData b, FacadeHit ed)
+        /// <summary>
+        /// The Doors card's Place doors click: add an entrance with <paramref name="door"/> (<see cref="EntranceData.door"/>;
+        /// null, the style's pick), or remove the one there. The error says why nothing happened.
+        /// </summary>
+        public static string? ToggleEntrance(Site site, BuildingData b, FacadeHit ed, string? door = null)
         {
             var (d, err) = EntranceAt(site, b, ed);
             if (d == null) return err;
             if (d.entrance >= 0) b.entrances.RemoveAt(d.entrance);
-            else b.entrances.Add(new EntranceData { edge = d.edge, t = d.t, k = d.k });
+            else b.entrances.Add(new EntranceData { edge = d.edge, t = d.t, k = d.k, door = door });
             return null;
         }
 

@@ -21,8 +21,14 @@ namespace Triband.Storey.Editor
         /// <summary>The storey the Interior tab edits; the floor count means the roof.</summary>
         [SerializeField] internal int floor;
         [SerializeField] internal InteriorTool interiorTool;
-        /// <summary>The Facade tab's click tool: "", "entrance", "blank", or a detail kind ("ac", "vent", "dish", "escape", "awning").</summary>
+        /// <summary>The Facade tab's click tool: "", "entrance" (the Doors card's Place doors), "blank", "bridge", or a detail kind ("ac", "vent", "dish", "escape", "awning").</summary>
         [SerializeField] internal string facadeTool = "";
+        /// <summary>
+        /// The door Place doors puts in (<see cref="EntranceData.door"/>), where the style has several: one of its list
+        /// (<see cref="EntranceData.Plain"/> for the built-in one, or a Storey Opening's id), or "*" for any of them by weight;
+        /// empty, or one no longer in the list, the list's first.
+        /// </summary>
+        [SerializeField] internal string placeDoor = "";
         /// <summary>What the Blank wall tool makes a wall (docs/EDITOR.md §6.7): blank, quiet or bare.</summary>
         [SerializeField] internal EdgeState wallState = EdgeState.Blank;
         [SerializeField] internal int placeRot;

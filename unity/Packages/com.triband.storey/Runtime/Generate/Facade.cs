@@ -325,6 +325,8 @@ namespace Triband.Storey.Generate
                 // with its entry's own recess, if it has one
                 double? er = null;
                 var ek = doorSet == null ? dk : OpeningSets.DoorAt(st, b.id, k, i, out er);
+                // a door placed as one of its own (the Doors card), where the project has it
+                if (e.door != null && OpeningSets.Placed(st, e.door, out var pk, out var pr)) { ek = pk; er = pr; }
                 // an artist's door that keeps its size is as wide as it is on a shell storey, as a window is (a shop's double door
                 // is not squeezed into a house door's hole); a walk-in storey's doorway, which the player walks through, stays the
                 // standard one

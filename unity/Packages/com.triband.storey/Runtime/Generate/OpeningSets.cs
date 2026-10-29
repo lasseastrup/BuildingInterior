@@ -101,6 +101,26 @@ namespace Triband.Storey.Generate
             return Door(st, DoorSeed(id, k, edge), out recess);
         }
 
+        /// <summary>
+        /// A door an entrance names (<see cref="EntranceData.door"/>): the built-in one (<see cref="EntranceData.Plain"/>, a
+        /// null kind) or a Storey Opening door, with its entry's own recess where the style's set has one for it. False for a
+        /// door the project doesn't have: the entrance then takes the style's pick.
+        /// </summary>
+        public static bool Placed(FacadeStyle? st, string door, out OpeningKind? kind, out double? recess)
+        {
+            kind = null; recess = null;
+            bool plain = door == EntranceData.Plain;
+            if (!plain)
+            {
+                kind = OpeningKinds.Get(door);
+                if (kind == null || !kind.door) { kind = null; return false; }
+            }
+            if (Doors(st) is { } set)
+                foreach (var en in set)
+                    if (!en.none && (plain ? en.kind == null : en.kind == door)) { recess = en.recess; break; }
+            return true;
+        }
+
         /// <summary>The street door a hash picks for a style (null: the plain one).</summary>
         public static OpeningKind? Door(FacadeStyle? st, uint hash) => Door(st, hash, out _);
 

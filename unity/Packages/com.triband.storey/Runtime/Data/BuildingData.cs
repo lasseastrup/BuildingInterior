@@ -218,6 +218,15 @@ namespace Triband.Storey
         public double t;
         /// <summary>Floor: 0 = street door; above, a door onto that setback's terrace or a neighbour's roof.</summary>
         public int k;
+        /// <summary>
+        /// Its door: null, the one its style picks for its wall (docs/OPENINGS.md §7.1); <see cref="Plain"/>, the built-in
+        /// door; otherwise a Storey Opening door's id, as the Facade tab's Doors card places them. One the project no longer
+        /// has is the style's pick. Storey's own.
+        /// </summary>
+        public string? door;
+
+        /// <summary>The built-in door, as <see cref="door"/> names it.</summary>
+        public const string Plain = "plain";
     }
 
     public sealed class DetailData

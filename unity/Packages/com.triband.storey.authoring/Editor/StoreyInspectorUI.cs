@@ -126,19 +126,19 @@ namespace Triband.Storey.Editor
         /// <summary>A quiet line saying what the settings above do, or why some aren't there.</summary>
         public static void Note(string text) => EditorGUILayout.LabelField(text, Caption);
 
-        static string shortKey = "";
-        static Dictionary<string, string> shortNames = new Dictionary<string, string>();
+        static readonly Dictionary<string, Dictionary<string, string>> shortNames = new Dictionary<string, Dictionary<string, string>>();
 
         /// <summary>
         /// A project's asset names as a person would write them: words apart, not run together with underscores or capitals
         /// (Visual_BuildingDetail_EdgeBricks: Visual Building Detail Edge Bricks), and the words a family of them all start
         /// with left out (two or more named alike: Edge Bricks), so a button shows what tells them apart. Their own names go
-        /// in their tooltips. Kept while the names stay the same.
+        /// in their tooltips. Kept for each list of names (the details', the windows', the doors'), while it stays the same.
         /// </summary>
         public static IReadOnlyDictionary<string, string> ShortNames(IReadOnlyList<string> names)
         {
             string key = string.Join("\n", names);
-            if (key == shortKey) return shortNames;
+            if (shortNames.TryGetValue(key, out var kept)) return kept;
+            if (shortNames.Count > 16) shortNames.Clear();
             var words = names.Distinct().ToDictionary(n => n, Words);
             var o = new Dictionary<string, string>();
             foreach (var family in words.GroupBy(kv => kv.Value.Length > 0 ? kv.Value[0] : ""))
@@ -149,7 +149,7 @@ namespace Triband.Storey.Editor
                     while (list.All(kv => kv.Value.Length > common + 1 && kv.Value[common] == list[0].Value[common])) common++;
                 foreach (var kv in list) o[kv.Key] = kv.Value.Length == 0 ? kv.Key : string.Join(" ", kv.Value.Skip(common));
             }
-            shortKey = key; shortNames = o;
+            shortNames[key] = o;
             return o;
         }
 

@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 7;
+        public const int Version = 8;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -223,7 +223,7 @@ namespace Triband.Storey
             for (n = r.Count(); n > 0; n--)
                 b.shafts.Add(new CoreData { id = Str(ref r)!, type = E<CoreType>(ref r), x = r.F64(), z = r.F64(), rot = r.F64(), bottom = r.Int(), top = r.Int(), roof = r.Bool() });
             for (n = r.Count(); n > 0; n--)
-                b.entrances.Add(new EntranceData { edge = r.Int(), t = r.F64(), k = r.Int() });
+                b.entrances.Add(new EntranceData { edge = r.Int(), t = r.F64(), k = r.Int(), door = Str(ref r) });
             for (n = r.Count(); n > 0; n--)
                 b.details.Add(new DetailData { kind = Str(ref r)!, k = r.Int(), edge = r.Int(), t = r.F64(), y = r.Opt() });
             for (n = r.Count(); n > 0; n--)
@@ -413,7 +413,7 @@ namespace Triband.Storey
             w.Count(b.shafts.Count);
             foreach (var s in b.shafts) { w.Count(S(s.id)); w.E(s.type); w.F64(s.x); w.F64(s.z); w.F64(s.rot); w.Int(s.bottom); w.Int(s.top); w.Bool(s.roof); }
             w.Count(b.entrances.Count);
-            foreach (var e in b.entrances) { w.Int(e.edge); w.F64(e.t); w.Int(e.k); }
+            foreach (var e in b.entrances) { w.Int(e.edge); w.F64(e.t); w.Int(e.k); w.Count(S(e.door)); }
             w.Count(b.details.Count);
             foreach (var dd in b.details) { w.Count(S(dd.kind)); w.Int(dd.k); w.Int(dd.edge); w.F64(dd.t); w.Opt(dd.y); }
             w.Count(b.voids.Count);

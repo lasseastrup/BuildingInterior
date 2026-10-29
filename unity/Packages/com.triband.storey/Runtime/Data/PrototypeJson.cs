@@ -112,7 +112,7 @@ namespace Triband.Storey
             foreach (var e in c.Array(o, "entrances", w))
             {
                 var ep = w.In("entrances", i++); var eo = c.Obj(e, ep);
-                b.entrances.Add(new EntranceData { edge = c.Int(eo, "edge", 0, ep), t = c.Num(eo, "t", 0.5, ep), k = c.Int(eo, "k", 0, ep) });
+                b.entrances.Add(new EntranceData { edge = c.Int(eo, "edge", 0, ep), t = c.Num(eo, "t", 0.5, ep), k = c.Int(eo, "k", 0, ep), door = c.OptStr(eo, "door", ep) });
                 c.Check(eo, ep, Keys.Entrance);
             }
             i = 0;
@@ -419,6 +419,7 @@ namespace Triband.Storey
             {
                 var eo = new Dictionary<string, object?> { ["edge"] = e.edge, ["t"] = e.t };
                 if (e.k != 0) eo["k"] = e.k;
+                if (e.door != null) eo["door"] = e.door;
                 ents.Add(eo);
             }
             o["entrances"] = ents;
@@ -633,7 +634,7 @@ namespace Triband.Storey
             public static readonly string[] Root = { "v", "seq", "spawn", "buildings", "palette" };
             public static readonly string[] PaletteEntry = { "name", "hex" };
             public static readonly string[] Building = { "id", "name", "pos", "elevation", "footprint", "floors", "shafts", "entrances", "details", "blank", "quiet", "bare", "groundHeight", "floorHeight", "interior", "style", "gen", "colliders", "voids", "bridges", "corners" };
-            public static readonly string[] Entrance = { "edge", "t", "k" };
+            public static readonly string[] Entrance = { "edge", "t", "k", "door" };
             public static readonly string[] Detail = { "kind", "k", "edge", "t", "y" };
             public static readonly string[] Void = { "id", "kind", "shape", "bottom" };
             public static readonly string[] Bridge = { "id", "to", "k", "at", "toK", "width", "open" };

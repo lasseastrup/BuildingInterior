@@ -660,13 +660,16 @@ namespace Triband.Storey.Editor
 
         void DoorsCard(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
         {
-            string summary = (st.doorSet is { Count: > 1 } ? $"{st.doorSet.Count} doors" : st.doorKind != null ? "Your door" : "Built-in")
-                + (st.doorRecess is double dr ? $" · set in {dr * 100:0} cm" : "");
+            int placed = b.entrances.Count;
+            string summary = (st.doorSet is { Count: > 1 } ? $"{st.doorSet.Count} kinds" : st.doorKind != null ? "Your door" : "Built-in")
+                + (placed == 1 ? " · 1 placed" : $" · {placed} placed") + (st.doorRecess is double dr ? $" · set in {dr * 100:0} cm" : "");
             using var c = StoreyInspectorUI.Card("doors", "Doors", StoreyInspectorUI.DoorFrontIcon, StoreyInspectorUI.Tint.Doors, summary,
-                tip: "The street doors: place them with Entrance, under Details");
+                tip: "The building's doors: which door its style has (or several), and where they are on its walls");
             if (!c.Open) return;
-            SetRows(e, k0, st, SetOf.Doors, "Street door");
+            SetRows(e, k0, st, SetOf.Doors, "Door");
             Colour(e, b, k0, "Colour", "door", optional: true);
+            StoreyInspectorUI.SubHeader("On the walls", "Put doors in, and take them out, in the Scene view");
+            PlaceDoors(e, st);
             StoreyInspectorUI.SubHeader("Depth in the wall");
             Recess(e, k0, st, "Doors", "Doors sit back from the wall's face, this deep: the built-in door's panel, or yours pushed back that far; a set-in door's threshold takes the foundation's colour. Off: the built-in door sits at its usual depth, and yours at the wall's face",
                 st.doorRecess, 0.29, (s, x) => s.doorRecess = x);
@@ -677,6 +680,81 @@ namespace Triband.Storey.Editor
                 StoreyInspectorUI.Note((st.doorRecessOffset ?? 0) < 0 ? "The opening is smaller than the door: its frame stays hidden in the wall."
                     : (st.doorRecessOffset ?? 0) > 0 ? "The opening is bigger than the door: the wall shows round it." : "The opening is the door's own size.");
             }
+        }
+
+        static readonly GUIContent PlaceDoorsLabel = new GUIContent("Place doors", "Click a wall in the Scene view to put a door in it, and a door to take it out");
+        static readonly GUIContent DoorToPlaceLabel = new GUIContent("Door to place",
+            "Which of the style's doors a click puts in. Any of them, by weight: one picked for its wall as the style picks, which changes when the list does");
+
+        /// <summary>
+        /// Place doors (docs/EDITOR.md §6.7): the Facade tool that puts a door in the wall clicked, or takes out the one clicked
+        /// (<see cref="Facades.ToggleEntrance"/>), at the street or onto a terrace or a neighbour's roof; and, where the style
+        /// has several doors, which one it puts in.
+        /// </summary>
+        void PlaceDoors(StoreyEdit e, FacadeStyle st)
+        {
+            var v = e.View; bool was = v.facadeTool == "entrance";
+            bool on = GUILayout.Toggle(was, PlaceDoorsLabel, GUI.skin.button, GUILayout.Height(22));
+            if (on != was) { v.facadeTool = on ? "entrance" : ""; if (on) StoreyToolContext.Show(StoreyTab.Facade); SceneView.RepaintAll(); }
+            var choices = DoorChoices(st);
+            if (choices.Count > 1)
+            {
+                int cur = Math.Max(0, choices.FindIndex(x => x.value == v.placeDoor));
+                int pick = EditorGUILayout.Popup(DoorToPlaceLabel, cur, choices.Select(x => new GUIContent(x.label)).ToArray());
+                if (pick != cur) { v.placeDoor = choices[pick].value; SceneView.RepaintAll(); }
+            }
+            if (on) StoreyInspectorUI.Note("Click a wall to put a door in it, and a door to take it out. Above the street, where a terrace or a neighbour's roof is in front of the wall.");
+        }
+
+        /// <summary>The doors Place doors can put in: the style's, by name (the built-in one as <see cref="EntranceData.Plain"/>), and with more than one, any of them by weight ("*").</summary>
+        static List<(string value, string label)> DoorChoices(FacadeStyle st)
+        {
+            var o = new List<(string value, string label)>();
+            foreach (var en in WindowSets.Shown(st, SetOf.Doors)!)
+            {
+                string value = en.kind ?? EntranceData.Plain;
+                if (!en.none && !o.Exists(x => x.value == value)) o.Add((value, DoorName(value)));
+            }
+            if (o.Count > 1) o.Add(("*", "Any of them, by weight"));
+            return o;
+        }
+
+        /// <summary>
+        /// The door Place doors puts in, as an entrance names it (<see cref="EntranceData.door"/>): the one picked in the Doors
+        /// card, or the list's first; none (the style's pick) for "Any of them", or where the style has one door.
+        /// </summary>
+        internal static string? DoorToPlace(StoreyEditView v, FacadeStyle st)
+        {
+            var choices = DoorChoices(st);
+            if (choices.Count <= 1) return null;
+            string value = choices.Exists(x => x.value == v.placeDoor) ? v.placeDoor : choices[0].value;
+            return value == "*" ? null : value;
+        }
+
+        /// <summary>A door as an entrance names it, by the words that tell it from the project's other doors: none is the style's own pick.</summary>
+        internal static string DoorName(string? door)
+        {
+            if (door == null) return "the style's door";
+            if (door == EntranceData.Plain) return "the built-in door";
+            var doors = StoreyOpenings.All().Where(o => o.door).ToList();
+            if (!(doors.FirstOrDefault(o => o.Id == door) is { } asset)) return "a door not in the project";
+            return StoreyInspectorUI.ShortNames(doors.Select(o => o.name).ToList()).TryGetValue(asset.name, out var sn) ? sn : asset.name;
+        }
+
+        /// <summary>What Place doors puts in, by name, for the Scene view: the door picked, the style's one door, or any of its doors.</summary>
+        internal static string PlaceName(StoreyEditView v, FacadeStyle st)
+        {
+            if (DoorToPlace(v, st) is string door) return DoorName(door);
+            var choices = DoorChoices(st);
+            return choices.Count == 1 ? choices[0].label : "one of the style's doors";
+        }
+
+        /// <summary>The door an entrance has, by name, for the Scene view: the one it names, or the one its style picks for its wall.</summary>
+        internal static string PlacedName(BuildingData b, EntranceData en)
+        {
+            if (en.door != null && (en.door == EntranceData.Plain || OpeningKinds.Get(en.door) != null)) return DoorName(en.door);
+            var kind = OpeningSets.DoorAt(Derived.StyleAt(b, en.k), b.id, en.k, en.edge, out _);
+            return kind != null ? DoorName(kind.id) : "the built-in door";
         }
 
         /// <summary>Whether any street door the style can pick is one you made: only those keep their own size, so only their holes take a margin.</summary>
@@ -776,7 +854,6 @@ namespace Triband.Storey.Editor
             StoreyInspectorUI.SubHeader("Place by hand", "Pick one, then click a wall in the Scene view; click a placed one to remove it");
             var tools = new List<(string tool, string label, string tip)>
             {
-                ("entrance", "Entrance", "A street door: click a wall to put one in it, click a door to remove it"),
                 ("blank", "Blank wall", "Take the windows (and more) off a wall, or a whole side"),
             };
             var palette = StoreyDetails.Palette();
@@ -799,7 +876,6 @@ namespace Triband.Storey.Editor
             }
             if (v.facadeTool == "blank") WallStates(e, b, k0);
             else if (v.facadeTool == "bridge") StoreyInspectorUI.Note("Click an upper floor's wall: a bridge goes straight out to the building facing it, to its floor nearest this one. Click a bridge's door to remove it.");
-            else if (v.facadeTool == "entrance") StoreyInspectorUI.Note("Click a wall to put a street door in it; click a door to remove it.");
             else if (v.facadeTool.Length > 0) StoreyInspectorUI.Note("Click a wall to place it; click a placed one to remove it.");
         }
 
@@ -1200,11 +1276,13 @@ namespace Triband.Storey.Editor
             var names = new List<GUIContent> { new GUIContent("Built-in") };
             if (!door) names.Add(new GUIContent("None", "No window: the wall is left whole there"));
             int first = names.Count;
-            names.AddRange(kinds.Select(o => new GUIContent(o.name)));
+            // by the words that tell them apart (Visual_BuildingPiece08_Door: 08 Door): the rows' popups are narrow
+            var shortName = StoreyInspectorUI.ShortNames(kinds.Select(o => o.name).ToList());
+            names.AddRange(kinds.Select(o => new GUIContent(shortName.TryGetValue(o.name, out var sn) ? sn : o.name, o.name)));
             if (kinds.Count == 0) names.Add(new GUIContent("(make one: Create ▸ Storey ▸ Window or Door)"));
             double total = 0; for (int i = 0; i < set.Count; i++) total += OpeningSets.Weight(set, i);
             var tip = new GUIContent(label, door
-                ? "The street doors: the built-in one (a flat panel set into the wall, in the door colour), or doors you made (Create ▸ Storey ▸ Window or Door). With several, each wall's doors are one of them, picked by its weight"
+                ? "The doors: the built-in one (a flat panel set into the wall, in the door colour), or doors you made (Create ▸ Storey ▸ Window or Door). With several, Door to place says which a click puts in; a door placed as Any of them is one picked for its wall by its weight"
                 : "What fills each opening: the built-in window, windows you made (Create ▸ Storey ▸ Window or Door), or none. With several, each window is one of them, picked by its weight, the same on every build and different from building to building");
             for (int i = 0; i < set.Count; i++)
             {
