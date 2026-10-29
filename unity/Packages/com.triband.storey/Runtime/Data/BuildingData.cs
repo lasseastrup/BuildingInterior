@@ -265,6 +265,25 @@ namespace Triband.Storey
     public enum RoofType { Flat, Hip, Gable, Shed, Mansard }
 
     /// <summary>
+    /// A pitched roof's surface pattern (<see cref="RoofSurface"/>): clay tiles (barrels up the slope), slates, shingles
+    /// (rounded feet) or a metal roof's standing seams. The numbers are the shader's (StoreyRoof.hlsl).
+    /// </summary>
+    public enum RoofPattern { Tiles = 1, Slate = 2, Shingles = 3, Seams = 4 }
+
+    /// <summary>
+    /// A pitched roof's surface (<see cref="FacadeStyle.roofSurface"/>, docs/EDITOR.md §6.2): its pattern, a tile's width along
+    /// the eave and height up the slope (metres; null = the pattern's own), how much it stands out in the light (0 to 1;
+    /// null = 0.6) and how much each tile's shade differs (0 to 1; null = 0.15). Layout key <c>roofSurface</c>, an object
+    /// with <c>pattern</c>, <c>w</c>, <c>h</c>, <c>relief</c> and <c>variation</c>, each written only when set.
+    /// </summary>
+    public sealed class RoofSurface
+    {
+        public RoofPattern pattern = RoofPattern.Tiles;
+        public double? w, h, relief, variation;
+        public RoofSurface Clone() => (RoofSurface)MemberwiseClone();
+    }
+
+    /// <summary>
     /// Exterior style. Colours are colour references (<see cref="ColorRef"/>): CSS hex as the prototype
     /// stores them, or Color Pipeline palette ids.
     /// </summary>
@@ -404,6 +423,11 @@ namespace Triband.Storey
         /// <summary>Dormers along every eave of a pitched roof, this far apart (metres, centre to centre); null = none. Storey's own.</summary>
         public double? dormers;
         /// <summary>
+        /// A pitched roof's surface, drawn by the shader rather than modelled (docs/EDITOR.md §6.2); null = plain. The roof's
+        /// colour is the tiles'. A roofed terrace has the surface of the style of the floors it covers. Storey's own.
+        /// </summary>
+        public RoofSurface? roofSurface;
+        /// <summary>
         /// A cap on a flat roof's edge (docs/EDITOR.md §6.7; the old BuildingGenerator's roof insert): its height (null = none;
         /// above 0 it stands up from the roof, below 0 it hangs from the roof's edge as a fascia), how far its outer side is
         /// in from the wall's face (null = 0; below 0 it overhangs the wall), and the width of the strip round its top in its
@@ -416,7 +440,7 @@ namespace Triband.Storey
 
         public FacadeStyle Clone()
         {
-            var c = (FacadeStyle)MemberwiseClone(); c.details = details?.Clone();
+            var c = (FacadeStyle)MemberwiseClone(); c.details = details?.Clone(); c.roofSurface = roofSurface?.Clone();
             c.windowSet = OpeningEntry.Copy(windowSet); c.groundSet = OpeningEntry.Copy(groundSet); c.doorSet = OpeningEntry.Copy(doorSet);
             return c;
         }

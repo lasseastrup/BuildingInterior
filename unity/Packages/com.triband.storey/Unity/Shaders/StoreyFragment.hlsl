@@ -7,6 +7,8 @@
 // windows: here, after a project's lighting, so its own room mapping and night blend can stand in (StoreyWindow.hlsl); the
 // glass too, whose see-through panes start as LOD1's painted ones
 #include "StoreyWindow.hlsl"
+// a pitched roof's surface: tiles, slates, shingles or seams (StoreyRoof.hlsl)
+#include "StoreyRoof.hlsl"
 
 float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) : SV_Target
 {
@@ -43,6 +45,12 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
             s.normalWS = rn;
         }
     }
+#endif
+#if !defined(STOREY_MASSING) && !defined(STOREY_GLASS)
+    // a pitched roof's surface, which a roof face's vertices hand on in a pane's place (StoreyVert); its place's derivatives
+    // taken here, where every pixel of the quad takes them
+    float3 dpx = ddx(s.positionWS), dpy = ddy(s.positionWS);
+    if (IN.win.z < -0.5 && isFront) StoreyRoofSurface(IN.win, s.positionWS, dpx, dpy, s.albedo, s.normalWS);
 #endif
     if (_StoreyLodTint > 0.5) s.albedo = lerp(s.albedo, StoreyLodTint(v.lod), 0.65);
     if (_StoreyIso.x > 0.001 && abs(v.bid - _StoreyIso.y) > 0.5) s.albedo = lerp(s.albedo, float3(0.78, 0.82, 0.83), _StoreyIso.x * 0.7);

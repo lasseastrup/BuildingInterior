@@ -583,6 +583,7 @@ namespace Triband.Storey.Editor
                 WallsCard(e, b, k0, st);
                 ColoursCard(e, b, k0, st);
                 if (Styles.DrivesRoof(b, k0)) RoofCard(e, b, k0, st);
+                else if (TerraceRoofed(b, k0)) TerraceRoofCard(e, k0, st);
             }
             DetailsCard(e, b, k0, st);
             BridgeList(e, b);
@@ -810,7 +811,7 @@ namespace Triband.Storey.Editor
 
         void RoofCard(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
         {
-            string summary = st.roofType != RoofType.Flat ? $"{st.roofType}, {st.pitch ?? (st.roofType == RoofType.Shed ? 15 : st.roofType == RoofType.Mansard ? 20 : 30):0}°"
+            string summary = st.roofType != RoofType.Flat ? $"{st.roofType}, {st.pitch ?? (st.roofType == RoofType.Shed ? 15 : st.roofType == RoofType.Mansard ? 20 : 30):0}°" + (st.roofSurface != null ? " · " + SurfaceName(st) : "")
                 : "Flat" + (st.parapet ? " · parapet" : "") + (Generate.RoofCap.Of(st) is Generate.RoofCap rc ? rc.inset ? " · edge set in" : rc.fascia ? " · hanging edge" : " · slab edge" : "");
             using var c = StoreyInspectorUI.Card("roof", "Roof", StoreyInspectorUI.RoofIcon, StoreyInspectorUI.Tint.Roof, summary);
             if (!c.Open) return;
@@ -825,11 +826,66 @@ namespace Triband.Storey.Editor
                 if (dm != st.dormers.HasValue) e.ApplyTo(dm ? "Dormers added" : "Dormers removed", bb => { Styles.Edited(bb, k0).dormers = dm ? 3.5 : (double?)null; return true; });
                 if (st.dormers is double every) using (new EditorGUI.IndentLevelScope()) StyleSlider(e, k0, "Every", every, 2.2, 10, 0.1, (s, x) => s.dormers = x);
                 if (mans) StoreyInspectorUI.Note("A mansard: a steep 70° slope from the eaves to the break, then a shallow hip at the top pitch.");
+                RoofSurfaceFields(e, k0, st);
                 return;
             }
             bool pp = StoreyInspectorUI.Feature("Parapet", "A low wall round the roof's edge", st.parapet);
             if (pp != st.parapet) e.ApplyTo(pp ? "Parapet" : "No parapet", bb => { Styles.Edited(bb, k0).parapet = pp; return true; });
             RoofEdge(e, b, k0, st);
+            // flat on top, but the terrace below a setback has a pitched roof, in this style
+            if (TerraceRoofed(b, k0)) RoofSurfaceFields(e, k0, st, "Terrace roof's surface");
+        }
+
+        /// <summary>Whether a roofed terrace (Shape › Terrace | Roof) covers the floors whose style this tier's is.</summary>
+        static bool TerraceRoofed(BuildingData b, int k0)
+        {
+            var t = Tiers.Of(b).Find(x => x.k0 == k0);
+            return t.k1 < b.floors.Count && b.floors[t.k1].terraceRoof != null;
+        }
+
+        /// <summary>The roof over a terrace below a setback: its surface, which is this tier's style's (the roof card is the top's).</summary>
+        void TerraceRoofCard(StoreyEdit e, int k0, FacadeStyle st)
+        {
+            using var c = StoreyInspectorUI.Card("terraceRoof", "Terrace roof", StoreyInspectorUI.RoofIcon, StoreyInspectorUI.Tint.Roof, SurfaceName(st),
+                tip: "The pitched roof over these floors' terrace (Shape › Terrace | Roof): its pitch is set there, its surface here");
+            if (c.Open) RoofSurfaceFields(e, k0, st);
+        }
+
+        static string SurfaceName(FacadeStyle st) => st.roofSurface is RoofSurface rs ? RoofSurfaces[(int)rs.pattern].text : "Plain";
+
+        static readonly GUIContent RoofSurfaceLabel = new GUIContent("Pattern", "Drawn on the slopes by the shader, in the roof's colour, so it adds no triangles: clay tiles, slates, shingles or a metal roof's seams");
+        static readonly GUIContent[] RoofSurfaces =
+        {
+            new GUIContent("Plain", "One colour"),
+            new GUIContent("Tiles", "Clay tiles: rounded, in columns up the slope"),
+            new GUIContent("Slate", "Flat slates, each row half a slate along"),
+            new GUIContent("Shingles", "Shingles with rounded feet, each row half a shingle along"),
+            new GUIContent("Seams", "A metal roof: a standing seam up the slope at each panel's edge"),
+        };
+
+        /// <summary>
+        /// A pitched roof's surface (docs/EDITOR.md §6.2): its pattern, a tile's size, its relief and each tile's own shade.
+        /// A slider left alone keeps the pattern's own number, so the next pattern picked brings its own.
+        /// </summary>
+        void RoofSurfaceFields(StoreyEdit e, int k0, FacadeStyle st, string title = "Surface")
+        {
+            StoreyInspectorUI.SubHeader(title, RoofSurfaceLabel.tooltip);
+            var rs = st.roofSurface;
+            int cur = rs != null ? (int)rs.pattern : 0, pick = StoreyInspectorUI.Segmented(RoofSurfaceLabel, cur, RoofSurfaces);
+            if (pick != cur) e.ApplyTo("Roof surface", bb =>
+            {
+                var s = Styles.Edited(bb, k0);
+                if (pick == 0) s.roofSurface = null;
+                else { s.roofSurface ??= new RoofSurface(); s.roofSurface.pattern = (RoofPattern)pick; s.roofSurface.w = s.roofSurface.h = null; }
+                return true;
+            });
+            if (rs == null) return;
+            var (_, w, h, relief, variation) = Generate.ColorRows.RoofSurface(st);
+            bool seams = rs.pattern == RoofPattern.Seams;
+            StyleSlider(e, k0, new GUIContent(seams ? "Panel width" : "Tile width", "Along the eave, in metres"), w, 0.05, 2, 0.01, (s, v) => s.roofSurface!.w = v);
+            if (!seams) StyleSlider(e, k0, new GUIContent("Tile height", "Up the slope: how much of each tile shows, in metres"), h, 0.05, 2, 0.01, (s, v) => s.roofSurface!.h = v);
+            StyleSlider(e, k0, new GUIContent("Relief", "How strongly the light picks out each tile"), relief, 0, 1, 0.05, (s, v) => s.roofSurface!.relief = v);
+            StyleSlider(e, k0, new GUIContent("Variation", "How much each tile's shade differs from the next"), variation, 0, 1, 0.05, (s, v) => s.roofSurface!.variation = v);
         }
 
         void DetailsCard(StoreyEdit e, BuildingData b, int k0, FacadeStyle? st)

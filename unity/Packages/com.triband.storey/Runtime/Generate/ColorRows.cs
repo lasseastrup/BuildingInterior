@@ -27,7 +27,8 @@ namespace Triband.Storey.Generate
     /// <summary>
     /// The GPU side of swatches (docs/COLOURS.md §3.3, §3.4), engine-free so the headless tests can check
     /// exactly what the shaders will read. A colour row is 32 16-bit entries in four <c>uint4</c>s: the palette
-    /// index of each <see cref="ColorSlot"/> of a style, spare entries, and the atlas row of the building's remap. It was
+    /// index of each <see cref="ColorSlot"/> of a style, spare entries, the style's roof surface (<see cref="RoofEntry"/>), and
+    /// the atlas row of the building's remap. It was
     /// 24 in three until the facade's strips and roof cap needed more slots than were spare (docs/COLOURS.md §3.3).
     /// </summary>
     public static class ColorRows
@@ -46,6 +47,49 @@ namespace Triband.Storey.Generate
             for (int s = 0; s < Slots; s++) r[s] = palette.IndexOf(StyleColors.Of(st, (ColorSlot)s, palette.Defaults));
             return r;
         }
+
+        /// <summary>
+        /// A pitched roof's surface (<see cref="FacadeStyle.roofSurface"/>, docs/EDITOR.md §6.2), in three spare entries from
+        /// here: its pattern (bits 0 to 3, 0 for a plain roof), relief and variation (6 bits each, of 63); then a tile's width
+        /// and height in millimetres. StoreyRoofOf in StoreyPalette.hlsl reads them, one load with the remap row.
+        /// </summary>
+        public const int RoofEntry = 28;
+
+        /// <summary>
+        /// A style's colour row as written (<see cref="Pack"/>): its slots' palette indices (<see cref="Indices"/>), then the
+        /// spare entries, its roof's surface among them (<see cref="RoofEntry"/>).
+        /// </summary>
+        public static int[] Row(FacadeStyle st, IColorPalette palette)
+        {
+            var r = new int[RoofEntry + 3];
+            Array.Copy(Indices(st, palette), r, Slots);
+            var (pattern, w, h, relief, variation) = RoofSurface(st);
+            if (pattern != 0)
+            {
+                r[RoofEntry] = pattern | (int)Math.Round(relief * 63) << 4 | (int)Math.Round(variation * 63) << 10;
+                r[RoofEntry + 1] = (int)Math.Round(w * 1000); r[RoofEntry + 2] = (int)Math.Round(h * 1000);
+            }
+            return r;
+        }
+
+        /// <summary>
+        /// A style's roof surface with its defaults filled in: the pattern (0 for none), a tile's width and height in metres
+        /// (kept between 2 cm and 60 m), relief and variation (0 to 1).
+        /// </summary>
+        public static (int pattern, double w, double h, double relief, double variation) RoofSurface(FacadeStyle st)
+        {
+            if (st.roofSurface is not RoofSurface rs) return (0, 0, 0, 0, 0);
+            var (dw, dh) = TileSize(rs.pattern);
+            static double Size(double? v, double d) => Math.Max(0.02, Math.Min(60, v ?? d));
+            static double Unit(double? v, double d) => Math.Max(0, Math.Min(1, v ?? d));
+            return ((int)rs.pattern, Size(rs.w, dw), Size(rs.h, dh), Unit(rs.relief, 0.6), Unit(rs.variation, 0.15));
+        }
+
+        /// <summary>A pattern's own tile, width along the eave and height up the slope in metres: a standing seam's width is the panel's.</summary>
+        public static (double w, double h) TileSize(RoofPattern p) => p switch
+        {
+            RoofPattern.Tiles => (0.25, 0.35), RoofPattern.Slate => (0.3, 0.22), RoofPattern.Shingles => (0.25, 0.18), _ => (0.5, 1.0),
+        };
 
         /// <summary>Write a row as the shader reads it: entry e is the low (even e) or high half of word e / 2.</summary>
         public static void Pack(int[] indices, int remapRow, uint[] dest, int offset)
@@ -179,6 +223,7 @@ namespace Triband.Storey.Generate
     {
         int AllocColorRow();
         void ReleaseColorRow(int row);
+        /// <summary>A style's row (<see cref="ColorRows.Row"/>: its slots' palette indices and spare entries) and its remap's atlas row (0 = none).</summary>
         void WriteColorRow(int row, int[] paletteIndices, int remapRow);
     }
 
@@ -256,7 +301,7 @@ namespace Triband.Storey.Generate
             finally { rewriting = false; }
         }
 
-        void Write(StyleRef s, int row) => sink.WriteColorRow(row, ColorRows.Indices(colors.StyleOf(s), palette), RemapRowOf(s.building));
+        void Write(StyleRef s, int row) => sink.WriteColorRow(row, ColorRows.Row(colors.StyleOf(s), palette), RemapRowOf(s.building));
 
         /// <summary>
         /// Resolve styles from another site (the layout was edited or undone; building indices unchanged). With

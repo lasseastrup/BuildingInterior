@@ -59,7 +59,7 @@ namespace Triband.Storey.Tests
             return (new ColorRowBook(colors, palette, sink), palette, sink, colors);
         }
 
-        static int[] Expected(ColorResolver colors, StyleRef s, FakePalette p) => ColorRows.Indices(colors.StyleOf(s), p);
+        static int[] Expected(ColorResolver colors, StyleRef s, FakePalette p) => ColorRows.Row(colors.StyleOf(s), p);
 
         [Fact]
         public void EachStyleGetsOneRowWrittenOnce()

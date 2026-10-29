@@ -76,7 +76,7 @@ public readonly struct Swatch { public readonly StyleRef style; public readonly 
 
 Two buffers join the building table and are allocated and freed like LOD2's parameter rows:
 
-- `_StoreyColors` (`StructuredBuffer<uint4>`): **one row per building tier** of four `uint4`, 32 16-bit entries. The first entries are the palette indices of the style's colours in `ColorSlot` order (25 today), the rest up to 30 are spare, and entry 31 is the **atlas row of the building's remap** (0 = none). At 64 bytes a row this is about 280 KiB for the 3,000-building test city, at 1.5 tiers per building. The row was three `uint4` (24 entries, 48 bytes, about 210 KiB) until the facade's strips and roof cap (docs/EDITOR.md §6.7) needed five slots where three were spare: the fourth `uint4` costs 16 bytes a row, about 70 KiB for the test city, and no shader reads it but for the remap row, which the massing read from the third before.
+- `_StoreyColors` (`StructuredBuffer<uint4>`): **one row per building tier** of four `uint4`, 32 16-bit entries. The first entries are the palette indices of the style's colours in `ColorSlot` order (25 today), the rest up to 27 are spare, entries 28 to 30 hold the style's **roof surface** (docs/EDITOR.md §6.2, `ColorRows.RoofEntry`: pattern, relief and variation, then a tile's width and height in millimetres; 0 for a plain roof), and entry 31 is the **atlas row of the building's remap** (0 = none). At 64 bytes a row this is about 280 KiB for the 3,000-building test city, at 1.5 tiers per building. The row was three `uint4` (24 entries, 48 bytes, about 210 KiB) until the facade's strips and roof cap (docs/EDITOR.md §6.7) needed five slots where three were spare: the fourth `uint4` costs 16 bytes a row, about 70 KiB for the test city, and no shader reads it but for the remap row, which the massing read from the third before.
 - `_StoreyDetailColors` (`StructuredBuffer<uint>`): the palette index of each colour used by facade-detail models (slot − 32, §3.9), written once from the detail catalogue. None is set until detail models exist, but the table has an entry for every slot a vertex's byte can name (32 to 255): the shader reads it for every colour (§3.5), and on Metal a read past a buffer's end can fault the GPU.
 
 The CPU writes a row when a building is uploaded or its colours change. It rewrites every row when the palette's indices may have moved (`OnMappingsInvalidated`), resolving each palette id to its current index through `ColorPaletteDefinition.Instance`. Party-wall faces point at the neighbour's row, so the neighbour's interior colour follows it without a rebuild. Party walls already rebuild when a neighbour's structure changes.
@@ -102,7 +102,7 @@ One new include, `StoreyPalette.hlsl`, is Storey's whole view of Color Pipeline.
 ```hlsl
 TEXTURE2D(_GlobalColorPaletteTex);          // ColorMappingManager's atlas, or Storey's hex palette (§3.7)
 uint _ColorAtlasWidth;
-StructuredBuffer<uint4> _StoreyColors;       // per colour row, 4 x uint4: 32 x uint16 (the style's colours, spare, remap row)
+StructuredBuffer<uint4> _StoreyColors;       // per colour row, 4 x uint4: 32 x uint16 (the style's colours, spare, roof surface, remap row)
 StructuredBuffer<uint>  _StoreyDetailColors; // per facade-detail colour: palette index
 
 // Color Pipeline 2.1.11's SampleColorPalette, same addressing; the width kept off zero and the texel inside the texture

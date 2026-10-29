@@ -187,7 +187,17 @@ Varyings StoreyVert(Attributes IN)
     // one lookup, its slot and shade picked first (StoreyVertexColor's otherwise): HLSL evaluates both sides of a ?:, and
     // the colour's side read a pane's number as its slot
     OUT.color = float4(StoreyPaletteColor(ce.x | (ce.y << 8), pane ? 6u : ce.z, pane ? paneTone : ce.w / 128.0), flat ? (float)ce.x : 1.0);   // a face's vertices share one swatch: exact per vertex
-    OUT.win = pane ? float4(IN.color.a, (abs(nw) * 127.0 - 1.0) / 126.0, flat ? 2.0 + (float)ce.y + (bar ? 256.0 : 0.0) : 1.0, (float)ce.z) : float4(0, 0, 0, 0);
+    // a pitched roof's face (the roof's slot, not level): its style's roof surface, if it has one, in a pane's place, which a
+    // roof never has (StoreyRoof.hlsl): a tile's width and height in metres, minus the pattern plus half its variation, and
+    // its relief. The row is read for a roof's vertices alone
+    float4 roof = float4(0, 0, 0, 0);
+    [branch] if (!pane && ce.z == STOREY_SLOT_ROOF && IN.normalOS.y < 0.985)
+    {
+        uint3 r = StoreyRoofOf(ce.x | (ce.y << 8));
+        if ((r.x & 15u) != 0u)
+            roof = float4(r.y / 1000.0, r.z / 1000.0, -((float)(r.x & 15u) + 0.5 * (float)((r.x >> 10) & 63u) / 63.0), (float)((r.x >> 4) & 63u) / 63.0);
+    }
+    OUT.win = pane ? float4(IN.color.a, (abs(nw) * 127.0 - 1.0) / 126.0, flat ? 2.0 + (float)ce.y + (bar ? 256.0 : 0.0) : 1.0, (float)ce.z) : roof;
 #endif
 #ifdef STOREY_STEADY
     OUT.misc = float2(v.bid, v.lod);

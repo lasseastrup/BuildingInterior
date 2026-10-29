@@ -196,9 +196,26 @@ Layouts with a mansard or dormers are Storey's own: the prototype doesn't read t
 Engine-free: `Roofs.Make`, `RoofType.Mansard`, `FacadeStyle.mansard` and `FacadeStyle.dormers` (`RoofFeatureTests`).
 - Dormer windows follow the style as the facade's windows do: sills, heads (flat or arched), frames, glazing bars, the artist's window, and rooms behind the glass (the window shader). LOD1 shows a plain pane with rooms.
 
+**Surface** (the Roof card's *Surface*, under any pitched roof): the slopes' tiles, drawn by the shader rather than modelled, so they add no triangles, draw calls or textures. *Pattern*:
+- **Tiles:** clay tiles, rounded, in columns up the slope, each row's foot over the one below.
+- **Slate:** flat slates, each row half a slate along, a fine joint between two.
+- **Shingles:** rounded feet, each row half a shingle along.
+- **Seams:** a metal roof, a standing seam up the slope at each panel's edge.
+
+*Tile width* (along the eave; for seams the *Panel width*) and *Tile height* (how much of each shows up the slope) default to the pattern's own: 0.25 × 0.35 m, 0.3 × 0.22 m, 0.25 × 0.18 m, 0.5 m. *Relief* is how strongly the light picks out each tile, and *Variation* how much each tile's shade differs from the next. The colour is the roof's.
+
+The pattern runs along each slope's own eave and up its own slope, so a hip roof's faces each have their rows. Dormer roofs and the steep sides of a mansard have it too. The flat top of a roof, the trim and the soffits don't. A roofed terrace below a setback (Shape › Terrace | Roof) has the surface of the style of the floors it covers: when that style isn't the one with the roof card, the Facade tab shows a *Terrace roof* card for it.
+
+The tiles fade to the roof's plain colour where one is under a few pixels on screen, so they don't shimmer in the distance. Every pattern averages that colour, which is also what LOD2's massing paints, so the switch to the massing changes nothing (`RoofSurfaceTests`).
+
+How it is drawn: the style's surface rides in three spare entries of its colour row (`ColorRows.RoofEntry`). A vertex of the roof's colour slot on a face that isn't level reads them, one buffer load, and hands them to its fragments where a window pane's coordinates go (a pane never lies on a roof). The fragment works out the pattern from the face's normal and its place, about 40 instructions on roof pixels only (StoreyRoof.hlsl).
+
+Layout key `roofSurface` on the style: an object with `pattern` (`tiles`, `slate`, `shingles` or `seams`), `w`, `h`, `relief` and `variation`, each written only when set. The baked layout format is version 9.
+
 **Checks:**
 1. Set a building's roof to Mansard: steep sides, a shallow top. Change *Steep part*.
 2. Turn on Dormers on a hip, a gable and the mansard, then change *Dormers every*.
+3. Give a hip roof each Surface pattern, close up and far off: the tiles follow each slope, and far off the roof is its plain colour again.
 
 ### 6.3 Courtyards and atria
 

@@ -235,7 +235,7 @@ namespace Triband.Storey.Unity
         }
         public void ReleaseColorRow(int row) => freeColorRow.Push(row);
 
-        /// <summary>A style's palette indices (in <see cref="Generate.ColorSlot"/> order) and its remap's atlas row (0 = none).</summary>
+        /// <summary>A style's row (<see cref="Generate.ColorRows.Row"/>: palette indices in <see cref="Generate.ColorSlot"/> order, then the roof's surface) and its remap's atlas row (0 = none).</summary>
         public void WriteColorRow(int row, int[] paletteIndices, int remapRow)
         {
             Generate.ColorRows.Pack(paletteIndices, remapRow, packed, 0);

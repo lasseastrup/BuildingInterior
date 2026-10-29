@@ -79,7 +79,7 @@ namespace Triband.Storey.Tests
                 sb.Append('}');
             }
             string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())))[..16];
-            Assert.True(hash == "8A16B519EE690842", $"the model's shape is {hash}: see this test's summary ({sb})");
+            Assert.True(hash == "DFF414FAE921FCBB", $"the model's shape is {hash}: see this test's summary ({sb})");
         }
 
         /// <summary>A number the enum doesn't name, which the JSON reader takes ("roofType": "7"), bakes and reads back as it was.</summary>
