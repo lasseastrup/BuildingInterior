@@ -57,6 +57,13 @@ namespace Triband.Storey.Generate
         /// </summary>
         public bool noLod1;
         /// <summary>
+        /// Up the corners (<see cref="Details.Rule.Corners"/>): the corners it goes on, by the angle between their walls where it
+        /// stands, in degrees (90 a rectangle's corner; going in, the notch's), and whether it is bent to fit that angle: made
+        /// for a 90° corner, each half turned onto its own wall about the corner (<see cref="Details.Item.bend"/>). Storey's own.
+        /// </summary>
+        public double cornerMin = 45, cornerMax = 135;
+        public bool cornerBend = true;
+        /// <summary>
         /// The colour most of its LOD0 triangles have (a part's own or its style colour), found when it is registered: what a
         /// style's colour for it replaces (<see cref="KindRule.color"/>), as the old generator recoloured a detail's most used
         /// palette colour. Null for the generator's own.
@@ -155,10 +162,12 @@ namespace Triband.Storey.Generate
         /// up. Each part takes its colour from the style; those of colour <paramref name="from"/> take <paramref name="to"/>
         /// instead (a style's colour for the kind's main colour).
         /// </summary>
-        public static void Place(MeshBuilder op, Frame F, DetailKind.Mesh m, double u, double y0, double sx, double sy, Palette C, ColorSlot? from = null, ColorSlot? to = null)
+        public static void Place(MeshBuilder op, Frame F, DetailKind.Mesh m, double u, double y0, double sx, double sy, Palette C, ColorSlot? from = null, ColorSlot? to = null,
+            double bend = 0, double bendOut = 1)
         {
             if (op.ShapeOnly || m.P.Length == 0) return;
             var at = new KindPlace(F, u, y0, sx, sy);
+            if (bend != 0) at = at.Bent(bend, bendOut);
             foreach (var whole in m.parts)
             {
                 var part = KindPart.Of(m, whole);

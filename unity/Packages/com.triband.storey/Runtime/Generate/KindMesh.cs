@@ -454,16 +454,21 @@ namespace Triband.Storey.Generate
         readonly double xL, xR, XL, mx, yB, yT, YB, my;
         // a part that keeps its shape: its anchor in its own space
         readonly bool rigid; readonly double ax, ay;
+        // bent to a corner (Bent): each half turned about the corner's edge, across u and Dim.T_EXT out, by bend (the left half
+        // one way, the right the other); a point on the bend out along the corner's bisector, bendOut times as far
+        readonly double bend, bendOut;
 
-        public KindPlace(Frame f, double u, double y0, double sx, double sy) : this(f, u, y0, sx, sy, false, 0, 0, 0, 1, false, 0, 0, 0, 1, false, 0, 0) { }
+        public KindPlace(Frame f, double u, double y0, double sx, double sy) : this(f, u, y0, sx, sy, false, 0, 0, 0, 1, false, 0, 0, 0, 1, false, 0, 0, 0, 1) { }
 
-        KindPlace(Frame f, double u, double y0, double sx, double sy, bool cutX, double xL, double xR, double XL, double mx, bool cutY, double yB, double yT, double YB, double my, bool rigid, double ax, double ay)
+        KindPlace(Frame f, double u, double y0, double sx, double sy, bool cutX, double xL, double xR, double XL, double mx, bool cutY, double yB, double yT, double YB, double my, bool rigid, double ax, double ay,
+            double bend, double bendOut)
         {
             F = f; this.u = u; this.y0 = y0; this.sx = sx; this.sy = sy;
             flip = f.u.x * f.w.z - f.u.z * f.w.x < 0 ? -1 : 1;
             this.cutX = cutX; this.xL = xL; this.xR = xR; this.XL = XL; this.mx = mx;
             this.cutY = cutY; this.yB = yB; this.yT = yT; this.YB = YB; this.my = my;
             this.rigid = rigid; this.ax = ax; this.ay = ay;
+            this.bend = bend; this.bendOut = bendOut;
         }
 
         /// <summary>
@@ -477,11 +482,31 @@ namespace Triband.Storey.Generate
             double xL = -w / 2 + bl, xR = w / 2 - br, XL = -W / 2 + bl, XR = W / 2 - br, yB = bb, yT = h - bt, YB = bb, YT = H - bt;
             bool cx = xR - xL > 1e-3 && XR - XL > 1e-3, cy = yT - yB > 1e-3 && YT - YB > 1e-3;
             return new KindPlace(f, u, y0, W / Math.Max(1e-3, w), H / Math.Max(1e-3, h),
-                cx, xL, xR, XL, cx ? (XR - XL) / (xR - xL) : 1, cy, yB, yT, YB, cy ? (YT - YB) / (yT - yB) : 1, false, 0, 0);
+                cx, xL, xR, XL, cx ? (XR - XL) / (xR - xL) : 1, cy, yB, yT, YB, cy ? (YT - YB) / (yT - yB) : 1, false, 0, 0, 0, 1);
         }
 
         /// <summary>The same placement for a part that keeps its shape: it goes where its anchor goes, unscaled.</summary>
-        public KindPlace Rigid(P3 anchor) => new KindPlace(F, u, y0, sx, sy, cutX, xL, xR, XL, mx, cutY, yB, yT, YB, my, true, anchor.x, anchor.y);
+        public KindPlace Rigid(P3 anchor) => new KindPlace(F, u, y0, sx, sy, cutX, xL, xR, XL, mx, cutY, yB, yT, YB, my, true, anchor.x, anchor.y, bend, bendOut);
+
+        /// <summary>
+        /// The same placement bent to a corner (Details.Corners): a kind made for a 90° corner, at a corner of another angle, each
+        /// half turned by <paramref name="by"/> (radians; the left half that way, the right the other) about the corner's edge,
+        /// so each lies on its own wall as it lies on its wall at 90°. A point on the bend goes out along the corner's bisector,
+        /// <paramref name="outScale"/> times as far, where it stands as far from both walls as it did: the two halves still meet.
+        /// </summary>
+        public KindPlace Bent(double by, double outScale) => new KindPlace(F, u, y0, sx, sy, cutX, xL, xR, XL, mx, cutY, yB, yT, YB, my, rigid, ax, ay, by, outScale);
+
+        /// <summary>A point's place across and out (frame space) bent to the corner; <paramref name="side"/>: which half it is in (0 on the bend).</summary>
+        (double a, double w) Bend(double a, double w, double side)
+        {
+            double r = w - Dim.T_EXT;
+            if (side == 0) return (u, Dim.T_EXT + r * bendOut);
+            double t = side < 0 ? bend : -bend, c = Math.Cos(t), s = Math.Sin(t), x = a - u;
+            return (u + x * c - r * s, Dim.T_EXT + x * s + r * c);
+        }
+
+        // within this of the bend, a point is on it
+        const double OnBend = 1e-4;
 
         /// <summary>
         /// How near a slice line a point the bake set aside from it (<see cref="KindBake.Aside"/>) is: it goes back onto the
@@ -503,17 +528,26 @@ namespace Triband.Storey.Generate
             : Math.Abs(y - yB) <= OnLine ? YB : Math.Abs(y - yT) <= OnLine ? YB + (yT - yB) * my
             : y < yB ? y : y > yT ? y + (YB + (yT - yB) * my - yT) : YB + (y - yB) * my;
 
-        public P3 Point(P3 p) => rigid
-            ? F.At(u + flip * (X(ax) + p.x - ax), y0 + Y(ay) + p.y - ay, Dim.T_EXT + p.z)
-            : F.At(u + flip * X(p.x), y0 + Y(p.y), Dim.T_EXT + p.z);
+        public P3 Point(P3 p)
+        {
+            double a = rigid ? u + flip * (X(ax) + p.x - ax) : u + flip * X(p.x), y = rigid ? y0 + Y(ay) + p.y - ay : y0 + Y(p.y), w = Dim.T_EXT + p.z;
+            if (bend != 0) (a, w) = Bend(a, w, Math.Abs(a - u) <= OnBend ? 0 : a - u);
+            return F.At(a, y, w);
+        }
 
         /// <summary>The normal <paramref name="n"/> at point <paramref name="p"/> (its own space): by the inverse of the scale where the point is.</summary>
         public P3 Normal(P3 p, P3 n)
         {
             double kx = rigid ? 1 : !cutX ? sx : p.x < xL || p.x > xR ? 1 : mx;
             double ky = rigid ? 1 : !cutY ? sy : p.y < yB || p.y > yT ? 1 : my;
-            double nx = n.x / kx, ny = n.y / ky, nz = n.z;
-            return new P3(F.u.x * flip * nx + F.w.x * nz, ny, F.u.z * flip * nx + F.w.z * nz).Normalized;
+            double nx = n.x / kx, ny = n.y / ky, nz = n.z, na = flip * nx;
+            if (bend != 0)
+            {
+                // turned with its half: by where the point is, or on the bend by which way it faces
+                double a = rigid ? u + flip * (X(ax) + p.x - ax) : u + flip * X(p.x), side = Math.Abs(a - u) > OnBend ? a - u : na;
+                if (side != 0) { double t = side < 0 ? bend : -bend, c = Math.Cos(t), s = Math.Sin(t); (na, nz) = (na * c - nz * s, na * s + nz * c); }
+            }
+            return new P3(F.u.x * na + F.w.x * nz, ny, F.u.z * na + F.w.z * nz).Normalized;
         }
     }
 }

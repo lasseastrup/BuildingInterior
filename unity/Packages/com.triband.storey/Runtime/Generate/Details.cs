@@ -102,6 +102,12 @@ namespace Triband.Storey.Generate
             public DetailData? man;
             /// <summary>Up a corner (<see cref="Rule.Corners"/>): at the corner where edge <see cref="i"/> starts, on the outside of its walls, facing out along the corner's bisector.</summary>
             public bool corner;
+            /// <summary>
+            /// Up a corner of another angle than 90°, bent to fit it (<see cref="DetailKind.cornerBend"/>): each half turned by this
+            /// (radians, the left half this way) about the corner's edge, and a point on the bend this far out along the
+            /// bisector per metre it was (<see cref="bendOut"/>). 0 and 1: as made.
+            /// </summary>
+            public double bend, bendOut = 1;
             /// <summary>As wide as its opening's span (an awning, or an artist's kind fitted across).</summary>
             public bool Spans => hasSpan && (kind.stretch || kind.w <= 0);
             public double Width => Spans ? u1 - u0 : kind.w > 0 ? kind.w : 1;
@@ -436,6 +442,10 @@ namespace Triband.Storey.Generate
                     if (Math.Abs(turn) < 1e-4) continue;   // no corner: the walls run on
                     bool outward = turn > 0;
                     if ((mode == DetailCorners.Outward && !outward) || (mode == DetailCorners.Inward && outward)) continue;
+                    // the corner's angle where the detail stands, between its walls (90° a rectangle's; going in, the notch's):
+                    // outside the kind's range it would float off a sharp corner or sink into a blunt one
+                    double half = (180 - Math.Acos(Math.Max(-1, Math.Min(1, (ax * cx + az * cz) / (la * lc)))) * 180 / Math.PI) / 2;
+                    if (2 * half < dk.cornerMin - 1e-6 || 2 * half > dk.cornerMax + 1e-6) continue;
                     if (OnParty(i, 0) || OnParty(ip, la)) continue;
                     // none beside a bare wall, nor between two quiet ones (as the old generator kept them off its blank edges and
                     // between two sides it left plain); a wall that is only blank keeps its corners
@@ -445,7 +455,15 @@ namespace Triband.Storey.Generate
                     {
                         double x = Hash01(b.id, "corner", ka, i, j * 32 + (int)Math.Min(31, Math.Round(step * 10)));
                         if (x < from || x >= from + p) continue;
-                        var it = Mk(dk, i, 0, null); it.corner = true; it.y = y0 + off + (j + 0.5) * step - yk - dk.bottom - dk.h / 2; out_.Add(it);
+                        var it = Mk(dk, i, 0, null); it.corner = true; it.y = y0 + off + (j + 0.5) * step - yk - dk.bottom - dk.h / 2;
+                        if (dk.cornerBend && Math.Abs(half - 45) > 1e-6)
+                        {
+                            // made for 90°: each half turned onto its own wall, which leaves the corner at half its angle from the
+                            // bisector (behind the detail, round a corner going out; ahead of it, in a notch)
+                            it.bend = (outward ? 45 - half : half - 45) * Math.PI / 180;
+                            it.bendOut = Math.Sin(Math.PI / 4) / Math.Sin(half * Math.PI / 180);
+                        }
+                        out_.Add(it);
                     }
                 }
             }
@@ -499,7 +517,7 @@ namespace Triband.Storey.Generate
                     }
                     // the style's colour for its main colour, where the style gives one (Storey's own)
                     ColorSlot? to = RuleOf(st, d.kind.id)?.color is string cr ? KindColors.SlotOf(cr) : null;
-                    DetailKinds.Place(op, F, lod == 0 || d.kind.lod1 == null ? full : d.kind.lod1, um, y0, sx, sy, C, to.HasValue ? d.kind.main : null, to);
+                    DetailKinds.Place(op, F, lod == 0 || d.kind.lod1 == null ? full : d.kind.lod1, um, y0, sx, sy, C, to.HasValue ? d.kind.main : null, to, d.bend, d.bendOut);
                     continue;
                 }
                 switch (d.kind.id)

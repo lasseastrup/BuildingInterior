@@ -79,6 +79,10 @@ namespace Triband.Storey.Unity
         public bool stretch;
         [Tooltip("Leave it out of LOD1: for a small detail (a brick patch) that LOD1's distance can't show, where many would cost the lean shell more than its walls do.")]
         public bool leaveOutOfLod1;
+        [Tooltip("Up the corners: the corners it goes on, by the angle between their walls, in degrees (90 is a rectangle's corner; for a corner going in, the angle of the notch). Outside it, it would float off a sharp corner or sink into a blunt one.")]
+        public float cornerMin = 45, cornerMax = 135;
+        [Tooltip("Up the corners: made for a 90° corner, bend it to its corner's angle, each half turned onto its own wall. Off, it keeps its shape.")]
+        public bool bendToCorner = true;
 
         [SerializeField, HideInInspector] Baked lod0 = new Baked(), lod1 = new Baked();
 #pragma warning disable CS0649   // a player's are never assigned in code: Bake (editor) sets them, the asset brings them
@@ -193,6 +197,7 @@ namespace Triband.Storey.Unity
             id = id, name = name, anchor = anchor, rule = rule, stretch = stretch,
             w = Mathf.Max(0.05f, size.x), h = Mathf.Max(0.05f, size.y), d = Mathf.Max(0.02f, size.z), bottom = Bottom(lod0),
             lod0 = ToMesh(lod0), lod1 = hasLod1 ? ToMesh(lod1) : null, noLod1 = leaveOutOfLod1,
+            cornerMin = Mathf.Clamp(Mathf.Min(cornerMin, cornerMax), 1, 179), cornerMax = Mathf.Clamp(Mathf.Max(cornerMin, cornerMax), 1, 179), cornerBend = bendToCorner,
         };
 
         /// <summary>

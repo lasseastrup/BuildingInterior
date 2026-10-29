@@ -198,6 +198,21 @@ namespace Triband.Storey.Editor
             foreach (var f in fields) EditorGUILayout.PropertyField(serializedObject.FindProperty(f), true);
             if (d.anchor != Details.Anchor.Wall) EditorGUILayout.PropertyField(serializedObject.FindProperty("stretch"), true);
             EditorGUILayout.PropertyField(serializedObject.FindProperty("leaveOutOfLod1"), new GUIContent("Leave out of LOD1", "For a small detail (a brick patch) that LOD1's distance can't show: many would cost the lean shell more than its walls do"));
+            if (d.rule == Details.Rule.Corners)
+            {
+                // the corners it goes on, and bent to fit them (docs/EDITOR.md §6.12)
+                float lo = d.cornerMin, hi = d.cornerMax;
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.PrefixLabel(new GUIContent("Corner angles", "The corners it goes on, by the angle between their walls (90° is a rectangle's corner; going in, the notch's angle). Outside them it would float off a sharp corner or sink into a blunt one."));
+                    lo = Mathf.Round(EditorGUILayout.FloatField(lo, GUILayout.Width(36)));
+                    EditorGUILayout.MinMaxSlider(ref lo, ref hi, 1, 179);
+                    hi = Mathf.Round(EditorGUILayout.FloatField(hi, GUILayout.Width(36)));
+                }
+                lo = Mathf.Clamp(Mathf.Round(lo), 1, 179); hi = Mathf.Clamp(Mathf.Round(hi), lo, 179);
+                if (lo != d.cornerMin || hi != d.cornerMax) { Undo.RecordObject(d, "Corner angles"); d.cornerMin = lo; d.cornerMax = hi; changed = true; }
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("bendToCorner"), new GUIContent("Bend to the corner", "Made for a 90° corner: bent to each corner's angle, each half turned onto its own wall. Off, it keeps its shape."));
+            }
             serializedObject.ApplyModifiedProperties();
             changed |= EditorGUI.EndChangeCheck();
             if (d.parts.Count > 0) EditorGUILayout.LabelField(new GUIContent("Parts", d.prefab != null
@@ -225,7 +240,8 @@ namespace Triband.Storey.Editor
                 EditorGUILayout.HelpBox("The pivot looks off. " + Pivot(d.anchor), MessageType.Warning);
             if (!d.leaveOutOfLod1 && StoreyDetailBake.Small(d.size) && (d.rule == Details.Rule.Scatter || d.rule == Details.Rule.Corners))
                 EditorGUILayout.HelpBox("A small detail many go on: LOD1's distance can't show it, and it costs every building at LOD1. Tick Leave out of LOD1.", MessageType.Info);
-            if (b.min.z < -0.05f)
+            // up the corners, its halves run back along the walls from where their faces meet: below Z 0 by design
+            if (b.min.z < -0.05f && d.rule != Details.Rule.Corners)
                 EditorGUILayout.HelpBox("The mesh goes into the wall: keep it at Z 0 and out (+Z), or it shows through the wall inside.", MessageType.Warning);
             if (d.anchor == Details.Anchor.Tier && d.stretch && d.FlatEnds())
                 EditorGUILayout.HelpBox("Fitted to each storey, its flat top and bottom lie on the floor line, where the floor band's top is, and flicker: leave them out (a pipe needs no caps), or turn off Stretch.", MessageType.Warning);
