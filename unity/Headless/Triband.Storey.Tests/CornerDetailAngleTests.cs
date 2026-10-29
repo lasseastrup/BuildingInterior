@@ -10,8 +10,8 @@ namespace Triband.Storey.Tests
     /// <summary>
     /// A detail up the corners at a corner of another angle than the 90° it was made for (docs/EDITOR.md §6.12,
     /// <see cref="DetailKind.cornerMin"/>, <see cref="DetailKind.cornerBend"/>): bent to fit, each half lies on its own wall as
-    /// it lies on its wall at 90°; and outside the kind's range of angles it isn't placed, where it would float off a sharp
-    /// corner or sink into a blunt one. Storey's own.
+    /// it lies on its wall at 90°; and outside the kind's range of angles it isn't placed: a near-straight joint, or a corner so
+    /// sharp the bent detail's edge would stand far out. Storey's own.
     /// </summary>
     public class CornerDetailAngleTests
     {

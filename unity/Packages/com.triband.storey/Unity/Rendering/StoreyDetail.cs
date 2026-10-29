@@ -79,9 +79,9 @@ namespace Triband.Storey.Unity
         public bool stretch;
         [Tooltip("Leave it out of LOD1: for a small detail (a brick patch) that LOD1's distance can't show, where many would cost the lean shell more than its walls do.")]
         public bool leaveOutOfLod1;
-        [Tooltip("Up the corners: the corners it goes on, by the angle between their walls, in degrees (90 is a rectangle's corner; for a corner going in, the angle of the notch). Outside it, it would float off a sharp corner or sink into a blunt one.")]
-        public float cornerMin = 45, cornerMax = 135;
-        [Tooltip("Up the corners: made for a 90° corner, bend it to its corner's angle, each half turned onto its own wall. Off, it keeps its shape.")]
+        [Tooltip("Up the corners: the corners it goes on, by the angle between their walls, in degrees (90 is a rectangle's corner; for a corner going in, the angle of the notch). Past 150° the walls nearly run on; below 45° a bent detail's edge stands far out.")]
+        public float cornerMin = 45, cornerMax = 150;
+        [Tooltip("Up the corners: made for a 90° corner, bend it to its corner's angle, each half turned onto its own wall. Off, it keeps its shape: it floats off a sharp corner and sinks into a blunt one.")]
         public bool bendToCorner = true;
 
         [SerializeField, HideInInspector] Baked lod0 = new Baked(), lod1 = new Baked();

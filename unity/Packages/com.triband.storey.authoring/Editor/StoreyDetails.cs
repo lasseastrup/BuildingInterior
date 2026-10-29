@@ -204,14 +204,14 @@ namespace Triband.Storey.Editor
                 float lo = d.cornerMin, hi = d.cornerMax;
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.PrefixLabel(new GUIContent("Corner angles", "The corners it goes on, by the angle between their walls (90° is a rectangle's corner; going in, the notch's angle). Outside them it would float off a sharp corner or sink into a blunt one."));
+                    EditorGUILayout.PrefixLabel(new GUIContent("Corner angles", "The corners it goes on, by the angle between their walls (90° is a rectangle's corner; going in, the notch's angle). Past 150° the walls nearly run on; below 45° a bent detail's edge stands far out."));
                     lo = Mathf.Round(EditorGUILayout.FloatField(lo, GUILayout.Width(36)));
                     EditorGUILayout.MinMaxSlider(ref lo, ref hi, 1, 179);
                     hi = Mathf.Round(EditorGUILayout.FloatField(hi, GUILayout.Width(36)));
                 }
                 lo = Mathf.Clamp(Mathf.Round(lo), 1, 179); hi = Mathf.Clamp(Mathf.Round(hi), lo, 179);
                 if (lo != d.cornerMin || hi != d.cornerMax) { Undo.RecordObject(d, "Corner angles"); d.cornerMin = lo; d.cornerMax = hi; changed = true; }
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("bendToCorner"), new GUIContent("Bend to the corner", "Made for a 90° corner: bent to each corner's angle, each half turned onto its own wall. Off, it keeps its shape."));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("bendToCorner"), new GUIContent("Bend to the corner", "Made for a 90° corner: bent to each corner's angle, each half turned onto its own wall. Off, it keeps its shape: it floats off a sharp corner and sinks into a blunt one."));
             }
             serializedObject.ApplyModifiedProperties();
             changed |= EditorGUI.EndChangeCheck();

@@ -443,7 +443,7 @@ namespace Triband.Storey.Generate
                     bool outward = turn > 0;
                     if ((mode == DetailCorners.Outward && !outward) || (mode == DetailCorners.Inward && outward)) continue;
                     // the corner's angle where the detail stands, between its walls (90° a rectangle's; going in, the notch's):
-                    // outside the kind's range it would float off a sharp corner or sink into a blunt one
+                    // outside the kind's range it isn't placed: a near-straight joint, or a corner so sharp the bent detail's edge stands far out
                     double half = (180 - Math.Acos(Math.Max(-1, Math.Min(1, (ax * cx + az * cz) / (la * lc)))) * 180 / Math.PI) / 2;
                     if (2 * half < dk.cornerMin - 1e-6 || 2 * half > dk.cornerMax + 1e-6) continue;
                     if (OnParty(i, 0) || OnParty(ip, la)) continue;

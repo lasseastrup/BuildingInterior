@@ -61,7 +61,7 @@ namespace Triband.Storey.Generate
         /// stands, in degrees (90 a rectangle's corner; going in, the notch's), and whether it is bent to fit that angle: made
         /// for a 90° corner, each half turned onto its own wall about the corner (<see cref="Details.Item.bend"/>). Storey's own.
         /// </summary>
-        public double cornerMin = 45, cornerMax = 135;
+        public double cornerMin = 45, cornerMax = 150;
         public bool cornerBend = true;
         /// <summary>
         /// The colour most of its LOD0 triangles have (a part's own or its style colour), found when it is registered: what a
