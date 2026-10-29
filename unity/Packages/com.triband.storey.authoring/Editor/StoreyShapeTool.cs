@@ -11,9 +11,10 @@ namespace Triband.Storey.Editor
 {
     /// <summary>
     /// The Shape tool (docs/EDITOR.md slice 6.5): the selected outline's corners, a "+" on each edge to add a corner, an
-    /// orange bar outside each edge to push that wall, and a centre handle to move the building, at the outline's
-    /// height with the outline below dotted. Corners snap to neighbours, the outline below and the next corners (Alt:
-    /// free); a refused change says why. Double-click a corner to remove it. Every drag is one undo step.
+    /// orange bar outside each edge to push that wall, at the outline's height with the outline below dotted; and Unity's
+    /// move gizmo to move the building, up and down too (docs/EDITOR.md §6.11). Corners snap to neighbours, the outline
+    /// below and the next corners, and a moved building to its neighbours' walls and ground floors (Alt: free); a refused
+    /// change says why. Double-click a corner to remove it. Every drag is one undo step.
     /// </summary>
     [EditorTool("Storey Shape", typeof(StoreySite), typeof(StoreyToolContext))]
     internal sealed class StoreyShapeTool : StoreyTool
@@ -27,10 +28,14 @@ namespace Triband.Storey.Editor
         int dragIndex, dragControl;
         List<Vec2>? dragBase;
         Vector3 dragStart;
-        Vec2 moveOffset;
+        // a move: where the gizmo, the building and its ground floor were when it began, and the line saying its height
+        Vector3 moveFrom;
+        Vec2 movePos;
+        double moveElevation;
+        string? moveHeight;
         string? refusal;
         // control ids by kind of handle, so adding a corner mid-drag does not renumber the other handles
-        static readonly int CornerHint = "StoreyCorner".GetHashCode(), InsertHint = "StoreyInsert".GetHashCode(), PushHint = "StoreyPush".GetHashCode(), MoveHint = "StoreyMove".GetHashCode();
+        static readonly int CornerHint = "StoreyCorner".GetHashCode(), InsertHint = "StoreyInsert".GetHashCode(), PushHint = "StoreyPush".GetHashCode();
         static readonly int VoidCornerHint = "StoreyVoidCorner".GetHashCode(), VoidInsertHint = "StoreyVoidInsert".GetHashCode(), VoidMoveHint = "StoreyVoidMove".GetHashCode();
         Vec2 voidGrab;
 
@@ -171,27 +176,7 @@ namespace Triband.Storey.Editor
                 }
             }
 
-            // the building's centre moves it; an edge that comes within 0.5 m of a neighbour's snaps onto it (Alt: free)
-            if (k0 == 0)
-            {
-                var bb0 = Tiers.Bbox(b.footprint);
-                var centre = W(b, new Vec2((bb0.x0 + bb0.x1) / 2, (bb0.z0 + bb0.z1) / 2), y);
-                int id = GUIUtility.GetControlID(MoveHint, FocusType.Passive);
-                Handles.color = Accent;
-                EditorGUI.BeginChangeCheck();
-                var np = Handles.Slider2D(id, centre, Vector3.zero, Vector3.up, Vector3.right, Vector3.forward, Size(centre, 0.15f), Handles.CircleHandleCap, Vector2.zero, false);
-                if (EditorGUI.EndChangeCheck())
-                {
-                    if (drag != Drag.Move) { BeginDragOf(e, Drag.Move, 0, id, "Move building"); moveOffset = new Vec2(b.pos.x - np.x, b.pos.z - np.z); moveSnapped = false; }
-                    double nx = Tiers.Cm(np.x + moveOffset.x), nz = Tiers.Cm(np.z + moveOffset.z), rx = nx, rz = nz;
-                    if (!alt) { var s = Outlines.SnapMove(b, nx, nz, e.Document.buildings); nx = s.x; nz = s.z; }
-                    if (nx != b.pos.x || nz != b.pos.z) e.ApplyTo("Move building", bb => { bb.pos = new Vec2(nx, nz); return true; });
-                    // snapped against a neighbour: the wall they now share flashes
-                    bool snapped = nx != rx || nz != rz;
-                    if (snapped && !moveSnapped) FlashShared(e, b.id);
-                    moveSnapped = snapped;
-                }
-            }
+            MoveGizmo(e, b, alt);
 
             VoidHandles(e, b, sv, alt);
 
@@ -211,6 +196,47 @@ namespace Triband.Storey.Editor
                 // no longer reads as one)
                 if (drag != Drag.Insert && GUIUtility.hotControl != dragControl) Finish(e, k0);
             }
+        }
+
+        /// <summary>
+        /// Unity's move gizmo on the building, at its ground floor: deep inside its outline, clear of the corner and wall
+        /// handles (<see cref="Generate.Geo.Deepest"/>), or with the Pivot setting at its own origin (its
+        /// <see cref="BuildingData.pos"/>); along the site's axes, or with Global the world's. Across, it
+        /// moves the building, an edge that comes within 0.5 m of a neighbour's snapping onto it (the wall they then share
+        /// flashes); up and down, it sets the building's height above the site (<see cref="BuildingData.elevation"/>), level
+        /// with the ground or a neighbour's ground floor within 15 cm (<see cref="Ground.Level"/>). Alt: free. Unity's own
+        /// snapping (Ctrl or Cmd, the grid) applies as to any object. One undo step a drag.
+        /// </summary>
+        void MoveGizmo(StoreyEdit e, BuildingData b, bool alt)
+        {
+            var pivot = Tools.pivotMode == PivotMode.Pivot ? new Vec2(0, 0) : Generate.Geo.Deepest(b.footprint);
+            var at = W(b, pivot, b.elevation);
+            var turn = Tools.pivotRotation == PivotRotation.Global && Site != null ? Quaternion.Inverse(Site.transform.rotation) : Quaternion.identity;
+            EditorGUI.BeginChangeCheck();
+            var np = Handles.PositionHandle(at, turn);
+            if (EditorGUI.EndChangeCheck())
+            {
+                // the axis or plane being dragged is the hot control: the drag ends when it lets go
+                if (drag != Drag.Move) { BeginDragOf(e, Drag.Move, 0, GUIUtility.hotControl, "Move building"); moveFrom = at; movePos = b.pos; moveElevation = b.elevation; moveSnapped = false; }
+                var d = np - moveFrom;
+                bool alongX = Mathf.Abs(d.x) > 1e-4f, alongZ = Mathf.Abs(d.z) > 1e-4f, upDown = Mathf.Abs(d.y) > 1e-4f;
+                double nx = alongX ? Tiers.Cm(movePos.x + d.x) : movePos.x, nz = alongZ ? Tiers.Cm(movePos.z + d.z) : movePos.z, rx = nx, rz = nz;
+                if ((alongX || alongZ) && !alt)
+                {
+                    // onto a neighbour's wall within reach, only along the axes being dragged: an arrow keeps to its line
+                    var s = Outlines.SnapMove(b, nx, nz, e.Document.buildings);
+                    if ((alongX || s.x == nx) && (alongZ || s.z == nz)) { nx = s.x; nz = s.z; }
+                }
+                BuildingData? level = null;
+                double ny = !upDown ? moveElevation : alt ? Tiers.Cm(moveElevation + d.y) : Ground.Level(b, nx, nz, moveElevation + d.y, e.Document.buildings, out level);
+                if (nx != b.pos.x || nz != b.pos.z || ny != b.elevation) e.ApplyTo("Move building", bb => { bb.pos = new Vec2(nx, nz); bb.elevation = ny; return true; });
+                // snapped against a neighbour: the wall they now share flashes
+                bool snapped = nx != rx || nz != rz;
+                if (snapped && !moveSnapped) FlashShared(e, b.id);
+                moveSnapped = snapped;
+                moveHeight = !upDown ? null : level != null ? $"{ny:0.00} m up, level with {level.name}" : ny == 0 && !alt ? "On the site's ground" : $"{ny:0.00} m up";
+            }
+            if (drag == Drag.Move && moveHeight != null) Label(at + Vector3.down * Size(at, 0.3f), moveHeight);
         }
 
         /// <summary>
@@ -311,7 +337,7 @@ namespace Triband.Storey.Editor
             if (drag == Drag.Corner || drag == Drag.Insert || drag == Drag.Push)
                 e.ApplyTo("Tidy outline", bb => { bool ch = false; CornerCuts.Around(bb, k0, (x, _) => ch = Outlines.Simplify(x, k0)); return ch; });
             e.EndDrag();
-            drag = Drag.None; dragBase = null; refusal = null;
+            drag = Drag.None; dragBase = null; refusal = null; moveHeight = null;
             Inspectors();
         }
 

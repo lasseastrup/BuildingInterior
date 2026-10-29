@@ -254,6 +254,32 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void ADraggedHeightStandsLevelWithTheGroundOrANeighbour()
+        {
+            var (site, a, b) = BackToBack(2, 0, 2, 3.25);
+            var all = site.Buildings;
+            Assert.Equal(0, Edit.Ground.Level(a, 0, 0, 0.1, all, out var w0)); Assert.Null(w0);            // the site's ground
+            Assert.Equal(3.25, Edit.Ground.Level(a, 0, 0, 3.14, all, out var w1)); Assert.Same(b, w1);     // the neighbour's ground floor
+            Assert.Equal(2.47, Edit.Ground.Level(a, 0, 0, 2.4671, all, out var w2)); Assert.Null(w2);      // between: to the centimetre
+            Assert.Equal(3.14, Edit.Ground.Level(a, -30, 0, 3.14, all, out var w3)); Assert.Null(w3);      // a building far off doesn't count
+            Assert.Equal(-0.5, Edit.Ground.Level(a, 0, 0, -0.5, all, out _));                               // below the site's ground is allowed
+        }
+
+        [Fact]
+        public void TheMoveGizmoStandsDeepInsideTheOutline()
+        {
+            // an L: its box's centre is on the inner corner's walls, where the corner and wall handles are
+            var L = new List<Vec2> { new Vec2(0, 0), new Vec2(20, 0), new Vec2(20, 6), new Vec2(6, 6), new Vec2(6, 20), new Vec2(0, 20) };
+            var p = Geo.Deepest(L);
+            Assert.True(Geo.Pip(L, p.x, p.z));
+            Assert.True(Geo.DistToEdges(L, p) > 2.9, $"({p.x:F2}, {p.z:F2}) is {Geo.DistToEdges(L, p):F2} m from a wall");   // 3 m: the arms are 6 m wide
+            // a box: its middle
+            var box = new List<Vec2> { new Vec2(0, 0), new Vec2(10, 0), new Vec2(10, 8), new Vec2(0, 8) };
+            var q = Geo.Deepest(box);
+            Assert.Equal(5, q.x, 1); Assert.Equal(4, q.z, 1);
+        }
+
+        [Fact]
         public void RaisingABuildingRebuildsTheNeighbourItSharesAWallWith()
         {
             var (site, a, b) = BackToBack(3, 0, 3, 0);

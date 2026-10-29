@@ -292,18 +292,21 @@ namespace Triband.Storey.Editor
 
         // ---- Shape ----
 
-        /// <summary>The building's height in the site: typed in, or stood on the ground under it (docs/EDITOR.md §6.11).</summary>
+        /// <summary>
+        /// The building's height in the site (docs/EDITOR.md §6.11): moved up and down with the move gizmo in the Scene view,
+        /// or stood on the ground under it.
+        /// </summary>
         void Placement(StoreyEdit e, BuildingData b)
         {
-            using var c = StoreyInspectorUI.Card("placement", "Placement", StoreyInspectorUI.PlacementIcon, StoreyInspectorUI.Tint.Details, $"{b.elevation:0.##} m up",
-                tip: "How high the building stands in the site: its ground floor's height above the site's ground");
+            using var c = StoreyInspectorUI.Card("placement", "Placement", StoreyInspectorUI.PlacementIcon, StoreyInspectorUI.Tint.Details,
+                b.elevation == 0 ? "On the site's ground" : $"{b.elevation:0.##} m up",
+                tip: "Where the building stands in the site: its ground floor's height above the site's ground");
             if (!c.Open) return;
+            StoreyInspectorUI.Note("Move the building with the move gizmo in the Scene view; its up arrow raises and lowers it, level with the ground or a neighbour as it passes them (Alt: free).");
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUI.BeginChangeCheck();
-                float el = EditorGUILayout.DelayedFloatField(new GUIContent("Elevation", "The ground floor's height above the Storey Site, in metres. Every floor, the roof and the interior stand on it; neighbours at other heights share only the storeys both reach."), (float)b.elevation);
-                if (EditorGUI.EndChangeCheck()) e.ApplyTo("Elevation", bb => { bb.elevation = Tiers.Cm(el); return true; });
-                if (GUILayout.Button(new GUIContent("Snap to ground", "Cast down onto the scene's colliders (a Terrain has one) under the building: it stands on the highest ground it finds, and its foundation reaches down to the lowest"), GUILayout.Width(110)))
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button(new GUIContent("Snap to ground", "Cast down onto the scene's colliders (a Terrain has one) under the building: it stands on the highest ground it finds, and its foundation reaches down to the lowest"), GUILayout.Width(120)))
                     SnapToGround(e, b);
             }
         }
@@ -410,7 +413,7 @@ namespace Triband.Storey.Editor
             }
             else
             {
-                EditorGUILayout.HelpBox("Drag the corners in the Scene view. Drag a + to add a corner, double-click a corner to remove it, drag an orange bar to push a wall. Alt: no snapping.", MessageType.None);
+                EditorGUILayout.HelpBox("Drag the corners in the Scene view. Drag a + to add a corner, double-click a corner to remove it, drag an orange bar to push a wall, and the move gizmo to move the building. Alt: no snapping.", MessageType.None);
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     // the outline of a template: the package's as buttons, the project's in a menu

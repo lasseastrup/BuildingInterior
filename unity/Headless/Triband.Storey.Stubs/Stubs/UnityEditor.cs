@@ -109,6 +109,15 @@ namespace UnityEditor
 
     public enum Tool { View = 0, Move = 1, Rotate = 2, Scale = 3, Rect = 4, Transform = 5, Custom = 6, None = -1 }
 
+    public enum PivotMode { Center = 0, Pivot = 1 }
+    public enum PivotRotation { Local = 0, Global = 1 }
+
+    public static class Tools
+    {
+        public static PivotMode pivotMode { get; set; }
+        public static PivotRotation pivotRotation { get; set; }
+    }
+
     public static class Undo
     {
         public static void RecordObjects(UnityEngine.Object[] objectsToUndo, string name) { }
@@ -230,6 +239,7 @@ namespace UnityEditor
         public static Color color { get; set; }
         public static Matrix4x4 matrix { get; set; }
         public static void DrawAAPolyLine(float width, params Vector3[] points) { }
+        public static Vector3 PositionHandle(Vector3 position, Quaternion rotation) => position;
         public static void DrawDottedLines(Vector3[] lineSegments, float screenSpaceSize) { }
         public static void DrawDottedLine(Vector3 p1, Vector3 p2, float screenSpaceSize) { }
         public static void DrawWireDisc(Vector3 center, Vector3 normal, float radius) { }

@@ -52,6 +52,34 @@ namespace Triband.Storey.Generate
 
         public static double Hypot(double a, double b) => Math.Sqrt(a * a + b * b);
 
+        /// <summary>
+        /// The point inside an outline furthest from its edges, roughly (its pole of inaccessibility): the best of a 9 × 9
+        /// grid over its box, then of grids a quarter as wide round the best, four times, so to about a 1/500 of its size.
+        /// Where a handle on the building (the Shape tool's move gizmo) keeps clear of the handles on its corners and walls:
+        /// an outline's box centre can lie on a wall, or outside it. Storey's own.
+        /// </summary>
+        public static Vec2 Deepest(List<Vec2> fp)
+        {
+            if (fp.Count == 0) return new Vec2(0, 0);
+            double x0 = fp[0].x, x1 = x0, z0 = fp[0].z, z1 = z0;
+            foreach (var p in fp) { x0 = Math.Min(x0, p.x); x1 = Math.Max(x1, p.x); z0 = Math.Min(z0, p.z); z1 = Math.Max(z1, p.z); }
+            var best = new Vec2((x0 + x1) / 2, (z0 + z1) / 2);
+            double bestD = Pip(fp, best.x, best.z) ? DistToEdges(fp, best) : -1, hw = (x1 - x0) / 2, hd = (z1 - z0) / 2;
+            for (int round = 0; round < 4; round++, hw /= 4, hd /= 4)
+            {
+                double ox = best.x, oz = best.z;
+                for (int i = 0; i <= 8; i++)
+                    for (int j = 0; j <= 8; j++)
+                    {
+                        double x = ox + hw * (i - 4) / 4, z = oz + hd * (j - 4) / 4;
+                        if (!Pip(fp, x, z)) continue;
+                        double d = DistToEdges(fp, new Vec2(x, z));
+                        if (d > bestD) { bestD = d; best = new Vec2(x, z); }
+                    }
+            }
+            return best;
+        }
+
         /// <summary>Normal of a slanted end face of a mitred box (the prototype's <c>endNormal</c>).</summary>
         public static P3 EndNormal(Frame F, double a0, double a1, double w0, double w1, int sign)
         {

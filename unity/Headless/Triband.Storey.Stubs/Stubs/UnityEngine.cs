@@ -269,6 +269,7 @@ namespace UnityEngine
         public static Quaternion Euler(float x, float y, float z) => default;
         public static Quaternion LookRotation(Vector3 forward, Vector3 upwards) => default;
         public static Quaternion LookRotation(Vector3 forward) => default;
+        public static Quaternion Inverse(Quaternion rotation) => rotation;
         public static bool operator ==(Quaternion a, Quaternion b) => true;
         public static bool operator !=(Quaternion a, Quaternion b) => false;
     }

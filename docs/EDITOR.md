@@ -100,7 +100,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Drag a corner. It snaps to the neighbours' corners and edges, Alt moves it freely, and edge lengths show while you drag.
    - Drag a "+" to add a corner, and double-click a corner to remove it.
    - Drag an orange bar to push a wall.
-   - Drag the centre handle: the building moves and snaps against a neighbour, which then shares the wall.
+   - Drag the move gizmo's arrows or squares (Unity's own, on the building's ground floor): the building moves along that axis or in that plane and snaps against a neighbour along it, which then shares the wall. Its up arrow raises and lowers it (§6.11).
    - Add setback, Inset 1.5 m, Starts at, Terrace or Roof.
    - Something refused says why next to the pointer, for example "Stairs or a lift are in the way".
    - Each drag is one undo step.
@@ -511,7 +511,7 @@ The site's inspector reads top to bottom in the order you work: which layout, wh
    - only the settings that apply show: *Window width* for Standard and Tall openings, the *Built-in window* group while the built-in window is picked, *Variety* while a list has a choice to make, *Opening margin* for doors of your own, *Shade of the wall* for a band with no colour of its own. A quiet line says why something isn't there (*Your window brings its own frame, sill and glazing bars.*).
 
    The cards:
-   - **Shape:** *Placement* (elevation, Snap to ground), *Outline* (setbacks, templates to start from), *Corners*, *Courtyards and atria* (folded until the building has one), *Storey heights*.
+   - **Shape:** *Placement* (how high it stands, which the move gizmo sets; Snap to ground), *Outline* (setbacks, templates to start from), *Corners*, *Courtyards and atria* (folded until the building has one), *Storey heights*.
    - **Facade:** *Style for* (with setbacks) above the cards, then *Style* (preset, Save as preset…), *Windows* (the window, or several with their weights and *Variety*; *Size and spacing*: openings, height for a window of its own size, window width, bays, bay width; *Ground floor*: its layout and own windows; *Depth in the wall*; *Built-in window*: sills, heads, glazing bars, frames), *Doors* (base: the street door, or several; its colour; *Depth in the wall*, opening margin), *Walls* (cornice, floor bands, plinth, foundation, brick patches, each with its colour), *Colours* (*More colours* folded), *Roof* (type; pitched: pitch, eaves, dormers; flat: parapet, roof edge), *Details* (*Placed for you*: AC units, vents and every Facade Detail with a rule, each as a chance; *Place by hand*: Entrance, Blank wall with its No windows / No details / Bare choice and *Whole side*, every Facade Detail, Bridge, as many to a row as fit), *Bridges* (when it has any).
    - **Interior:** *Inside* (walk-in or shell; the colours inside), *Floor* (the storey, how its walls show, rooms or filled, its height; on the roof, which stairs and lifts reach it), *Tools* (and what is selected with them).
 6. **Site settings** (folded): materials, the LOD shown, colliders, and the artist's windows, doors and facade details the layout uses.
@@ -538,7 +538,9 @@ Code: `StoreyInspectorUI` (`Card`, `SubHeader`, `Feature`, `Segmented`, `Note`, 
 
 ### 6.11 Buildings at different heights
 
-Each building has an **Elevation**: its ground floor's height above the Storey Site, in metres (Shape ▸ *Placement*). The whole building stands on it, interior included. Every floor height in the code (`Derived.FloorBase`) is a site height, so the walk model, the occlusion, the cutaway, bridges and the editor's tools all follow it. A layout saves `elevation` only for a raised building, so one on flat ground reads as before.
+Each building has an **elevation**: its ground floor's height above the Storey Site, in metres. The whole building stands on it, interior included. Every floor height in the code (`Derived.FloorBase`) is a site height, so the walk model, the occlusion, the cutaway, bridges and the editor's tools all follow it. A layout saves `elevation` only for a raised building, so one on flat ground reads as before.
+
+**Moving it up and down.** The Shape tool puts Unity's own move gizmo on the building, at its ground floor (`StoreyShapeTool.MoveGizmo`): deep inside its outline (`Geo.Deepest`, the point furthest from its walls, so the gizmo keeps clear of the corner and wall handles; an outline's box centre can lie on a wall), or with Unity's *Pivot* setting at the building's own origin (`pos`); along the site's axes, or with *Global* the world's. Its arrows and squares move the building across, snapping onto a neighbour's wall within 0.5 m along the axes being dragged (an arrow keeps to its line); its up arrow sets the elevation, standing it level with the site's ground or with the ground floor of a building within a metre of it as it comes within 15 cm of one (`Ground.Level`), so floors line up and the wall between them is shared all the way up. Alt drags freely, to the centimetre. Unity's own snapping (Ctrl or Cmd for increments, grid snapping) works as on any object. While it moves up or down, a label by the gizmo says how high it stands, and what it's level with. Each drag is one undo step. Shape ▸ *Placement* says how high it stands; it has no field to type it in.
 
 **Snap to ground** casts down onto the scene's colliders (a Terrain has one) at the building's corners (30 cm in), its edges' middles and its centre, skipping the site's own colliders (`Ground.Samples`). The building stands on the highest ground found, so it never sinks into the slope. Where the ground falls away by more than 5 cm, its foundation (Facade ▸ *Walls*) reaches 10 cm past the lowest point, so it never floats (`Ground.Snap`). One undo step.
 
@@ -550,7 +552,7 @@ A template comes in at elevation 0 (it lands somewhere else); a duplicate keeps 
 
 **Checks:**
 1. Put a Terrain with a slope under a site. Select a building, Shape ▸ *Snap to ground*: it stands on the high side, and its foundation reaches the ground on the low side.
-2. Type an elevation: the building moves up, inside and out. Walk into it with the play kit, and up its stairs: the floor clip and the cutaway follow.
+2. Drag the move gizmo's up arrow: the building moves up, inside and out, and a label says how high. Bring it down near the ground: it stops level with it. Undo puts it back in one step. Walk into it with the play kit, and up its stairs: the floor clip and the cutaway follow.
 3. Raise one of two buildings back to back by a storey: the lower one's ground floor along the shared wall gets windows; the raised one's top storey above its neighbour does too.
 4. Undo each step.
 
