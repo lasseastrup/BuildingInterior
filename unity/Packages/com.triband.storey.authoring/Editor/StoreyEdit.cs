@@ -141,8 +141,12 @@ namespace Triband.Storey.Editor
         }
         EditSession Core => core ??= new EditSession(text);
 
-        /// <summary>The edit open on a site, if any.</summary>
-        public static StoreyEdit? Of(StoreySite s) => open.FirstOrDefault(e => e != null && (e.site == s || (e.siteId != 0 && e.siteId == s.GetInstanceID())));
+        /// <summary>The edit open on a site, if any. Allocates nothing: the selection outline asks every editor update.</summary>
+        public static StoreyEdit? Of(StoreySite s)
+        {
+            foreach (var e in open) if (e != null && (e.site == s || (e.siteId != 0 && e.siteId == s.GetInstanceID()))) return e;
+            return null;
+        }
 
         /// <summary>Start editing a site's layout (or return the edit already open).</summary>
         public static StoreyEdit Begin(StoreySite s)

@@ -36,6 +36,7 @@ If those files move, change the four include paths. If the graph's lighting chan
 To light Storey another way, copy this sample:
 
 - Define `STOREY_CUSTOM_LIGHTING` in every pass.
-- Declare `#pragma multi_compile_local _ STOREY_STEADY` in every pass of the opaque and massing shaders, as these do. Buildings that nothing can hide draw with that variant, which has no discard, so tile-based GPUs treat them as opaque (docs/CITY.md §2). A shader without it still draws correctly, always with the discard.
+- Declare `#pragma multi_compile_local _ STOREY_STEADY` in every pass of the opaque and massing shaders but the selection pass, as these do. Buildings that nothing can hide draw with that variant, which has no discard, so tile-based GPUs treat them as opaque (docs/CITY.md §2). A shader without it still draws correctly, always with the discard.
+- Copy the `SceneSelectionPass` pass into each shader as it is, so the Scene view outlines only the building being edited. Without it Unity outlines every building of the selected site.
 - Put the material's own properties in `STOREY_MATERIAL_PROPERTIES`.
 - Include `StoreyLit.hlsl`, define `float4 StoreyLighting(StoreySurface s)`, then include `StoreyFragment.hlsl`.

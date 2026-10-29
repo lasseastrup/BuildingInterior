@@ -126,12 +126,13 @@ namespace Triband.Storey.Tests
             Assert.NotEmpty(clips);
             Assert.All(clips, i => Assert.InRange(i, other, end));
             Assert.Contains("#if !defined(STOREY_DEPTH) && !defined(STOREY_STEADY)", occ);   // no Sink in the steady variant
-            // every pass of the opaque and massing shaders has the variant; the glass doesn't need it (it blends)
+            // every pass of the opaque and massing shaders has the variant, but the Scene view's selection pass, which reads the
+            // building index the steady variant doesn't carry (SelectionOutlineTests); the glass doesn't need it (it blends)
             foreach (var name in new[] { "StoreyOpaque.shader", "StoreyMassing.shader" })
             {
-                var text = File.ReadAllText(Path.Combine(Shaders, name));
-                int passes = Regex.Matches(text, @"\bPass\s*\{").Count, variants = Regex.Matches(text, @"#pragma multi_compile_local _ STOREY_STEADY").Count;
-                Assert.True(passes == 3 && variants == passes, $"{name}: {variants} steady variants for {passes} passes");
+                var passes = Regex.Split(File.ReadAllText(Path.Combine(Shaders, name)), @"\bPass\s*\{").Skip(1).Where(p => !p.Contains("\"LightMode\" = \"SceneSelectionPass\"")).ToList();
+                int variants = passes.Count(p => p.Contains("#pragma multi_compile_local _ STOREY_STEADY"));
+                Assert.True(passes.Count == 3 && variants == passes.Count, $"{name}: {variants} steady variants for {passes.Count} passes");
             }
         }
 
@@ -170,7 +171,9 @@ namespace Triband.Storey.Tests
                 foreach (var name in new[] { "StoreyOpaque.shader", "StoreyMassing.shader" })
                 {
                     var text = Regex.Replace(File.ReadAllText(Path.Combine(dir, name)), @"//[^\n]*", "");
-                    Assert.Equal(new[] { "[_StoreyCull]" }, Regex.Matches(text, @"\bCull\s+(\S+)").Select(m => m.Groups[1].Value));
+                    // the Scene view's selection pass draws both faces, as URP's do: an outline, not the building
+                    var drawn = string.Concat(Regex.Split(text, @"\bPass\s*\{").Where(p => !p.Contains("\"LightMode\" = \"SceneSelectionPass\"")));
+                    Assert.Equal(new[] { "[_StoreyCull]" }, Regex.Matches(drawn, @"\bCull\s+(\S+)").Select(m => m.Groups[1].Value));
                     Assert.Matches(new Regex(@"_StoreyCull\s*\(""Cull"",\s*Float\)\s*=\s*0\s"), text);   // CullMode.Off
                 }
                 Assert.Matches(new Regex(@"\bCull\s+Back\b"), File.ReadAllText(Path.Combine(dir, "StoreyGlass.shader")));

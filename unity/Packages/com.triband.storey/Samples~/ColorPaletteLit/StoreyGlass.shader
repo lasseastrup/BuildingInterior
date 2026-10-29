@@ -48,5 +48,28 @@ Shader "Flamingo/Storey/Glass"
             #include "Packages/com.triband.storey/Unity/Shaders/StoreyFragment.hlsl"
             ENDHLSL
         }
+
+        // The Scene view's selection outline, never drawn in a player: where the depth pass draws, of the building being
+        // edited alone while the editor names one (StoreySelectionFrag)
+        Pass
+        {
+            Name "SceneSelectionPass"
+            Tags { "LightMode" = "SceneSelectionPass" }
+            Cull Off
+            ZWrite On
+            Blend Off
+            HLSLPROGRAM
+            #pragma target 4.5
+            #pragma vertex StoreyVert
+            #pragma fragment StoreySelectionFrag
+            // compiled when first drawn, as URP's own selection pass for the GPU Resident Drawer (BRGPicking.shader): compiled
+            // in the background instead, the buildings it draws had no outline at all
+            #pragma editor_sync_compilation
+            #pragma multi_compile _ DOTS_INSTANCING_ON
+            #define STOREY_DEPTH
+            #define STOREY_SELECTION
+            #include "Packages/com.triband.storey/Unity/Shaders/StoreyLit.hlsl"
+            ENDHLSL
+        }
     }
 }

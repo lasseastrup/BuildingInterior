@@ -3,6 +3,7 @@
 //   Storey/Glass    palette colour from the vertex's colour reference, transparent, no depth write
 //   Storey/Massing  LOD2: colour from StoreyFacadeColor()
 // each with a shadow-caster / depth pass that defines STOREY_DEPTH. Keywords: STOREY_MASSING, STOREY_CAP.
+// Each also has the Scene view's selection pass, a depth pass that defines STOREY_SELECTION too (StoreySelectionFrag).
 //
 // Lighting is one function, StoreyLighting(StoreySurface), so a project can light the buildings like the rest
 // of its world (the Color Palette Lit sample is one). By default it is URP's PBR. A project shader
@@ -46,6 +47,14 @@ static const float _StoreyAlpha = 1.0;
 #ifdef STOREY_SHADOW
 float3 _LightDirection;   // set by URP for the shadow caster pass: a directional light's direction
 float3 _LightPosition;    // and a spot or point light's place (_CASTING_PUNCTUAL_LIGHT_SHADOW)
+#endif
+#ifdef STOREY_SELECTION
+// The Scene view's selection outline, set by the editor (StoreySelectionOutline): 0 draws every building, n building n - 1
+// alone (one past the table's rows: none). Unity sets the other two as integers, which Shader Graph's selection pass
+// declares them as: read as floats they are 0, the id of nothing, and no outline is drawn
+float _StoreyOutline;
+int _ObjectId;
+int _PassValue;
 #endif
 
 struct Attributes
@@ -129,6 +138,10 @@ Varyings StoreyVert(Attributes IN)
     worldPos = StoreySink(worldPos, IN.tag, kind, origY);
     StoreyVarying v;
     bool shown = StoreyVertex(IN.tag, wall, kind, wid, worldPos, origY, v);
+#ifdef STOREY_SELECTION
+    // the outline of the site's selected object is on every building under it: of the one being edited alone
+    if (_StoreyOutline > 0.5 && abs(v.bid + 1.0 - _StoreyOutline) > 0.5) shown = false;
+#endif
     // a flat pane stands upright: its normal's up byte is its centre bar's mark (ColorRows.EncodePane), not light
     float3 normalOS = IN.normalOS.xyz;
     if (IN.normalOS.w < -0.5 / 127.0) normalOS.y = 0.0;
@@ -235,6 +248,17 @@ float4 StoreyDepthFrag(Varyings IN) : SV_Target
     StoreyOcclude(StoreyUnpack(IN), IN.positionCS.xy, IN.positionCS.z);   // only the cross-fade and isolate reach the depth passes
     return 0;
 }
+
+#ifdef STOREY_SELECTION
+// The selection outline's pass: where the depth pass draws, the ids Unity's outline reads. The Scene view's alone; a player
+// never draws it
+half4 StoreySelectionFrag(Varyings IN) : SV_Target
+{
+    UNITY_SETUP_INSTANCE_ID(IN);
+    StoreyOcclude(StoreyUnpack(IN), IN.positionCS.xy, IN.positionCS.z);
+    return half4(_ObjectId, _PassValue, 1.0, 1.0);
+}
+#endif
 
 #else
 

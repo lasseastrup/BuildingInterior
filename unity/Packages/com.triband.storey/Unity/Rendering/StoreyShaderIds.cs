@@ -21,6 +21,8 @@ namespace Triband.Storey.Unity
         public static readonly int OccMode = Shader.PropertyToID("_StoreyOccMode");
         public static readonly int Player = Shader.PropertyToID("_StoreyPlayer");
         public static readonly int LodTint = Shader.PropertyToID("_StoreyLodTint");
+        /// <summary>The Scene view's selection outline, which the selection pass draws (StoreyLit.hlsl): 0 on every building, n on building n - 1 alone. The editor's to set.</summary>
+        public static readonly int Outline = Shader.PropertyToID("_StoreyOutline");
         public static readonly int GlassFill = Shader.PropertyToID("_StoreyGlassFill");
         public static readonly int Colors = Shader.PropertyToID("_StoreyColors");
         public static readonly int DetailColors = Shader.PropertyToID("_StoreyDetailColors");
