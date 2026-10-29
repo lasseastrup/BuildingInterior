@@ -409,12 +409,23 @@ namespace Triband.Storey.Generate
                 }
             }
 
-            // stacked up the corners, steps of the kind's spacing centred on each storey, each one middled in its step; facing
+            // stacked up the corners in steps of the kind's spacing, each one middled in its step, over the whole run of storeys
+            // the corner goes up (its tier's, those the rule puts it on), the leftover split between the run's foot and top, as
+            // the old generator stacks its vertical edge details up the whole building: each belongs to the storey its middle
+            // is on, and may reach into the next. A storey at a time, each storey's leftover was a gap at every floor. Facing
             // out along the corner's bisector, on the outside of its walls. Not where a party wall meets the corner.
             void Corners(DetailKind dk, double p, double from, KindRule? kr)
             {
-                double step = CornerStep(kr); int steps = (int)Math.Floor(h / step); if (steps == 0) return;
-                double off = (h - steps * step) / 2; var mode = kr?.corners ?? DetailCorners.Outward;
+                double step = CornerStep(kr); var mode = kr?.corners ?? DetailCorners.Outward;
+                var floors = kr?.floors ?? DetailFloors.All;
+                int ka = floors == DetailFloors.Upper ? Math.Max(k0, 1) : k0, kb = floors == DetailFloors.Ground ? Math.Min(Party.TierEnd(b, k0), 1) : Party.TierEnd(b, k0);
+                if (k < ka || k >= kb) return;
+                double y0 = Derived.FloorBase(b, ka), run = Derived.FloorBase(b, kb) - y0, yk = Derived.FloorBase(b, k);
+                int steps = (int)Math.Floor(run / step + 1e-9); if (steps == 0) return;
+                double off = (run - steps * step) / 2;
+                // this storey's steps: those whose middle is on it, from its floor up to the next one's, worked out alike for both
+                // storeys at a floor, so each step is on exactly one
+                int j0 = Math.Max(0, (int)Math.Ceiling((yk - y0 - off) / step - 0.5)), j1 = Math.Min(steps, (int)Math.Ceiling((Derived.FloorBase(b, k + 1) - y0 - off) / step - 0.5));
                 for (int i = 0; i < n; i++)
                 {
                     int ip = (i - 1 + n) % n;
@@ -430,11 +441,11 @@ namespace Triband.Storey.Generate
                     // between two sides it left plain); a wall that is only blank keeps its corners
                     EdgeState sa = Derived.EdgeStateAt(b, k, ip), sc = Derived.EdgeStateAt(b, k, i);
                     if (sa == EdgeState.Bare || sc == EdgeState.Bare || (sa >= EdgeState.Quiet && sc >= EdgeState.Quiet)) continue;
-                    for (int j = 0; j < steps; j++)
+                    for (int j = j0; j < j1; j++)
                     {
-                        double x = Hash01(b.id, "corner", k, i, j * 32 + (int)Math.Min(31, Math.Round(step * 10)));
+                        double x = Hash01(b.id, "corner", ka, i, j * 32 + (int)Math.Min(31, Math.Round(step * 10)));
                         if (x < from || x >= from + p) continue;
-                        var it = Mk(dk, i, 0, null); it.corner = true; it.y = off + (j + 0.5) * step - dk.bottom - dk.h / 2; out_.Add(it);
+                        var it = Mk(dk, i, 0, null); it.corner = true; it.y = y0 + off + (j + 0.5) * step - yk - dk.bottom - dk.h / 2; out_.Add(it);
                     }
                 }
             }

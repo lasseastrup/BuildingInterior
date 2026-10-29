@@ -226,13 +226,23 @@ namespace Triband.Storey.Tests
         public void CornerDetailsStackUpTheCornersItsStyleNamesFacingOut()
         {
             var k = Kind(Details.Rule.Corners, 0.3, 0.4, 0.1, y0: -0.2);
-            var (b, s) = DetailKindTests.Block(bb => Set(bb, k.id, 100, new KindRule { spacing = 0.75 }));
+            // storeys that aren't whole steps high: stacked a storey at a time, each one's leftover was a gap at every floor
+            static void Heights(BuildingData bb) { bb.groundHeight = 3.25; bb.floorHeight = 2.9; }
+            var (b, s) = DetailKindTests.Block(bb => { Set(bb, k.id, 100, new KindRule { spacing = 0.75 }); Heights(bb); });
             var items = ItemsByFloor(s, b, k);
-            int perStorey = Enumerable.Range(0, b.floors.Count).Sum(f => (int)Math.Floor(Derived.FloorH(b, f) / 0.75));
-            Assert.Equal(4 * perStorey, items.Count);   // a box has four corners, all standing out
-            Assert.All(items, x => { Assert.True(x.it.corner); Assert.InRange(x.it.y + k.bottom, 0, Derived.FloorH(b, x.k) - k.h + 1e-9); });
+            double foot = Derived.FloorBase(b, 0), run = Derived.RoofY(b) - foot; int steps = (int)Math.Floor(run / 0.75);
+            Assert.Equal(4 * steps, items.Count);   // a box has four corners, all standing out
+            // each middled on its storey, and up each corner a step apart all the way, across the floors: the leftover split
+            // between the foot and the top alone, as the old generator stacks its vertical edge details
+            Assert.All(items, x => { Assert.True(x.it.corner); Assert.InRange(x.it.y + k.bottom + k.h / 2, 0, Derived.FloorH(b, x.k)); });
+            foreach (var corner in items.GroupBy(x => x.it.i))
+            {
+                var mids = corner.Select(x => Derived.FloorBase(b, x.k) + x.it.y + k.bottom + k.h / 2).OrderBy(y => y).ToList();
+                Assert.Equal(steps, mids.Count);
+                for (int j = 0; j < steps; j++) Assert.Equal(foot + (run - steps * 0.75) / 2 + (j + 0.5) * 0.75, mids[j], 6);
+            }
             // each faces out along its corner's bisector, from outside its walls
-            var (b0, s0) = DetailKindTests.Block(bb => Floors.SetCount(bb, b.floors.Count)); int plain = DetailKindTests.Slot(Lod0.Build(s0, b0).Op, ColorSlot.Grille).Count;
+            var (b0, s0) = DetailKindTests.Block(bb => { Floors.SetCount(bb, b.floors.Count); Heights(bb); }); int plain = DetailKindTests.Slot(Lod0.Build(s0, b0).Op, ColorSlot.Grille).Count;
             var op = Lod0.Build(s, b).Op; var front = DetailKindTests.Slot(op, ColorSlot.Grille).Skip(plain).ToList();
             Assert.Equal(4 * items.Count, front.Count);
             Assert.All(front, i =>
