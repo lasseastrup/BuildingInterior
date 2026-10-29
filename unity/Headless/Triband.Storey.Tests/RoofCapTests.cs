@@ -70,6 +70,49 @@ namespace Triband.Storey.Tests
                     }
         }
 
+        /// <summary>
+        /// Seen from above, a flat roof is closed out to its walls' outer face, whatever its edge: a curb, a parapet, a raised
+        /// cap or a fascia's curb covers the walls' top, and round an inset cap, which takes the curb's place but stands clear
+        /// of the walls, the roof does. The old Skyscraper themes' roofs were open along the walls' top round their block.
+        /// </summary>
+        [Theory, MemberData(nameof(Caps))]
+        public void SeenFromAboveTheRoofIsClosedOutToTheWalls(double h, double depth, double strip, bool parapet)
+        {
+            foreach (var outline in new[] { Rect, Ell })
+                foreach (bool interior in new[] { true, false })
+                {
+                    var (_, b, site) = Block(Capped(h, depth, strip > 0 ? strip : null, parapet), outline, interior);
+                    var open0 = Open(Lod0.Build(site, b).Op, b); var open1 = Open(Lod1.Build(site, b), b);
+                    Assert.True(open0.Count == 0, $"LOD0: {open0.Count} points open, the first at {string.Join(", ", open0.Take(3))}");
+                    Assert.True(open1.Count == 0, $"LOD1: {open1.Count} points open, the first at {string.Join(", ", open1.Take(3))}");
+                }
+        }
+
+        /// <summary>The points of a 10 cm grid inside the walls' outer face that no face turned up, at the roof's height or above, covers.</summary>
+        static List<(double x, double z)> Open(MeshBuilder op, BuildingData b)
+        {
+            double top = Derived.RoofY(b);
+            var up = new List<(P3 a, P3 b, P3 c)>();
+            for (int t = 0; t < op.Tris; t++)
+            {
+                var A = op.P[op.I[3 * t]]; var B = op.P[op.I[3 * t + 1]]; var C = op.P[op.I[3 * t + 2]];
+                // turned up by its winding, as culling sees it, not by its normals
+                double ny = (B.z - A.z) * (C.x - A.x) - (B.x - A.x) * (C.z - A.z);
+                if (ny > 1e-9 && Math.Min(A.y, Math.Min(B.y, C.y)) > top - 0.01) up.Add((A, B, C));
+            }
+            static bool Covers((P3 a, P3 b, P3 c) t, double x, double z)
+            {
+                double d1 = (x - t.b.x) * (t.a.z - t.b.z) - (t.a.x - t.b.x) * (z - t.b.z), d2 = (x - t.c.x) * (t.b.z - t.c.z) - (t.b.x - t.c.x) * (z - t.c.z), d3 = (x - t.a.x) * (t.c.z - t.a.z) - (t.c.x - t.a.x) * (z - t.a.z);
+                return !((d1 < -1e-9 || d2 < -1e-9 || d3 < -1e-9) && (d1 > 1e-9 || d2 > 1e-9 || d3 > 1e-9));
+            }
+            var outer = Geo.GrownUnion(new List<List<Vec2>> { b.footprint }, Dim.T_EXT, new List<List<Vec2>>())[0][0];
+            var open = new List<(double, double)>();
+            for (double x = outer.Min(p => p.x) + 0.05; x < outer.Max(p => p.x); x += 0.1)
+                for (double z = outer.Min(p => p.z) + 0.05; z < outer.Max(p => p.z); z += 0.1)
+                    if (Geo.Pip(outer, x, z) && !up.Any(t => Covers(t, x + b.pos.x, z + b.pos.z))) open.Add((Math.Round(x, 2), Math.Round(z, 2)));
+            return open;
+        }
+
         [Fact]
         public void ItsNumbersWithoutAHeightBuildNothing()
         {

@@ -628,6 +628,8 @@ namespace Triband.Storey.Generate
             // a cap on the roof's edge (RoofCap): a raised one takes the curb's place and lifts the parapet
             var cap = RoofCap.Of(stN); double yp = y + (cap?.Lift ?? 0); bool whole = cap != null && RoofCap.Whole(b);
             Swatch capC = C.CapOf(stN), rimC = C.CapRimOf(stN);
+            // the walls' top under no curb, parapet or raised cap: the roof's, in its colour round an inset cap's block (Slab)
+            Swatch wallTop = whole && stN.capRim != null && cap is RoofCap ri && ri.inset ? rimC : C.roof;
             for (int i = 0; i < n; i++)
             {
                 var e = Geo.EdgeInfo(g.Wp, i, g.ccw); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L);
@@ -647,6 +649,9 @@ namespace Triband.Storey.Generate
                         Facade.StripPieces(op, F, m, ranges(m.Span(-0.04, T + 0.05)), yp + 1.0, yp + 1.1, -0.04, T + 0.05, C.trim, null);
                     }
                     else if (cap == null || cap.Value.fascia) Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), y, y + 0.3, 0, T, C.trim, C.trim, Skip.Bot);
+                    // an inset cap takes the curb's place, as the old generator has none, but stands clear of the walls: their
+                    // top is closed flush with the roof, or the roof's edge is open into the wall
+                    else if (cap.Value.inset) Facade.StripFace(op, F, m, ranges(m.Span(0, T)), 0, T, y, 0, T, true, wallTop);
                 }
                 Edge(R);
                 // the parapet stops where a core stands flush against the wall, whose bulkhead (LOD0's) takes the wall up. A
