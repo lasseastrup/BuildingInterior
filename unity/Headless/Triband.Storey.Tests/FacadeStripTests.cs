@@ -105,6 +105,38 @@ namespace Triband.Storey.Tests
             Assert.Equal(PrototypeJson.WriteStyle(st), PrototypeJson.WriteStyle(baked.buildings[0].style));
         }
 
+        /// <summary>
+        /// A plinth deeper than the prototype's 4 cm is closed where a door cuts it, 8 cm either side, at LOD0 and LOD1: its
+        /// ends were left open, as the prototype's sliver is, and the old Skyscraper Simple 2 theme's 22 cm plinth showed into
+        /// itself beside its door. The prototype's is left as it draws it.
+        /// </summary>
+        [Fact]
+        public void APlinthStandingOutIsClosedWhereADoorCutsIt()
+        {
+            foreach (double depth in new[] { 0.22, 0.04 })
+            {
+                var st = Styles.Preset("brick").Clone(); st.ground = GroundType.Match; st.plinthH = 0.62; st.plinthDepth = depth; st.foundation = null;
+                var (_, b, site) = Block(st, interior: false);
+                var f = Details.EdgeFrameAt(b, 0, 0);
+                var door = Facade.Ops(site, b, 0, 0, f.e.L, f.uS, f.uE).Single(o => o.door);
+                foreach (var (lod, mesh) in new[] { (0, Lod0.Build(site, b).Op), (1, Lod1.Build(site, b)) })
+                {
+                    // its ends facing the door, across its depth (out from the wall's outer face) and height
+                    double area = 0;
+                    for (int t = 0; t < mesh.Tris; t++)
+                    {
+                        var A = mesh.P[mesh.I[3 * t]]; var B = mesh.P[mesh.I[3 * t + 1]]; var C = mesh.P[mesh.I[3 * t + 2]];
+                        double nx = (B.y - A.y) * (C.z - A.z) - (B.z - A.z) * (C.y - A.y), ny = (B.z - A.z) * (C.x - A.x) - (B.x - A.x) * (C.z - A.z), nz = (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x);
+                        double L = Math.Sqrt(nx * nx + ny * ny + nz * nz); if (L < 1e-12) continue;
+                        double x = (A.x + B.x + C.x) / 3, y = (A.y + B.y + C.y) / 3, z = (A.z + B.z + C.z) / 3;
+                        bool faces = (nx / L > 0.99 && Math.Abs(x - (door.u0 - 0.08)) < 1e-6) || (nx / L < -0.99 && Math.Abs(x - (door.u1 + 0.08)) < 1e-6);
+                        if (faces && y > 0 && y < 0.62 && z < -Dim.T_EXT && z > -Dim.T_EXT - depth) area += L / 2;
+                    }
+                    Assert.True(Math.Abs(area - (depth > 0.04 ? 2 * depth * 0.62 : 0)) < 1e-6, $"{depth} m deep, LOD{lod}: {area:F4} m² of ends facing the door");
+                }
+            }
+        }
+
         [Fact]
         public void ThePlinthStandsOutAsSet()
         {

@@ -1044,26 +1044,31 @@ namespace Triband.Storey.Generate
         /// <param name="squareS">The wall before has no such strip (a bare wall, docs/EDITOR.md §6.7): where it reaches the
         /// start corner the strip ends square at the wall's face there, closed where it stands out past the corner and open
         /// against the wall before where it doesn't. <paramref name="squareE"/> likewise at the end.</param>
+        /// <param name="cutsWithin">Ends of pieces cut inside this span (by an opening) are closed, whatever <paramref name="skip"/>
+        /// says of the ends: a strip standing out further than a sliver shows into itself there. Storey's own (a plinth of its
+        /// own depth, cut for its doors).</param>
         public static void StripPieces(MeshBuilder gb, Frame F, Miter m, List<(double, double)> ranges, double y0, double y1, double wa, double wb, Swatch c, Swatch? cIn, Skip skip = Skip.None,
-            bool squareS = false, bool squareE = false)
+            bool squareS = false, bool squareE = false, (double lo, double hi)? cutsWithin = null)
         {
             var (s0, e0) = m.Span(wa, wb);
             foreach (var (a, bb) in ranges)
             {
                 bool ms = a <= s0 + 1e-6, me = bb >= e0 - 1e-6;
+                var cut = skip;
+                if (cutsWithin is (double lo, double hi)) { if (!ms && a > lo + 1e-6) cut &= ~Skip.UStart; if (!me && bb < hi - 1e-6) cut &= ~Skip.UEnd; }
                 if ((ms && squareS) || (me && squareE))
                 {
                     // the square end: at the corner of the wall's face; a convex corner's stands out past the wall before, and is closed
-                    var sk = skip & ~(Skip.UStart | Skip.UEnd);
+                    var sk = cut & ~(Skip.UStart | Skip.UEnd);
                     double ks = ms ? m.S.k : 0, ke = me ? m.E.k : 0; double ss = ms ? m.S.s : a, se = me ? m.E.s : bb;
                     if (ms && squareS) { ss = m.S.At(wa); ks = 0; sk |= m.S.At(wb) > m.S.At(wa) ? Skip.UStart : Skip.None; }
-                    else sk |= skip & Skip.UStart | (ms ? Skip.UStart : Skip.None);
+                    else sk |= cut & Skip.UStart | (ms ? Skip.UStart : Skip.None);
                     if (me && squareE) { se = m.E.At(wa); ke = 0; sk |= m.E.At(wb) < m.E.At(wa) ? Skip.UEnd : Skip.None; }
-                    else sk |= skip & Skip.UEnd | (me ? Skip.UEnd : Skip.None);
+                    else sk |= cut & Skip.UEnd | (me ? Skip.UEnd : Skip.None);
                     gb.MBox(F, ss, ks, se, ke, y0, y1, wa, wb, c, cIn, sk);
                     continue;
                 }
-                gb.MBox(F, ms ? m.S.s : a, ms ? m.S.k : 0, me ? m.E.s : bb, me ? m.E.k : 0, y0, y1, wa, wb, c, cIn, skip | (ms ? Skip.UStart : Skip.None) | (me ? Skip.UEnd : Skip.None));
+                gb.MBox(F, ms ? m.S.s : a, ms ? m.S.k : 0, me ? m.E.s : bb, me ? m.E.k : 0, y0, y1, wa, wb, c, cIn, cut | (ms ? Skip.UStart : Skip.None) | (me ? Skip.UEnd : Skip.None));
             }
         }
     }

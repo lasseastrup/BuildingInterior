@@ -503,7 +503,11 @@ namespace Triband.Storey.Generate
                     var widened = ops.ConvertAll(o => { if (!o.door) return o; var d = o.Clone(); d.u0 -= 0.08; d.u1 += 0.08; return d; });
                     var pc0 = st.plinth != null ? new Swatch(C.style, ColorSlot.Plinth) : st.groundWall != null ? C.groundWall.Shade(0.72) : C.plinth;
                     var rp = Facade.SolidRanges(r.Item1, r.Item2, widened);
-                    Facade.StripPieces(op, F, m, rp, y + fTop, y + pTop, T, T + pd, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart, sqS, sqE);
+                    // where a door cuts it, a plinth deeper than the prototype's 4 cm (Storey's own, as the old generator's bottom
+                    // strip) is closed, or it shows into itself; the prototype's is left as it draws it, and the ends against a
+                    // party wall open
+                    Facade.StripPieces(op, F, m, rp, y + fTop, y + pTop, T, T + pd, pc0, pc0, Skip.In | (fTop > 0 ? Skip.None : Skip.Bot) | Skip.UEnd | Skip.UStart, sqS, sqE,
+                        pd > 0.04 + 1e-6 ? r : ((double, double)?)null);
                     Facade.StripBacks(op, F, rp, ops, y, y + fTop, y + pTop, T, pc0, rooms);
                 }
             }
