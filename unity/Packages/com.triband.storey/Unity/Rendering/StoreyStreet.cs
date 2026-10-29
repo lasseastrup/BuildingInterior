@@ -15,14 +15,14 @@ namespace Triband.Storey.Unity
     [AddComponentMenu("Storey/Storey Street (parity harness)")]
     public sealed class StoreyStreet : MonoBehaviour
     {
-        [Tooltip("The layout to build, imported from the prototype.")]
+        [Tooltip("The layout to build: a .storey file.")]
         public StoreyDocumentAsset? layout;
         [Tooltip("Storey/Opaque")] public Material? opaque;
         [Tooltip("Storey/Glass")] public Material? glass;
         [Tooltip("Storey/Massing")] public Material? massing;
         [Tooltip("Which LOD every building shows: 0 full, 1 shell, 2 massing.")]
         [Range(0, 2)] public int displayedLod = 0;
-        [Tooltip("Tint by LOD, as the prototype's stats card does.")]
+        [Tooltip("Tint each building by the level of detail it shows.")]
         public bool lodTint;
 
         [Header("Remap test (needs Color Pipeline; docs/COLOURS.md §3.6)")]

@@ -11,10 +11,10 @@ namespace Triband.Storey.Editor
     /// </summary>
     internal static class PrototypeImportMenu
     {
-        [MenuItem(StoreyEditorInfo.MenuRoot + "Import Prototype Layout...", priority = 100)]
+        [MenuItem(StoreyEditorInfo.MenuRoot + "Import Layout File...", priority = 100)]
         static void Import()
         {
-            string source = EditorUtility.OpenFilePanel("Prototype layout", "", "json,storey");
+            string source = EditorUtility.OpenFilePanel("Layout file to import", "", "json,storey");
             if (string.IsNullOrEmpty(source)) return;
 
             string text = File.ReadAllText(source);

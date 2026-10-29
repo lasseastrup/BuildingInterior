@@ -34,15 +34,15 @@ namespace Triband.Storey.Editor
 
         static readonly GUIContent
             BuildingsLabel = new GUIContent("Buildings", "How many generated buildings, in blocks round the layout's own (12 m clear of each)."),
-            SeedLabel = new GUIContent("Seed", "The generator's seed: another one lays out another city. The prototype's is 20260928."),
-            ScaleLabel = new GUIContent("Height ×", "Multiplies each building's storeys. The prototype's are 1 to 40, taller towards the middle."),
+            SeedLabel = new GUIContent("Seed", "Another seed lays out another city. The reference city's is 20260928."),
+            ScaleLabel = new GUIContent("Height ×", "Multiplies each building's storeys. The reference city's are 1 to 40, taller towards the middle."),
             MostLabel = new GUIContent("Most storeys", "No building is taller than this."),
-            PrototypeLabel = new GUIContent("The prototype's mix", "Walk-in as the web prototype makes them: about 6% of the buildings up to 12 storeys, with a stair core in the middle where one fits, and no lifts."),
+            PrototypeLabel = new GUIContent("Reference mix", "About 6% of the buildings of 12 storeys or fewer walk-in, with a stair core in the middle where one fits, and no lifts."),
             WalkInLabel = new GUIContent("Walk-in %", "The share of the buildings with interiors to walk: stairs from the ground to the top, and a lift above the storeys below, where they fit. The others are shells."),
             NearLabel = new GUIContent("Nearest the middle", "The walk-in buildings are the ones nearest the middle of the city, where it is made from. Off, they are spread through it at random."),
             LiftLabel = new GUIContent("Lift above (storeys)", "A walk-in building taller than this gets a lift beside its stairs, where one fits."),
             NewSeed = new GUIContent("New", "Another seed, at random."),
-            PrototypeCity = new GUIContent("Prototype's city", "The web prototype's own city: its seed, heights and walk-in mix. The count stays.");
+            PrototypeCity = new GUIContent("Reference city", "The reference city's seed, heights and walk-in mix. The count stays.");
 
         void OnEnable()
         {
@@ -188,7 +188,7 @@ namespace Triband.Storey.Editor
         {
             var e = StoreyEdit.Begin(site);
             var o = Options(); int made = 0;
-            string mix = o.WalkIn is double w ? $"{w * 100:0.#}% walk-in" : "the prototype's mix";
+            string mix = o.WalkIn is double w ? $"{w * 100:0.#}% walk-in" : "the reference mix";
             e.Apply($"Made a test city of {o.Count:N0}, {mix}", d => { made = TestCity.Generate(d, o); return true; });
             var (n, walkIn, _, _, _) = TestCity.Summary(e.Document);
             ShowNotification(new GUIContent($"{n:N0} buildings, {walkIn:N0} walk-in"), 2);

@@ -30,7 +30,7 @@ namespace Triband.Storey.Unity
         public Camera? lodCamera;
         [Tooltip("Detail distances, residency and the build budget; the defaults (the primary tier's) when empty.")]
         public StoreyQualitySettings? quality;
-        [Tooltip("Tint by LOD, as the prototype's stats card does.")]
+        [Tooltip("Tint each building by the level of detail it shows.")]
         public bool lodTint;
         [Tooltip("Automatic LOD: show its numbers (LOD counts, resident meshes, cells, build time) in the Game view in Play mode, and in the Scene view while the site is selected.")]
         public bool showLodStats;

@@ -195,7 +195,10 @@ namespace UnityEditor
         public static float currentViewWidth => 400;
         public static float labelWidth => 0;
         public static void PingObject(Object obj) { }
+        public static void AddCursorRect(Rect position, MouseCursor mouse) { }
     }
+
+    public enum MouseCursor { Arrow = 0, Link = 4 }
 
     public static class EditorStyles
     {
@@ -208,6 +211,8 @@ namespace UnityEditor
         public static GUIStyle miniButtonLeft => new GUIStyle();
         public static GUIStyle helpBox => new GUIStyle();
         public static GUIStyle wordWrappedMiniLabel => new GUIStyle();
+        public static GUIStyle miniBoldLabel => new GUIStyle();
+        public static GUIStyle label => new GUIStyle();
     }
 
     public sealed class GenericMenu
@@ -265,6 +270,7 @@ namespace UnityEditor
         public static void BeginChangeCheck() { }
         public static bool EndChangeCheck() => false;
         public static void DrawRect(Rect rect, Color color) { }
+        public static Rect PrefixLabel(Rect totalPosition, GUIContent label) => totalPosition;
         public sealed class IndentLevelScope : System.IDisposable
         {
             public IndentLevelScope() { }
@@ -296,6 +302,10 @@ namespace UnityEditor
         }
 
         public static void HelpBox(string message, MessageType type) { }
+        public static Rect GetControlRect(params GUILayoutOption[] options) => default;
+        public static Rect BeginVertical(GUIStyle style, params GUILayoutOption[] options) => default;
+        public static void EndVertical() { }
+        public static bool ToggleLeft(GUIContent label, bool value, GUIStyle labelStyle, params GUILayoutOption[] options) => value;
         public static void Space() { }
         public static int Popup(string label, int selectedIndex, string[] displayedOptions, params GUILayoutOption[] options) => selectedIndex;
         public static int Popup(int selectedIndex, string[] displayedOptions, params GUILayoutOption[] options) => selectedIndex;

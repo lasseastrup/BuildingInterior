@@ -178,7 +178,7 @@ namespace Triband.Storey.Editor
             {
                 var k = DetailKinds.Get(d.Id)!;
                 string rule = StoreyDetails.Rules(k.anchor).FirstOrDefault(r => r.rule == k.rule).label?.text ?? "By hand only";
-                EditorGUILayout.HelpBox($"One of Storey's own details: the generator draws it. {StoreyDetails.Anchors[(int)k.anchor].text}; {rule.ToLowerInvariant()}.", MessageType.Info);
+                EditorGUILayout.HelpBox($"One of Storey's built-in details, made by Storey itself. {StoreyDetails.Anchors[(int)k.anchor].text}; {rule.ToLowerInvariant()}.", MessageType.Info);
                 EditorGUILayout.LabelField("Make your own with Assets ▸ Create ▸ Storey ▸ Facade Detail (or Facade Detail from Prefab), or duplicate this one and give the copy a mesh or a prefab.", StoreyInspectorUI.Caption);
                 return;
             }

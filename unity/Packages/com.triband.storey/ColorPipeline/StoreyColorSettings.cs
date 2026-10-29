@@ -34,7 +34,7 @@ namespace Triband.Storey.ColorPipeline
         [Tooltip("A plinth with a colour of its own (styles that don't set one shade the wall).")]
         [ColorReference] public SerializableGUID plinth;
 
-        [Header("Suggested colours per field (the prototype's swatch rows)")]
+        [Header("Suggested colours per field")]
         [ColorReference] public SerializableGUID[] walls = new SerializableGUID[0];
         [ColorReference] public SerializableGUID[] trims = new SerializableGUID[0];
         [ColorReference] public SerializableGUID[] roofs = new SerializableGUID[0];

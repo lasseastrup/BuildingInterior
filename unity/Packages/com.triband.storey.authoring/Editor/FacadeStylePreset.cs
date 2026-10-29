@@ -20,7 +20,7 @@ namespace Triband.Storey.Editor
     {
         [SerializeField, TextArea(4, 16)] internal string style = Initial();
 
-        [Tooltip("The key a style applied from it carries: the prototype's for the package's own five (brick, glass…), which layouts name them by. Empty for a project's: its asset's GUID is its key.")]
+        [Tooltip("The key a style applied from it carries: a name for the package's own five (brick, glass…), which layouts name them by. Empty for a project's: its asset's GUID is its key.")]
         [SerializeField] internal string key = "";
 
         /// <summary>The folder of the presets the package ships.</summary>

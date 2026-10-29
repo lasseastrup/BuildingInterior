@@ -38,7 +38,7 @@ namespace Triband.Storey.Editor
                 }
                 asset.Set(text, summary, baked);
                 foreach (var key in summary.unknownKeys)
-                    ctx.LogImportWarning($"{ctx.assetPath}: unknown key {key}; the package's data model lags the prototype.");
+                    ctx.LogImportWarning($"{ctx.assetPath}: unknown key {key}: this version of Storey doesn't know it, and leaves it out.");
             }
             catch (System.FormatException e)
             {

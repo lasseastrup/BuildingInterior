@@ -298,6 +298,7 @@ namespace UnityEngine
         public float x, y, width, height;
         public float xMax { get => x + width; set => width = value - x; }
         public float yMax { get => y + height; set => height = value - y; }
+        public Vector2 center => default;
         public bool Contains(Vector2 p) => false;
     }
 
@@ -336,8 +337,22 @@ namespace UnityEngine
         public bool wordWrap { get; set; }
         public FontStyle fontStyle { get; set; }
         public GUIStyleState normal { get; } = new GUIStyleState();
+        public RectOffset padding { get; set; } = new RectOffset();
+        public RectOffset margin { get; set; } = new RectOffset();
+        public TextClipping clipping { get; set; }
+        public Vector2 CalcSize(GUIContent content) => default;
+        public float CalcHeight(GUIContent content, float width) => 0;
         public void Draw(Rect position, string text, bool isHover, bool isActive, bool on, bool hasKeyboardFocus) { }
+        public void Draw(Rect position, GUIContent content, bool isHover, bool isActive, bool on, bool hasKeyboardFocus) { }
     }
+
+    public class RectOffset
+    {
+        public RectOffset() { }
+        public RectOffset(int left, int right, int top, int bottom) { }
+    }
+
+    public enum TextClipping { Overflow = 0, Clip = 1 }
 
     public enum FontStyle { Normal = 0, Bold = 1, Italic = 2, BoldAndItalic = 3 }
 
@@ -360,6 +375,7 @@ namespace UnityEngine
         public static int Toolbar(int selected, string[] texts, params GUILayoutOption[] options) => selected;
         public static int Toolbar(int selected, GUIContent[] contents, params GUILayoutOption[] options) => selected;
         public static int Toolbar(int selected, GUIContent[] contents, GUIStyle style, params GUILayoutOption[] options) => selected;
+        public static int Toolbar(int selected, string[] texts, GUIStyle style, params GUILayoutOption[] options) => selected;
         public static void Label(string text, params GUILayoutOption[] options) { }
         public static void Label(string text, GUIStyle style, params GUILayoutOption[] options) { }
         public static void Space(float pixels) { }
@@ -382,7 +398,11 @@ namespace UnityEngine
         public static Color contentColor { get => default; set { } }
         public static void Label(Rect position, string text) { }
         public static void Label(Rect position, string text, GUIStyle style) { }
+        public static void Label(Rect position, GUIContent content) { }
         public static bool Button(Rect position, GUIContent content, GUIStyle style) => false;
+        public static bool Toggle(Rect position, bool value, GUIContent content, GUIStyle style) => value;
+        public static int Toolbar(Rect position, int selected, string[] texts) => selected;
+        public static int Toolbar(Rect position, int selected, GUIContent[] contents, GUIStyle style) => selected;
         public static bool Button(Rect position, string text) => false;
         public static void Box(Rect position, string text) { }
         public static void Box(Rect position, string text, GUIStyle style) { }
@@ -394,6 +414,8 @@ namespace UnityEngine
     public static class GUILayoutUtility
     {
         public static Rect GetRect(float width, float height, params GUILayoutOption[] options) => default;
+        public static Rect GetRect(GUIContent content, GUIStyle style, params GUILayoutOption[] options) => default;
+        public static Rect GetLastRect() => default;
     }
 
     public enum FocusType { Keyboard = 0, Passive = 2 }

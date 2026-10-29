@@ -17,10 +17,10 @@ How Storey draws a few thousand buildings: a test city to measure with, the auto
 In the editor, **Tools ▸ Storey ▸ Test City…** opens the **Storey Test City** window. Select a Storey Site (with none selected, the window lists the scene's), set the city and press **Make test city**:
 
 - **Buildings**: how many, up to 8,000, with 300, 1,000 and 3,000 a click away. Fewer are made if the blocks round the layout's own buildings run out (the Console says so).
-- **Seed**: another lays out another city, and **New** picks one at random. The prototype's is 20260928.
-- **Height ×** multiplies every building's storeys (the prototype's are 1 to 40), and **Most storeys** caps them, at most 60.
+- **Seed**: another lays out another city, and **New** picks one at random. The reference city's (the prototype's) is 20260928.
+- **Height ×** multiplies every building's storeys (the reference city's are 1 to 40), and **Most storeys** caps them, at most 60.
 - **Walk-in %**: that share of the buildings is walk-in, with switchback stairs from the ground to the top where they fit (in about 95% of buildings or more) and a lift beside them above **Lift above** storeys (5). The others are shells. **Nearest the middle** makes them the ones nearest the middle, where the city is made from, instead of spread through it.
-- **The prototype's mix** makes them walk-in as the prototype does instead: about 6% of the buildings of 12 storeys or fewer, with a stair core in the middle where one fits, and no lifts. **Prototype's city** puts back the prototype's seed, heights and mix.
+- **Reference mix** makes them walk-in as the prototype does instead: about 6% of the buildings of 12 storeys or fewer, with a stair core in the middle where one fits, and no lifts. **Reference city** puts back the prototype's seed, heights and mix.
 
 The window shows the site's test city now: its buildings, how many are walk-in, their storeys and lifts. **Make test city again** replaces it and **Remove test city** takes it out. Use a walk-in city to test interiors, LOD0 and the occlusion at scale. The settings are kept for next time, per user. It's a window rather than part of the site's inspector so nobody adds thousands of buildings by accident. The city is an edit like any other, so it is saved with the layout and can be undone.
 

@@ -80,7 +80,7 @@ namespace Triband.Storey.Unity
         public bool specularAndReflections = true;
 
         [Header("Culling")]
-        [Tooltip("Buildings drawing steady (most of the city: none cut, fading or in the way) skip their back faces in the colour, depth and shadow passes, as an opaque material usually does, so about half their triangles never reach the tiler (docs/PERFORMANCE.md §7.1). Every one-sided surface the prototype draws two-sided has its back, so no hole shows from outside (the headless back-face ray test). Off draws every face, as the prototype does. Needs shaders with the _StoreyCull property: Storey's own, and the Color Palette Lit sample once re-imported.")]
+        [Tooltip("Buildings drawing steady (most of the city: none cut, fading or in the way) skip their back faces in the colour, depth and shadow passes, as an opaque material usually does, so about half their triangles never reach the tiler (docs/PERFORMANCE.md §7.1). Every one-sided surface that can be seen from behind has a back of its own, so no hole shows from outside (the headless back-face ray test). Off draws every face. Needs shaders with the _StoreyCull property: Storey's own, and the Color Palette Lit sample once re-imported.")]
         public bool cullBackFacesWhenSteady = true;
 
         [Header("Measurement")]

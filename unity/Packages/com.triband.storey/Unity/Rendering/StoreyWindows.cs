@@ -13,24 +13,31 @@ namespace Triband.Storey.Unity
     [AddComponentMenu("Storey/Storey Windows")]
     public sealed class StoreyWindows : MonoBehaviour
     {
-        [Tooltip("The room atlas: each cell a room in one-point perspective, laid out in thirds (ceiling, floor and side walls round the back wall), as the Window shader graph's Texture2D.")]
+        [Header("Rooms behind the glass")]
+        [Tooltip("The room atlas: each cell a room in one-point perspective, laid out in thirds (ceiling, floor and side walls round the back wall).")]
         public Texture2D? rooms;
-        [Tooltip("The atlas's columns and rows (the Window shader graph's AtlasGrid).")]
+        [Tooltip("The atlas's columns and rows.")]
         public Vector2Int atlasGrid = new Vector2Int(1, 1);
-        [Tooltip("How deep the rooms look: the room's depth over the window's width, 1 a cube (the Window shader graph's Depth).")]
+        [Tooltip("How deep the rooms look: the room's depth over the window's width; 1 is a cube.")]
         [Range(0.05f, 4f)] public float depth = 1f;
-        [Tooltip("By day the room is lit by the main light's colour times this (the Window shader graph's Color).")]
+
+        [Header("Day and night")]
+        [Tooltip("By day the room is lit by the main light's colour times this.")]
         public Color tint = Color.white;
-        [Tooltip("At night a lit window's room is multiplied by a colour between these two (ColorLight, ColorLight2).")]
+        [Tooltip("At night a lit window's room is multiplied by a colour between Light and Light 2.")]
         public new Color light = new Color(1f, 0.85f, 0.55f);   // new: hides Component.light, long obsolete
+        [Tooltip("At night a lit window's room is multiplied by a colour between Light and Light 2.")]
         public Color light2 = new Color(1f, 0.65f, 0.35f);
-        [Tooltip("The glare over the glass (the Window shader graph's second texture), and how strong it is (0.03 there).")]
-        public Texture2D? glare;
-        [Range(0, 0.5f)] public float glareStrength = 0.03f;
         [Tooltip("0 day, 1 night: windows light up as it rises. Set it from your day and night cycle, or with NightBlend. A project's shaders can take their own instead (the Color Palette Lit sample takes _GlobalNightBlend).")]
         [Range(0, 1)] public float nightBlend;
         [Tooltip("The share of windows lit at full night.")]
         [Range(0, 1)] public float lightChance = 1f;
+
+        [Header("Glare")]
+        [Tooltip("A reflection over the glass.")]
+        public Texture2D? glare;
+        [Tooltip("How strong the glare is.")]
+        [Range(0, 0.5f)] public float glareStrength = 0.03f;
 
         /// <summary>The night blend for every StoreyWindows in the scene, for a day and night system to drive.</summary>
         public static float? NightBlend { get; set; }

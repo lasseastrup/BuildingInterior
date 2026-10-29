@@ -205,13 +205,13 @@ namespace Triband.Storey.Editor
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (o.prefab != null && GUILayout.Button(new GUIContent("Open Prefab", "Edit the prefab and its Storey Cutout; saving it bakes this again"))) AssetDatabase.OpenAsset(o.prefab);
-                if (GUILayout.Button(new GUIContent("Check on a building", "Build a 20 × 12 m block of six storeys with it, count its triangles against the generator's own, and look for faces that flicker"))) trials[o] = KindTrial.Run(k);
+                if (GUILayout.Button(new GUIContent("Check on a building", "Build a 20 × 12 m block of six storeys with it, count its triangles against the built-in window's or door's, and look for faces that flicker"))) trials[o] = KindTrial.Run(k);
                 if (o.prefab == null && GUILayout.Button(new GUIContent("Name the parts again", "Guess each part's colour from its material's name, and the size from the mesh"))) { Undo.RecordObject(o, "Name the parts"); Fill(o); o.Bake(); EditorUtility.SetDirty(o); trials.Remove(o); }
             }
             if (trials.TryGetValue(o, out var t))
             {
                 string flicker = t.overlaps.Count == 0 ? "No faces overlap." : $"{t.overlaps.Count} pair{(t.overlaps.Count == 1 ? "" : "s")} of faces overlap and flicker, the first at {t.overlaps[0].At}.";
-                EditorGUILayout.HelpBox($"On a 20 × 12 m block of six storeys: LOD0 {t.lod0:N0} triangles ({t.plainLod0:N0} with the generator's own), LOD1 {t.lod1:N0} ({t.plainLod1:N0}). {flicker}", t.overlaps.Count == 0 ? MessageType.Info : MessageType.Warning);
+                EditorGUILayout.HelpBox($"On a 20 × 12 m block of six storeys: LOD0 {t.lod0:N0} triangles ({t.plainLod0:N0} with the built-in ones), LOD1 {t.lod1:N0} ({t.plainLod1:N0}). {flicker}", t.overlaps.Count == 0 ? MessageType.Info : MessageType.Warning);
             }
         }
 
@@ -273,7 +273,7 @@ namespace Triband.Storey.Editor
             if (o.door && !c.leaf)
                 EditorGUILayout.HelpBox("No part is the leaf: on a walk-in storey the player walks through the closed door. Name the leaf objects in the prefab's Storey Cutout, or tick Leaf on a part.", MessageType.Warning);
             if (c.tris > 140)
-                EditorGUILayout.HelpBox($"{c.tris} triangles: more than the generator's most dressed window (140), and a block of six storeys has about 156 windows.", MessageType.Warning);
+                EditorGUILayout.HelpBox($"{c.tris} triangles: more than the most dressed built-in window (140), and a block of six storeys has about 156 windows.", MessageType.Warning);
             if (!o.door && k.lod1 != null && !k.lod1OnWall)
                 EditorGUILayout.HelpBox("LOD1 reaches into the wall, so LOD1 cuts the wall round every window: about 12 triangles a window more, and most buildings on screen are at LOD1. A LOD1 that stays in front of the wall's face (shutters, a sill, a pediment) lies on the flat wall with the plain pane, whose recess the shader draws.", MessageType.Info);
             if (k.lod1 != null && c.lod1Tris > 12)

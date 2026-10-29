@@ -49,7 +49,7 @@ namespace Triband.Storey.Editor
             serializedObject.ApplyModifiedProperties();
             if (site.layout == null)
             {
-                EditorGUILayout.HelpBox("Give the site a layout: a .storey file (Assets › Create › Storey › Layout, or import one from the prototype).", MessageType.Info);
+                EditorGUILayout.HelpBox("Give the site a layout: a .storey file (Assets › Create › Storey › Layout).", MessageType.Info);
                 SiteSettings();
                 return;
             }
@@ -211,8 +211,8 @@ namespace Triband.Storey.Editor
         }
 
         static readonly GUIContent CollidersLabel = new GUIContent("Colliders",
-            "The building's MeshCollider, made with its LOD0, at load or in edit mode as Site settings say. Off, it gets none, as the old " +
-            "BuildingGenerator's Generate Colliders off: physics and raycasts pass through it, and nothing waits for it. Storey's own play kit still walks it");
+            "The building's MeshCollider, made with its LOD0, at load or in edit mode as Site settings say. Off, it gets none: " +
+            "physics and raycasts pass through it, and nothing waits for it. Storey's own play kit still walks it");
 
         /// <summary>Save a building as a template asset: a new one, or over one picked in the save panel.</summary>
         static void SaveTemplate(BuildingData b)
@@ -295,7 +295,9 @@ namespace Triband.Storey.Editor
         /// <summary>The building's height in the site: typed in, or stood on the ground under it (docs/EDITOR.md §6.11).</summary>
         void Placement(StoreyEdit e, BuildingData b)
         {
-            StoreyInspectorUI.Section("Placement", "How high the building stands in the site: its ground floor's height above the site's ground");
+            using var c = StoreyInspectorUI.Card("placement", "Placement", StoreyInspectorUI.PlacementIcon, StoreyInspectorUI.Tint.Details, $"{b.elevation:0.##} m up",
+                tip: "How high the building stands in the site: its ground floor's height above the site's ground");
+            if (!c.Open) return;
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUI.BeginChangeCheck();
@@ -333,7 +335,26 @@ namespace Triband.Storey.Editor
         {
             var v = e.View; int k0 = v.tier; var ts = Tiers.Of(b); var cur = ts.First(t => t.k0 == k0);
             Placement(e, b);
-            StoreyInspectorUI.Section("Outline", "The building's footprint, and the setbacks above it that each have their own outline");
+            using (var c = StoreyInspectorUI.Card("outline", "Outline", StoreyInspectorUI.ShapeIcon, StoreyInspectorUI.Tint.Windows,
+                $"{Math.Abs(Geo.Area2(Tiers.Outline(b, k0))) / 2:0} m²" + (ts.Count > 1 ? $" · {ts.Count - 1} setback{(ts.Count > 2 ? "s" : "")}" : ""),
+                tip: "The building's footprint, and the setbacks above it that each have their own outline"))
+                if (c.Open) Outline(e, b, k0, ts, cur);
+            CornerSection(e, b, k0);
+            VoidSection(e, b);
+            using (var c = StoreyInspectorUI.Card("heights", "Storey heights", StoreyInspectorUI.HeightsIcon, StoreyInspectorUI.Tint.Doors,
+                $"{b.floors.Count} storeys · {Derived.RoofY(b):0.0} m tall", tip: "Every storey's height; one storey can differ (Interior tab)"))
+                if (c.Open)
+                {
+                    Slider(e, "Ground", b.groundHeight, 3, 6, 0.1, (bb, x) => bb.groundHeight = x);
+                    Slider(e, "Upper", b.floorHeight, 2.7, 4.5, 0.1, (bb, x) => bb.floorHeight = x);
+                    StoreyInspectorUI.Note($"{Math.Abs(Geo.Area2(Tiers.Outline(b, k0))) / 2:0} m² per floor · {Derived.RoofY(b):0.0} m tall");
+                }
+        }
+
+        /// <summary>The outlines: the base's and each setback's, picked to edit, added and removed; a setback's start and its terrace; templates to start from.</summary>
+        void Outline(StoreyEdit e, BuildingData b, int k0, List<Tier> ts, Tier cur)
+        {
+            var v = e.View;
             foreach (var t in ts.AsEnumerable().Reverse())
             {
                 using (new EditorGUILayout.HorizontalScope())
@@ -409,12 +430,6 @@ namespace Triband.Storey.Editor
                     }
                 }
             }
-            CornerSection(e, b, k0);
-            VoidSection(e, b);
-            StoreyInspectorUI.Section("Storey heights", "Every storey's height; one storey can differ (Interior tab)");
-            Slider(e, "Ground", b.groundHeight, 3, 6, 0.1, (bb, x) => bb.groundHeight = x);
-            Slider(e, "Upper", b.floorHeight, 2.7, 4.5, 0.1, (bb, x) => bb.floorHeight = x);
-            EditorGUILayout.LabelField($"{Math.Abs(Geo.Area2(Tiers.Outline(b, k0))) / 2:0} m² per floor · {Derived.RoofY(b):0.0} m tall", EditorStyles.miniLabel);
         }
 
         /// <summary>
@@ -427,11 +442,13 @@ namespace Triband.Storey.Editor
             var v = e.View; var (fp, cuts) = CornerCuts.Sharp(b, k0);
             int ci = v.selectedCorner < fp.Count ? v.selectedCorner : -1;
             var cut = cuts.FirstOrDefault(c => c.i == ci);
-            StoreyInspectorUI.Section("Corners", "Click a corner in the Scene view to cut it, or to change its cut");
+            using var card = StoreyInspectorUI.Card("corners", "Corners", StoreyInspectorUI.CornerIcon, StoreyInspectorUI.Tint.Style,
+                cuts.Count == 0 ? "All sharp" : $"{cuts.Count} cut", tip: "Click a corner in the Scene view to cut it, or to change its cut");
+            if (!card.Open) return;
             // a cut corner shows its own cut, and changes as it is set; otherwise these set the next cut
             var shape = cut?.shape ?? v.cornerShape; float size = cut != null ? (float)cut.size : v.cornerSize; bool door = cut?.door ?? v.cornerDoor;
             EditorGUI.BeginChangeCheck();
-            shape = (CornerShape)GUILayout.Toolbar((int)shape, new[] { new GUIContent("Chamfer", "Cut the corner off straight"), new GUIContent("Round", "Round the corner off in an arc") });
+            shape = (CornerShape)StoreyInspectorUI.Segmented(new GUIContent("Cut", "How a corner is cut"), (int)shape, CornerShapes);
             size = EditorGUILayout.Slider(shape == CornerShape.Round ? "Radius" : "Size", size, 0.5f, 8f);
             if (k0 == 0 && shape == CornerShape.Chamfer)
                 door = EditorGUILayout.Toggle(new GUIContent("Corner entrance", "A street door in the middle of the chamfer (it needs about 2.7 m)"), door);
@@ -464,6 +481,8 @@ namespace Triband.Storey.Editor
             }
         }
 
+        static readonly GUIContent[] CornerShapes = { new GUIContent("Chamfer", "Cut the corner off straight"), new GUIContent("Round", "Round the corner off in an arc") };
+
         void CutCorner(StoreyEdit e, int k0, int ci, CornerShape shape, double size, bool door)
         {
             var why = OutlineIssue.None;
@@ -481,7 +500,9 @@ namespace Triband.Storey.Editor
         void VoidSection(StoreyEdit e, BuildingData b)
         {
             var v = e.View; int N = b.floors.Count;
-            if (!StoreyInspectorUI.Fold("voids", b.voids.Count > 0 ? $"Courtyards and atria ({b.voids.Count})" : "Courtyards and atria", b.voids.Count > 0, "Open space inside the building: a courtyard open to the sky, or an atrium under a skylight")) return;
+            using var c = StoreyInspectorUI.Card("voids", "Courtyards and atria", StoreyInspectorUI.CourtyardIcon, StoreyInspectorUI.Tint.Roof,
+                b.voids.Count == 0 ? "None" : b.voids.Count.ToString(), open: b.voids.Count > 0, tip: "Open space inside the building: a courtyard open to the sky, or an atrium under a skylight");
+            if (!c.Open) return;
             var floors = Enumerable.Range(0, N).Select(k => Floor(b, k)).ToArray();
             for (int i = 0; i < b.voids.Count; i++)
             {
@@ -503,7 +524,8 @@ namespace Triband.Storey.Editor
                         return;
                     }
                 }
-                int from = EditorGUILayout.Popup(vd.kind == VoidKind.Courtyard ? "   Paved on" : "   Floor on", Math.Min(vd.bottom, N - 1), floors);
+                int from;
+                using (new EditorGUI.IndentLevelScope()) from = EditorGUILayout.Popup(vd.kind == VoidKind.Courtyard ? "Paved on" : "Floor on", Math.Min(vd.bottom, N - 1), floors);
                 if (from != vd.bottom)
                 {
                     var why = VoidIssue.None;
@@ -531,10 +553,11 @@ namespace Triband.Storey.Editor
             if (ts.Count > 1)
             {
                 StoreyInspectorUI.Section("Style for", "The base and each setback can have a style of their own");
-                int sel = GUILayout.Toolbar(ts.FindIndex(t => t.k0 == k0), ts.Select(t => $"{(t.k0 > 0 ? "Setback" : "Base")} {Range(b, t)}").ToArray());
+                int sel = GUI.Toolbar(EditorGUILayout.GetControlRect(), ts.FindIndex(t => t.k0 == k0), ts.Select(t => $"{(t.k0 > 0 ? "Setback" : "Base")} {Range(b, t)}").ToArray());
                 if (sel >= 0 && ts[sel].k0 != k0) { v.tier = ts[sel].k0; k0 = v.tier; }
             }
             bool own = Styles.HasOwn(b, k0);
+            FacadeStyle? st = null;
             if (!own)
             {
                 EditorGUILayout.HelpBox("This setback looks like the floors below it.", MessageType.None);
@@ -542,82 +565,239 @@ namespace Triband.Storey.Editor
             }
             else
             {
-                var st = Styles.Edited(b, k0);
+                st = Styles.Edited(b, k0);
                 if (k0 > 0 && GUILayout.Button(new GUIContent("Match the floors below", "Drop this setback's style and follow the floors below again"))) e.ApplyTo("The setback matches the floors below again", bb => { Styles.MatchBelow(bb, k0); return true; });
-                StoreyInspectorUI.Section("Style", "Start from a preset; every change below makes the style this building's own");
-                Presets(e, b, k0, st);
-                StoreyInspectorUI.Section("Windows and doors");
-                SetRows(e, k0, st, SetOf.Windows, "Window");
-                if (st.windowSet is { Count: > 1 }) StyleEnum(e, k0, "   Picked by", st.windowPick, (s, x) => s.windowPick = x);
-                if (k0 == 0) GroundRows(e, st);
-                OpeningSets.Uses(st, out bool generated, out _, out bool anyOwnSize);
-                bool ownSize = !generated && anyOwnSize;
-                Openings(e, k0, st, ownSize, anyOwnSize);
-                // Window width sizes Punched and Tall holes alone: Ribbon and Curtain span the bay, and a window of its own size is its own width
-                using (new EditorGUI.DisabledScope(ownSize || st.windows is not (WindowType.Punched or WindowType.Tall)))
-                    StyleSlider(e, k0, "Window width", st.winW, 0.6, 2.4, 0.1, (s, x) => s.winW = x);
-                StyleSlider(e, k0, "Bay spacing", st.bay, 1.4, 5, 0.1, (s, x) => s.bay = x);
+                GUILayout.Space(4);
+                using (var c = StoreyInspectorUI.Card("style", "Style", StoreyInspectorUI.StyleIcon, StoreyInspectorUI.Tint.Style, FacadeStylePreset.Of(st)?.asset.name ?? "Custom",
+                    tip: "A preset sets everything below at once"))
+                    if (c.Open)
+                    {
+                        Presets(e, b, k0, st);
+                        StoreyInspectorUI.Note("Start from a preset. Changing anything below makes the style this building's own.");
+                    }
+                WindowsCard(e, b, k0, st);
+                if (k0 == 0) DoorsCard(e, b, k0, st);
+                WallsCard(e, b, k0, st);
+                ColoursCard(e, b, k0, st);
+                if (Styles.DrivesRoof(b, k0)) RoofCard(e, b, k0, st);
+            }
+            DetailsCard(e, b, k0, st);
+            BridgeList(e, b);
+        }
+
+        // ---- the Facade tab's cards ----
+
+        void WindowsCard(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
+        {
+            OpeningSets.Uses(st, out bool generated, out _, out bool anyOwnSize);
+            bool ownSize = !generated && anyOwnSize;
+            string summary = st.windows == WindowType.None ? "None"
+                : $"{(ownSize ? "Own size" : OpeningName(st.windows))} · bays of {st.bay:0.##} m";
+            using var c = StoreyInspectorUI.Card("windows", "Windows", StoreyInspectorUI.WindowFrontIcon, StoreyInspectorUI.Tint.Windows, summary,
+                tip: "What fills the walls' openings, how they're spaced, and how they sit in the wall");
+            if (!c.Open) return;
+            SetRows(e, k0, st, SetOf.Windows, "Window");
+            Variety(e, k0, st);
+
+            StoreyInspectorUI.SubHeader("Size and spacing");
+            Openings(e, k0, st, ownSize, anyOwnSize);
+            // Window width sizes Punched and Tall holes alone: Ribbon and Curtain span the bay, and a window of its own size is its own width
+            if (!ownSize && st.windows is WindowType.Punched or WindowType.Tall)
+                StyleSlider(e, k0, "Window width", st.winW, 0.6, 2.4, 0.1, (s, x) => s.winW = x);
+            if (st.windows != WindowType.None)
+            {
                 BayFits(e, k0, st);
+                StyleSlider(e, k0, "Bay width", st.bay, 1.4, 5, 0.1, (s, x) => s.bay = x);
+            }
+
+            if (k0 == 0)
+            {
+                StoreyInspectorUI.SubHeader("Ground floor");
+                int g = EditorGUILayout.Popup(GroundLabel, (int)st.ground, GroundChoices);
+                if (g != (int)st.ground) e.ApplyTo("Ground floor", bb => { Styles.Edited(bb, 0).ground = (GroundType)g; return true; });
+                GroundRows(e, st);
+            }
+
+            StoreyInspectorUI.SubHeader("Depth in the wall");
+            Recess(e, k0, st, "Windows", "Windows sit back from the wall's face, this deep: the built-in window's glass and frame, or yours pushed back that far. Off: the built-in window sits 16.5 cm in, and yours at the wall's face",
+                st.recess, 0.25, (s, x) => s.recess = x);
+
+            if (generated)
+            {
+                StoreyInspectorUI.SubHeader("Built-in window");
                 WindowDetails(e, b, k0, st);
-                StoreyInspectorUI.Section("Walls");
-                if (k0 == 0) StyleEnum(e, k0, "Ground floor", st.ground, (s, x) => s.ground = x);
-                WallDetails(e, b, k0, st);
-                StoreyInspectorUI.Section("Colours", "From the project's palette");
-                Colour(e, b, k0, "Walls", "wall");
-                if (k0 == 0) Colour(e, b, k0, "Ground floor walls", "groundWall", optional: true);
-                Colour(e, b, k0, "Trim", "trim");
-                Colour(e, b, k0, "Roof", "roof");
-                Colour(e, b, k0, "Glass", "glass");
-                if (StoreyInspectorUI.Fold("colours", "More colours", false, "Doors, frames, metal, the inside, details: each follows the project's default until set"))
+            }
+            else StoreyInspectorUI.Note("Your window brings its own frame, sill and glazing bars.");
+        }
+
+        static readonly GUIContent GroundLabel = new GUIContent("Layout", "What the ground floor's walls have");
+        static readonly GUIContent[] GroundChoices =
+        {
+            new GUIContent("Shopfront", "Wide shop windows along the street"),
+            new GUIContent("Like the floors above", "The same openings as the floors above"),
+            new GUIContent("No windows", "A solid ground floor; doors you place stay"),
+        };
+
+        static readonly GUIContent VarietyLabel = new GUIContent("Variety",
+            "How the windows are picked from the lists, by their weights. Per window: each on its own. Per column: a column the same all the way up. " +
+            "Per storey: a storey of a wall the same along it. Per wall: each wall one window. Same pattern everywhere: every building with this style " +
+            "gets the same windows in the same places, picked by wall, storey and bay, and the same door on each wall (otherwise each wall's doors are picked by the wall)");
+        static readonly GUIContent[] VarietyChoices =
+        {
+            new GUIContent("Per window"), new GUIContent("Per column"), new GUIContent("Per storey"), new GUIContent("Per wall"), new GUIContent("Same pattern everywhere"),
+        };
+
+        /// <summary>How the windows are picked from the style's lists (<see cref="FacadeStyle.windowPick"/>), where any list has a choice to make.</summary>
+        static void Variety(StoreyEdit e, int k0, FacadeStyle st)
+        {
+            if (!(st.windowSet is { Count: > 1 } || st.groundSet is { Count: > 1 } || st.doorSet is { Count: > 1 })) return;
+            int x = EditorGUILayout.Popup(VarietyLabel, (int)st.windowPick, VarietyChoices);
+            if (x != (int)st.windowPick) e.ApplyTo("Variety: " + VarietyChoices[x].text, bb => { Styles.Edited(bb, k0).windowPick = (WindowPick)x; return true; });
+        }
+
+        void DoorsCard(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
+        {
+            string summary = (st.doorSet is { Count: > 1 } ? $"{st.doorSet.Count} doors" : st.doorKind != null ? "Your door" : "Built-in")
+                + (st.doorRecess is double dr ? $" · set in {dr * 100:0} cm" : "");
+            using var c = StoreyInspectorUI.Card("doors", "Doors", StoreyInspectorUI.DoorFrontIcon, StoreyInspectorUI.Tint.Doors, summary,
+                tip: "The street doors: place them with Entrance, under Details");
+            if (!c.Open) return;
+            SetRows(e, k0, st, SetOf.Doors, "Street door");
+            Colour(e, b, k0, "Colour", "door", optional: true);
+            StoreyInspectorUI.SubHeader("Depth in the wall");
+            Recess(e, k0, st, "Doors", "Doors sit back from the wall's face, this deep: the built-in door's panel, or yours pushed back that far; a set-in door's threshold takes the foundation's colour. Off: the built-in door sits at its usual depth, and yours at the wall's face",
+                st.doorRecess, 0.29, (s, x) => s.doorRecess = x);
+            if (!st.doorRecess.HasValue || !OwnDoors(st)) return;
+            using (new EditorGUI.IndentLevelScope())
+            {
+                StyleSlider(e, k0, OpeningMarginLabel, st.doorRecessOffset ?? 0, -0.5, 1, 0.01, (s, x) => s.doorRecessOffset = Math.Abs(x) < 1e-4 ? (double?)null : x);
+                StoreyInspectorUI.Note((st.doorRecessOffset ?? 0) < 0 ? "The opening is smaller than the door: its frame stays hidden in the wall."
+                    : (st.doorRecessOffset ?? 0) > 0 ? "The opening is bigger than the door: the wall shows round it." : "The opening is the door's own size.");
+            }
+        }
+
+        /// <summary>Whether any street door the style can pick is one you made: only those keep their own size, so only their holes take a margin.</summary>
+        static bool OwnDoors(FacadeStyle st) => st.doorKind != null || (st.doorSet?.Any(x => !x.none && x.kind != null) ?? false);
+
+        static readonly GUIContent OpeningMarginLabel = new GUIContent("Opening margin",
+            "How much bigger the hole is than your door, each side and above, in metres; below 0 it is smaller and the door's frame stays hidden in the wall. For doors that keep their own size, on buildings without interiors");
+
+        void WallsCard(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
+        {
+            var on = new List<string>();
+            if (st.corniceH.HasValue) on.Add("cornice");
+            if (st.bands) on.Add("bands");
+            if (k0 == 0 && (st.plinthH ?? 0.45) > 0) on.Add("plinth");
+            if (k0 == 0 && st.foundation.HasValue) on.Add("foundation");
+            if (st.bricks > 0) on.Add("bricks");
+            string summary = on.Count == 0 ? "Plain" : char.ToUpperInvariant(on[0][0]) + string.Join(" · ", on).Substring(1);
+            using var c = StoreyInspectorUI.Card("walls", "Walls", StoreyInspectorUI.BricksIcon, StoreyInspectorUI.Tint.Walls, summary,
+                tip: "The strips along the walls, top to bottom, and brick patches");
+            if (!c.Open) return;
+            WallDetails(e, b, k0, st);
+        }
+
+        void ColoursCard(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
+        {
+            using var c = StoreyInspectorUI.Card("colours", "Colours", StoreyInspectorUI.PaletteIcon, StoreyInspectorUI.Tint.Colours, "From the project's palette");
+            if (!c.Open) return;
+            Colour(e, b, k0, "Walls", "wall");
+            if (k0 == 0) Colour(e, b, k0, "Ground floor walls", "groundWall", optional: true);
+            Colour(e, b, k0, "Trim", "trim");
+            Colour(e, b, k0, "Roof", "roof");
+            Colour(e, b, k0, "Glass", "glass");
+            bool more;
+            using (new EditorGUI.IndentLevelScope()) more = StoreyInspectorUI.Fold("colours", "More colours", false, "Frames, metal, the inside, details: each follows the project's default until you set it");
+            if (more)
+                using (new EditorGUI.IndentLevelScope())
                 {
                     Colour(e, b, k0, "Stairs and lifts", "core");
-                    foreach (var f in new[] { ("Doors", "door"), ("Frames", "frame"), ("Plinth", "plinth"), ("Foundation", "foundationColor"), ("Rails", "rail"), ("Metal", "metal"), ("Ceilings", "ceiling"), ("Lift inside", "liftInterior"), ("Lift button", "liftButton"), ("Detail metal", "detailMetal"), ("Grilles", "grille"), ("Detail dark", "detailDark"), ("Dishes", "dish") })
-                        Colour(e, b, k0, f.Item1, f.Item2, optional: true);
+                    // the base's doors, plinth and foundation have theirs with them (Doors, Walls); a set-in door's threshold
+                    // takes the foundation's colour, so it stays here while there's no foundation
+                    if (k0 > 0) Colour(e, b, k0, "Doors", "door", optional: true);
+                    if (k0 == 0 && !st.foundation.HasValue) Colour(e, b, k0, "Foundation", "foundationColor", optional: true);
+                    foreach (var f in MoreColours) Colour(e, b, k0, f.label, f.field, optional: true);
                     DefaultsNotice();
                 }
-                bool drives = Styles.DrivesRoof(b, k0);
-                if (drives)
-                {
-                    StoreyInspectorUI.Section("Roof");
-                    StyleEnum(e, k0, "Type", st.roofType, (s, x) => s.roofType = x);
-                    if (st.roofType != RoofType.Flat)
-                    {
-                        bool mans = st.roofType == RoofType.Mansard;
-                        StyleSlider(e, k0, mans ? "Top pitch" : "Pitch", st.pitch ?? (st.roofType == RoofType.Shed ? 15 : mans ? 20 : 30), 5, 60, 1, (s, x) => s.pitch = x);
-                        StyleSlider(e, k0, "Eaves", st.eave ?? 0.35, 0, 1.2, 0.05, (s, x) => s.eave = x);
-                        if (mans) StyleSlider(e, k0, "Steep part", st.mansard ?? 2.4, 0.5, 6, 0.1, (s, x) => s.mansard = x);
-                        using (new EditorGUILayout.HorizontalScope())
-                        {
-                            bool dm = EditorGUILayout.Toggle(new GUIContent("Dormers", "Dormer windows along every eave, wherever they fit on the slope"), st.dormers.HasValue);
-                            if (dm != st.dormers.HasValue) e.ApplyTo(dm ? "Dormers added" : "Dormers removed", bb => { Styles.Edited(bb, k0).dormers = dm ? 3.5 : (double?)null; return true; });
-                        }
-                        if (st.dormers is double every) StyleSlider(e, k0, "Dormers every", every, 2.2, 10, 0.1, (s, x) => s.dormers = x);
-                        if (mans) EditorGUILayout.HelpBox("A mansard: a steep 70° slope rises from the eaves to the break, then a shallow hip at the top pitch.", MessageType.None);
-                    }
-                    else
-                    {
-                        StyleToggle(e, k0, "Parapet", st.parapet, (s, x) => s.parapet = x);
-                        RoofCapFields(e, b, k0, st);
-                    }
-                }
-                if (StoreyInspectorUI.Fold("rules", "Details by rule", false, "Details scattered on the walls by the style (AC units, vents, and your own Facade Details with a rule); place any by hand below"))
-                    RuleDetails(e, b, k0, st);
+        }
+
+        static readonly (string label, string field)[] MoreColours =
+        {
+            ("Frames", "frame"), ("Rails", "rail"), ("Metal", "metal"), ("Ceilings", "ceiling"), ("Lift inside", "liftInterior"), ("Lift button", "liftButton"),
+            ("Detail metal", "detailMetal"), ("Grilles", "grille"), ("Detail dark", "detailDark"), ("Dishes", "dish"),
+        };
+
+        void RoofCard(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
+        {
+            string summary = st.roofType != RoofType.Flat ? $"{st.roofType}, {st.pitch ?? (st.roofType == RoofType.Shed ? 15 : st.roofType == RoofType.Mansard ? 20 : 30):0}°"
+                : "Flat" + (st.parapet ? " · parapet" : "") + (Generate.RoofCap.Of(st) is Generate.RoofCap rc ? rc.inset ? " · edge set in" : rc.fascia ? " · hanging edge" : " · slab edge" : "");
+            using var c = StoreyInspectorUI.Card("roof", "Roof", StoreyInspectorUI.RoofIcon, StoreyInspectorUI.Tint.Roof, summary);
+            if (!c.Open) return;
+            StyleEnum(e, k0, "Type", st.roofType, (s, x) => s.roofType = x);
+            if (st.roofType != RoofType.Flat)
+            {
+                bool mans = st.roofType == RoofType.Mansard;
+                StyleSlider(e, k0, mans ? "Top pitch" : "Pitch", st.pitch ?? (st.roofType == RoofType.Shed ? 15 : mans ? 20 : 30), 5, 60, 1, (s, x) => s.pitch = x);
+                StyleSlider(e, k0, "Eaves", st.eave ?? 0.35, 0, 1.2, 0.05, (s, x) => s.eave = x);
+                if (mans) StyleSlider(e, k0, "Steep part", st.mansard ?? 2.4, 0.5, 6, 0.1, (s, x) => s.mansard = x);
+                bool dm = StoreyInspectorUI.Feature("Dormers", "Dormer windows along every eave, wherever they fit on the slope", st.dormers.HasValue);
+                if (dm != st.dormers.HasValue) e.ApplyTo(dm ? "Dormers added" : "Dormers removed", bb => { Styles.Edited(bb, k0).dormers = dm ? 3.5 : (double?)null; return true; });
+                if (st.dormers is double every) using (new EditorGUI.IndentLevelScope()) StyleSlider(e, k0, "Every", every, 2.2, 10, 0.1, (s, x) => s.dormers = x);
+                if (mans) StoreyInspectorUI.Note("A mansard: a steep 70° slope from the eaves to the break, then a shallow hip at the top pitch.");
+                return;
             }
-            StoreyInspectorUI.Section("Place on walls", "Pick one, then click a wall in the Scene view; click a placed one to remove it");
-            // rows of four: the labels stay whole at inspector widths
-            var tools = new List<(string tool, string label)> { ("entrance", "Entrance"), ("blank", "Blank wall") };
-            tools.AddRange(StoreyDetails.Palette());
-            tools.Add(("bridge", "Bridge"));
-            for (int row = 0; row < tools.Count; row += 4)
-                using (new EditorGUILayout.HorizontalScope())
-                    foreach (var (tool, label) in tools.Skip(row).Take(4))
-                    {
-                        bool on = GUILayout.Toggle(v.facadeTool == tool, label, EditorStyles.miniButton, GUILayout.Height(20));
-                        if (on != (v.facadeTool == tool)) { v.facadeTool = on ? tool : ""; if (on) StoreyToolContext.Show(StoreyTab.Facade); SceneView.RepaintAll(); }
-                    }
+            bool pp = StoreyInspectorUI.Feature("Parapet", "A low wall round the roof's edge", st.parapet);
+            if (pp != st.parapet) e.ApplyTo(pp ? "Parapet" : "No parapet", bb => { Styles.Edited(bb, k0).parapet = pp; return true; });
+            RoofEdge(e, b, k0, st);
+        }
+
+        void DetailsCard(StoreyEdit e, BuildingData b, int k0, FacadeStyle? st)
+        {
+            var v = e.View;
+            int auto = 0;
+            if (st != null)
+            {
+                var (ac, vents) = Details.Rules(st);
+                auto = (ac > 0 ? 1 : 0) + (vents > 0 ? 1 : 0) + (st.details?.kinds?.Count(kv => Details.Density(st, kv.Key) > 0) ?? 0);
+            }
+            string summary = auto == 0 && b.details.Count == 0 ? "None"
+                : string.Join(" · ", new[] { auto > 0 ? $"{auto} placed for you" : null, b.details.Count > 0 ? $"{b.details.Count} by hand" : null }.Where(x => x != null));
+            using var c = StoreyInspectorUI.Card("details", "Details", StoreyInspectorUI.DetailsIcon, StoreyInspectorUI.Tint.Details, summary,
+                tip: "Things on the walls: some placed for you by chance, others placed by hand");
+            if (!c.Open) return;
+            if (st != null)
+            {
+                StoreyInspectorUI.SubHeader("Placed for you", "Scattered over the walls by chance, the same on every rebuild; 0% leaves one out");
+                RuleDetails(e, b, k0, st);
+            }
+            StoreyInspectorUI.SubHeader("Place by hand", "Pick one, then click a wall in the Scene view; click a placed one to remove it");
+            var tools = new List<(string tool, string label, string tip)>
+            {
+                ("entrance", "Entrance", "A street door: click a wall to put one in it, click a door to remove it"),
+                ("blank", "Blank wall", "Take the windows (and more) off a wall, or a whole side"),
+            };
+            var palette = StoreyDetails.Palette();
+            var shortName = StoreyInspectorUI.ShortNames(palette.Where(x => !DetailKinds.IsBuiltIn(x.id)).Select(x => x.name).ToList());
+            tools.AddRange(palette.Select(x => (x.id, shortName.TryGetValue(x.name, out var sn) ? sn : x.name, x.name)));
+            tools.Add(("bridge", "Bridge", "A bridge from an upper floor to the building facing it"));
+            // as many to a row as fit, each as wide as the others, so the card is never wider than the inspector
+            float avail = EditorGUIUtility.currentViewWidth - 52; int cols = Math.Max(2, Math.Min(4, (int)(avail / 96)));
+            for (int row = 0; row < tools.Count; row += cols)
+            {
+                var r = GUILayoutUtility.GetRect(0, 22, GUILayout.ExpandWidth(true));
+                float w = (r.width - (cols - 1) * 3) / cols;
+                for (int i = 0; i < cols && row + i < tools.Count; i++)
+                {
+                    var (tool, label, tip) = tools[row + i];
+                    bool was = v.facadeTool == tool;
+                    bool on = GUI.Toggle(new Rect(r.x + i * (w + 3), r.y, w, 20), was, new GUIContent(StoreyInspectorUI.Fit(label, w - 8, EditorStyles.miniButton), tip), EditorStyles.miniButton);
+                    if (on != was) { v.facadeTool = on ? tool : ""; if (on) StoreyToolContext.Show(StoreyTab.Facade); SceneView.RepaintAll(); }
+                }
+            }
             if (v.facadeTool == "blank") WallStates(e, b, k0);
-            if (v.facadeTool == "bridge") EditorGUILayout.HelpBox("Click an upper floor's wall: a bridge goes straight out to the building facing it, to its floor nearest this one. Click a bridge's door to remove it.", MessageType.None);
-            BridgeList(e, b);
+            else if (v.facadeTool == "bridge") StoreyInspectorUI.Note("Click an upper floor's wall: a bridge goes straight out to the building facing it, to its floor nearest this one. Click a bridge's door to remove it.");
+            else if (v.facadeTool == "entrance") StoreyInspectorUI.Note("Click a wall to put a street door in it; click a door to remove it.");
+            else if (v.facadeTool.Length > 0) StoreyInspectorUI.Note("Click a wall to place it; click a placed one to remove it.");
         }
 
         /// <summary>What the Blank wall tool makes a wall, as its toolbar names them (<see cref="EdgeState"/> from Blank).</summary>
@@ -626,8 +806,8 @@ namespace Triband.Storey.Editor
         static readonly GUIContent[] WallStateChoices =
         {
             new GUIContent("No windows", "Blank: no windows (doors you placed stay); bands, plinth and details stay"),
-            new GUIContent("No details", "Quiet: no windows and no details by rule; bands and plinth stay"),
-            new GUIContent("Bare", "Bare: a plain wall: no windows, no details by rule, no floor bands or plinth (the foundation and parapet stay)"),
+            new GUIContent("No details", "Quiet: no windows and no automatic details; bands and plinth stay"),
+            new GUIContent("Bare", "Bare: a plain wall: no windows, no automatic details, no floor bands or plinth (the foundation and parapet stay)"),
         };
 
         /// <summary>
@@ -637,45 +817,78 @@ namespace Triband.Storey.Editor
         void WallStates(StoreyEdit e, BuildingData b, int k0)
         {
             var v = e.View;
-            int cur = Math.Max(0, (int)v.wallState - 1), pick = GUILayout.Toolbar(cur, WallStateChoices, EditorStyles.miniButton);
+            int cur = Math.Max(0, (int)v.wallState - 1), pick = GUI.Toolbar(EditorGUILayout.GetControlRect(), cur, WallStateChoices, EditorStyles.miniButton);
             if (pick != cur) v.wallState = (EdgeState)(pick + 1);
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.LabelField(new GUIContent("Whole side", "Every wall of this outline facing that way (by its outward normal, in the building's axes: front +Z, right +X)"), GUILayout.Width(EditorGUIUtility.labelWidth - 4));
                 foreach (var side in new[] { Side.Front, Side.Back, Side.Left, Side.Right })
-                    if (GUILayout.Button(side.ToString(), EditorStyles.miniButton))
+                    if (GUILayout.Button(side.ToString(), EditorStyles.miniButton, GUILayout.MinWidth(30)))
                     {
                         var s = v.wallState; int n = 0;
                         e.ApplyTo($"{side} walls {WallStateNames[(int)s - 1].ToLowerInvariant()}", bb => (n = Facades.SetSide(bb, k0, side, s)) > 0);
                         if (n == 0) message = $"Every {side.ToString().ToLowerInvariant()} wall already has that, or more.";
                     }
             }
-            EditorGUILayout.LabelField("Click a wall to make it so; click it again for its windows back.", StoreyInspectorUI.Caption);
+            StoreyInspectorUI.Note("Click a wall to make it so; click it again for its windows back.");
         }
 
-        /// <summary>
-        /// A flat roof's cap (docs/EDITOR.md §6.7, <see cref="FacadeStyle.capH"/>): its height (below 0 it hangs from the edge as
-        /// a fascia), how far in from the wall's face it stands (below 0 it overhangs), the strip round its top, and its colours.
-        /// </summary>
-        void RoofCapFields(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
+        static readonly GUIContent EdgeKindLabel = new GUIContent("Kind", "What the roof's edge is");
+        static readonly GUIContent[] EdgeKinds =
         {
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                bool on = EditorGUILayout.Toggle(new GUIContent("Roof cap", "A cap on the roof's edge: a slab standing out over the walls, a fascia hanging from the edge, or a ring set in on the roof. A raised one takes the curb's place, and a parapet stands on it"), st.capH.HasValue);
-                if (on != st.capH.HasValue) e.ApplyTo(on ? "Roof cap" : "No roof cap", bb => { var s = Styles.Edited(bb, k0); s.capH = on ? 0.4 : (double?)null; if (on && !s.capDepth.HasValue) s.capDepth = -0.25; return true; });
-            }
-            if (!(st.capH is double h)) return;
-            StyleSlider(e, k0, "   Height", h, -1.5, 4, 0.01, (s, x) => s.capH = x);
-            StyleSlider(e, k0, "   In from the wall", st.capDepth ?? 0, -1, 5, 0.01, (s, x) => s.capDepth = x);
-            StyleSlider(e, k0, "   Strip", st.capStrip ?? 0, 0, 2, 0.01, (s, x) => s.capStrip = x > 0 ? x : (double?)null);
-            Colour(e, b, k0, "   Colour", "cap", optional: true);
-            if ((st.capDepth ?? 0) < 0) Colour(e, b, k0, "   Underside", "capRim", optional: true);
-            string what = Generate.RoofCap.Of(st) is Generate.RoofCap c ? c.inset ? "A ring set in on the roof, round the bulkheads and openings." : c.fascia ? "A fascia hanging from the roof's edge, under the curb or parapet." : "A slab on the walls' top, standing out over them; it takes the curb's place." : "A cap below the roof needs an overhang (In from the wall below 0).";
-            EditorGUILayout.LabelField(what + " Above 0, In from the wall sets it in; below 0 it overhangs.", StoreyInspectorUI.Caption);
-        }
+            new GUIContent("Slab", "A slab on top of the walls, standing out over them: it takes the curb's place, and a parapet stands on it"),
+            new GUIContent("Hanging", "A fascia hanging down from the roof's edge, out past the walls, under the curb or parapet"),
+            new GUIContent("Set in", "A raised ring on the roof, set in from its edge, cut round the bulkheads and openings"),
+        };
 
         /// <summary>
-        /// The style's details by rule (docs/EDITOR.md §6.12): the AC units' and vents' chances, then each of the project's
+        /// A flat roof's edge (docs/EDITOR.md §6.7, <see cref="FacadeStyle.capH"/>, <see cref="Generate.RoofCap"/>): a slab, a
+        /// hanging fascia or a ring set in, each set by a few numbers that are all positive, which the style's signed ones
+        /// follow (a fascia's height is below 0, an overhang's depth below 0); the strip round its top, and its colours.
+        /// </summary>
+        void RoofEdge(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
+        {
+            bool on = StoreyInspectorUI.Feature("Roof edge", "A cap round the roof's edge: a slab standing out over the walls, a fascia hanging from it, or a ring set in on the roof", st.capH.HasValue);
+            if (on != st.capH.HasValue) e.ApplyTo(on ? "Roof edge" : "No roof edge", bb => { var s = Styles.Edited(bb, k0); s.capH = on ? 0.4 : (double?)null; if (on && !s.capDepth.HasValue) s.capDepth = -0.25; return true; });
+            if (!(st.capH is double h)) return;
+            double d = st.capDepth ?? 0;
+            int kind = d > 1e-3 ? 2 : h >= 0 ? 0 : 1;
+            using var _ = new EditorGUI.IndentLevelScope();
+            int pick = StoreyInspectorUI.Segmented(EdgeKindLabel, kind, EdgeKinds);
+            if (pick != kind) e.ApplyTo("Roof edge: " + EdgeKinds[pick].text, bb =>
+            {
+                var s = Styles.Edited(bb, k0); double size = Math.Abs(s.capH ?? 0.4) < 0.02 ? 0.4 : Math.Abs(s.capH ?? 0.4), dd = s.capDepth ?? 0;
+                s.capH = pick == 1 ? -size : size;
+                s.capDepth = pick == 2 ? (dd > 1e-3 ? dd : 0.5) : pick == 1 ? (dd < -0.01 ? dd : -0.25) : (dd > 1e-3 ? -0.25 : dd);
+                return true;
+            });
+            switch (kind)
+            {
+                case 0:
+                    StyleSlider(e, k0, "Height", h, 0, 4, 0.01, (s, x) => s.capH = x);
+                    StyleSlider(e, k0, OverhangLabel, -d, 0, 1, 0.01, (s, x) => s.capDepth = x > 0 ? -x : 0);
+                    break;
+                case 1:
+                    StyleSlider(e, k0, new GUIContent("Hangs down", "How far it hangs below the roof's edge"), -h, 0.02, 1.5, 0.01, (s, x) => s.capH = -x);
+                    StyleSlider(e, k0, OverhangLabel, -d, 0.02, 1, 0.01, (s, x) => s.capDepth = -x);
+                    break;
+                default:
+                    StyleSlider(e, k0, "Height", h, 0, 4, 0.01, (s, x) => s.capH = x);
+                    StyleSlider(e, k0, new GUIContent("In from the edge", "How far in from the walls' face it stands"), d, 0.01, 5, 0.01, (s, x) => s.capDepth = x);
+                    break;
+            }
+            StyleSlider(e, k0, kind == 2 ? new GUIContent("Thickness", "How thick the ring is; 0: as thick as the wall")
+                : new GUIContent("Top strip", "A strip of the edge's colour round its top, this wide from its outer side; 0: its top is the roof's colour"),
+                st.capStrip ?? 0, 0, 2, 0.01, (s, x) => s.capStrip = x > 0 ? x : (double?)null);
+            Colour(e, b, k0, "Colour", "cap", optional: true);
+            if (d < 0) Colour(e, b, k0, "Underside", "capRim", optional: true);
+            if (!(Generate.RoofCap.Of(st) is Generate.RoofCap)) StoreyInspectorUI.Note("A hanging edge needs an overhang.");
+        }
+
+        static readonly GUIContent OverhangLabel = new GUIContent("Overhang", "How far it stands out past the walls' face");
+
+        /// <summary>
+        /// The style's automatic details (docs/EDITOR.md §6.12): the AC units' and vents' chances, then each of the project's
         /// Facade Details with a rule, and any the style names that the project no longer has. Giving one a chance adds it
         /// to the site's list, so builds include it.
         /// </summary>
@@ -685,26 +898,29 @@ namespace Triband.Storey.Editor
             StyleSlider(e, k0, "AC units %", Math.Round(ac * 100), 0, 100, 5, (s, x) => (s.details ??= new DetailRules()).ac = x);
             StyleSlider(e, k0, "Vents %", Math.Round(vents * 100), 0, 100, 5, (s, x) => (s.details ??= new DetailRules()).vents = x);
             var shown = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var d in StoreyDetails.All())
+            var all = StoreyDetails.All();
+            var shortName = StoreyInspectorUI.ShortNames(all.Where(d => !d.BuiltIn).Select(d => d.name).ToList());
+            foreach (var d in all)
             {
                 if (d.BuiltIn || !Details.RuleFits(d.anchor, d.rule)) continue;
                 shown.Add(d.Id);
-                RuleSlider(e, k0, st, d.name, d.Id);
-                if (Details.Density(st, d.Id) > 0) RuleSettings(e, b, k0, st, d.Id, d.rule);
+                RuleSlider(e, k0, st, new GUIContent(shortName.TryGetValue(d.name, out var sn) ? sn : d.name, d.name), d.Id);
+                if (Details.Density(st, d.Id) > 0)
+                    using (new EditorGUI.IndentLevelScope()) RuleSettings(e, b, k0, st, d.Id, d.rule);
             }
             if (st.details?.kinds != null)
-                foreach (var id in st.details.kinds.Keys.Where(id => !shown.Contains(id)).ToList()) RuleSlider(e, k0, st, StoreyDetails.Name(id), id);
-            if (shown.Count == 0) EditorGUILayout.LabelField("A Facade Detail of your own with a rule gets a slider here.", StoreyInspectorUI.Caption);
+                foreach (var id in st.details.kinds.Keys.Where(id => !shown.Contains(id)).ToList()) RuleSlider(e, k0, st, new GUIContent(StoreyDetails.Name(id), "Not in the project any more"), id);
+            if (shown.Count == 0) StoreyInspectorUI.Note("A Facade Detail of your own with a placement rule gets a slider here (Create ▸ Storey ▸ Facade Detail).");
         }
 
         /// <summary>An artist's detail's chance in the style; giving it one keeps the detail in the site's list.</summary>
-        static void RuleSlider(StoreyEdit e, int k0, FacadeStyle st, string name, string id)
+        static void RuleSlider(StoreyEdit e, int k0, FacadeStyle st, GUIContent name, string id)
         {
             double was = Math.Round(Details.Density(st, id) * 100);
             EditorGUI.BeginChangeCheck();
-            double x = Math.Round(EditorGUILayout.Slider(name + " %", (float)was, 0, 100) / 5) * 5;
+            double x = Math.Round(EditorGUILayout.Slider(new GUIContent(name.text + " %", name.tooltip), (float)was, 0, 100) / 5) * 5;
             if (!EditorGUI.EndChangeCheck() || x == was) return;
-            e.ApplyTo(name + " %", bb => { StoreyDetails.SetDensity(Styles.Edited(bb, k0), id, x); return true; });
+            e.ApplyTo(name.text + " %", bb => { StoreyDetails.SetDensity(Styles.Edited(bb, k0), id, x); return true; });
             if (x > 0) StoreyDetails.Keep(e.Site, id);
         }
 
@@ -723,7 +939,7 @@ namespace Triband.Storey.Editor
             void Number(string label, double value, double min, double max, double step, Action<KindRule, double> f)
             {
                 EditorGUI.BeginChangeCheck();
-                double x = Math.Round(EditorGUILayout.Slider("   " + label, (float)value, (float)min, (float)max) / step) * step;
+                double x = Math.Round(EditorGUILayout.Slider(label, (float)value, (float)min, (float)max) / step) * step;
                 if (EditorGUI.EndChangeCheck() && Math.Abs(x - value) > 1e-9) Set(label, kr => f(kr, Math.Round(x, 3)));
             }
             switch (rule)
@@ -742,28 +958,26 @@ namespace Triband.Storey.Editor
                 case Details.Rule.Corners:
                 {
                     Number("Every", Details.CornerStep(r), 0.1, 3, 0.05, (kr, x) => kr.spacing = x);
-                    int c = EditorGUILayout.Popup(new GUIContent("   Corners", "Which corners it goes up"), (int)(r?.corners ?? DetailCorners.Outward), CornerNames);
+                    int c = EditorGUILayout.Popup(new GUIContent("Corners", "Which corners it goes up"), (int)(r?.corners ?? DetailCorners.Outward), CornerNames);
                     if (c != (int)(r?.corners ?? DetailCorners.Outward)) Set("Corners", kr => kr.corners = (DetailCorners)c);
                     break;
                 }
             }
             if (rule == Details.Rule.Scatter || rule == Details.Rule.Corners)
             {
-                int f = EditorGUILayout.Popup(new GUIContent("   Storeys", "Which storeys it goes on"), (int)(r?.floors ?? DetailFloors.All), FloorNames);
+                int f = EditorGUILayout.Popup(new GUIContent("Storeys", "Which storeys it goes on"), (int)(r?.floors ?? DetailFloors.All), FloorNames);
                 if (f != (int)(r?.floors ?? DetailFloors.All)) Set("Storeys", kr => kr.floors = (DetailFloors)f);
             }
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                bool own = r?.color != null;
-                bool on = EditorGUILayout.Toggle(new GUIContent("   Colour", "Give its main colour (the one most of its triangles have) another in this style; off, it keeps its own"), own);
-                if (on != own) Set(on ? "Detail colour" : "Detail's own colour", kr => kr.color = on ? MainColour(st, id) : null);
-            }
+            bool own = r?.color != null;
+            bool on = EditorGUILayout.Toggle(new GUIContent("Recolour", "Give its main colour (the one most of its triangles have) another in this style; off, it keeps its own"), own);
+            if (on != own) Set(on ? "Detail colour" : "Detail's own colour", kr => kr.color = on ? MainColour(st, id) : null);
             if (r?.color is string colour)
-            {
-                var doc = e.Document;
-                string? picked = StoreyColorField.Picker.Draw($"{b.id}/{k0}/detail/{id}", "      Main colour", colour, "detail", pid => doc.palette.TryGetValue(pid, out var pe) ? pe : null);
-                if (picked != null && picked != colour) Set("Detail colour", kr => kr.color = picked);
-            }
+                using (new EditorGUI.IndentLevelScope())
+                {
+                    var doc = e.Document;
+                    string? picked = StoreyColorField.Picker.Draw($"{b.id}/{k0}/detail/{id}", "Main colour", colour, "detail", pid => doc.palette.TryGetValue(pid, out var pe) ? pe : null);
+                    if (picked != null && picked != colour) Set("Detail colour", kr => kr.color = picked);
+                }
         }
 
         /// <summary>What a detail's main colour is now, in this style: where a colour of its own starts.</summary>
@@ -781,20 +995,26 @@ namespace Triband.Storey.Editor
             var spans = Bridges.Touching(site, b);
             var dangling = b.bridges.Where(x => Bridges.Span(site, b, x) == null).ToList();
             if (spans.Count == 0 && dangling.Count == 0) return;
-            StoreyInspectorUI.Section("Bridges", "Bridges from and to this building");
+            int n = spans.Count + dangling.Count;
+            using var c = StoreyInspectorUI.Card("bridges", "Bridges", StoreyInspectorUI.BridgeIcon, StoreyInspectorUI.Tint.Details, n == 1 ? "1 bridge" : $"{n} bridges",
+                tip: "Bridges from and to this building: add one with Bridge, under Details");
+            if (!c.Open) return;
             foreach (var s in spans)
             {
                 bool own = ReferenceEquals(s.A, b); var other = own ? s.B : s.A; string owner = s.A.id, id = s.br.id;
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField($"{Floor(b, own ? s.br.k : s.br.toK)} ↔ {other.name}, {Floor(other, own ? s.br.toK : s.br.k)} · {s.L:0.0} m", GUILayout.MinWidth(120));
-                    int kind = GUILayout.Toolbar(s.br.open ? 1 : 0, new[] { "Enclosed", "Open" }, GUILayout.Width(130));
+                    EditorGUILayout.LabelField($"{Floor(b, own ? s.br.k : s.br.toK)} ↔ {other.name}, {Floor(other, own ? s.br.toK : s.br.k)} · {s.L:0.0} m", GUILayout.MinWidth(60));
+                    int kind = GUILayout.Toolbar(s.br.open ? 1 : 0, new[] { "Enclosed", "Open" }, EditorStyles.miniButton, GUILayout.Width(120));
                     if (kind != (s.br.open ? 1 : 0)) e.Apply(kind == 1 ? "Bridge opened" : "Bridge enclosed", d => { var br = d.buildings.First(x => x.id == owner).bridges.First(x => x.id == id); br.open = kind == 1; return true; });
                     if (GUILayout.Button(new GUIContent("×", "Remove the bridge"), EditorStyles.miniButton, GUILayout.Width(22))) { e.Apply("Bridge removed", d => BridgeEdits.Remove(d.buildings.First(x => x.id == owner), id)); return; }
                 }
-                EditorGUI.BeginChangeCheck();
-                float w = EditorGUILayout.Slider("   Width", (float)s.br.width, 1.5f, 4f);
-                if (EditorGUI.EndChangeCheck()) e.Apply("Bridge width", d => { d.buildings.First(x => x.id == owner).bridges.First(x => x.id == id).width = Math.Round(w * 10) / 10; return true; });
+                using (new EditorGUI.IndentLevelScope())
+                {
+                    EditorGUI.BeginChangeCheck();
+                    float w = EditorGUILayout.Slider("Width", (float)s.br.width, 1.5f, 4f);
+                    if (EditorGUI.EndChangeCheck()) e.Apply("Bridge width", d => { d.buildings.First(x => x.id == owner).bridges.First(x => x.id == id).width = Math.Round(w * 10) / 10; return true; });
+                }
             }
             foreach (var br in dangling)
                 using (new EditorGUILayout.HorizontalScope())
@@ -805,177 +1025,183 @@ namespace Triband.Storey.Editor
                 }
         }
 
-        /// <summary>The style's window details (docs/EDITOR.md §6.7): heads, glazing bars, frames; and on the base its street door.</summary>
+        /// <summary>The built-in window's details (docs/EDITOR.md §6.7): sills, heads, glazing bars and frames. A window of your own brings its own.</summary>
         void WindowDetails(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
         {
-            OpeningSets.Uses(st, out bool generated, out _, out _);
-            bool artist = !generated;
-            using (new EditorGUI.DisabledScope(artist))
-            {
-                StyleToggle(e, k0, "Sills", st.sills, (s, x) => s.sills = x);
-                StyleToggle(e, k0, "Heads", st.heads, (s, x) => s.heads = x);
-                using (new EditorGUI.DisabledScope(!st.heads))
-                    StyleEnum(e, k0, "   Head shape", st.head, (s, x) => s.head = x);
-                using (new EditorGUILayout.HorizontalScope())
+            StyleToggle(e, k0, "Sills", st.sills, (s, x) => s.sills = x);
+            StyleToggle(e, k0, "Heads", st.heads, (s, x) => s.heads = x);
+            if (st.heads) using (new EditorGUI.IndentLevelScope()) StyleEnum(e, k0, "Head shape", st.head, (s, x) => s.head = x);
+            bool panes = st.paneCols.HasValue || st.paneRows.HasValue;
+            bool p = EditorGUILayout.Toggle(new GUIContent("Glazing bars", "Divide every window into panes"), panes);
+            if (p != panes) e.ApplyTo(p ? "Glazing bars" : "No glazing bars", bb => { var s = Styles.Edited(bb, k0); s.paneCols = p ? 2 : (int?)null; s.paneRows = p ? 3 : (int?)null; return true; });
+            if (panes)
+                using (new EditorGUI.IndentLevelScope())
                 {
-                    bool panes = EditorGUILayout.Toggle(new GUIContent("Glazing bars", "Divide every window into panes"), st.paneCols.HasValue || st.paneRows.HasValue);
-                    if (panes != (st.paneCols.HasValue || st.paneRows.HasValue)) e.ApplyTo(panes ? "Glazing bars" : "No glazing bars", bb => { var s = Styles.Edited(bb, k0); s.paneCols = panes ? 2 : (int?)null; s.paneRows = panes ? 3 : (int?)null; return true; });
+                    StyleSlider(e, k0, "Panes across", st.paneCols ?? 1, 1, 6, 1, (s, x) => s.paneCols = (int)x);
+                    StyleSlider(e, k0, "Panes up", st.paneRows ?? 1, 1, 6, 1, (s, x) => s.paneRows = (int)x);
                 }
-                if (st.paneCols.HasValue || st.paneRows.HasValue)
-                {
-                    StyleSlider(e, k0, "   Panes across", st.paneCols ?? 1, 1, 6, 1, (s, x) => s.paneCols = (int)x);
-                    StyleSlider(e, k0, "   Panes up", st.paneRows ?? 1, 1, 6, 1, (s, x) => s.paneRows = (int)x);
-                }
-                StyleToggle(e, k0, "Frames", st.frames, (s, x) => s.frames = x);
-            }
-            if (artist) EditorGUILayout.LabelField("The artist's window brings its own head, frame and bars.", StoreyInspectorUI.Caption);
-            Recess(e, k0, "Window recess", "How deep windows sit in the wall, from its face: the generator's glass and frame, or an artist's window pushed back that far", st.recess, 0.25, (s, x) => s.recess = x);
-            if (k0 == 0) SetRows(e, k0, st, SetOf.Doors, "Street door");
-            Recess(e, k0, "Door recess", "How deep doors sit in the wall, from its face: the plain door's panel, or an artist's door pushed back that far; a recessed street door's threshold is in the Foundation colour", st.doorRecess, 0.29, (s, x) => s.doorRecess = x);
+            StyleToggle(e, k0, "Frames", st.frames, (s, x) => s.frames = x);
         }
 
+        static readonly GUIContent SolidBackLabel = new GUIContent("Solid back",
+            "Windows and doors of your own that are set into the wall get a back in the wall's colour at their depth: whatever of them is behind it " +
+            "is hidden, and round a hole bigger than what fills it the wall shows. One setting for windows and doors, on buildings without interiors");
+
         /// <summary>
-        /// A recess (docs/EDITOR.md §6.7, <see cref="FacadeStyle.recess"/>, <see cref="FacadeStyle.doorRecess"/>): off, as before
-        /// (the generator's 16.5 cm, an artist's at the wall's face); on, how deep.
+        /// Windows or doors set into the wall (docs/EDITOR.md §6.7, <see cref="FacadeStyle.recess"/>, <see cref="FacadeStyle.doorRecess"/>):
+        /// off, the built-in ones sit at their usual depth and yours at the wall's face; on, how deep, and whether the hole has a
+        /// solid back (<see cref="FacadeStyle.recessBack"/>).
         /// </summary>
-        static void Recess(StoreyEdit e, int k0, string label, string tip, double? value, double max, Action<FacadeStyle, double?> set)
+        static void Recess(StoreyEdit e, int k0, FacadeStyle st, string what, string tip, double? value, double max, Action<FacadeStyle, double?> set)
         {
-            using (new EditorGUILayout.HorizontalScope())
+            bool on = StoreyInspectorUI.Feature("Set into the wall", tip, value.HasValue);
+            if (on != value.HasValue) e.ApplyTo(on ? what + " set into the wall" : what + " at their usual depth", bb => { set(Styles.Edited(bb, k0), on ? Generate.OpeningKinds.ShellReveal : (double?)null); return true; });
+            if (!(value is double v)) return;
+            using (new EditorGUI.IndentLevelScope())
             {
-                bool on = EditorGUILayout.Toggle(new GUIContent(label, tip), value.HasValue);
-                if (on != value.HasValue) e.ApplyTo(label, bb => { set(Styles.Edited(bb, k0), on ? Generate.OpeningKinds.ShellReveal : (double?)null); return true; });
+                StyleSlider(e, k0, new GUIContent("Depth", "How far in from the wall's face, in metres"), v, 0, max, 0.01, (s, x) => set(s, x));
+                StyleToggle(e, k0, SolidBackLabel, st.recessBack, (s, x) => s.recessBack = x);
             }
-            if (value is double v) StyleSlider(e, k0, "   Depth", v, 0, max, 0.01, (s, x) => set(s, x));
         }
 
         /// <summary>
-        /// The style's wall details (docs/EDITOR.md §6.7), top to bottom as they stand on the wall: the cornice, bands, and on
-        /// the base the plinth and foundation; brick patches on any. Each strip's colour is with it.
+        /// The style's wall strips (docs/EDITOR.md §6.7), top to bottom as they stand on the wall: the cornice, bands, and on
+        /// the base the plinth and foundation; brick patches on any. Each one's settings and colour are under it while it's on.
         /// </summary>
         void WallDetails(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
         {
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                bool cn = EditorGUILayout.Toggle(new GUIContent("Cornice", "A strip round the top of the walls, under the roof (and under a terrace's parapet where a setback starts above); the top storey's windows stay under it"), st.corniceH.HasValue);
-                if (cn != st.corniceH.HasValue) e.ApplyTo(cn ? "Cornice" : "No cornice", bb => { Styles.Edited(bb, k0).corniceH = cn ? 0.3 : (double?)null; return true; });
-            }
+            bool cn = StoreyInspectorUI.Feature("Cornice", "A strip round the top of the walls, under the roof (and under a terrace's parapet where a setback starts above); the top storey's windows stay under it", st.corniceH.HasValue);
+            if (cn != st.corniceH.HasValue) e.ApplyTo(cn ? "Cornice" : "No cornice", bb => { Styles.Edited(bb, k0).corniceH = cn ? 0.3 : (double?)null; return true; });
             if (st.corniceH is double ch)
-            {
-                StyleSlider(e, k0, "   Height", ch, 0.05, 2, 0.01, (s, x) => s.corniceH = x);
-                StyleSlider(e, k0, "   Stands out", st.corniceDepth ?? 0.1, 0.01, 1, 0.01, (s, x) => s.corniceDepth = x);
-                Colour(e, b, k0, "   Colour", "cornice", optional: true);
-            }
-            StyleToggle(e, k0, "Floor bands", st.bands, (s, x) => s.bands = x);
+                using (new EditorGUI.IndentLevelScope())
+                {
+                    StyleSlider(e, k0, "Height", ch, 0.05, 2, 0.01, (s, x) => s.corniceH = x);
+                    StyleSlider(e, k0, StandsOutLabel, st.corniceDepth ?? 0.1, 0.01, 1, 0.01, (s, x) => s.corniceDepth = x);
+                    Colour(e, b, k0, "Colour", "cornice", optional: true);
+                }
+            bool bd = StoreyInspectorUI.Feature("Floor bands", "A strip along the walls under each storey's ceiling", st.bands);
+            if (bd != st.bands) e.ApplyTo(bd ? "Floor bands" : "No floor bands", bb => { Styles.Edited(bb, k0).bands = bd; return true; });
             if (st.bands)
-            {
-                if (k0 == 0) StyleToggle(e, k0, "   Over the ground floor only", st.bandGround, (s, x) => s.bandGround = x);
-                StyleSlider(e, k0, "   Band height", st.bandH ?? 0.22, 0.05, 1.5, 0.01, (s, x) => s.bandH = x);
-                StyleSlider(e, k0, "   Band stands out", st.bandDepth ?? 0.06, 0.01, 0.2, 0.01, (s, x) => s.bandDepth = x);
-                using (new EditorGUI.DisabledScope(st.band != null))
-                    StyleToggle(e, k0, "   Band in a wall shade", st.bandWall, (s, x) => s.bandWall = x);
-                Colour(e, b, k0, "   Band colour", "band", optional: true);
-            }
+                using (new EditorGUI.IndentLevelScope())
+                {
+                    if (k0 == 0) StyleToggle(e, k0, new GUIContent("Ground floor only", "One band, over the ground floor; the storeys above have none"), st.bandGround, (s, x) => s.bandGround = x);
+                    StyleSlider(e, k0, "Height", st.bandH ?? 0.22, 0.05, 1.5, 0.01, (s, x) => s.bandH = x);
+                    StyleSlider(e, k0, StandsOutLabel, st.bandDepth ?? 0.06, 0.01, 0.2, 0.01, (s, x) => s.bandDepth = x);
+                    Colour(e, b, k0, "Colour", "band", optional: true);
+                    if (st.band == null) StyleToggle(e, k0, new GUIContent("Shade of the wall", "With no colour of its own, the band is a shade of the wall's colour, not the trim's"), st.bandWall, (s, x) => s.bandWall = x);
+                }
             if (k0 == 0)
             {
-                StyleSlider(e, k0, "Plinth height", st.plinthH ?? 0.45, 0, 2, 0.05, (s, x) => s.plinthH = x);
-                StyleSlider(e, k0, "   Stands out", st.plinthDepth ?? 0.04, 0.01, 1, 0.01, (s, x) => s.plinthDepth = x);
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    bool fd = EditorGUILayout.Toggle(new GUIContent("Foundation", "A foundation along the foot of the ground floor"), st.foundation.HasValue);
-                    if (fd != st.foundation.HasValue) e.ApplyTo(fd ? "Foundation" : "No foundation", bb => { Styles.Edited(bb, k0).foundation = fd ? 0.5 : (double?)null; return true; });
-                }
+                double ph = st.plinthH ?? 0.45;
+                bool pl = StoreyInspectorUI.Feature("Plinth", "A strip along the foot of the ground floor's walls", ph > 0);
+                if (pl != ph > 0) e.ApplyTo(pl ? "Plinth" : "No plinth", bb => { Styles.Edited(bb, 0).plinthH = pl ? (double?)null : 0; return true; });
+                if (ph > 0)
+                    using (new EditorGUI.IndentLevelScope())
+                    {
+                        StyleSlider(e, k0, "Height", ph, 0.05, 2, 0.05, (s, x) => s.plinthH = x);
+                        StyleSlider(e, k0, StandsOutLabel, st.plinthDepth ?? 0.04, 0.01, 1, 0.01, (s, x) => s.plinthDepth = x);
+                        Colour(e, b, k0, "Colour", "plinth", optional: true);
+                    }
+                bool fd = StoreyInspectorUI.Feature("Foundation", "A foundation along the foot of the ground floor, reaching down into the ground", st.foundation.HasValue);
+                if (fd != st.foundation.HasValue) e.ApplyTo(fd ? "Foundation" : "No foundation", bb => { Styles.Edited(bb, k0).foundation = fd ? 0.5 : (double?)null; return true; });
                 if (st.foundation is double depth)
-                {
-                    StyleSlider(e, k0, "   Below ground", depth, 0, 5, 0.05, (s, x) => s.foundation = x);
-                    StyleSlider(e, k0, "   Above ground", st.foundationH ?? 0.2, 0.02, 1.5, 0.01, (s, x) => s.foundationH = x);
-                    StyleSlider(e, k0, "   Stands out", st.foundationOut ?? 0.08, 0.01, 1, 0.01, (s, x) => s.foundationOut = x);
-                }
+                    using (new EditorGUI.IndentLevelScope())
+                    {
+                        StyleSlider(e, k0, "Below ground", depth, 0, 5, 0.05, (s, x) => s.foundation = x);
+                        StyleSlider(e, k0, "Above ground", st.foundationH ?? 0.2, 0.02, 1.5, 0.01, (s, x) => s.foundationH = x);
+                        StyleSlider(e, k0, StandsOutLabel, st.foundationOut ?? 0.08, 0.01, 1, 0.01, (s, x) => s.foundationOut = x);
+                        Colour(e, b, k0, "Colour", "foundationColor", optional: true);
+                    }
             }
-            StyleSlider(e, k0, "Brick patches", st.bricks ?? 0, 0, 1, 0.05, (s, x) => s.bricks = x > 0 ? x : (double?)null);
+            bool br = StoreyInspectorUI.Feature("Brick patches", "Patches of brick scattered over the walls", (st.bricks ?? 0) > 0);
+            if (br != (st.bricks ?? 0) > 0) e.ApplyTo(br ? "Brick patches" : "No brick patches", bb => { Styles.Edited(bb, k0).bricks = br ? 0.3 : (double?)null; return true; });
+            if (st.bricks is double bk && bk > 0)
+                using (new EditorGUI.IndentLevelScope()) StyleSlider(e, k0, "Amount", bk, 0.05, 1, 0.05, (s, x) => s.bricks = x);
         }
 
-        static readonly GUIContent BaysLabel = new GUIContent("Bays", "How each wall's bays are laid out along it");
+        static readonly GUIContent StandsOutLabel = new GUIContent("Stands out", "How far it stands out from the wall's face, in metres");
+
+        static readonly GUIContent BaysLabel = new GUIContent("Bays", "How the windows are spaced along each wall: each bay has one window");
         static readonly GUIContent[] BayFitChoices =
         {
-            new GUIContent("Spread", "As many bays as Bay spacing rounds to, stretched to fill the wall between its corners"),
-            new GUIContent("Fixed (as the old generator)", "As many whole bays of Bay spacing as fit on the wall's outside, centred on it, as the old BuildingGenerator lays out its tiles; an artist's window of its own size keeps it however narrow the bay"),
+            new GUIContent("Fill the wall", "As many bays as Bay width rounds to, stretched to fill each wall from corner to corner"),
+            new GUIContent("Fixed width", "As many whole bays of exactly Bay width as fit on each wall, centred on it; a window that keeps its own size keeps it however narrow the bay"),
         };
 
-        /// <summary>
-        /// How the style's bays are laid out (<see cref="FacadeStyle.bayFit"/>, docs/EDITOR.md §6.7): spread to fill each wall,
-        /// or fixed at Bay spacing and centred, as the old generator's tiles are.
-        /// </summary>
+        /// <summary>How the style's bays are laid out (<see cref="FacadeStyle.bayFit"/>, docs/EDITOR.md §6.7): spread to fill each wall, or fixed at Bay width and centred.</summary>
         static void BayFits(StoreyEdit e, int k0, FacadeStyle st)
         {
-            int x = EditorGUILayout.Popup(BaysLabel, (int)st.bayFit, BayFitChoices);
-            if (x != (int)st.bayFit) e.ApplyTo(x == (int)BayFit.Fixed ? "Fixed bays" : "Spread bays", bb => { Styles.Edited(bb, k0).bayFit = (BayFit)x; return true; });
+            int x = StoreyInspectorUI.Segmented(BaysLabel, (int)st.bayFit, BayFitChoices);
+            if (x != (int)st.bayFit) e.ApplyTo(x == (int)BayFit.Fixed ? "Bays of a fixed width" : "Bays filling the wall", bb => { Styles.Edited(bb, k0).bayFit = (BayFit)x; return true; });
         }
 
         static readonly GUIContent OpeningsLabel = new GUIContent("Openings",
-            "Where each storey's windows are and how big their holes are, whatever window fills them (the ground floor follows Ground floor). " +
-            "Punched: up to 1.35 m high over a 90 cm sill, Window width wide. Tall: from 40 cm to half a metre under the storey's top, Window width wide. " +
-            "Ribbon: a strip across each bay. Curtain: glass across each bay, floor to ceiling. None: blank walls.");
-        static readonly GUIContent OwnSizeLabel = new GUIContent("Openings", "The artist's window keeps its own size, so each hole is as big as it is, as high over its floor as Sill height says, or centred in its storey. None: blank walls.");
-        static readonly GUIContent[] OwnSizeChoices = { new GUIContent("The window's own size"), new GUIContent("None") };
+            "The holes in each storey's walls, whatever window fills them (the ground floor's follow Ground floor). " +
+            "Standard: up to 1.35 m high over a 90 cm sill, Window width wide. Tall: from 40 cm up to half a metre under the storey's top, Window width wide. " +
+            "Ribbon: a strip across each bay. Glass wall: glass across each bay, floor to ceiling. None: blank walls.");
+        /// <summary>The window types (<see cref="WindowType"/>) as the inspector names them.</summary>
+        static readonly GUIContent[] OpeningChoices = { new GUIContent("Standard"), new GUIContent("Tall"), new GUIContent("Ribbon"), new GUIContent("Glass wall"), new GUIContent("None") };
+        static string OpeningName(WindowType t) => OpeningChoices[(int)t].text;
+        static readonly GUIContent OwnSizeLabel = new GUIContent("Openings", "Your window keeps its own size, so each hole is as big as it is. None: blank walls.");
+        static readonly GUIContent[] OwnSizeChoices = { new GUIContent("As big as the window"), new GUIContent("None") };
 
         /// <summary>
         /// The style's openings (its window type, docs/EDITOR.md §6.9): where each storey's windows are and how big their
-        /// holes are. An artist's window that keeps its own size leaves two things to them: whether there are any, and how high
-        /// they sit (<see cref="FacadeStyle.sillH"/>, which starts at the type's sill).
+        /// holes are. A window of your own that keeps its own size leaves two things to you: whether there are any, and how
+        /// high they sit (<see cref="Sill"/>).
         /// </summary>
-        /// <param name="sill">Some of the windows (not all: <paramref name="ownSize"/>) keep their own size: they take Sill height too.</param>
+        /// <param name="sill">Some of the windows (not all: <paramref name="ownSize"/>) keep their own size: they take a height too.</param>
         static void Openings(StoreyEdit e, int k0, FacadeStyle st, bool ownSize, bool sill)
         {
             if (!ownSize)
             {
-                var x = (WindowType)EditorGUILayout.EnumPopup(OpeningsLabel, st.windows);
-                if (x != st.windows) e.ApplyTo("Openings", bb => { Styles.Edited(bb, k0).windows = x; return true; });
-                if (sill && st.windows != WindowType.None) Sill(e, k0, st, "   ");
+                int x = EditorGUILayout.Popup(OpeningsLabel, (int)st.windows, OpeningChoices);
+                if (x != (int)st.windows) e.ApplyTo("Openings: " + OpeningChoices[x].text, bb => { Styles.Edited(bb, k0).windows = (WindowType)x; return true; });
+                if (sill && st.windows != WindowType.None) using (new EditorGUI.IndentLevelScope()) Sill(e, k0, st, OwnHeightLabel);
                 return;
             }
             int was = st.windows == WindowType.None ? 1 : 0, pick = EditorGUILayout.Popup(OwnSizeLabel, was, OwnSizeChoices);
             if (pick != was) e.ApplyTo(pick == 1 ? "No windows" : "Windows", bb => { Styles.Edited(bb, k0).windows = pick == 1 ? WindowType.None : WindowType.Punched; return true; });
-            if (was == 1) return;
-            Sill(e, k0, st, "");
-            EditorGUILayout.LabelField(st.winCentre ? "The window keeps its own size, centred in each storey's height." : "The window keeps its own size, this high over each floor.", StoreyInspectorUI.Caption);
+            if (was == 0) Sill(e, k0, st, HeightLabel);
         }
 
-        static readonly GUIContent CentredLabel = new GUIContent("Centred in storey",
-            "A window that keeps its own size sits halfway up each storey, the ground storey's in its own height, as the old BuildingGenerator places its windows; Sill height then doesn't apply");
-        static readonly GUIContent CentredIndented = new GUIContent("   " + CentredLabel.text, CentredLabel.tooltip);
+        static readonly GUIContent HeightLabel = new GUIContent("Height", "Where a window that keeps its own size sits in each storey: halfway up (the ground storey's in its own height), or at a sill height over the floor");
+        static readonly GUIContent OwnHeightLabel = new GUIContent("Your windows", "Where your windows that keep their own size sit in each storey: halfway up (the ground storey's in its own height), or at a sill height over the floor");
+        static readonly GUIContent[] HeightChoices = { new GUIContent("Centred", "Halfway up each storey"), new GUIContent("Sill height", "This high over each floor") };
 
         /// <summary>
         /// Where a window that keeps its own size sits (docs/EDITOR.md §6.9): centred in its storey
-        /// (<see cref="FacadeStyle.winCentre"/>), or at <see cref="FacadeStyle.sillH"/>, whose slider is greyed out while centred.
+        /// (<see cref="FacadeStyle.winCentre"/>), or at <see cref="FacadeStyle.sillH"/>, whose slider shows while it isn't.
         /// </summary>
-        static void Sill(StoreyEdit e, int k0, FacadeStyle st, string indent)
+        static void Sill(StoreyEdit e, int k0, FacadeStyle st, GUIContent label)
         {
-            bool x = EditorGUILayout.Toggle(indent == "" ? CentredLabel : CentredIndented, st.winCentre);
-            if (x != st.winCentre) e.ApplyTo(x ? "Windows centred in storey" : "Windows at sill height", bb => { Styles.Edited(bb, k0).winCentre = x; return true; });
-            using (new EditorGUI.DisabledScope(st.winCentre))
-                StyleSlider(e, k0, indent + "Sill height", st.sillH ?? Generate.Facade.SillOf(st.windows), 0, 2, 0.05, (s, y) => s.sillH = y);
+            int cur = st.winCentre ? 0 : 1, x = StoreyInspectorUI.Segmented(label, cur, HeightChoices);
+            if (x != cur) e.ApplyTo(x == 0 ? "Windows centred in storey" : "Windows at sill height", bb => { Styles.Edited(bb, k0).winCentre = x == 0; return true; });
+            if (!st.winCentre)
+                using (new EditorGUI.IndentLevelScope())
+                    StyleSlider(e, k0, "Sill height", st.sillH ?? Generate.Facade.SillOf(st.windows), 0, 2, 0.05, (s, y) => s.sillH = y);
         }
 
         /// <summary>
-        /// A style's windows (or street doors, or the ground floor's own windows): the generator's own, or ones an artist made
-        /// (Storey Opening assets: docs/EDITOR.md §6.9), or none (no window there), each picked as often as its weight
-        /// (docs/OPENINGS.md §7.1). One entry is the style's one window, as before sets; with two or more, each has a weight,
-        /// its share, and a ×. Picking an artist's adds it to the site's list, so builds include it.
+        /// A style's windows (or street doors, or the ground floor's own windows): the built-in one, ones you made (Storey
+        /// Window or Door assets: docs/EDITOR.md §6.9), or none (no window there), each picked as often as its weight
+        /// (docs/OPENINGS.md §7.1). One entry is the style's one window; with two or more, each has a weight, its share, and
+        /// a ×. Picking one of yours adds it to the site's list, so builds include it.
         /// </summary>
         void SetRows(StoreyEdit e, int k0, FacadeStyle st, SetOf which, string label)
         {
             var set = WindowSets.Shown(st, which)!;
             bool door = which == SetOf.Doors, many = set.Count > 1;
             var kinds = StoreyOpenings.All().Where(o => o.door == door).ToList();
-            var names = new List<GUIContent> { new GUIContent(door ? "Plain" : "Generated") };
+            var names = new List<GUIContent> { new GUIContent("Built-in") };
             if (!door) names.Add(new GUIContent("None", "No window: the wall is left whole there"));
             int first = names.Count;
             names.AddRange(kinds.Select(o => new GUIContent(o.name)));
             if (kinds.Count == 0) names.Add(new GUIContent("(make one: Create ▸ Storey ▸ Window or Door)"));
             double total = 0; for (int i = 0; i < set.Count; i++) total += OpeningSets.Weight(set, i);
             var tip = new GUIContent(label, door
-                ? "Street doors: a plain one (a flat panel set into the wall, in the Doors colour), or ones an artist made. With several, each wall's doors are one of them, picked by its weight"
-                : "What fills each opening: the generator's own window, ones an artist made, or none. With several, each window is one of them, picked by its weight, the same on every build and different from building to building");
+                ? "The street doors: the built-in one (a flat panel set into the wall, in the door colour), or doors you made (Create ▸ Storey ▸ Window or Door). With several, each wall's doors are one of them, picked by its weight"
+                : "What fills each opening: the built-in window, windows you made (Create ▸ Storey ▸ Window or Door), or none. With several, each window is one of them, picked by its weight, the same on every build and different from building to building");
             for (int i = 0; i < set.Count; i++)
             {
                 var en = set[i]; int at = i;
@@ -996,27 +1222,27 @@ namespace Triband.Storey.Editor
                         EditorGUI.BeginChangeCheck();
                         double w = Math.Max(0, EditorGUILayout.DelayedFloatField((float)en.weight, GUILayout.Width(36)));
                         if (EditorGUI.EndChangeCheck() && w != en.weight) e.ApplyTo(label + " weight", bb => { WindowSets.Weigh(Styles.Edited(bb, k0), which, at, w); return true; });
-                        EditorGUILayout.LabelField(total > 0 ? $"{OpeningSets.Weight(set, i) / total * 100:0}%" : "", StoreyInspectorUI.Caption, GUILayout.Width(30));
+                        EditorGUILayout.LabelField(new GUIContent(total > 0 ? $"{OpeningSets.Weight(set, i) / total * 100:0}%" : "", "Its share: its weight over all of theirs"), StoreyInspectorUI.Caption, GUILayout.Width(30));
                     }
                     if (door && (many || en.recess.HasValue)) DoorRecess(e, k0, en, at, label);
-                    if (many && GUILayout.Button(new GUIContent("×", "Remove it from the set"), EditorStyles.miniButton, GUILayout.Width(22)))
+                    if (many && GUILayout.Button(new GUIContent("×", "Remove it from the list"), EditorStyles.miniButton, GUILayout.Width(22)))
                         e.ApplyTo(label + " removed", bb => { WindowSets.Remove(Styles.Edited(bb, k0), which, at); return true; });
                 }
             }
             using (new EditorGUILayout.HorizontalScope())
             {
                 GUILayout.Space(EditorGUIUtility.labelWidth + 2);
-                if (GUILayout.Button(new GUIContent(door ? "+ Another door" : "+ Another window", door ? "Add a door: each wall's doors are picked from the set" : "Add a window (or none): each opening is picked from the set"), EditorStyles.miniButton))
+                if (GUILayout.Button(new GUIContent(door ? "+ Another door" : "+ Another window", door ? "Add a door: each wall's doors are picked from the list, by weight" : "Add a window (or none): each opening is picked from the list, by weight"), EditorStyles.miniButton))
                     e.ApplyTo(label + " added", bb => { WindowSets.Add(Styles.Edited(bb, k0), which, null); return true; });
             }
         }
 
-        static readonly GUIContent DoorRecessLabel = new GUIContent("recess",
-            "How deep this door sits in the wall, in metres from its face (0 to 0.29), in place of Door recess; empty: Door recess's");
+        static readonly GUIContent DoorRecessLabel = new GUIContent("depth",
+            "How deep this door sits in the wall, in metres from its face (0 to 0.29), in place of the style's; empty: the style's");
 
         /// <summary>
-        /// A street door entry's own recess (docs/EDITOR.md §6.7, <see cref="OpeningEntry.recess"/>), in metres: empty, the
-        /// style's <see cref="FacadeStyle.doorRecess"/>. One undo step, as every style edit.
+        /// A street door entry's own depth in the wall (docs/EDITOR.md §6.7, <see cref="OpeningEntry.recess"/>), in metres:
+        /// empty, the style's <see cref="FacadeStyle.doorRecess"/>. One undo step, as every style edit.
         /// </summary>
         static void DoorRecess(StoreyEdit e, int k0, OpeningEntry en, int at, string label)
         {
@@ -1026,17 +1252,17 @@ namespace Triband.Storey.Editor
             if (x == was) return;
             double? to = x.Length == 0 ? (double?)null
                 : double.TryParse(x.Replace(',', '.'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v) ? v : en.recess;
-            if (to != en.recess) e.ApplyTo(label + " recess", bb => { WindowSets.Recess(Styles.Edited(bb, k0), SetOf.Doors, at, to); return true; });
+            if (to != en.recess) e.ApplyTo(label + " depth", bb => { WindowSets.Recess(Styles.Edited(bb, k0), SetOf.Doors, at, to); return true; });
         }
 
-        /// <summary>The ground floor's windows: the floors above's, or a set of its own (docs/OPENINGS.md §7.1). Solid ground floors have none.</summary>
+        /// <summary>The ground floor's windows: the floors above's, or a list of its own (docs/OPENINGS.md §7.1). A ground floor without windows has none.</summary>
         void GroundRows(StoreyEdit e, FacadeStyle st)
         {
             if (st.ground == GroundType.Solid) return;
             bool own = st.groundSet is { Count: > 0 };
-            bool x = EditorGUILayout.Toggle(new GUIContent("Own ground windows", "The ground floor's openings (as Ground floor lays them out) take windows of their own, not the floors above's"), own);
+            bool x = EditorGUILayout.Toggle(new GUIContent("Own windows", "The ground floor's openings take windows of their own, not the floors above's"), own);
             if (x != own) e.ApplyTo(x ? "Ground floor windows of its own" : "Ground floor windows as above", bb => { var s = Styles.Edited(bb, 0); if (x) WindowSets.Own(s, SetOf.Ground); else WindowSets.FollowAbove(s); return true; });
-            if (own) SetRows(e, 0, st, SetOf.Ground, "   Ground window");
+            if (own) SetRows(e, 0, st, SetOf.Ground, "Ground window");
         }
 
         static Vec2 Near()
@@ -1116,15 +1342,36 @@ namespace Triband.Storey.Editor
         void InteriorTab(StoreyEdit e, BuildingData b)
         {
             var v = e.View; int k = v.floor, N = b.floors.Count;
-            StoreyInspectorUI.Section("Inside", "Walk-in buildings have floors, rooms and stairs; shells are facades only");
-            int shell = GUILayout.Toolbar(b.interior ? 0 : 1, new[] { "Walk-in interior", "Shell only" });
-            if ((shell == 1) == b.interior) e.ApplyTo(shell == 1 ? "Shell only: facade with no interior" : "Walk-in interior restored", bb => { bb.interior = shell == 0; return true; });
-            if (!b.interior)
+            using (var c = StoreyInspectorUI.Card("inside", "Inside", StoreyInspectorUI.InteriorIcon, StoreyInspectorUI.Tint.Windows, b.interior ? "Walk-in" : "Shell only",
+                tip: "Walk-in buildings have floors, rooms and stairs; shells are facades only"))
+                if (c.Open)
+                {
+                    int shell = GUI.Toolbar(EditorGUILayout.GetControlRect(), b.interior ? 0 : 1, new[] { "Walk-in interior", "Shell only" });
+                    if ((shell == 1) == b.interior) e.ApplyTo(shell == 1 ? "Shell only: facade with no interior" : "Walk-in interior restored", bb => { bb.interior = shell == 0; return true; });
+                    if (!b.interior) StoreyInspectorUI.Note("Facade only: windows are opaque, no floors or rooms inside, and the player can't enter. Use it for background blocks. The floor layouts are kept if you switch back.");
+                    else
+                    {
+                        StoreyInspectorUI.SubHeader("Colours inside", "The walls and floors inside, for the whole building");
+                        Colour(e, b, 0, "Walls", "interior", baseStyle: true);
+                        Colour(e, b, 0, "Floors", "floor", baseStyle: true);
+                    }
+                }
+            if (!b.interior) return;
+            using (var c = StoreyInspectorUI.Card("floor", "Floor", StoreyInspectorUI.FloorPlanIcon, StoreyInspectorUI.Tint.Doors,
+                Floor(b, k) + (k < N && b.floors[k].filled ? " · filled" : ""), tip: "The storey being edited; the Storey Floors overlay in the Scene view picks it too"))
             {
-                EditorGUILayout.HelpBox("Facade only: windows are opaque, no floors or rooms inside, and the player can't enter. Use it for background blocks. The floor layouts are kept if you switch back.", MessageType.None);
-                return;
+                if (c.Open) k = FloorSettings(e, b, k);
             }
-            StoreyInspectorUI.Section("Floor", "The storey being edited; the Storey Floors overlay in the Scene view picks it too");
+            if (k == N || b.floors[k].filled) return;
+            using (var c = StoreyInspectorUI.Card("tools", "Tools", StoreyInspectorUI.StairsIcon, StoreyInspectorUI.Tint.Style, InteriorTools[(int)v.interiorTool].label,
+                tip: "Pick one, then work in the Scene view"))
+                if (c.Open) Tools(e, b, k);
+        }
+
+        /// <summary>The storey being edited (picked here or in the Scene view's overlay), how its walls show, rooms or filled, its height; on the roof, which stairs and lifts reach it. Returns the storey picked.</summary>
+        int FloorSettings(StoreyEdit e, BuildingData b, int k)
+        {
+            var v = e.View; int N = b.floors.Count;
             using (new EditorGUILayout.HorizontalScope())
             {
                 int pickF = EditorGUILayout.Popup("Floor", N - k, Enumerable.Range(0, N + 1).Select(j => Floor(b, N - j)).ToArray());
@@ -1138,12 +1385,10 @@ namespace Triband.Storey.Editor
                 new GUIContent("Up", "Every wall at full height"),
             });
             if (wm != (int)v.walls) { v.walls = (CutWalls)wm; SceneView.RepaintAll(); }
-            int pick = N - k;
-            if (pick != N - k) { v.floor = N - pick; k = v.floor; v.selectedCore = ""; v.selectedWall = -1; SceneView.RepaintAll(); }
             if (k == N)
             {
-                if (Roofs.IsPitched(b)) { EditorGUILayout.HelpBox("A pitched roof has no roof access. Switch the roof to Flat in the Facade tab to put stairs up here.", MessageType.None); return; }
-                if (b.shafts.Count == 0) EditorGUILayout.HelpBox("No stairs or lifts yet. Pick a floor in the Storey Floors overlay, then place stairs.", MessageType.None);
+                if (Roofs.IsPitched(b)) { StoreyInspectorUI.Note("A pitched roof has no roof access. Switch the roof to Flat in the Facade tab to put stairs up here."); return k; }
+                if (b.shafts.Count == 0) StoreyInspectorUI.Note("No stairs or lifts yet. Pick a floor in the Storey Floors overlay, then place stairs.");
                 for (int i = 0; i < b.shafts.Count; i++)
                 {
                     var s = b.shafts[i]; bool reach = Derived.ShaftTop(b, s) == N - 1; string id = s.id;
@@ -1153,9 +1398,9 @@ namespace Triband.Storey.Editor
                         if (roof != s.roof) e.ApplyTo(roof ? "Now reaches the roof" : "Stops at the top floor", bb => { bb.shafts.First(x => x.id == id).roof = roof; return true; });
                     }
                 }
-                return;
+                return k;
             }
-            int fill = GUILayout.Toolbar(b.floors[k].filled ? 1 : 0, new[] { new GUIContent("Rooms", "A storey to walk in: walls, doors, stairs and lift stops"), new GUIContent("Filled", "Nothing inside: opaque windows and closed doors, no rooms or stairs; lifts pass through without stopping") });
+            int fill = StoreyInspectorUI.Segmented(new GUIContent("Inside", "Rooms to walk in, or nothing"), b.floors[k].filled ? 1 : 0, new[] { new GUIContent("Rooms", "A storey to walk in: walls, doors, stairs and lift stops"), new GUIContent("Filled", "Nothing inside: opaque windows and closed doors, no rooms or stairs; lifts pass through without stopping") });
             if ((fill == 1) != b.floors[k].filled)
             {
                 bool to = fill == 1; int kk = k;
@@ -1163,14 +1408,23 @@ namespace Triband.Storey.Editor
                 v.selectedCore = ""; v.selectedWall = -1;
             }
             if (b.floors[k].filled)
+                StoreyInspectorUI.Note("Filled: this storey has nothing inside. Its windows are opaque and its doors closed. Stairs stop at the storeys on either side, and lifts pass through without stopping. The rooms drawn here are kept if you switch back.");
+            using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.HelpBox("Filled: this storey has nothing inside. Its windows are opaque and its doors closed. Stairs stop at the storeys on either side, and lifts pass through without stopping. The rooms drawn here are kept if you switch back.", MessageType.None);
-                return;
+                Slider(e, "Height", Derived.FloorH(b, k), 2.4, 8, 0.1, (bb, x) => Floors.SetHeight(bb, k, x));
+                if (b.floors[k].h.HasValue && GUILayout.Button(new GUIContent("Default", $"Use the building's {(k == 0 ? b.groundHeight : b.floorHeight):0.0} m"), EditorStyles.miniButton, GUILayout.Width(56)))
+                    e.ApplyTo("Storey uses the default height", bb => { Floors.SetHeight(bb, k, null); return true; });
             }
-            StoreyInspectorUI.Section("Tools", "Pick one, then work in the Scene view");
+            return k;
+        }
+
+        /// <summary>The interior tools (pick one, then work in the Scene view), their options, and what is selected with them.</summary>
+        void Tools(StoreyEdit e, BuildingData b, int k)
+        {
+            var v = e.View;
             int tool = StoreyInspectorUI.ToolBar((int)v.interiorTool, InteriorTools);
             if (tool != (int)v.interiorTool) { v.interiorTool = (InteriorTool)tool; SceneView.RepaintAll(); }
-            EditorGUILayout.HelpBox(ToolHint(v.interiorTool), MessageType.None);
+            StoreyInspectorUI.Note(ToolHint(v.interiorTool));
             if (v.interiorTool == InteriorTool.Stairs)
             {
                 int kind = GUILayout.Toolbar(v.stairKind == CoreType.Flight ? 1 : 0, new[] { new GUIContent("Switchback", "Two flights and a landing per storey, in a walled stairwell"), new GUIContent("Straight flights", "One straight flight per storey with no walls, and a walkway beside it back to the next flight") });
@@ -1191,25 +1445,16 @@ namespace Triband.Storey.Editor
                 var w = b.floors[k].walls[v.selectedWall]; int wi = v.selectedWall;
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField($"Wall · {Tiers.Hypot(w.b.x - w.a.x, w.b.z - w.a.z):0.00} m");
+                    EditorGUILayout.LabelField($"Selected wall · {Tiers.Hypot(w.b.x - w.a.x, w.b.z - w.a.z):0.00} m");
                     if (GUILayout.Button("Remove", EditorStyles.miniButton)) { e.ApplyTo("Removed", bb => { bb.floors[k].walls.RemoveAt(wi); return true; }); v.selectedWall = -1; }
                 }
             }
-
-            StoreyInspectorUI.Section("This storey's height");
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                Slider(e, "Height", Derived.FloorH(b, k), 2.4, 8, 0.1, (bb, x) => Floors.SetHeight(bb, k, x));
-                if (b.floors[k].h.HasValue && GUILayout.Button(new GUIContent("Default", $"Use the building's {(k == 0 ? b.groundHeight : b.floorHeight):0.0} m"), EditorStyles.miniButton, GUILayout.Width(56)))
-                    e.ApplyTo("Storey uses the default height", bb => { Floors.SetHeight(bb, k, null); return true; });
-            }
-            if (StoreyInspectorUI.Fold("inside", "Interior colours", false, "The walls and floors inside, for the whole building")) { Colour(e, b, 0, "Walls", "interior", baseStyle: true); Colour(e, b, 0, "Floors", "floor", baseStyle: true); }
         }
 
         void CoreInspector(StoreyEdit e, BuildingData b, CoreData s)
         {
             int N = b.floors.Count; string id = s.id;
-            EditorGUILayout.LabelField(s.type == CoreType.Lift ? "Lift" : "Stairs", EditorStyles.boldLabel);
+            StoreyInspectorUI.SubHeader(s.type == CoreType.Lift ? "Selected lift" : "Selected stairs");
             if (s.type != CoreType.Lift)
             {
                 int kind = GUILayout.Toolbar(s.type == CoreType.Flight ? 1 : 0, new[] { "Switchback", "Straight flights" });
@@ -1276,7 +1521,7 @@ namespace Triband.Storey.Editor
         }
 
         /// <summary>
-        /// The project leaves some defaults unset, so they are the prototype's colours, shown as their nearest palette
+        /// The project leaves some defaults unset, so they are Storey's own colours, shown as their nearest palette
         /// entries: offer to store those entries as the project's defaults.
         /// </summary>
         void DefaultsNotice()
@@ -1284,7 +1529,7 @@ namespace Triband.Storey.Editor
             if (StoreyColorField.FillDefaults == null) return;
             var d = StoreyColorField.Defaults?.Invoke() ?? new StyleDefaults();
             if (!new[] { d.door, d.rail, d.metal, d.ceiling, d.liftInterior, d.liftButton, d.detailMetal, d.grille, d.detailDark, d.dish, d.frame, d.foundation, d.plinth }.Any(x => x != null && x.StartsWith("#"))) return;
-            EditorGUILayout.HelpBox("Some default colours aren't set for this project, so they show the nearest palette colour to the prototype's. Store those palette colours as the project's defaults (in Storey Color Settings) to pick them yourself.", MessageType.None);
+            EditorGUILayout.HelpBox("Some default colours aren't set for this project, so they show the palette colour nearest to Storey's own. Store those palette colours as the project's defaults (in Storey Color Settings) to pick them yourself.", MessageType.None);
             if (GUILayout.Button("Store the defaults in Storey Color Settings"))
             {
                 int n = StoreyColorField.FillDefaults();
@@ -1311,10 +1556,23 @@ namespace Triband.Storey.Editor
         static void StyleSlider(StoreyEdit e, int k0, string label, double value, double min, double max, double step, Action<FacadeStyle, double> set) =>
             Slider(e, label, value, min, max, step, (bb, x) => set(Styles.Edited(bb, k0), x));
 
+        static void StyleSlider(StoreyEdit e, int k0, GUIContent label, double value, double min, double max, double step, Action<FacadeStyle, double> set)
+        {
+            EditorGUI.BeginChangeCheck();
+            double x = Math.Round(EditorGUILayout.Slider(label, (float)value, (float)min, (float)max) / step) * step;
+            if (EditorGUI.EndChangeCheck() && x != value) e.ApplyTo(label.text, bb => { set(Styles.Edited(bb, k0), Math.Round(x, 3)); return true; });
+        }
+
         static void StyleToggle(StoreyEdit e, int k0, string label, bool value, Action<FacadeStyle, bool> set)
         {
             bool x = EditorGUILayout.Toggle(label, value);
             if (x != value) e.ApplyTo(label, bb => { set(Styles.Edited(bb, k0), x); return true; });
+        }
+
+        static void StyleToggle(StoreyEdit e, int k0, GUIContent label, bool value, Action<FacadeStyle, bool> set)
+        {
+            bool x = EditorGUILayout.Toggle(label, value);
+            if (x != value) e.ApplyTo(label.text, bb => { set(Styles.Edited(bb, k0), x); return true; });
         }
 
         static void StyleEnum<T>(StoreyEdit e, int k0, string label, T value, Action<FacadeStyle, T> set) where T : Enum
