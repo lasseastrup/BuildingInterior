@@ -209,7 +209,9 @@ namespace Triband.Storey
             if (o.TryGetValue("terraceRoof", out var tr) && tr != null)
             {
                 var tp = w.In("terraceRoof"); var to = c.Obj(tr, tp);
-                f.terraceRoof = new TerraceRoofData { pitch = c.Num(to, "pitch", 30, tp) };
+                // a hip or a gable (TerraceRoofData.type): any other is read as a hip
+                var trType = c.Enum<RoofType>(to, "type", RoofType.Hip, tp) == RoofType.Gable ? RoofType.Gable : RoofType.Hip;
+                f.terraceRoof = new TerraceRoofData { pitch = c.Num(to, "pitch", 30, tp), type = trType };
                 c.Check(to, tp, Keys.Terrace);
             }
             // "props" is a leftover key some test layouts carry; the prototype never reads it.
@@ -485,7 +487,12 @@ namespace Triband.Storey
                 if (f.bare is { Count: > 0 }) o["bare"] = Ints(f.bare);
             }
             if (f.style != null) o["style"] = Style(f.style);
-            if (f.terraceRoof != null) o["terraceRoof"] = new Dictionary<string, object?> { ["pitch"] = f.terraceRoof.pitch };
+            if (f.terraceRoof != null)
+            {
+                var tr = new Dictionary<string, object?> { ["pitch"] = f.terraceRoof.pitch };
+                if (f.terraceRoof.type != RoofType.Hip) tr["type"] = Lower(f.terraceRoof.type);   // Storey's own: the prototype's is a hip
+                o["terraceRoof"] = tr;
+            }
             return o;
         }
 
@@ -657,7 +664,7 @@ namespace Triband.Storey
             public static readonly string[] Floor = { "walls", "h", "shape", "blank", "quiet", "bare", "style", "terraceRoof", "props", "filled", "corners" };
             public static readonly string[] Wall = { "a", "b", "doors" };
             public static readonly string[] Door = { "t" };
-            public static readonly string[] Terrace = { "pitch" };
+            public static readonly string[] Terrace = { "pitch", "type" };
             public static readonly string[] RoofSurface = { "pattern", "w", "h", "relief", "variation" };
             public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof" };
             public static readonly string[] DetailRules = { "ac", "vents" };

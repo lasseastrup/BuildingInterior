@@ -243,10 +243,20 @@ namespace Triband.Storey
         public double? y;
     }
 
+    /// <summary>
+    /// The roof over a setback's terrace (<see cref="FloorData.terraceRoof"/>), instead of the terrace: the roof of the outline
+    /// below, cut away where the setback stands (docs/SPEC.md §4.1). Edited in the Facade tab with the floors below selected.
+    /// </summary>
     public sealed class TerraceRoofData
     {
         /// <summary>Roof pitch in degrees.</summary>
         public double pitch = 30;
+        /// <summary>
+        /// Its shape: a hip (the prototype's) or a gable, Storey's own; any other is built as a hip. Not a shed, whose one slope over
+        /// the whole outline below would tower over the setback, nor a mansard, whose steep slope would hide it; and never flat,
+        /// which is the terrace.
+        /// </summary>
+        public RoofType type = RoofType.Hip;
     }
 
     public enum WindowType { Punched, Tall, Ribbon, Curtain, None }

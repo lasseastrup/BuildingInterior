@@ -399,17 +399,17 @@ namespace Triband.Storey.Editor
                 }
                 if (Geo.TerracePolys(Derived.OutlineAt(b, k0 - 1), Derived.OutlineAt(b, k0)).Count > 0)
                 {
+                    // what covers the floors below where this setback leaves them uncovered: their roof, set with them in the Facade tab
                     var tr = b.floors[k0].terraceRoof;
-                    int top = GUILayout.Toolbar(tr != null ? 1 : 0, new[] { "Terrace", "Roof" });
-                    if ((top == 1) != (tr != null)) e.ApplyTo(top == 1 ? "The terrace below is now a roof" : "The roof below is a terrace again", bb => { Facades.SetTerraceRoof(bb, k0, top == 1); return true; });
-                    if (tr != null)
+                    using (new EditorGUILayout.HorizontalScope())
                     {
-                        EditorGUI.BeginChangeCheck();
-                        float pitch = EditorGUILayout.Slider("Pitch", (float)tr.pitch, 10, 50);
-                        if (EditorGUI.EndChangeCheck()) e.ApplyTo("Roof pitch", bb => { bb.floors[k0].terraceRoof!.pitch = Math.Round(pitch); return true; });
+                        EditorGUILayout.PrefixLabel(new GUIContent("Uncovered below", "Where this setback leaves the floors below it uncovered: a terrace, or a roof"));
+                        GUILayout.Label(tr == null ? "A terrace" : $"A {(tr.type == RoofType.Gable ? "gable" : "hip")} roof, {tr.pitch:0}°");
+                        if (GUILayout.Button(new GUIContent("Roof…", "The Facade tab with the floors below selected: their Terrace roof card"), EditorStyles.miniButton, GUILayout.Width(56)))
+                        { v.tier = lo; SetTab(v, StoreyTab.Facade); }
                     }
                 }
-                EditorGUILayout.HelpBox("Drag corners in the Scene view, or drag an edge's orange bar to push that wall in. " + (b.floors[k0].terraceRoof != null ? "The roof left uncovered below runs up against the walls above." : "The roof left uncovered below becomes a terrace: add a door onto it with Facade ▸ Entrance."), MessageType.None);
+                EditorGUILayout.HelpBox("Drag corners in the Scene view, or drag an edge's orange bar to push that wall in. The roof it leaves uncovered below is a terrace, or a roof of its own: the floors below's Terrace roof card, in the Facade tab.", MessageType.None);
             }
             else
             {
@@ -583,8 +583,9 @@ namespace Triband.Storey.Editor
                 WallsCard(e, b, k0, st);
                 ColoursCard(e, b, k0, st);
                 if (Styles.DrivesRoof(b, k0)) RoofCard(e, b, k0, st);
-                else if (TerraceRoofed(b, k0)) TerraceRoofCard(e, k0, st);
             }
+            // the roof over these floors where the setback above leaves them uncovered: whatever their style
+            TerraceRoofCard(e, b, k0, st);
             DetailsCard(e, b, k0, st);
             BridgeList(e, b);
         }
@@ -813,7 +814,10 @@ namespace Triband.Storey.Editor
         {
             string summary = st.roofType != RoofType.Flat ? $"{st.roofType}, {st.pitch ?? (st.roofType == RoofType.Shed ? 15 : st.roofType == RoofType.Mansard ? 20 : 30):0}°" + (st.roofSurface != null ? " · " + SurfaceName(st) : "")
                 : "Flat" + (st.parapet ? " · parapet" : "") + (Generate.RoofCap.Of(st) is Generate.RoofCap rc ? rc.inset ? " · edge set in" : rc.fascia ? " · hanging edge" : " · slab edge" : "");
-            using var c = StoreyInspectorUI.Card("roof", "Roof", StoreyInspectorUI.RoofIcon, StoreyInspectorUI.Tint.Roof, summary);
+            // from floors under a setback that shares their style (which has its own Terrace roof card), the roof on top
+            bool below = Tiers.Of(b).Last().k0 != k0;
+            using var c = StoreyInspectorUI.Card("roof", below ? "Roof on top" : "Roof", StoreyInspectorUI.RoofIcon, StoreyInspectorUI.Tint.Roof, summary,
+                tip: below ? "The roof on top of the building: the floors above these share their style" : null);
             if (!c.Open) return;
             StyleEnum(e, k0, "Type", st.roofType, (s, x) => s.roofType = x);
             if (st.roofType != RoofType.Flat)
@@ -832,23 +836,53 @@ namespace Triband.Storey.Editor
             bool pp = StoreyInspectorUI.Feature("Parapet", "A low wall round the roof's edge", st.parapet);
             if (pp != st.parapet) e.ApplyTo(pp ? "Parapet" : "No parapet", bb => { Styles.Edited(bb, k0).parapet = pp; return true; });
             RoofEdge(e, b, k0, st);
-            // flat on top, but the terrace below a setback has a pitched roof, in this style
-            if (TerraceRoofed(b, k0)) RoofSurfaceFields(e, k0, st, "Terrace roof's surface");
         }
 
-        /// <summary>Whether a roofed terrace (Shape › Terrace | Roof) covers the floors whose style this tier's is.</summary>
-        static bool TerraceRoofed(BuildingData b, int k0)
+        /// <summary>
+        /// The setback starting on the floor above tier <paramref name="k0"/>'s top, where it leaves these floors' roof uncovered (a
+        /// terrace, or a roof over it); -1 where nothing is uncovered (the top tier, or a setback flush with them).
+        /// </summary>
+        static int TerraceAbove(BuildingData b, int k0)
         {
             var t = Tiers.Of(b).Find(x => x.k0 == k0);
-            return t.k1 < b.floors.Count && b.floors[t.k1].terraceRoof != null;
+            return t.k1 < b.floors.Count && Geo.TerracePolys(Derived.OutlineAt(b, t.k1 - 1), Derived.OutlineAt(b, t.k1)).Count > 0 ? t.k1 : -1;
         }
 
-        /// <summary>The roof over a terrace below a setback: its surface, which is this tier's style's (the roof card is the top's).</summary>
-        void TerraceRoofCard(StoreyEdit e, int k0, FacadeStyle st)
+        // a hip or a gable: one shed slope over the whole outline below towers over the setback, and a mansard's steep slope hides it
+        static readonly RoofType[] TerraceRoofTypes = { RoofType.Hip, RoofType.Gable };
+        static readonly GUIContent TerraceRoofLabel = new GUIContent("Type", "What covers these floors where the setback above leaves them uncovered");
+        static readonly GUIContent[] TerraceRoofChoices =
         {
-            using var c = StoreyInspectorUI.Card("terraceRoof", "Terrace roof", StoreyInspectorUI.RoofIcon, StoreyInspectorUI.Tint.Roof, SurfaceName(st),
-                tip: "The pitched roof over these floors' terrace (Shape › Terrace | Roof): its pitch is set there, its surface here");
-            if (c.Open) RoofSurfaceFields(e, k0, st);
+            new GUIContent("Terrace", "Flat, with a parapet round it: walk out onto it through a door (Doors ▸ Place doors)"),
+            new GUIContent("Hip", "Sloping up from every eave to the walls above"),
+            new GUIContent("Gable", "Sloping up from two sides, with a gable at each end"),
+        };
+
+        /// <summary>
+        /// The roof over these floors where the setback above leaves them uncovered (docs/SPEC.md §4.1): a terrace to walk on, or
+        /// a roof of its own shape and pitch, with this style's colour and surface. Its own card, whichever style drives the roof
+        /// on top: the Facade tab with these floors selected is where their roof is.
+        /// </summary>
+        void TerraceRoofCard(StoreyEdit e, BuildingData b, int k0, FacadeStyle? st)
+        {
+            int k1 = TerraceAbove(b, k0); if (k1 < 0) return;
+            var tr = b.floors[k1].terraceRoof;
+            int cur = tr == null ? 0 : tr.type == RoofType.Gable ? 2 : 1;
+            string summary = tr == null ? "Terrace" : $"{TerraceRoofChoices[cur].text}, {tr.pitch:0}°" + (st?.roofSurface != null ? " · " + SurfaceName(st) : "");
+            using var c = StoreyInspectorUI.Card("terraceRoof", "Terrace roof", StoreyInspectorUI.RoofIcon, StoreyInspectorUI.Tint.Roof, summary,
+                tip: $"Where the setback above ({Floor(b, k1)} and up) leaves these floors uncovered: a terrace, or a roof");
+            if (!c.Open) return;
+            int pick = StoreyInspectorUI.Segmented(TerraceRoofLabel, cur, TerraceRoofChoices);
+            if (pick != cur) e.ApplyTo(pick == 0 ? "The roof below is a terrace again" : $"The terrace below is now a {TerraceRoofChoices[pick].text.ToLowerInvariant()} roof", bb =>
+            {
+                Facades.SetTerraceRoof(bb, k1, pick > 0);
+                if (pick > 0) bb.floors[k1].terraceRoof!.type = TerraceRoofTypes[pick - 1];
+                return true;
+            });
+            if (tr == null) { StoreyInspectorUI.Note("A terrace with a parapet round it. Put a door onto it from the setback with Doors ▸ Place doors."); return; }
+            Slider(e, "Pitch", tr.pitch, 10, 50, 1, (bb, x) => bb.floors[k1].terraceRoof!.pitch = x);
+            if (st != null) RoofSurfaceFields(e, k0, st);
+            else StoreyInspectorUI.Note("Its colour and surface are these floors' style's, which is the floors below's: give them their own style to choose them.");
         }
 
         static string SurfaceName(FacadeStyle st) => st.roofSurface is RoofSurface rs ? RoofSurfaces[(int)rs.pattern].text : "Plain";

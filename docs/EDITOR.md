@@ -102,7 +102,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Drag a "+" to add a corner, and double-click a corner to remove it.
    - Drag an orange bar to push a wall.
    - Drag the move gizmo's arrows or squares (Unity's own, on the building's ground floor): the building moves along that axis or in that plane and snaps against a neighbour along it, which then shares the wall. Its up arrow raises and lowers it (§6.11).
-   - Add setback, Inset 1.5 m, Starts at, Terrace or Roof.
+   - Add setback, Inset 1.5 m, Starts at, and what it leaves uncovered below (a terrace, or a roof: the floors below's *Terrace roof* card, Facade tab).
    - Something refused says why next to the pointer, for example "Stairs or a lift are in the way".
    - Each drag is one undo step.
 3. **Facade:**
@@ -204,7 +204,9 @@ Engine-free: `Roofs.Make`, `RoofType.Mansard`, `FacadeStyle.mansard` and `Facade
 
 *Tile width* (along the eave; for seams the *Panel width*) and *Tile height* (how much of each shows up the slope) default to the pattern's own: 0.25 × 0.35 m, 0.3 × 0.22 m, 0.25 × 0.18 m, 0.5 m. *Relief* is how strongly the light picks out each tile, and *Variation* how much each tile's shade differs from the next. The colour is the roof's.
 
-The pattern runs along each slope's own eave and up its own slope, so a hip roof's faces each have their rows. Dormer roofs and the steep sides of a mansard have it too. The flat top of a roof, the trim and the soffits don't. A roofed terrace below a setback (Shape › Terrace | Roof) has the surface of the style of the floors it covers: when that style isn't the one with the roof card, the Facade tab shows a *Terrace roof* card for it.
+The pattern runs along each slope's own eave and up its own slope, so a hip roof's faces each have their rows. Dormer roofs and the steep sides of a mansard have it too. The flat top of a roof, the trim and the soffits don't. A roofed terrace has the surface of the style of the floors it covers, set on their *Terrace roof* card.
+
+**Terrace roof** (the Facade tab, with the floors under a setback selected in *Style for*): what covers those floors where the setback above leaves them uncovered. *Terrace*: flat, with a parapet, to walk out onto through a door. Or a roof: *Hip* (sloping up from every eave to the walls above, as the prototype's) or *Gable*, with its *Pitch* and *Surface*, the roof of the outline below cut away where the setback stands (docs/SPEC.md §4.1; `TerraceRoofData.type`, layout key `type` in `terraceRoof`, written only when not a hip; `TerraceRoofTypeTests`). Not a shed, whose one slope over the whole outline below would tower over the setback, nor a mansard, whose steep slope would hide it: a layout's other types are read as a hip. The card is there whatever the floors' style, and whichever style drives the roof on top: their own roof is set with them. When it is these floors' style that drives the roof on top (the setback shares it), that card is titled *Roof on top*. Its colour and surface are the floors' style's; where they share the floors below's, the card says so. The Shape tab shows what covers the floors below a setback, with *Roof…* to go to the card.
 
 The tiles fade to the roof's plain colour where one is under a few pixels on screen, so they don't shimmer in the distance. Every pattern averages that colour, which is also what LOD2's massing paints, so the switch to the massing changes nothing (`RoofSurfaceTests`).
 

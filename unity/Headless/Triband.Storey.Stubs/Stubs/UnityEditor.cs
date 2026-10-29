@@ -343,6 +343,9 @@ namespace UnityEditor
         public static void LabelField(GUIContent label, params GUILayoutOption[] options) { }
         public static void LabelField(GUIContent label, GUIStyle style, params GUILayoutOption[] options) { }
         public static void PrefixLabel(string label) { }
+        public static void PrefixLabel(GUIContent label) { }
+        public static float FloatField(float value, params GUILayoutOption[] options) => value;
+        public static void MinMaxSlider(ref float minValue, ref float maxValue, float minLimit, float maxLimit, params GUILayoutOption[] options) { }
         public static Color ColorField(GUIContent label, Color value, bool showEyedropper, bool showAlpha, bool hdr, params GUILayoutOption[] options) => value;
         public static Object ObjectField(GUIContent label, Object obj, System.Type objType, bool allowSceneObjects, params GUILayoutOption[] options) => obj;
     }

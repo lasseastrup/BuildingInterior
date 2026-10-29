@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 9;
+        public const int Version = 10;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -216,7 +216,7 @@ namespace Triband.Storey
                 Corners(ref r, f.corners);
                 int st = r.Count();
                 if (st > 0) Style(st - 1, f.style = new FacadeStyle());
-                if (r.Bool()) f.terraceRoof = new TerraceRoofData { pitch = r.F64() };
+                if (r.Bool()) f.terraceRoof = new TerraceRoofData { pitch = r.F64(), type = E<RoofType>(ref r) };
                 f.filled = r.Bool();
                 b.floors.Add(f);
             }
@@ -408,7 +408,7 @@ namespace Triband.Storey
                 w.Ints(f.blank); w.OptInts(f.quiet); w.OptInts(f.bare);
                 WriteCorners(w, f.corners);
                 w.Count(f.style == null ? 0 : St(f.style) + 1);
-                w.Bool(f.terraceRoof != null); if (f.terraceRoof != null) w.F64(f.terraceRoof.pitch);
+                w.Bool(f.terraceRoof != null); if (f.terraceRoof != null) { w.F64(f.terraceRoof.pitch); w.E(f.terraceRoof.type); }
                 w.Bool(f.filled);
             }
             w.Count(b.shafts.Count);

@@ -612,7 +612,7 @@ namespace Triband.Storey.Generate
             // non-zero rule a clockwise ring cancels a counter-clockwise one where they overlap
             for (int i = 0; i < rings.Count; i++) if (!Clipper.IsPositive(rings[i])) rings[i].Reverse();
             var cut = Clipper.Union(rings, new PathsD(), FillRule.NonZero, 6);   // the default precision is centimetres
-            return Make(b, RoofType.Hip, tr.pitch, e, raw, party, Derived.FloorBase(b, k), cut);
+            return Make(b, tr.type == RoofType.Gable ? RoofType.Gable : RoofType.Hip, tr.pitch, e, raw, party, Derived.FloorBase(b, k), cut);
         }
 
         /// <summary>
