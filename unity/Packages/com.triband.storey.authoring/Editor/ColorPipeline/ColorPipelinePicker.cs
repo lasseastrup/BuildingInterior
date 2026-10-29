@@ -45,6 +45,17 @@ namespace Triband.Storey.Editor.ColorPipeline
             // Color Pipeline's lit shader takes a palette offset (ColorMappingManager's remaps); a material without it doesn't
             // draw from the palette
             StoreyColorField.PaletteMaterial = m => m != null && m.HasProperty("_ColorPaletteOffset");
+            // swatches and names for the Storey Library: a palette id as its entry, a CSS colour as the entry it renders as
+            StoreyColorField.Describe = value =>
+            {
+                ColorPaletteDefinition palette;
+                try { palette = ColorPaletteDefinition.Instance; }
+                catch (Exception) { return null; }   // no palette yet
+                if (palette == null) return null;
+                if (ColorRef.IsPaletteId(value)) return palette.TryGetColor(ColorPipelinePalette.Guid(value), out var d) ? (d.Color, d.Name) : ((Color, string)?)null;
+                if (!ColorUtility.TryParseHtmlString(value, out var c)) return null;
+                return Nearest(palette, value) is ColorDefinition nd ? (nd.Color, nd.Name) : (c, value.ToUpperInvariant());
+            };
             StoreyColorField.Conform = d =>
             {
                 ColorPaletteDefinition palette;
@@ -77,7 +88,8 @@ namespace Triband.Storey.Editor.ColorPipeline
                 EditorGUILayout.PrefixLabel(label);
                 var rect = GUILayoutUtility.GetRect(36, 18, GUILayout.Width(36), GUILayout.Height(18));
                 EditorGUI.DrawRect(rect, c);
-                GUILayout.Label(name, EditorStyles.miniLabel);
+                // cut short where the field is narrow, never widening what it is in; the whole name in its tooltip
+                GUILayout.Label(new GUIContent(name, name), EditorStyles.miniLabel, GUILayout.MinWidth(10));
                 if (GUILayout.Button("Pick…", EditorStyles.miniButton, GUILayout.Width(48)))
                 {
                     int sel = def != null ? palette.GetIndexOfColor(def.ID) : 0;
@@ -92,22 +104,32 @@ namespace Triband.Storey.Editor.ColorPipeline
             var suggested = Suggested(field);
             if (suggested != null && suggested.Length > 0)
             {
+                var shown = new List<ColorDefinition>();
+                foreach (var g in suggested) if (g.valid && palette.TryGetColor(g, out var sd)) shown.Add(sd);
+                // as many to a row as fit beside the label, on as many rows as it takes, so the field is never wider than
+                // what it is in (the Storey Library's panel, a narrow inspector); the width is the last repaint's
+                swatchWidths.TryGetValue(key, out float width);
+                int per = Math.Max(1, (int)((width > 0 ? width : 200) / 20)), rows = (shown.Count + per - 1) / per;
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     GUILayout.Space(EditorGUIUtility.labelWidth);
-                    foreach (var g in suggested)
+                    var area = GUILayoutUtility.GetRect(20, rows * 20, GUILayout.ExpandWidth(true), GUILayout.MinWidth(20));
+                    if (Event.current.type == EventType.Repaint) swatchWidths[key] = area.width;
+                    for (int i = 0; i < shown.Count; i++)
                     {
-                        if (!g.valid || !palette.TryGetColor(g, out var sd)) continue;
-                        var rect = GUILayoutUtility.GetRect(18, 18, GUILayout.Width(18), GUILayout.Height(18));
-                        EditorGUI.DrawRect(rect, sd.Color);
-                        string id = ColorPipelinePalette.IdOf(g);
+                        var rect = new Rect(area.x + (i % per) * 20, area.y + (i / per) * 20, 18, 18);
+                        EditorGUI.DrawRect(rect, shown[i].Color);
+                        string id = ColorPipelinePalette.IdOf(shown[i].ID);
                         if (id == value) EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 2, rect.width, 2), Color.white);
-                        if (GUI.Button(rect, new GUIContent("", sd.Name), GUIStyle.none)) result = id;
+                        if (GUI.Button(rect, new GUIContent("", shown[i].Name), GUIStyle.none)) result = id;
                     }
                 }
             }
             return result;
         }
+
+        // each field's swatch row's width at its last repaint, for how many swatches fit in a row
+        readonly Dictionary<string, float> swatchWidths = new Dictionary<string, float>(StringComparer.Ordinal);
 
         // a hex colour's nearest entry, by the rule the renderer and conforming use; kept until the palette changes
         static readonly Dictionary<string, ColorDefinition?> nearest = new Dictionary<string, ColorDefinition?>(StringComparer.OrdinalIgnoreCase);

@@ -129,6 +129,45 @@ namespace Triband.Storey.Editor
             if (rules.Count == 0) s.details.rules = null;
         }
 
+        /// <summary>Where a detail's pivot goes, for where it goes.</summary>
+        internal static string Pivot(Details.Anchor a) => a == Details.Anchor.Opening
+            ? "Give it a mesh with its pivot at the middle of its back, where it meets the wall: +Y up, +Z out of the wall, in metres. The pivot goes 25 cm above the opening's top, clear of a window's head; an awning can hang below it."
+            : "Give it a mesh with its pivot at the bottom middle of its back, where it meets the wall: +Y up, +Z out of the wall, in metres.";
+
+        /// <summary>
+        /// What will look wrong or cost too much about an artist's facade detail (docs/EDITOR.md §6.12), each a line and how
+        /// much it matters (None: a quiet line): what its bake left out, faces that flicker, a pivot that looks off, a mesh in
+        /// the wall, flat ends up a wall, parts without a colour, a heavy LOD1. Its inspector shows them; the Storey Library
+        /// counts the warnings. None for one without a mesh or a prefab yet.
+        /// </summary>
+        internal static List<(string text, MessageType type)> Issues(StoreyDetail d)
+        {
+            var w = new List<(string, MessageType)>();
+            if (d.BuiltIn || (d.mesh == null && d.prefab == null)) return w;
+            var (tris, b) = d.Made();
+            if (d.prefab != null)
+            {
+                foreach (var line in d.notes.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)) w.Add((line, MessageType.Info));
+                if (d.hiddenFaces > 0) w.Add(($"{d.hiddenFaces} face{(d.hiddenFaces == 1 ? "" : "s")} in the wall, or on its face turned into it, left out.", MessageType.None));
+                if (d.wallFaces > 0) w.Add(($"{d.wallFaces} face{(d.wallFaces == 1 ? " lies" : "s lie")} on the wall's outer face, facing out: {(d.wallFaces == 1 ? "it flickers" : "they flicker")} against the wall. Move {(d.wallFaces == 1 ? "it" : "them")} a centimetre out.", MessageType.Warning));
+            }
+            bool placedBySize = d.rule == Details.Rule.Scatter || d.rule == Details.Rule.Corners;   // its bounds place it, wherever its pivot is
+            if (!placedBySize && (Mathf.Abs(b.center.x) > 0.05f || (d.anchor != Details.Anchor.Opening && d.rule != Details.Rule.AlongTop && Mathf.Abs(b.min.y) > 0.05f)))
+                w.Add(("The pivot looks off. " + Pivot(d.anchor), MessageType.Warning));
+            if (!d.leaveOutOfLod1 && StoreyDetailBake.Small(d.size) && (d.rule == Details.Rule.Scatter || d.rule == Details.Rule.Corners))
+                w.Add(("A small detail many go on: LOD1's distance can't show it, and it costs every building at LOD1. Tick Leave out of LOD1.", MessageType.Info));
+            // up the corners, its halves run back along the walls from where their faces meet: below Z 0 by design
+            if (b.min.z < -0.05f && d.rule != Details.Rule.Corners)
+                w.Add(("The mesh goes into the wall: keep it at Z 0 and out (+Z), or it shows through the wall inside.", MessageType.Warning));
+            if (d.anchor == Details.Anchor.Tier && d.stretch && d.FlatEnds())
+                w.Add(("Fitted to each storey, its flat top and bottom lie on the floor line, where the floor band's top is, and flicker: leave them out (a pipe needs no caps), or turn off Stretch.", MessageType.Warning));
+            if (d.mesh != null && d.mesh.subMeshCount > d.parts.Count)
+                w.Add(("Some parts have no colour set: they take Detail metal.", MessageType.Warning));
+            if (d.lod1Mesh == null && d.lod1Prefab == null && !d.leaveOutOfLod1 && tris > 300)
+                w.Add(("LOD1 draws the full mesh: give it a much simpler LOD1, or leave it out of LOD1, as many buildings are seen in LOD1 at once.", MessageType.Warning));
+            return w;
+        }
+
         /// <summary>Where a detail goes, in words.</summary>
         public static readonly GUIContent[] Anchors =
         {
@@ -174,6 +213,8 @@ namespace Triband.Storey.Editor
         {
             var d = (StoreyDetail)target;
             StoreyDetails.All();   // a new or copied one takes an id of its own first
+            if (!StoreyLibraryWindow.Embedded && GUILayout.Button(new GUIContent("Open in Storey Library", "Browse every style, window, door, detail and template, and see this one on a building"), EditorStyles.miniButton))
+                StoreyLibraryWindow.Open(d);
             if (d.BuiltIn && StoreyDetails.Ours(d))
             {
                 var k = DetailKinds.Get(d.Id)!;
@@ -225,30 +266,13 @@ namespace Triband.Storey.Editor
             }
             if (d.prefab == null && d.mesh != before && d.mesh != null) Fill(d);
             if (changed || (d.Id.Length > 0 && DetailKinds.Get(d.Id) == null)) { d.Bake(); EditorUtility.SetDirty(d); trials.Remove(d); }
-            if (d.mesh == null && d.prefab == null) { EditorGUILayout.HelpBox(Pivot(d.anchor) + " Each submesh is one part. Or give it a prefab: every object under it with a mesh, its root's origin the pivot.", MessageType.Info); return; }
+            if (d.mesh == null && d.prefab == null) { EditorGUILayout.HelpBox(StoreyDetails.Pivot(d.anchor) + " Each submesh is one part. Or give it a prefab: every object under it with a mesh, its root's origin the pivot.", MessageType.Info); return; }
             var (tris, b) = d.Made();
             string what = d.prefab != null ? $"{d.objects} object{(d.objects == 1 ? "" : "s")}, {d.parts.Count} part{(d.parts.Count == 1 ? "" : "s")}" : $"{d.parts.Count} part{(d.parts.Count == 1 ? "" : "s")}";
             EditorGUILayout.HelpBox($"{tris} triangles ({what}); {b.size.x:0.00} × {b.size.y:0.00} m, {b.max.z:0.00} m out of the wall{(d.leaveOutOfLod1 ? "; left out of LOD1" : "")}. Pick it in the Facade tab's Place on walls.", MessageType.None);
-            if (d.prefab != null)
-            {
-                foreach (var line in d.notes.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)) EditorGUILayout.HelpBox(line, MessageType.Info);
-                if (d.hiddenFaces > 0) EditorGUILayout.LabelField($"{d.hiddenFaces} face{(d.hiddenFaces == 1 ? "" : "s")} in the wall, or on its face turned into it, left out.", StoreyInspectorUI.Caption);
-                if (d.wallFaces > 0) EditorGUILayout.HelpBox($"{d.wallFaces} face{(d.wallFaces == 1 ? " lies" : "s lie")} on the wall's outer face, facing out: {(d.wallFaces == 1 ? "it flickers" : "they flicker")} against the wall. Move {(d.wallFaces == 1 ? "it" : "them")} a centimetre out.", MessageType.Warning);
-            }
-            bool placedBySize = d.rule == Details.Rule.Scatter || d.rule == Details.Rule.Corners;   // its bounds place it, wherever its pivot is
-            if (!placedBySize && (Mathf.Abs(b.center.x) > 0.05f || (d.anchor != Details.Anchor.Opening && d.rule != Details.Rule.AlongTop && Mathf.Abs(b.min.y) > 0.05f)))
-                EditorGUILayout.HelpBox("The pivot looks off. " + Pivot(d.anchor), MessageType.Warning);
-            if (!d.leaveOutOfLod1 && StoreyDetailBake.Small(d.size) && (d.rule == Details.Rule.Scatter || d.rule == Details.Rule.Corners))
-                EditorGUILayout.HelpBox("A small detail many go on: LOD1's distance can't show it, and it costs every building at LOD1. Tick Leave out of LOD1.", MessageType.Info);
-            // up the corners, its halves run back along the walls from where their faces meet: below Z 0 by design
-            if (b.min.z < -0.05f && d.rule != Details.Rule.Corners)
-                EditorGUILayout.HelpBox("The mesh goes into the wall: keep it at Z 0 and out (+Z), or it shows through the wall inside.", MessageType.Warning);
-            if (d.anchor == Details.Anchor.Tier && d.stretch && d.FlatEnds())
-                EditorGUILayout.HelpBox("Fitted to each storey, its flat top and bottom lie on the floor line, where the floor band's top is, and flicker: leave them out (a pipe needs no caps), or turn off Stretch.", MessageType.Warning);
-            if (d.mesh != null && d.mesh.subMeshCount > d.parts.Count)
-                EditorGUILayout.HelpBox("Some parts have no colour set: they take Detail metal.", MessageType.Warning);
-            if (d.lod1Mesh == null && d.lod1Prefab == null && !d.leaveOutOfLod1 && tris > 300)
-                EditorGUILayout.HelpBox("LOD1 draws the full mesh: give it a much simpler LOD1, or leave it out of LOD1, as many buildings are seen in LOD1 at once.", MessageType.Warning);
+            foreach (var (text, type) in StoreyDetails.Issues(d))
+                if (type == MessageType.None) EditorGUILayout.LabelField(text, StoreyInspectorUI.Caption);
+                else EditorGUILayout.HelpBox(text, type);
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (d.prefab != null && GUILayout.Button(new GUIContent("Open Prefab", "Edit the prefab; saving it bakes this again"))) AssetDatabase.OpenAsset(d.prefab);
@@ -262,10 +286,6 @@ namespace Triband.Storey.Editor
                 EditorGUILayout.HelpBox($"On a 20 × 12 m block of six storeys, {t.placed} of it: LOD0 {t.lod0:N0} triangles ({t.plainLod0:N0} without), LOD1 {t.lod1:N0} ({t.plainLod1:N0}). {flicker}", t.overlaps.Count == 0 ? MessageType.Info : MessageType.Warning);
             }
         }
-
-        static string Pivot(Details.Anchor a) => a == Details.Anchor.Opening
-            ? "Give it a mesh with its pivot at the middle of its back, where it meets the wall: +Y up, +Z out of the wall, in metres. The pivot goes 25 cm above the opening's top, clear of a window's head; an awning can hang below it."
-            : "Give it a mesh with its pivot at the bottom middle of its back, where it meets the wall: +Y up, +Z out of the wall, in metres.";
 
         /// <summary>The parts from the model's materials' names, the size from the mesh's bounds.</summary>
         static void Fill(StoreyDetail d)

@@ -65,6 +65,15 @@ namespace Triband.Storey.Editor
         /// </summary>
         public static Func<UnityEngine.Material, bool>? PaletteMaterial { get; set; }
 
+        /// <summary>
+        /// A colour reference as a colour to draw and its name, for swatches and finding a style by its colours (the Storey
+        /// Library, docs/EDITOR.md §6.13); null where it can't be read. The default reads CSS colours, named by their hex;
+        /// Color Pipeline's integration installs one that reads palette ids, named as the palette names them, and draws a CSS
+        /// colour as the palette entry nearest it, as it renders. Storey's own.
+        /// </summary>
+        public static Func<string, (Color colour, string name)?> Describe { get; set; } =
+            value => ColorUtility.TryParseHtmlString(value, out var c) ? (c, value.ToUpperInvariant()) : ((Color, string)?)null;
+
         sealed class HexPicker : IStoreyColorPicker
         {
             public string? Draw(string key, string label, string value, string field, Func<string, PaletteEntry?> lookup)

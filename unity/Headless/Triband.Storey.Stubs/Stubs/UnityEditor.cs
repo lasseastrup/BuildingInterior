@@ -20,10 +20,15 @@ namespace UnityEditor
         public static bool DisplayDialog(string title, string message, string ok, string cancel) => false;
         public static string OpenFilePanel(string title, string directory, string extension) => "";
         public static string SaveFilePanelInProject(string title, string defaultName, string extension, string message) => "";
+        public static string SaveFilePanelInProject(string title, string defaultName, string extension, string message, string path) => "";
         public static bool DisplayDialog(string title, string message, string ok) => true;
         public static int DisplayDialogComplex(string title, string message, string ok, string cancel, string alt) => 0;
         public static void SetDirty(Object target) { }
         public static bool IsPersistent(Object target) => false;
+        public static Object EntityIdToObject(EntityId entityId) => null;
+        public static bool IsDirty(Object target) => false;
+        public static int GetDirtyCount(Object target) => 0;
+        public static int NaturalCompare(string a, string b) => 0;
     }
 
     public static class AssetDatabase
@@ -45,7 +50,22 @@ namespace UnityEditor
         public static string GenerateUniqueAssetPath(string path) => path;
         public static bool OpenAsset(Object target) => false;
         public static bool Contains(Object obj) => false;
+        public static bool CopyAsset(string path, string newPath) => false;
+        public static string RenameAsset(string pathName, string newName) => "";
+        public static bool MoveAssetToTrash(string path) => false;
     }
+
+    public static class DragAndDrop
+    {
+        public static Object[] objectReferences { get => new Object[0]; set { } }
+        public static string[] paths { get => new string[0]; set { } }
+        public static DragAndDropVisualMode visualMode { get => default; set { } }
+        public static void PrepareStartDrag() { }
+        public static void StartDrag(string title) { }
+        public static void AcceptDrag() { }
+    }
+
+    public enum DragAndDropVisualMode { None = 0, Copy = 1, Link = 2, Generic = 4, Move = 16, Rejected = 32 }
 
     public sealed class ActiveEditorTracker
     {
@@ -89,6 +109,7 @@ namespace UnityEditor
         public virtual void OnInspectorGUI() { }
         public bool DrawDefaultInspector() => false;
         public SerializedObject serializedObject { get; } = new SerializedObject();
+        public static void CreateCachedEditor(Object targetObject, System.Type editorType, ref Editor previousEditor) { }
     }
 
     public class AssetPostprocessor { }
@@ -140,6 +161,7 @@ namespace UnityEditor
         public Vector3 pivot { get => default; set { } }
         public Quaternion rotation { get => default; set { } }
         public void LookAt(Vector3 point, Quaternion direction, float newSize) { }
+        public bool Frame(Bounds bounds, bool instant = true) => false;
     }
 
     public class EditorWindow : ScriptableObject
@@ -150,6 +172,11 @@ namespace UnityEditor
         public static T GetWindow<T>(bool utility, string title, bool focus) where T : EditorWindow => null;
         public static EditorWindow focusedWindow => null;
         public Vector2 minSize { get => default; set { } }
+        public GUIContent titleContent { get => GUIContent.none; set { } }
+        public bool wantsMouseMove { get => false; set { } }
+        public bool docked => false;
+        public void Show() { }
+        public void Focus() { }
     }
 
     public static class Menu
@@ -176,6 +203,8 @@ namespace UnityEditor
         public static void SetInt(string key, int value) { }
         public static float GetFloat(string key, float defaultValue = 0) => defaultValue;
         public static void SetFloat(string key, float value) { }
+        public static string GetString(string key, string defaultValue = "") => defaultValue;
+        public static void SetString(string key, string value) { }
     }
 
     public static class SessionState
@@ -202,12 +231,16 @@ namespace UnityEditor
     {
         public static bool isProSkin => true;
         public static float currentViewWidth => 400;
-        public static float labelWidth => 0;
+        public static float labelWidth { get => 0; set { } }
+        public static bool wideMode { get => false; set { } }
+        public static bool hierarchyMode { get => false; set { } }
         public static void PingObject(Object obj) { }
         public static void AddCursorRect(Rect position, MouseCursor mouse) { }
+        public static void AddCursorRect(Rect position, MouseCursor mouse, int controlID) { }
+        public static Rect GetMainWindowPosition() => default;
     }
 
-    public enum MouseCursor { Arrow = 0, Link = 4 }
+    public enum MouseCursor { Arrow = 0, ResizeVertical = 2, ResizeHorizontal = 3, Link = 4, Orbit = 14 }
 
     public static class EditorStyles
     {
@@ -222,6 +255,14 @@ namespace UnityEditor
         public static GUIStyle wordWrappedMiniLabel => new GUIStyle();
         public static GUIStyle miniBoldLabel => new GUIStyle();
         public static GUIStyle label => new GUIStyle();
+        public static GUIStyle miniButtonMid => new GUIStyle();
+        public static GUIStyle miniButtonRight => new GUIStyle();
+        public static GUIStyle miniPullDown => new GUIStyle();
+        public static GUIStyle textField => new GUIStyle();
+        public static GUIStyle textArea => new GUIStyle();
+        public static GUIStyle toolbar => new GUIStyle();
+        public static GUIStyle toolbarButton => new GUIStyle();
+        public static GUIStyle toolbarDropDown => new GUIStyle();
     }
 
     public sealed class GenericMenu
@@ -231,6 +272,25 @@ namespace UnityEditor
         public void AddDisabledItem(GUIContent content) { }
         public void AddSeparator(string path) { }
         public void ShowAsContext() { }
+    }
+
+    public interface IHasCustomMenu
+    {
+        void AddItemsToMenu(GenericMenu menu);
+    }
+
+    public class PreviewRenderUtility
+    {
+        public Camera camera => null;
+        public Light[] lights => new Light[0];
+        public Color ambientColor { get => default; set { } }
+        public void AddSingleGO(GameObject go) { }
+        public void BeginPreview(Rect r, GUIStyle previewBackground) { }
+        public void BeginStaticPreview(Rect r) { }
+        public void Render(bool allowScriptableRenderPipeline = false, bool updatefov = true) { }
+        public Texture EndPreview() => null;
+        public Texture2D EndStaticPreview() => null;
+        public void Cleanup() { }
     }
 
     public static class Handles
@@ -281,6 +341,8 @@ namespace UnityEditor
         public static bool EndChangeCheck() => false;
         public static void DrawRect(Rect rect, Color color) { }
         public static Rect PrefixLabel(Rect totalPosition, GUIContent label) => totalPosition;
+        public static int Popup(Rect position, int selectedIndex, string[] displayedOptions, GUIStyle style) => selectedIndex;
+        public static void FocusTextInControl(string name) { }
         public sealed class IndentLevelScope : System.IDisposable
         {
             public IndentLevelScope() { }
@@ -302,9 +364,16 @@ namespace UnityEditor
         public static bool PropertyField(SerializedProperty property, bool includeChildren, params GUILayoutOption[] options) => false;
         public sealed class VerticalScope : System.IDisposable
         {
+            public VerticalScope(params GUILayoutOption[] options) { }
             public VerticalScope(GUIStyle style, params GUILayoutOption[] options) { }
             public void Dispose() { }
         }
+
+        public static Vector2 BeginScrollView(Vector2 scrollPosition, bool alwaysShowHorizontal, bool alwaysShowVertical, GUIStyle horizontalScrollbar, GUIStyle verticalScrollbar, GUIStyle background, params GUILayoutOption[] options) => scrollPosition;
+        public static void EndScrollView() { }
+        public static string TextField(string label, string text, params GUILayoutOption[] options) => text;
+        public static string TextArea(string text, GUIStyle style, params GUILayoutOption[] options) => text;
+        public static string DelayedTextField(string text, GUIStyle style, params GUILayoutOption[] options) => text;
         public sealed class HorizontalScope : System.IDisposable
         {
             public HorizontalScope(params GUILayoutOption[] options) { }
@@ -437,6 +506,23 @@ namespace UnityEditor.Overlays
     public interface ITransientOverlay
     {
         bool visible { get; }
+    }
+}
+
+namespace UnityEditor.Callbacks
+{
+    public sealed class OnOpenAssetAttribute : System.Attribute
+    {
+        public OnOpenAssetAttribute() { }
+        public OnOpenAssetAttribute(int callbackOrder) { }
+    }
+}
+
+namespace UnityEditor.IMGUI.Controls
+{
+    public class SearchField
+    {
+        public string OnToolbarGUI(string text, params GUILayoutOption[] options) => text;
     }
 }
 

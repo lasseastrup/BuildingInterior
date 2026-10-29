@@ -55,6 +55,9 @@ namespace Triband.Storey.Editor
                 .OrderBy(a => a.Own ? 0 : 1).ThenBy(a => a.Own ? Order(a) : 0).ThenBy(a => a.name, System.StringComparer.OrdinalIgnoreCase).ToArray();
         }
 
+        /// <summary>Search again next time: a template was just made, copied, renamed or deleted (the project's change comes later).</summary>
+        internal static void Changed() => all = null;
+
         /// <summary>A line about what it holds, for menus and its inspector.</summary>
         internal string Summary()
         {

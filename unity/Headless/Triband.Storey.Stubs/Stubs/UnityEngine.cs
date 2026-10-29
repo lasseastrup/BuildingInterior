@@ -32,6 +32,9 @@ namespace UnityEngine
 
     public enum FindObjectsSortMode { None = 0, InstanceID = 1 }
 
+    /// <summary>An object's identity in the engine (Unity 6.3's successor to the instance id).</summary>
+    public struct EntityId { }
+
     public static class Screen { public static int width => 0; public static int height => 0; }
 
     public static class Mathf
@@ -53,6 +56,8 @@ namespace UnityEngine
         public static int RoundToInt(float f) => 0;
         public static float Atan(float f) => 0;
         public static float Floor(float f) => f;
+        public static float Tan(float f) => 0;
+        public static float Lerp(float a, float b, float t) => a;
     }
 
     public static class PlayerPrefs
@@ -225,6 +230,7 @@ namespace UnityEngine
         public static Vector3 forward => default;
         public static Vector3 back => default;
         public Vector3 normalized => default;
+        public float magnitude => 0;
         public static float Dot(Vector3 a, Vector3 b) => 0;
         public static Vector3 operator +(Vector3 a, Vector3 b) => a;
         public static Vector3 operator -(Vector3 a, Vector3 b) => a;
@@ -259,6 +265,7 @@ namespace UnityEngine
         public float r, g, b, a;
         public Color(float r, float g, float b, float a = 1) { this.r = r; this.g = g; this.b = b; this.a = a; }
         public static Color white => default;
+        public static Color magenta => default;
         public Color linear => this;
         public static Color Lerp(Color a, Color b, float t) => a;
         public static implicit operator Vector4(Color c) => new Vector4(c.r, c.g, c.b, c.a);
@@ -271,6 +278,7 @@ namespace UnityEngine
         public static Quaternion LookRotation(Vector3 forward, Vector3 upwards) => default;
         public static Quaternion LookRotation(Vector3 forward) => default;
         public static Quaternion Inverse(Quaternion rotation) => rotation;
+        public static Vector3 operator *(Quaternion rotation, Vector3 point) => point;
         public static bool operator ==(Quaternion a, Quaternion b) => true;
         public static bool operator !=(Quaternion a, Quaternion b) => false;
     }
@@ -301,6 +309,7 @@ namespace UnityEngine
         public float xMax { get => x + width; set => width = value - x; }
         public float yMax { get => y + height; set => height = value - y; }
         public Vector2 center => default;
+        public Vector2 size { get => default; set { } }
         public bool Contains(Vector2 p) => false;
     }
 
@@ -318,6 +327,21 @@ namespace UnityEngine
         public static int GetAllCameras(Camera[] cameras) => 0;
         public int cullingMask { get => -1; set { } }
         public float depth { get => 0; set { } }
+        public float nearClipPlane { get => 0.3f; set { } }
+        public float farClipPlane { get => 1000; set { } }
+        public CameraClearFlags clearFlags { get => default; set { } }
+        public Color backgroundColor { get => default; set { } }
+        public CameraType cameraType { get => default; set { } }
+    }
+
+    public enum CameraClearFlags { Skybox = 1, Color = 2, SolidColor = 2, Depth = 3, Nothing = 4 }
+
+    [System.Flags]
+    public enum CameraType { Game = 1, SceneView = 2, Preview = 4, VR = 8, Reflection = 16 }
+
+    public sealed class Light : Behaviour
+    {
+        public float intensity { get => 1; set { } }
     }
 
     public sealed class GUIContent
@@ -342,6 +366,7 @@ namespace UnityEngine
         public RectOffset padding { get; set; } = new RectOffset();
         public RectOffset margin { get; set; } = new RectOffset();
         public TextClipping clipping { get; set; }
+        public float lineHeight => 0;
         public Vector2 CalcSize(GUIContent content) => default;
         public float CalcHeight(GUIContent content, float width) => 0;
         public void Draw(Rect position, string text, bool isHover, bool isActive, bool on, bool hasKeyboardFocus) { }
@@ -362,7 +387,9 @@ namespace UnityEngine
 
     public enum TextAnchor { UpperLeft = 0, UpperCenter = 1, UpperRight = 2, MiddleLeft = 3, MiddleCenter = 4, MiddleRight = 5, LowerLeft = 6, LowerCenter = 7, LowerRight = 8 }
 
-    public sealed class GUISkin : Object { public GUIStyle box => new GUIStyle(); public GUIStyle button => new GUIStyle(); public GUIStyle label => new GUIStyle(); }
+    public sealed class GUISkin : Object { public GUIStyle box => new GUIStyle(); public GUIStyle button => new GUIStyle(); public GUIStyle label => new GUIStyle(); public GUIStyle verticalScrollbar => new GUIStyle(); }
+
+    public enum ScaleMode { StretchToFill = 0, ScaleAndCrop = 1, ScaleToFit = 2 }
 
     public sealed class GUILayoutOption { }
 
@@ -380,11 +407,18 @@ namespace UnityEngine
         public static int Toolbar(int selected, string[] texts, GUIStyle style, params GUILayoutOption[] options) => selected;
         public static void Label(string text, params GUILayoutOption[] options) { }
         public static void Label(string text, GUIStyle style, params GUILayoutOption[] options) { }
+        public static void Label(GUIContent content, GUIStyle style, params GUILayoutOption[] options) { }
         public static void Space(float pixels) { }
         public static void FlexibleSpace() { }
+        public static float HorizontalSlider(float value, float leftValue, float rightValue, params GUILayoutOption[] options) => value;
+        public static void BeginArea(Rect screenRect) { }
+        public static void BeginArea(Rect screenRect, GUIStyle style) { }
+        public static void EndArea() { }
         public static GUILayoutOption Width(float width) => new GUILayoutOption();
         public static GUILayoutOption MinWidth(float minWidth) => new GUILayoutOption();
+        public static GUILayoutOption MaxWidth(float maxWidth) => new GUILayoutOption();
         public static GUILayoutOption Height(float height) => new GUILayoutOption();
+        public static GUILayoutOption MinHeight(float minHeight) => new GUILayoutOption();
         public static GUILayoutOption ExpandWidth(bool expand) => new GUILayoutOption();
 
         public sealed class HorizontalScope : System.IDisposable
@@ -401,7 +435,15 @@ namespace UnityEngine
         public static void Label(Rect position, string text) { }
         public static void Label(Rect position, string text, GUIStyle style) { }
         public static void Label(Rect position, GUIContent content) { }
+        public static void Label(Rect position, GUIContent content, GUIStyle style) { }
+        public static bool Button(Rect position, GUIContent content) => false;
         public static bool Button(Rect position, GUIContent content, GUIStyle style) => false;
+        public static Color backgroundColor { get => default; set { } }
+        public static void DrawTexture(Rect position, Texture image, ScaleMode scaleMode) { }
+        public static void DrawTexture(Rect position, Texture image, ScaleMode scaleMode, bool alphaBlend) { }
+        public static Vector2 BeginScrollView(Rect position, Vector2 scrollPosition, Rect viewRect) => scrollPosition;
+        public static void EndScrollView() { }
+        public static void SetNextControlName(string name) { }
         public static bool Toggle(Rect position, bool value, GUIContent content, GUIStyle style) => value;
         public static int Toolbar(Rect position, int selected, string[] texts) => selected;
         public static int Toolbar(Rect position, int selected, GUIContent[] contents, GUIStyle style) => selected;
@@ -427,11 +469,12 @@ namespace UnityEngine
         public static int hotControl { get; set; }
         public static int GetControlID(FocusType focus) => 0;
         public static int GetControlID(int hint, FocusType focus) => 0;
+        public static int GetControlID(int hint, FocusType focus, Rect rect) => 0;
         public static Vector2 GUIToScreenPoint(Vector2 guiPoint) => guiPoint;
         public static string systemCopyBuffer { get; set; } = "";
     }
 
-    public enum EventType { MouseDown = 0, MouseUp = 1, MouseMove = 2, MouseDrag = 3, KeyDown = 4, Repaint = 7, Layout = 8, Used = 12, ValidateCommand = 13, ExecuteCommand = 14, MouseLeaveWindow = 21 }
+    public enum EventType { MouseDown = 0, MouseUp = 1, MouseMove = 2, MouseDrag = 3, KeyDown = 4, ScrollWheel = 6, Repaint = 7, Layout = 8, DragUpdated = 9, DragPerform = 10, Used = 12, ValidateCommand = 13, ExecuteCommand = 14, DragExited = 15, MouseLeaveWindow = 21 }
 
     public enum KeyCode { Backspace = 8, Escape = 27, LeftBracket = 91, RightBracket = 93, D = 100, I = 105, L = 108, R = 114, S = 115, V = 118, W = 119, X = 120, Delete = 127 }
 
@@ -448,6 +491,8 @@ namespace UnityEngine
         public bool command => false;
         public KeyCode keyCode => default;
         public Vector2 mousePosition => default;
+        public Vector2 delta => default;
+        public EventType GetTypeForControl(int controlID) => default;
         public void Use() { }
     }
 
@@ -458,6 +503,7 @@ namespace UnityEngine
         public void Encapsulate(Bounds bounds) { }
         public Vector3 center { get; set; }
         public Vector3 size { get; set; }
+        public Vector3 extents { get; set; }
         public Vector3 min { get; set; }
         public Vector3 max { get; set; }
     }
@@ -472,6 +518,7 @@ namespace UnityEngine
         public static void SetGlobalInt(int nameID, int value) { }
         public static int GetGlobalInt(int nameID) => 0;
         public static float GetGlobalFloat(int nameID) => 0;
+        public static Vector4 GetGlobalVector(int nameID) => default;
         public static void SetGlobalTexture(int nameID, Texture value) { }
         public static void EnableKeyword(string keyword) { }
         public static void DisableKeyword(string keyword) { }
@@ -479,7 +526,13 @@ namespace UnityEngine
         public UnityEngine.Rendering.LocalKeywordSpace keywordSpace => default;
     }
 
-    public enum TextureFormat { RGBAHalf = 17 }
+    public enum TextureFormat { RGBA32 = 4, RGBAHalf = 17 }
+
+    public static class ImageConversion
+    {
+        public static bool LoadImage(this Texture2D tex, byte[] data) => false;
+        public static byte[] EncodeToPNG(this Texture2D tex) => new byte[0];
+    }
 
     public static class ColorUtility
     {
@@ -539,9 +592,14 @@ namespace UnityEngine
         public Vector3[] vertices { get; set; } = System.Array.Empty<Vector3>();
         public Vector3[] normals { get; set; } = System.Array.Empty<Vector3>();
         public int[] GetTriangles(int submesh) => System.Array.Empty<int>();
+        public uint GetIndexCount(int submesh) => 0;
         public void GetUVs(int channel, System.Collections.Generic.List<Vector4> uvs) { }
+        public void SetVertices(System.Collections.Generic.List<Vector3> inVertices) { }
+        public void SetColors(System.Collections.Generic.List<Color> inColors) { }
+        public void SetTriangles(System.Collections.Generic.List<int> triangles, int submesh) { }
         public int vertexCount => 0;
         public void RecalculateNormals() { }
+        public void RecalculateBounds() { }
         public bool isReadable => true;
 
         public static MeshDataArray AllocateWritableMeshData(int meshCount) => default;
@@ -743,6 +801,7 @@ namespace UnityEngine
         public Material(Material source) { }
         public Shader shader { get; set; }
         public void SetColor(string name, Color value) { }
+        public void SetInt(string name, int value) { }
         public void SetKeyword(in UnityEngine.Rendering.LocalKeyword keyword, bool value) { }
         public void CopyMatchingPropertiesFromMaterial(Material mat) { }
         public string[] shaderKeywords { get; set; } = System.Array.Empty<string>();
@@ -786,6 +845,8 @@ namespace UnityEngine.Rendering
 {
     public enum ShadowCastingMode { Off, On, TwoSided, ShadowsOnly }
     public enum CullMode { Off = 0, Front = 1, Back = 2 }
+    public enum BlendMode { Zero = 0, One = 1, DstColor = 2, SrcColor = 3, OneMinusDstColor = 4, SrcAlpha = 5, OneMinusSrcColor = 6, DstAlpha = 7, OneMinusDstAlpha = 8, SrcAlphaSaturate = 9, OneMinusSrcAlpha = 10 }
+    public enum CompareFunction { Disabled = 0, Never = 1, Less = 2, Equal = 3, LessEqual = 4, Greater = 5, NotEqual = 6, GreaterEqual = 7, Always = 8 }
     public enum RenderQueue { Background = 1000, Geometry = 2000, AlphaTest = 2450, GeometryLast = 2500, Transparent = 3000, Overlay = 4000 }
     public enum LightProbeUsage { Off = 0, BlendProbes = 1, UseProxyVolume = 2, CustomProvided = 4 }
 }

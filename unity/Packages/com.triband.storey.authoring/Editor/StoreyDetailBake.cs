@@ -80,8 +80,15 @@ namespace Triband.Storey.Editor
         [MenuItem("Assets/Create/Storey/Facade Detail from Prefab", false, 32)]
         static void FromPrefabs()
         {
+            var made = Make(Selection.objects.OfType<GameObject>());
+            if (made.Count > 0) Selection.objects = made.ToArray();
+        }
+
+        /// <summary>A Facade Detail for each prefab, beside it, as the menu makes them; returns those made (the menu's, and prefabs dropped on the Storey Library).</summary>
+        internal static List<StoreyDetail> Make(IEnumerable<GameObject> prefabs)
+        {
             var made = new List<StoreyDetail>();
-            foreach (var go in Selection.objects.OfType<GameObject>())
+            foreach (var go in prefabs)
             {
                 string path = AssetDatabase.GetAssetPath(go);
                 if (string.IsNullOrEmpty(path)) continue;
@@ -91,11 +98,11 @@ namespace Triband.Storey.Editor
                 AssetDatabase.CreateAsset(d, AssetDatabase.GenerateUniqueAssetPath($"{dir}/{go.name} (detail).asset"));
                 made.Add(d);
             }
-            if (made.Count == 0) return;
+            if (made.Count == 0) return made;
             StoreyDetails.Changed(); StoreyDetails.All();   // each takes its asset's GUID as its id
             foreach (var d in made) { d.Bake(); d.leaveOutOfLod1 = Small(d.size); d.Bake(); EditorUtility.SetDirty(d); }
             AssetDatabase.SaveAssets();
-            Selection.objects = made.ToArray();
+            return made;
         }
 
         [MenuItem("Assets/Create/Storey/Facade Detail from Prefab", true)]

@@ -119,24 +119,67 @@ namespace Triband.Storey.Editor
         [MenuItem("Assets/Create/Storey/Window or Door from Prefab", false, 31)]
         static void FromPrefabs()
         {
+            var made = Make(Selection.objects.OfType<GameObject>(), null);
+            if (made.Count > 0) Selection.objects = made.ToArray();
+        }
+
+        /// <summary>
+        /// A window or door for each prefab, beside it: a door where <paramref name="door"/> says so, or, where it is null,
+        /// where its name or its Storey Cutout's leaf objects say so; fitted by Slice, and baked. Returns those made (the
+        /// menu's, and prefabs dropped on the Storey Library).
+        /// </summary>
+        internal static List<StoreyOpening> Make(IEnumerable<GameObject> prefabs, bool? door)
+        {
             var made = new List<StoreyOpening>();
-            foreach (var go in Selection.objects.OfType<GameObject>())
+            foreach (var go in prefabs)
             {
                 string path = AssetDatabase.GetAssetPath(go);
                 if (string.IsNullOrEmpty(path)) continue;
                 var o = ScriptableObject.CreateInstance<StoreyOpening>();
                 o.prefab = go;
-                o.door = Door(go);
+                o.door = door ?? Door(go);
                 o.slice = true;   // what is round its hole keeps its size
                 string dir = System.IO.Path.GetDirectoryName(path)!.Replace('\\', '/');
                 AssetDatabase.CreateAsset(o, AssetDatabase.GenerateUniqueAssetPath($"{dir}/{go.name} ({(o.door ? "door" : "window")}).asset"));
                 made.Add(o);
             }
-            if (made.Count == 0) return;
+            if (made.Count == 0) return made;
             Changed(); All();   // each takes its asset's GUID as its id
             foreach (var o in made) { o.Bake(); EditorUtility.SetDirty(o); }
             AssetDatabase.SaveAssets();
-            Selection.objects = made.ToArray();
+            return made;
+        }
+
+        /// <summary>
+        /// What will look wrong or cost too much about a window or door (docs/OPENINGS.md §3.5), each a line and how much it
+        /// matters: what its bake left out, faces that flicker, a hole left open, glass too deep, no glass or no leaf, too
+        /// many triangles. Its inspector shows them; the Storey Library counts the warnings.
+        /// </summary>
+        internal static List<(string text, MessageType type)> Issues(StoreyOpening o, OpeningKind k, OpeningKinds.Checked c)
+        {
+            var w = new List<(string, MessageType)>();
+            foreach (var line in o.notes.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)) w.Add((line, MessageType.Info));
+            if (o.prefab != null && o.holeFrom == "the meshes' bounds")
+                w.Add(("The hole is the meshes' bounds. Add a Storey Cutout to the prefab's root to say where it is, so what goes round it (shutters, a sill) stays outside it.", MessageType.Info));
+            if (o.wallFaces > 0)
+                w.Add(($"{o.wallFaces} face{(o.wallFaces == 1 ? " lies" : "s lie")} on the wall's outer face round the hole, facing out: {(o.wallFaces == 1 ? "it flickers" : "they flicker")} against the wall. Move {(o.wallFaces == 1 ? "it" : "them")} a centimetre out.", MessageType.Warning));
+            if (c.behind)
+                w.Add(("Something reaches behind the wall's back, 0.3 m in from its face: it shows inside the rooms.", MessageType.Warning));
+            if (c.uncovered > 0.01)
+                w.Add(($"{c.uncovered:P0} of the hole is open: on a shell or filled storey that shows into the building. Fill it (glass, a panel), or fit the cutout to the window.", MessageType.Warning));
+            if (c.deepGlass)
+                w.Add(($"Some glass sits deeper than {OpeningKinds.ShellReveal * 100:0.#} cm into the wall: on a shell or filled storey the reveal stops there, and the hole shows beside the glass.", MessageType.Warning));
+            if (!o.door && !c.glass)
+                w.Add(("No part is Glass: its windows show no rooms behind them (docs/EDITOR.md §6.8).", MessageType.Info));
+            if (o.door && !c.leaf)
+                w.Add(("No part is the leaf: on a walk-in storey the player walks through the closed door. Name the leaf objects in the prefab's Storey Cutout, or tick Leaf on a part.", MessageType.Warning));
+            if (c.tris > 140)
+                w.Add(($"{c.tris} triangles: more than the most dressed built-in window (140), and a block of six storeys has about 156 windows.", MessageType.Warning));
+            if (!o.door && k.lod1 != null && !k.lod1OnWall)
+                w.Add(("LOD1 reaches into the wall, so LOD1 cuts the wall round every window: about 12 triangles a window more, and most buildings on screen are at LOD1. A LOD1 that stays in front of the wall's face (shutters, a sill, a pediment) lies on the flat wall with the plain pane, whose recess the shader draws.", MessageType.Info));
+            if (k.lod1 != null && c.lod1Tris > 12)
+                w.Add(($"LOD1 has {c.lod1Tris} triangles a window: most buildings on screen are at LOD1, where the plain pane is 2.", MessageType.Warning));
+            return w;
         }
 
         [MenuItem("Assets/Create/Storey/Window or Door from Prefab", true)]
@@ -196,9 +239,11 @@ namespace Triband.Storey.Editor
                 EditorGUILayout.HelpBox("Give it a prefab: every object under it with a mesh, where it is in the prefab, with a Storey Cutout on its root saying where the hole is. Or one mesh, its pivot at the bottom middle of the hole. Either way +Y up, +Z out of the wall, in metres.", MessageType.Info);
                 return;
             }
+            if (!StoreyLibraryWindow.Embedded && GUILayout.Button(new GUIContent("Open in Storey Library", "Browse every style, window, door, detail and template, and see this one on a building"), EditorStyles.miniButton))
+                StoreyLibraryWindow.Open(o);
             var k = OpeningKinds.Get(o.Id) ?? o.ToKind();
             var c = OpeningKinds.Check(k);
-            string what = o.prefab != null ? $"{o.objects} object{(o.objects == 1 ? "" : "s")}, {o.parts.Count} part{(o.parts.Count == 1 ? "" : "s")}" : $"{o.parts.Count} part{(o.parts.Count == 1 ? "" : "s")}";
+            string what =o.prefab != null ? $"{o.objects} object{(o.objects == 1 ? "" : "s")}, {o.parts.Count} part{(o.parts.Count == 1 ? "" : "s")}" : $"{o.parts.Count} part{(o.parts.Count == 1 ? "" : "s")}";
             string lod1 = k.lod1 == null ? "; LOD1 shows the plain pane"
                 : $"; LOD1 {c.lod1Tris}{(o.door ? "" : k.lod1OnWall ? ", on the flat wall" : ", in a hole cut in the wall")}{(k.lod1Covers ? "" : $" with the plain {(o.door ? "door" : "pane")} where it leaves the hole open")}";
             string slices = (o.slice || !o.stretch) && o.borders != Vector4.zero ? $" Slice lines {o.borders.x:0.00}, {o.borders.y:0.00}, {o.borders.z:0.00} and {o.borders.w:0.00} m in from its sides." : "";
@@ -259,27 +304,7 @@ namespace Triband.Storey.Editor
 
         static void Warnings(StoreyOpening o, OpeningKind k, OpeningKinds.Checked c)
         {
-            foreach (var line in o.notes.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)) EditorGUILayout.HelpBox(line, MessageType.Info);
-            if (o.prefab != null && o.holeFrom == "the meshes' bounds")
-                EditorGUILayout.HelpBox("The hole is the meshes' bounds. Add a Storey Cutout to the prefab's root to say where it is, so what goes round it (shutters, a sill) stays outside it.", MessageType.Info);
-            if (o.wallFaces > 0)
-                EditorGUILayout.HelpBox($"{o.wallFaces} face{(o.wallFaces == 1 ? " lies" : "s lie")} on the wall's outer face round the hole, facing out: {(o.wallFaces == 1 ? "it flickers" : "they flicker")} against the wall. Move {(o.wallFaces == 1 ? "it" : "them")} a centimetre out.", MessageType.Warning);
-            if (c.behind)
-                EditorGUILayout.HelpBox("Something reaches behind the wall's back, 0.3 m in from its face: it shows inside the rooms.", MessageType.Warning);
-            if (c.uncovered > 0.01)
-                EditorGUILayout.HelpBox($"{c.uncovered:P0} of the hole is open: on a shell or filled storey that shows into the building. Fill it (glass, a panel), or fit the cutout to the window.", MessageType.Warning);
-            if (c.deepGlass)
-                EditorGUILayout.HelpBox($"Some glass sits deeper than {OpeningKinds.ShellReveal * 100:0.#} cm into the wall: on a shell or filled storey the reveal stops there, and the hole shows beside the glass.", MessageType.Warning);
-            if (!o.door && !c.glass)
-                EditorGUILayout.HelpBox("No part is Glass: its windows show no rooms behind them (docs/EDITOR.md §6.8).", MessageType.Info);
-            if (o.door && !c.leaf)
-                EditorGUILayout.HelpBox("No part is the leaf: on a walk-in storey the player walks through the closed door. Name the leaf objects in the prefab's Storey Cutout, or tick Leaf on a part.", MessageType.Warning);
-            if (c.tris > 140)
-                EditorGUILayout.HelpBox($"{c.tris} triangles: more than the most dressed built-in window (140), and a block of six storeys has about 156 windows.", MessageType.Warning);
-            if (!o.door && k.lod1 != null && !k.lod1OnWall)
-                EditorGUILayout.HelpBox("LOD1 reaches into the wall, so LOD1 cuts the wall round every window: about 12 triangles a window more, and most buildings on screen are at LOD1. A LOD1 that stays in front of the wall's face (shutters, a sill, a pediment) lies on the flat wall with the plain pane, whose recess the shader draws.", MessageType.Info);
-            if (k.lod1 != null && c.lod1Tris > 12)
-                EditorGUILayout.HelpBox($"LOD1 has {c.lod1Tris} triangles a window: most buildings on screen are at LOD1, where the plain pane is 2.", MessageType.Warning);
+            foreach (var (text, type) in StoreyOpenings.Issues(o, k, c)) EditorGUILayout.HelpBox(text, type);
         }
 
         /// <summary>A mesh's parts from the model's materials' names, the size from the mesh's bounds.</summary>

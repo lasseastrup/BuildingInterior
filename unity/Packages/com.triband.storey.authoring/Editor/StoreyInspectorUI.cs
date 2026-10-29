@@ -19,9 +19,9 @@ namespace Triband.Storey.Editor
     {
         static bool Dark => EditorGUIUtility.isProSkin;
         public static Color Accent => Dark ? new Color(0.36f, 0.62f, 0.95f) : new Color(0.16f, 0.43f, 0.82f);
-        static Color Ink => Dark ? new Color(0.86f, 0.86f, 0.86f) : new Color(0.16f, 0.16f, 0.16f);
-        static Color Rule => Dark ? new Color(1, 1, 1, 0.1f) : new Color(0, 0, 0, 0.12f);
-        static Color Muted => Dark ? new Color(0.62f, 0.62f, 0.62f) : new Color(0.38f, 0.38f, 0.38f);
+        internal static Color Ink => Dark ? new Color(0.86f, 0.86f, 0.86f) : new Color(0.16f, 0.16f, 0.16f);
+        internal static Color Rule => Dark ? new Color(1, 1, 1, 0.1f) : new Color(0, 0, 0, 0.12f);
+        internal static Color Muted => Dark ? new Color(0.62f, 0.62f, 0.62f) : new Color(0.38f, 0.38f, 0.38f);
 
         /// <summary>Each card's colour: its icon and the stripe down its side, so a part of the building is found by its colour.</summary>
         public static class Tint
@@ -155,7 +155,8 @@ namespace Triband.Storey.Editor
 
         static readonly Regex Asides = new Regex(@"\s*\([^)]*\)");
         static readonly Regex WordsIn = new Regex(@"\([^)]*\)|\p{Lu}+(?=\p{Lu}\p{Ll})|\p{Lu}?\p{Ll}+|\p{Lu}+|\p{Nd}+|[^\p{L}\p{Nd}\s_.()-]+");
-        static string[] Words(string name) => WordsIn.Matches(name).Cast<Match>().Select(m => m.Value).ToArray();
+        /// <summary>A name's words: run-together capitals and digits apart, underscores and dots dropped, an aside in brackets one word.</summary>
+        internal static string[] Words(string name) => WordsIn.Matches(name).Cast<Match>().Select(m => m.Value).ToArray();
 
         /// <summary>
         /// <paramref name="text"/> where it is wider than <paramref name="width"/> in <paramref name="style"/>: without its
@@ -464,6 +465,101 @@ namespace Triband.Storey.Editor
             Lines(r, c, 2f, (0.5f, 0.5f), (0.9f, 0.5f));
             // stairs in the corner
             for (int i = 0; i < 3; i++) Lines(r, c, 1.5f, (0.16f, 0.62f + i * 0.08f), (0.38f, 0.62f + i * 0.08f));
+        }
+
+        // ---- the Storey Library's ----
+
+        /// <summary>Grid: four tiles.</summary>
+        public static void GridIcon(Rect r, Color c)
+        {
+            Box(r, c, 0.1f, 0.1f, 0.44f, 0.44f); Box(r, c, 0.56f, 0.1f, 0.9f, 0.44f);
+            Box(r, c, 0.1f, 0.56f, 0.44f, 0.9f); Box(r, c, 0.56f, 0.56f, 0.9f, 0.9f);
+        }
+
+        /// <summary>List: rows, each a picture and a line.</summary>
+        public static void ListIcon(Rect r, Color c)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                float y = 0.1f + i * 0.3f;
+                Box(r, c, 0.08f, y, 0.3f, y + 0.2f);
+                Box(r, new Color(c.r, c.g, c.b, c.a * 0.8f), 0.4f, y + 0.07f, 0.92f, y + 0.13f);
+            }
+        }
+
+        /// <summary>Turntable: an arrow going round.</summary>
+        public static void TurnIcon(Rect r, Color c)
+        {
+            var arc = new (float, float)[13];
+            for (int i = 0; i < 13; i++) { double a = Math.PI * (0.15 + 1.55 * i / 12); arc[i] = (0.5f + 0.36f * (float)Math.Cos(a), 0.5f - 0.36f * (float)Math.Sin(a)); }
+            Lines(r, c, 2f, arc);
+            var (ex, ey) = arc[12];
+            Lines(r, c, 2f, (ex - 0.2f, ey - 0.02f), (ex, ey), (ex + 0.02f, ey - 0.2f));
+        }
+
+        /// <summary>Frame: a frame's four corners round a dot.</summary>
+        public static void FrameIcon(Rect r, Color c)
+        {
+            foreach (var (x, y, dx, dy) in new[] { (0.1f, 0.1f, 1f, 1f), (0.9f, 0.1f, -1f, 1f), (0.1f, 0.9f, 1f, -1f), (0.9f, 0.9f, -1f, -1f) })
+                Lines(r, c, 2f, (x, y + dy * 0.26f), (x, y), (x + dx * 0.26f, y));
+            Dot(r, c, 0.5f, 0.5f, 0.2f);
+        }
+
+        /// <summary>Lock: shown, not changed (one of Storey's own).</summary>
+        public static void LockIcon(Rect r, Color c)
+        {
+            Box(r, c, 0.18f, 0.46f, 0.82f, 0.94f);
+            var arc = new (float, float)[9];
+            for (int i = 0; i < 9; i++) { double a = Math.PI * i / 8; arc[i] = (0.5f + 0.22f * (float)Math.Cos(a), 0.46f - 0.3f * (float)Math.Sin(a)); }
+            Lines(r, c, 2f, arc);
+        }
+
+        /// <summary>Warning: a triangle with an exclamation mark.</summary>
+        public static void WarningIcon(Rect r, Color c)
+        {
+            Lines(r, c, 1.8f, (0.5f, 0.08f), (0.94f, 0.9f), (0.06f, 0.9f), (0.5f, 0.08f));
+            Lines(r, c, 2.2f, (0.5f, 0.36f), (0.5f, 0.62f));
+            Dot(r, c, 0.5f, 0.76f, 0.11f);
+        }
+
+        /// <summary>More: three dots.</summary>
+        public static void MoreIcon(Rect r, Color c) { Dot(r, c, 0.2f, 0.5f, 0.16f); Dot(r, c, 0.5f, 0.5f, 0.16f); Dot(r, c, 0.8f, 0.5f, 0.16f); }
+
+        /// <summary>Plus: something new.</summary>
+        public static void PlusIcon(Rect r, Color c) { Lines(r, c, 2.2f, (0.5f, 0.14f), (0.5f, 0.86f)); Lines(r, c, 2.2f, (0.14f, 0.5f), (0.86f, 0.5f)); }
+
+        /// <summary>Rename: a pencil.</summary>
+        public static void PencilIcon(Rect r, Color c)
+        {
+            Lines(r, c, 2.5f, (0.22f, 0.78f), (0.74f, 0.26f));
+            Lines(r, c, 1.5f, (0.14f, 0.86f), (0.22f, 0.78f));
+            Lines(r, c, 1.5f, (0.66f, 0.18f), (0.82f, 0.34f));
+        }
+
+        /// <summary>A layout: a plan of buildings on a site.</summary>
+        public static void LayoutIcon(Rect r, Color c)
+        {
+            Lines(r, c, 1.5f, (0.06f, 0.06f), (0.94f, 0.06f), (0.94f, 0.94f), (0.06f, 0.94f), (0.06f, 0.06f));
+            Box(r, c, 0.18f, 0.18f, 0.46f, 0.5f); Box(r, c, 0.56f, 0.18f, 0.82f, 0.38f); Box(r, c, 0.56f, 0.5f, 0.82f, 0.82f);
+        }
+
+        /// <summary>
+        /// A footprint's outline (a building template's, a placeholder's shape), fitted into <paramref name="r"/> and drawn
+        /// from above, +Z up the rect.
+        /// </summary>
+        public static void Outline(Rect r, Color c, IReadOnlyList<Vec2> footprint, float width = 1.5f)
+        {
+            if (footprint.Count < 3) return;
+            double x0 = footprint.Min(p => p.x), x1 = footprint.Max(p => p.x), z0 = footprint.Min(p => p.z), z1 = footprint.Max(p => p.z);
+            double s = Math.Max(1e-6, Math.Max(x1 - x0, z1 - z0));
+            float ox = (float)(1 - (x1 - x0) / s) / 2, oz = (float)(1 - (z1 - z0) / s) / 2;
+            var pts = new (float, float)[footprint.Count + 1];
+            for (int i = 0; i <= footprint.Count; i++)
+            {
+                var p = footprint[i % footprint.Count];
+                pts[i] = (0.08f + 0.84f * (ox + (float)((p.x - x0) / s)), 0.92f - 0.84f * (oz + (float)((p.z - z0) / s)));
+            }
+            Lines(r, c, width, pts);
         }
     }
 }

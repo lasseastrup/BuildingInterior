@@ -83,6 +83,9 @@ namespace Triband.Storey.Editor
             return all = Sorted();
         }
 
+        /// <summary>Search again next time: a preset was just made, copied, renamed or deleted (the project's change comes later).</summary>
+        internal static void Changed() => all = null;
+
         /// <summary>The preset a style carries the key of (applied from it, and not edited by hand since), or null: Custom.</summary>
         internal static Entry? Of(FacadeStyle s) => s.preset == null ? null : All().FirstOrDefault(e => e.key == s.preset);
 
@@ -93,6 +96,101 @@ namespace Triband.Storey.Editor
             if (e == null) return null;
             try { return (e.asset.Style, e.key); }
             catch (Exception) { return null; }   // edited into something that isn't a style: the prototype's brick, as before
+        }
+
+        /// <summary>This asset's entry in the list (its key, whether the package ships it), or null while it isn't in it (not saved yet).</summary>
+        internal Entry? Listed => All().FirstOrDefault(e => e.asset == this);
+    }
+
+    /// <summary>
+    /// A Facade Style asset as the style cards edit it (<see cref="StoreyStyleCards"/>; the Storey Library and the asset's
+    /// inspector, docs/EDITOR.md §6.13): read from its JSON, changed in place and written back, each change one undo step on
+    /// the asset. Kept as <see cref="FacadeStylePreset.Set"/> keeps a style: under its own name, with no preset's key.
+    /// </summary>
+    internal sealed class PresetStyle : StyleTarget
+    {
+        readonly FacadeStylePreset asset;
+        FacadeStyle? style;
+        string? readFrom;
+
+        public PresetStyle(FacadeStylePreset asset) => this.asset = asset;
+
+        public FacadeStylePreset Asset => asset;
+
+        /// <summary>Raised after each change the cards make (the Library builds its preview again).</summary>
+        public event Action? Changed;
+
+        /// <summary>The style as the asset holds it now: read again when its text changes (an undo, a reimport). Throws when the text isn't a style.</summary>
+        public override FacadeStyle Style
+        {
+            get
+            {
+                if (style == null || !ReferenceEquals(readFrom, asset.style)) { var s = asset.Style; readFrom = asset.style; style = s; }
+                return style;
+            }
+        }
+
+        public override string Key => "preset/" + asset.GetInstanceID();
+        public override string Cards => "library.";
+
+        // a preset carries no building's roof: a building it is applied to keeps its own (Styles.Apply)
+        public override string? RoofNote => "A building keeps its own roof shape when this style is applied to it: the type, pitch, eaves and dormers here are the preview's, and a new building's. The parapet, roof edge, surface and colour come with the style.";
+
+        public override void Edit(string undoName, Action<FacadeStyle> op)
+        {
+            var s = Style;   // the one the cards drew: changed in place, as a building's style is
+            Undo.RecordObject(asset, undoName);
+            op(s);
+            asset.Set(s);
+            readFrom = asset.style;
+            EditorUtility.SetDirty(asset);
+            Changed?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// A Facade Style asset's inspector: the style in the Facade tab's cards (docs/EDITOR.md §6.13), as the Storey Library
+    /// shows it, rather than the JSON it is kept as. One of the package's own is shown, not changed: duplicate it to make one
+    /// of your own.
+    /// </summary>
+    [CustomEditor(typeof(FacadeStylePreset))]
+    internal sealed class FacadeStylePresetEditor : UnityEditor.Editor
+    {
+        PresetStyle? cards;
+
+        public override void OnInspectorGUI()
+        {
+            var p = (FacadeStylePreset)target;
+            if (cards == null || cards.Asset != p) cards = new PresetStyle(p);
+            bool own = p.Listed?.own ?? false;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField(own ? "One of Storey's own styles" : "A style of the project's own", StoreyInspectorUI.Caption);
+                if (GUILayout.Button(new GUIContent("Open in Storey Library", "Browse every style, window, door, detail and template, and see this one on a building"), EditorStyles.miniButton, GUILayout.Width(140)))
+                    StoreyLibraryWindow.Open(p);
+            }
+            if (own) EditorGUILayout.HelpBox("Storey ships this style, so it isn't changed here. Duplicate it (Edit ▸ Duplicate, or Duplicate in the Storey Library) to make one of your own.", MessageType.Info);
+            FacadeStyle st;
+            try { st = cards.Style; }
+            catch (Exception ex)
+            {
+                EditorGUILayout.HelpBox($"It holds no style Storey can read ({ex.Message}).", MessageType.Error);
+                Stored(p);
+                return;
+            }
+            using (new EditorGUI.DisabledScope(own)) StoreyStyleCards.All(cards, st);
+            Stored(p);
+        }
+
+        /// <summary>What it is kept as, for the curious: its key and its JSON, read only.</summary>
+        void Stored(FacadeStylePreset p)
+        {
+            if (!StoreyInspectorUI.Fold("preset.stored", "Stored as", false, "The style as Storey's JSON, and the key a building's style applied from it carries")) return;
+            using (new EditorGUI.DisabledScope(true))
+            {
+                EditorGUILayout.TextField("Key", p.key.Length > 0 ? p.key : AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(p)));
+                EditorGUILayout.TextArea(p.style, EditorStyles.textArea, GUILayout.MinHeight(60));
+            }
         }
     }
 }

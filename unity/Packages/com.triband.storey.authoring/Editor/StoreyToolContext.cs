@@ -175,7 +175,7 @@ namespace Triband.Storey.Editor
         /// <paramref name="within"/>, the nearest, and that building's id; null when none has. Sites are unrotated and
         /// unscaled, so the distances along the ray compare.
         /// </summary>
-        internal static (StoreySite site, string id)? SiteAt(Ray ray, StoreySite except, double within)
+        internal static (StoreySite site, string id)? SiteAt(Ray ray, StoreySite? except, double within)
         {
             (StoreySite, string)? best = null;
             foreach (var s in StoreySite.All)

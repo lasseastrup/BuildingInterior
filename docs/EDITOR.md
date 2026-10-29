@@ -81,6 +81,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
 - `FacadeStylePreset` assets: every preset in the Facade tab, the package's five (`Facade Styles/`, the prototype's presets) and the project's.
 - `StoreyDetails`: every Facade Detail asset in the Facade tab's palette, the runtime package's five (`Facade Details/`, the generator's own) and the project's (§6.12).
 - The colour field hook, `StoreyColorField.Picker`. With Color Pipeline installed, `Triband.Storey.Editor.ColorPipeline` replaces it with Color Pipeline's picker and the suggestions from `StoreyColorSettings`. It also installs `StoreyColorField.Conform`, so every edit ends with palette colours only (docs/COLOURS.md §3.8).
+- The Storey Library (`StoreyLibraryWindow`, §6.13): every Facade Style, artist's window and door, Facade Detail and Building Template in one window, each drawn on a building in a live preview (`StoreyPreview`), with the Facade tab's own style cards (`StoreyStyleCards`) to edit a style.
 
 **Where this differs from the plan, for now:**
 - The inspector is IMGUI, not UI Toolkit. It is rebuilt from the layout on every draw, which keeps it simple while the fields settle; moving it to UI Toolkit later changes no data.
@@ -659,3 +660,78 @@ Unity: `StoreyDetail` (`prefab`, `lod1Prefab`, `leaveOutOfLod1`, `Part.key`), `S
 10. Give both *Scattered on the walls*, then 50% each under *Placed for you* with *Per m²* 1: patches spread evenly over the walls, clear of windows, the band and the plinth; *Storeys: Upper* takes them off the ground floor. Turn on *Recolour*: both patches take its *Main colour*, on this style alone. Zoom out to LOD1: they're gone.
 11. Make `TopBricks` a detail *Along the top of the wall* at 100% with *Per bay* 2: two to each bay along the roof line, none where a setback's wall goes on up. `EdgeBricks` *Up the corners*, *Inward*, on an L-shaped building: a stack up the corner set in, facing out along its bisector.
 12. Undo each change: the style writes the chance alone again once its settings are back to their defaults (`"<id>": 50`).
+
+### 6.13 The Storey Library
+
+*Tools ▸ Storey ▸ Library…* opens it. So does a double click on a Facade Style, Storey Opening (window or door), Facade Detail or Building Template asset in the Project window, and *Open in Storey Library* in their inspectors. It has three panes: the side bar, the list and the item picked.
+
+**The side bar** lists the five kinds, each in the colour and with the icon the site inspector's cards give it (§6.10), with how many there are:
+- **Styles** (purple): Facade Style assets, the whole look of a building's walls, windows, doors, colours and details.
+- **Windows** (blue) and **Doors** (amber): Storey Opening assets, made from your prefabs or meshes (§6.9).
+- **Details** (green): Facade Detail assets, placed by hand or by a style's rules (§6.12).
+- **Templates** (teal): Building Template assets, whole buildings to place again (§6.6).
+
+Under them, **In the scene** names the building being edited in the selected Storey Site (and its tier, with setbacks): what the Library's *Apply* and *Use on* buttons act on. Select a site and pick a building in it, as you would to edit it.
+
+**The list** shows the kind's items as cards:
+- a picture of each on a building, drawn by Storey itself a few at a time, the cards in view first, and kept in the project's `Library/StoreyLibrary` folder so the window opens with them;
+- a style's four main colours (walls, trim, roof, glass) in its corner;
+- a lock on Storey's own, a warning sign where its inspector warns (too many triangles, faces that flicker, no glass, a pivot that looks off: its tooltip says what), and how many buildings use it;
+- its name in words, a line about it (a style's windows and roof, a window's fit and triangles, a detail's rule).
+
+The project's items are listed by **family**: the words their names share, after what all of them start with (`Visual_BuildingPiece06_Door (door)` is *Door* under *Piece 06*; `Industrial Grey` is *Grey* under *Industrial*). A family of one goes under *Others*; Storey's own come last. With fewer than eight items, or one family, the list isn't split.
+
+The toolbar above it:
+- **Search** finds by name, family, kind and what an item is: a style by its palette colours' names (*red*, *beige*), its window type and roof; a detail by its rule (*corners*, *scattered*). Every word must match.
+- **Everything / The project's / Storey's own** filters by where it comes from.
+- **Cards / list**, and how big the cards are.
+- **New ▾** (below).
+
+**Drop prefabs** from the Project window on the list of Windows, Doors or Details: each becomes one, beside its prefab, as *Assets ▸ Create ▸ Storey ▸ Window or Door from Prefab* (or *Facade Detail from Prefab*) makes them (on Doors, a door; on Windows, a window).
+
+A click picks an item, a double click shows it in the Project window, a right click opens its menu, and a card dragged out drops its asset into a field or the Project window. Clicking in the Library never changes Unity's selection, so the site you're editing stays selected.
+
+**Drag a card onto a building in the Scene view** (a style, window, door or detail; from the Project window too): the building under the pointer is outlined in the card's colour, with a line saying what a drop does. Dropped, a style is applied to the building's base (keeping its roof), a window or door becomes its only one, and a detail with a rule is placed for you at 50 % in its style; one undo step, and the building is picked for editing, so its inspector shows the change. Any building of any Storey Site in the open scenes takes it, picked or not.
+
+**The item picked** is drawn on a building in a **live preview**, by Storey's own renderer with the materials of the Storey Site in the open scenes (the project's own, lit as its sites are), the palette and the rooms behind the windows (Storey Windows), exactly as it shows on a site:
+- drag to turn round it, right- or middle-drag to move, the wheel to zoom, a double click (or the frame button) for the first view again; the turntable button turns it slowly;
+- **LOD0 / LOD1 / LOD2**: full detail, the shell, the massing;
+- the footprint (Rect, L, U, T, Octa) and the storeys (1 to 30) at the bottom;
+- a window, door or detail is shown on a style, **On** at the top: windows in every opening, a door in the street door, a detail by its rule at 100 % (the generator's AC units and vents off) or, with no rule, put by hand on the front wall. A template is shown as it is, in its own style or one picked;
+- under it, the building's triangles at each LOD, to compare one style, window or detail with another.
+
+Under the preview:
+- Its **name**, renamed in place with the pencil (a style's own name follows its file's), what it is, where it comes from, its path (a click shows it in the Project window), and *Not saved* with **Save** while it has changes not written to its file.
+- **Apply to** *building* (a style: as picking it under *Preset* in the Facade tab, to the tier being edited, keeping the building's roof), **Use on** *building* (a window or door: its only one, or another by weight; a detail: a chance of 25, 50 or 100 % in its style, or *Place it by hand*, which picks it in the Facade tool so a click on a wall puts it there), or **Add to** *layout* (a template: a new building near the Scene view's middle). Each is one undo step.
+- **Duplicate** (one of Storey's own: where your own of that kind are, asked first; the copy is the project's, with an id of its own), **Show in Project**, and **⋯**: rename, open its prefab, select it (the Inspector shows it, and editing a site stops), draw its picture again, delete (to the system's trash, after saying which buildings use it).
+- **Used by**: every layout in the project whose buildings use it, the open edits' unsaved state included. A style is used by the buildings styled with it and not changed by hand since, and by those styled exactly as it is, roof aside, its colours compared as they render (the buildings the BuildingGenerator converter made name no style, but look exactly as their theme's). A building in a layout open in a scene is a button that selects it and frames the Scene view on it. After you change a style, **Update** applies it again to the buildings in open layouts that still look as it was, keeping their roofs: one undo step a layout. (A building only takes a copy of a style: changing the style changes no building until it is applied again.)
+- Its **settings**: a style in the Facade tab's own cards (Windows, Doors, Walls, Colours, Roof, Details), each change one undo step, the preview and its picture following at once. The Roof card notes that a building keeps its own roof shape when the style is applied: the type, pitch, eaves and dormers are the preview's. A window, door or detail shows its own inspector, its warnings and *Check on a building* included; a template, its footprint and what it holds.
+
+**Storey's own** (the package's five styles, five details and five templates) are shown, not changed: their settings are greyed out, and *Duplicate* makes one of your own to change.
+
+**New ▾** makes, the kind shown first:
+- a **style**, starting as the one picked (or the brick walk-up), or from the building being edited's;
+- **windows**, **doors** or **details** from the prefabs selected in the Project window, or an empty one to give a prefab or a mesh in its settings;
+- a **template** from the building being edited.
+
+A new style, window, door or detail asks where it goes, starting in the folder most of the project's of its kind are in.
+
+A Facade Style asset's own inspector shows the same cards, where it showed its JSON (still there under *Stored as*).
+
+No key does anything Storey-specific here, as elsewhere in the editor (§2): every action is a button.
+
+Code: `StoreyLibraryWindow` (the window), `StoreyLibrary` (its contents, families, search words, the placeholder buildings, making and deleting), `StoreyUsage` (where each is used), `StoreyThumbnails` (the pictures), `StoreyPreview` (a building in a preview scene, drawn by `SiteRenderer` at a fixed LOD, the scene's view globals put aside while it draws), `StoreyStyleCards` (the Facade tab's style cards, drawn for a `StyleTarget`: a building's style, `StoreySiteEditor.SiteStyle`, or a Facade Style asset's, `PresetStyle`).
+
+**Checks:**
+1. *Tools ▸ Storey ▸ Library…*: the side bar shows the five kinds with their counts; the list shows Styles with pictures, in families (*Industrial*, *Residential*, *Skyscraper*, *Storey's own*).
+2. Pick a style: the preview shows it on an L of four storeys. Drag round it, zoom, try LOD1 and LOD2, the U footprint and 8 storeys.
+3. Search *red*: the red styles alone. Search *corners* on Details: the corner details.
+4. Windows: pick one, then another style under *On*: the windows show on that style, and the cards' pictures follow.
+5. Duplicate one of Storey's own styles: the copy is the project's, named after its file, and its cards can be changed. Turn its Floor bands off: the preview and its picture change, *Not saved* shows, and Undo brings them back.
+6. Select a Storey Site and pick a building. *Apply to* it with a style: the building wears it, as from the Facade tab's Preset list, and one Undo takes it back. *Use on* it with a window (*Its only window*) and a detail (*Placed for you, 50 %*).
+7. Drop two window prefabs on Windows: two windows are made beside them, and the first is picked.
+8. A style used by buildings: *Used by* lists them; click one in an open scene and the Scene view goes to it.
+9. Change a style used by buildings in an open layout: *Update* appears; it brings them to the style as it is now.
+10. Double-click a Facade Detail asset in the Project window: the Library opens on it.
+11. Close and open the window: the pictures are back at once.
+12. Drag a style's card onto a building in the Scene view: it is outlined, and the line says *Apply … to …*; drop it, and the building wears the style. Undo takes it back.
