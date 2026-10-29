@@ -171,6 +171,8 @@ In the file, the outline still holds the cut's points, so everything that builds
 
 Engine-free: `CornerCuts` (`Sharp`, `Around`, `Cut`, `Clear`, `CutAll`, `ClearAll`), `Outlines.CornerPoints` (`CornerTests`, `CornerCutsTests`).
 
+**A sharp corner left sharp is clipped.** Everything that stands out from a wall (the wall's own thickness, the plinth, bands, cornice, curb, parapet, cap, a terrace's parapet, an overhang's fascia) ends at a corner on its bisector, where the next wall's meets it. A corner sharper than about 67° (a turn whose half has a tangent over `Geo.MitreLimit`, 1.5) would send those ends far out past it, metres for a deep cap, so they stop at that limit, as the prototype's do. They used to leave the corner open between the two walls, down to the inside and through the roof's edge. Now each one closes its half of the corner, from its end across to the bisector, on every face it has (`Cut.Clipped`, `Cut.Tip`; `MeshBuilder.ClipFace` and `ClipFlat`, `MBox` with its cuts, `Facade.WallPanel`, `StripFace`, LOD2's walls and tops). The corner ends in a small flat face across its tip, like a stroke's clipped mitre, standing out from the corner by at most 1.8 times the strip's depth. The outline and every corner up to 67° build as before (`AcuteCornerTests`). For a blunter tip, chamfer the corner (above).
+
 **Checks:**
 1. Click a building's corner, choose Round with a 3 m radius: the arc shows green. *Cut this corner*: the building is rounded there, with walls, bands and windows following. The corner is still one point.
 2. With it selected, switch to Chamfer and drag the size: the cut changes as you drag. *Make sharp*: the corner is square again.

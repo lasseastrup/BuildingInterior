@@ -263,6 +263,33 @@ namespace Triband.Storey.Generate
                 if (flip) { I.Add(bse); I.Add(bse + 2); I.Add(bse + 1); I.Add(bse); I.Add(bse + 3); I.Add(bse + 2); }
                 else { I.Add(bse); I.Add(bse + 1); I.Add(bse + 2); I.Add(bse); I.Add(bse + 2); I.Add(bse + 3); }
             }
+            // a strip's half of a clipped corner (Cut.Clipped, docs/EDITOR.md §6.1): beside a wall's quad w out, between heights ya
+            // and yb, painted as the wall is but with no windows (h: the run's height, for its bands); and on a top or underside
+            // between wa and wb out, a triangle from the footprint line
+            void ClipWall(Frame F, Cut x, double w, double ya, double yb, double kind, double h)
+            {
+                if (!x.Clipped || w < 1e-6 || yb - ya < 1e-6) return;
+                var (tu, tw) = x.Tip(w); double eu = x.At(w);
+                P3 a = F.At(eu, ya, w), q = F.At(tu, ya, tw);
+                Quad(a, q, F.At(tu, yb, tw), F.At(eu, yb, w), Geo.Bisector(F, x), 0, kind, 0, Geo.Hypot(q.x - a.x, q.z - a.z), h);
+            }
+            void ClipFlat(Frame F, Cut x, double wa, double wb, double y, double kind, bool down = false)
+            {
+                if (!x.Clipped) return;
+                wa = Math.Max(wa, 0); if (wb - wa < 1e-6) return;
+                var nr = new P3(0, down ? -1 : 1, 0); var (u1, w1) = x.Tip(wb);
+                if (wa < 1e-6)
+                {
+                    P3 p0 = F.At(x.s, y, 0), p1 = F.At(x.At(wb), y, wb), p2 = F.At(u1, y, w1);
+                    if (P3.Dot(P3.Cross(p1 - p0, p2 - p0), nr) < 0) { var t = p1; p1 = p2; p2 = t; }
+                    int bse = M.P.Count;
+                    Vtx(p0, nr, 0, 0, 0, 0, 0, kind); Vtx(p1, nr, 0, 0, 0, 0, 0, kind); Vtx(p2, nr, 0, 0, 0, 0, 0, kind);
+                    M.I.Add(bse); M.I.Add(bse + 1); M.I.Add(bse + 2);
+                    return;
+                }
+                var (u0, w0) = x.Tip(wa);
+                Quad(F.At(x.At(wa), y, wa), F.At(x.At(wb), y, wb), F.At(u1, y, w1), F.At(u0, y, w0), nr, 0, kind);
+            }
             void Flat(List<List<Vec2>> rings, double y, double kind, bool down)
             {
                 var v2 = new List<List<Vec2>>(); foreach (var r in rings) { var l = new List<Vec2>(r.Count); foreach (var q in r) l.Add(new Vec2(q.x + ox, q.z + oz)); v2.Add(l); }
@@ -334,6 +361,8 @@ namespace Triband.Storey.Generate
                         var F = new Frame(r.a, r.u, r.w); double s0 = r.S.s, e0 = r.E.s, s1 = r.S.At(T), e1 = r.E.At(T);
                         Quad(F.At(s1, yb, T), F.At(e1, yb, T), F.At(e1, y0, T), F.At(s1, y0, T), new P3(r.w.x, 0, r.w.z), 0, 4);
                         Quad(F.At(s0, yb, 0), F.At(e0, yb, 0), F.At(e1, yb, T), F.At(s1, yb, T), new P3(0, -1, 0), 0, 4);
+                        ClipWall(F, r.S, T, yb, y0, 4, 0); ClipWall(F, r.E, T, yb, y0, 4, 0);
+                        ClipFlat(F, r.S, 0, T, yb, 4, true); ClipFlat(F, r.E, 0, T, yb, 4, true);
                     }
                 }
                 var runs = new List<(int k0, int k1, double h, bool g, int slot, bool top)>();
@@ -368,6 +397,7 @@ namespace Triband.Storey.Generate
                     double yc = Derived.FloorBase(b, t.k0);
                     var c0 = Party.CornerCut(site, b, t.k0, i, false, yc, false, out double c0Top); var c1 = Party.CornerCut(site, b, t.k0, i, true, yc, false, out double c1Top);
                     double ms1 = m.S.At(T), me1 = m.E.At(T), ms0 = m.S.At(0), me0 = m.E.At(0);   // the corners mitred, as above a neighbour's top they are
+                    var mS = m.S; var mE = m.E;   // the corners' own cuts, clipped where they are too sharp to mitre (Cut.Clipped)
                     if (c0 != null) m.S = c0.Value; if (c1 != null) m.E = c1.Value;
                     double s1 = m.S.At(T), e1 = m.E.At(T), s0 = m.S.At(0), e0 = m.E.At(0); var outN = new P3(e.w.x, 0, e.w.z);
                     for (int ri = 0; ri < runs.Count; ri++)
@@ -393,6 +423,7 @@ namespace Triband.Storey.Generate
                             slot = bareSlots[ri] - 1;
                         }
                         Quad(F.At(s1, y0, T), F.At(e1, y0, T), F.At(e1, y1, T), F.At(s1, y1, T), outN, bay, 1, s1, e1, H, uS, uE);
+                        ClipWall(F, m.S, T, y0, y1, 1, H); ClipWall(F, m.E, T, y0, y1, 1, H);   // a neighbour's corner cut has no clip
                         // the tier's corner is cut for a neighbour lower than the run's top: above the neighbour the cut leaves a slit
                         // to the corner, closed by Unity only (the prototype's massing has it too)
                         foreach (var (cut, upTo, a, z) in new[] { (c0, c0Top, ms1, s1), (c1, c1Top, e1, me1) })
@@ -408,12 +439,14 @@ namespace Triband.Storey.Generate
                     {
                         Quad(F.At(s0, top, 0), F.At(e0, top, 0), F.At(e0, yTop, 0), F.At(s0, yTop, 0), new P3(-e.w.x, 0, -e.w.z), 0, st.parapet ? 4 : 3);
                         Quad(F.At(s0, yTop, 0), F.At(e0, yTop, 0), F.At(e1, yTop, T), F.At(s1, yTop, T), new P3(0, 1, 0), 0, 3);
+                        ClipFlat(F, m.S, 0, T, yTop, 3); ClipFlat(F, m.E, 0, T, yTop, 3);
                     }
                     else if (last)
                     {
                         // the lid's rim, over the wall (mitred: a corner cut for a neighbour is inside it or below the lid)
                         int from = M.Tris;
                         Quad(F.At(ms0, yLid, 0), F.At(me0, yLid, 0), F.At(me1, yLid, T), F.At(ms1, yLid, T), new P3(0, 1, 0), 0, 2);
+                        ClipFlat(F, mS, 0, T, yLid, 2); ClipFlat(F, mE, 0, T, yLid, 2);
                         Backed(from);
                     }
                 }
@@ -473,6 +506,7 @@ namespace Triband.Storey.Generate
                         {
                             var F = new Frame(r.a, r.u, r.w);
                             Quad(F.At(r.S.s, yl, 0), F.At(r.E.s, yl, 0), F.At(r.E.At(T), yl, T), F.At(r.S.At(T), yl, T), new P3(0, 1, 0), 0, 2);
+                            ClipFlat(F, r.S, 0, T, yl, 2); ClipFlat(F, r.E, 0, T, yl, 2);
                         }
                         Backed(from);
                     }
@@ -486,6 +520,8 @@ namespace Triband.Storey.Generate
                             Quad(F.At(s1, y1, T), F.At(e1, y1, T), F.At(e1, yp, T), F.At(s1, yp, T), new P3(r.w.x, 0, r.w.z), 0, 4);
                             Quad(F.At(s0, y1, 0), F.At(e0, y1, 0), F.At(e0, yp, 0), F.At(s0, yp, 0), new P3(-r.w.x, 0, -r.w.z), 0, 4);
                             Quad(F.At(s0, yp, 0), F.At(e0, yp, 0), F.At(e1, yp, T), F.At(s1, yp, T), new P3(0, 1, 0), 0, 3);
+                            ClipWall(F, r.S, T, y1, yp, 4, 0); ClipWall(F, r.E, T, y1, yp, 4, 0);
+                            ClipFlat(F, r.S, 0, T, yp, 3); ClipFlat(F, r.E, 0, T, yp, 3);
                         }
                     }
                 }

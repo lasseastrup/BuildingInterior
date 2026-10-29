@@ -355,7 +355,7 @@ namespace Triband.Storey.Generate
             foreach (var r in OverhangRuns(k))
             {
                 op.Ctx(Geo.WallCtx(new Vec2(r.a.x + r.u.x * r.S.s, r.a.z + r.u.z * r.S.s), r.u, r.w, Math.Max(r.E.s - r.S.s, 0.05)), 1);
-                op.MBox(new Frame(r.a, r.u, r.w), r.S.s, r.S.k, r.E.s, r.E.k, y - Dim.SLAB, y, 0, T, C.wall, C.wall, Skip.Top | Skip.In | Skip.UStart | Skip.UEnd);
+                op.MBox(new Frame(r.a, r.u, r.w), r.S, r.E, y - Dim.SLAB, y, 0, T, C.wall, C.wall, Skip.Top | Skip.In | Skip.UStart | Skip.UEnd);
             }
         }
 
@@ -366,8 +366,8 @@ namespace Triband.Storey.Generate
             {
                 var F = new Frame(r.a, r.u, r.w);
                 op.Ctx(Geo.WallCtx(new Vec2(r.a.x + r.u.x * r.S.s, r.a.z + r.u.z * r.S.s), r.u, r.w, Math.Max(r.E.s - r.S.s, 0.05)), 1);
-                op.MBox(F, r.S.s, r.S.k, r.E.s, r.E.k, y, y + 1.0, 0, T, C.wall, C.inner, Skip.Top | Skip.Bot | Skip.UStart | Skip.UEnd);
-                op.MBox(F, r.S.s, r.S.k, r.E.s, r.E.k, y + 1.0, y + 1.1, -0.04, T, C.trim, C.trim, Skip.UStart | Skip.UEnd);
+                op.MBox(F, r.S, r.E, y, y + 1.0, 0, T, C.wall, C.inner, Skip.Top | Skip.Bot | Skip.UStart | Skip.UEnd);
+                op.MBox(F, r.S, r.E, y + 1.0, y + 1.1, -0.04, T, C.trim, C.trim, Skip.UStart | Skip.UEnd);
                 if (sg != null) Facade.PushSeg(sg, F, r.S.s + r.S.k * T / 2, r.E.s + r.E.k * T / 2, T / 2, T / 2);
             }
         }
@@ -386,6 +386,7 @@ namespace Triband.Storey.Generate
                 var F = new Frame(r.a, r.u, r.w); double s1 = r.S.At(T), e1 = r.E.At(T);
                 if (r.E.s - r.S.s < 1e-4 || e1 - s1 < 1e-4) continue;
                 op.Quad(F.At(r.S.s, y, 0), F.At(r.E.s, y, 0), F.At(e1, y, T), F.At(s1, y, T), new P3(0, 1, 0), C.roof);
+                op.ClipFlat(F, r.S, 0, T, y, true, C.roof); op.ClipFlat(F, r.E, 0, T, y, true, C.roof);
             }
             op.Backing = false;
         }
@@ -839,6 +840,8 @@ namespace Triband.Storey.Generate
                     double sA = ms ? m.S.s : a, kA = ms ? m.S.k : 0, eB = me ? m.E.s : z, kB = me ? m.E.k : 0;
                     if (eB - sA < 1e-4 || eB + kB * T - (sA + kA * T) < 1e-4) continue;
                     op.Quad(e.F.At(sA, y, 0), e.F.At(eB, y, 0), e.F.At(eB + kB * T, y, T), e.F.At(sA + kA * T, y, T), new P3(0, 1, 0), C.roof);
+                    if (ms) op.ClipFlat(e.F, m.S, 0, T, y, true, C.roof);
+                    if (me) op.ClipFlat(e.F, m.E, 0, T, y, true, C.roof);
                 }
             }
             op.Backing = false;

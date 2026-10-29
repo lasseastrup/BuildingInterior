@@ -102,8 +102,15 @@ namespace Triband.Storey.Generate
             return new Edge { a = a, L = L, u = u, w = w };
         }
 
-        /// <summary>Corner rule: every strip along an edge ends on the corner's bisector plane.</summary>
-        public struct Corner { public int sg; public double t; }
+        /// <summary>
+        /// Corner rule: every strip along an edge ends on the corner's bisector plane, up to a mitre of <see cref="MitreLimit"/>
+        /// (a convex corner sharper than about 67°): there it ends short of the bisector, and closes the rest to it (bs, bc: the
+        /// sine and cosine of half the corner's turn; 0 at every other corner; <see cref="Cut.Tip"/>).
+        /// </summary>
+        public struct Corner { public int sg; public double t, bs, bc; }
+
+        /// <summary>The longest mitre, as how far a strip's end runs on past the corner per metre it stands out.</summary>
+        public const double MitreLimit = 1.5;
 
         public static Corner[] Corners(List<Vec2> fp, bool ccw)
         {
@@ -121,14 +128,22 @@ namespace Triband.Storey.Generate
             double la = Hypot(ax, az), lc = Hypot(cx, cz); if (la == 0) la = 1; if (lc == 0) lc = 1;
             double cr = ax * cz - az * cx, cs = Math.Max(-1, Math.Min(1, (ax * cx + az * cz) / (la * lc)));
             bool convex = ccw ? cr > 1e-9 : cr < -1e-9;
-            return new Corner { sg = convex ? 1 : -1, t = Math.Min(1.5, Math.Sqrt(Math.Max(0, 1 - cs) / (1 + cs + 1e-9))) };
+            double t = Math.Sqrt(Math.Max(0, 1 - cs) / (1 + cs + 1e-9));
+            var co = new Corner { sg = convex ? 1 : -1, t = Math.Min(MitreLimit, t) };
+            // clipped: a strip's end would run on so far past a sharp corner that it stops short and closes the rest (Cut.Tip).
+            // A concave corner's strips only overlap inside each other, so it needs nothing
+            if (convex && t > MitreLimit) { double r = 1 / Math.Sqrt(1 + t * t); co.bs = t * r; co.bc = r; }
+            return co;
         }
 
         public static Miter MiterOf(Corner[] cor, int i, double L)
         {
             var c0 = cor[i]; var c1 = cor[(i + 1) % cor.Length];
-            return new Miter(new Cut(0, -c0.sg * c0.t), new Cut(L, c1.sg * c1.t));
+            return new Miter(new Cut(0, -c0.sg * c0.t, -c0.bs, c0.bc), new Cut(L, c1.sg * c1.t, c1.bs, c1.bc));
         }
+
+        /// <summary>The outward bisector of a clipped corner (<see cref="Cut.Clipped"/>) in the world, from a strip's frame.</summary>
+        public static P3 Bisector(Frame F, Cut x) => new P3(F.u.x * x.bu + F.w.x * x.bw, 0, F.u.z * x.bu + F.w.z * x.bw);
 
         /// <summary>
         /// Cutaway data for a wall running L metres from a along u: a start point from which the wall

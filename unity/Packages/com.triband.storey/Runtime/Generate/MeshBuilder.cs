@@ -340,6 +340,43 @@ namespace Triband.Storey.Generate
             I.Add(bse); I.Add(bse + 1); I.Add(bse + 2); I.Add(bse); I.Add(bse + 2); I.Add(bse + 3);
         }
 
+        /// <summary>A triangle, wound to face <paramref name="nr"/> as <see cref="Quad"/> is.</summary>
+        public void Tri(P3 p0, P3 p1, P3 p2, P3 nr, Swatch c)
+        {
+            if (ShapeOnly) return;
+            if (P3.Dot(P3.Cross(p1 - p0, p2 - p0), nr) < 0) { var t = p1; p1 = p2; p2 = t; }
+            int bse = P.Count, ne = N.EntryOf(nr), ce = C.EntryOf(c);
+            V(p0, ne, ce); V(p1, ne, ce); V(p2, ne, ce);
+            I.Add(bse); I.Add(bse + 1); I.Add(bse + 2);
+        }
+
+        /// <summary>
+        /// A strip's half of a clipped corner (<see cref="Cut.Clipped"/>), on its face <paramref name="w"/> out: from the strip's
+        /// end there across to the corner's bisector, between heights y0 and y1, facing out (or in, <paramref name="outward"/>
+        /// false). Nothing at a corner that isn't clipped, or on the footprint line or inside it, where the strips meet.
+        /// </summary>
+        public void ClipFace(Frame F, Cut x, double w, double y0, double y1, Swatch c, bool outward = true)
+        {
+            if (!x.Clipped || w < 1e-6 || y1 - y0 < 1e-6 || ShapeOnly) return;
+            var (tu, tw) = x.Tip(w); double eu = x.At(w); var b = Geo.Bisector(F, x);
+            Quad(F.At(eu, y0, w), F.At(tu, y0, tw), F.At(tu, y1, tw), F.At(eu, y1, w), outward ? b : new P3(-b.x, 0, -b.z), c);
+        }
+
+        /// <summary>
+        /// A strip's half of a clipped corner (<see cref="Cut.Clipped"/>) on its top (<paramref name="up"/>) or underside at
+        /// height y, between <paramref name="wa"/> and <paramref name="wb"/> out: the quad (a triangle from the footprint line)
+        /// between its end and the corner's bisector. Only what lies outside the footprint line: inside it the strips overlap.
+        /// </summary>
+        public void ClipFlat(Frame F, Cut x, double wa, double wb, double y, bool up, Swatch c)
+        {
+            if (!x.Clipped || ShapeOnly) return;
+            wa = Math.Max(wa, 0); if (wb - wa < 1e-6) return;
+            var (u1, w1) = x.Tip(wb); var n = new P3(0, up ? 1 : -1, 0);
+            if (wa < 1e-6) { Tri(F.At(x.s, y, 0), F.At(x.At(wb), y, wb), F.At(u1, y, w1), n, c); return; }
+            var (u0, w0) = x.Tip(wa);
+            Quad(F.At(x.At(wa), y, wa), F.At(x.At(wb), y, wb), F.At(u1, y, w1), F.At(u0, y, w0), n, c);
+        }
+
         /// <summary>A triangulated planar polygon (earcut output): one vertex per corner, shared by its triangles.</summary>
         public void PolyTris(List<P3> pts, List<int> tris, P3 nr, Swatch c)
         {
@@ -386,6 +423,28 @@ namespace Triband.Storey.Generate
             if ((skip & Skip.UStart) == 0) Quad(Pt(s0, y0, w0), Pt(s1, y0, w1), Pt(s1, y1, w1), Pt(s0, y1, w0), Geo.EndNormal(F, s0, s1, w0, w1, -1), c);
             if ((skip & Skip.Top) == 0) Quad(Pt(s0, y1, w0), Pt(e0, y1, w0), Pt(e1, y1, w1), Pt(s1, y1, w1), new P3(0, 1, 0), c);
             if ((skip & Skip.Bot) == 0) Quad(Pt(s0, y0, w0), Pt(e0, y0, w0), Pt(e1, y0, w1), Pt(s1, y0, w1), new P3(0, -1, 0), c);
+        }
+
+        /// <summary>
+        /// The box between its two ends' cuts: as the one taking their numbers, and at an end at a clipped corner
+        /// (<see cref="Cut.Clipped"/>) its half of the clip, on each face it draws (<see cref="ClipFace"/>, <see cref="ClipFlat"/>).
+        /// </summary>
+        public void MBox(Frame F, Cut S, Cut E, double y0, double y1, double w0, double w1, Swatch c, Swatch? cIn = null, Skip skip = Skip.None)
+        {
+            MBox(F, S.s, S.k, E.s, E.k, y0, y1, w0, w1, c, cIn, skip);
+            if (ShapeOnly || y1 - y0 < 1e-4 || w1 - w0 < 1e-4 || E.At(w0) - S.At(w0) < 1e-4 || E.At(w1) - S.At(w1) < 1e-4) return;
+            ClipBox(F, S, y0, y1, w0, w1, c, cIn ?? c, skip);
+            ClipBox(F, E, y0, y1, w0, w1, c, cIn ?? c, skip);
+        }
+
+        /// <summary>One end's half of a clipped corner on each face a box draws.</summary>
+        void ClipBox(Frame F, Cut x, double y0, double y1, double w0, double w1, Swatch c, Swatch ci, Skip skip)
+        {
+            if (!x.Clipped) return;
+            if ((skip & Skip.Out) == 0) ClipFace(F, x, w1, y0, y1, c);
+            if ((skip & Skip.In) == 0) ClipFace(F, x, w0, y0, y1, ci, outward: false);
+            if ((skip & Skip.Top) == 0) ClipFlat(F, x, w0, w1, y1, true, c);
+            if ((skip & Skip.Bot) == 0) ClipFlat(F, x, w0, w1, y0, false, c);
         }
     }
 }

@@ -885,8 +885,13 @@ namespace Triband.Storey.Generate
                 foreach (var hh in holes) foreach (var q in hh) pts.Add(X(q.x, q.z, wv));
                 gb.PolyTris(pts, tris, new P3(F.w.x * sign, 0, F.w.z * sign), c);
             }
-            if (opt.outer) Face(w1, 1, cOut);
-            if (opt.inner) { bool was = gb.Inside; gb.Inside = was || opt.rooms; Face(w0, -1, cIn); gb.Inside = was; }
+            if (opt.outer) { Face(w1, 1, cOut); gb.ClipFace(F, m.S, w1, y0, y0 + h, cOut); gb.ClipFace(F, m.E, w1, y0, y0 + h, cOut); }
+            if (opt.inner)
+            {
+                bool was = gb.Inside; gb.Inside = was || opt.rooms;
+                Face(w0, -1, cIn); gb.ClipFace(F, m.S, w0, y0, y0 + h, cIn, outward: false); gb.ClipFace(F, m.E, w0, y0, y0 + h, cIn, outward: false);
+                gb.Inside = was;
+            }
             Swatch rc = opt.revealC ?? cOut;
             var nu = new P3(F.u.x, 0, F.u.z);
             foreach (var o in os)
@@ -1039,6 +1044,8 @@ namespace Triband.Storey.Generate
                 double sa = sA + kA * wa, sb = sA + kA * wb, ea = eB + kB * wa, eb = eB + kB * wb;
                 if (ea - sa < 1e-4 || eb - sb < 1e-4) continue;
                 gb.Quad(F.At(sa, y, wa), F.At(ea, y, wa), F.At(eb, y, wb), F.At(sb, y, wb), n, c);
+                if (ms) gb.ClipFlat(F, m.S, wa, wb, y, up, c);
+                if (me) gb.ClipFlat(F, m.E, wa, wb, y, up, c);
             }
         }
 
@@ -1067,10 +1074,11 @@ namespace Triband.Storey.Generate
                     else sk |= cut & Skip.UStart | (ms ? Skip.UStart : Skip.None);
                     if (me && squareE) { se = m.E.At(wa); ke = 0; sk |= m.E.At(wb) < m.E.At(wa) ? Skip.UEnd : Skip.None; }
                     else sk |= cut & Skip.UEnd | (me ? Skip.UEnd : Skip.None);
-                    gb.MBox(F, ss, ks, se, ke, y0, y1, wa, wb, c, cIn, sk);
+                    // a mitred end keeps its corner's clip (Cut.Clipped); a square one has none
+                    gb.MBox(F, ms && !squareS ? m.S : new Cut(ss, ks), me && !squareE ? m.E : new Cut(se, ke), y0, y1, wa, wb, c, cIn, sk);
                     continue;
                 }
-                gb.MBox(F, ms ? m.S.s : a, ms ? m.S.k : 0, me ? m.E.s : bb, me ? m.E.k : 0, y0, y1, wa, wb, c, cIn, cut | (ms ? Skip.UStart : Skip.None) | (me ? Skip.UEnd : Skip.None));
+                gb.MBox(F, ms ? m.S : new Cut(a, 0), me ? m.E : new Cut(bb, 0), y0, y1, wa, wb, c, cIn, cut | (ms ? Skip.UStart : Skip.None) | (me ? Skip.UEnd : Skip.None));
             }
         }
     }

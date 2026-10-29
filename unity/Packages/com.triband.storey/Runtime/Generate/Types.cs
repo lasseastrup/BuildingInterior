@@ -42,8 +42,20 @@ namespace Triband.Storey.Generate
     public struct Cut
     {
         public double s, k;
-        public Cut(double s, double k) { this.s = s; this.k = k; }
+        /// <summary>
+        /// At a corner too sharp to mitre in full (<see cref="Geo.CornerAt"/>), the corner's outward bisector in the strip's
+        /// own (u, w); 0, 0 at any other end. A strip ending there closes its half of the corner, from its end across to the
+        /// bisector (<see cref="Tip"/>), where the other wall's strip closes the other half: the corner is clipped, as a
+        /// stroke's mitre is past its limit, rather than left open.
+        /// </summary>
+        public double bu, bw;
+        public Cut(double s, double k) { this.s = s; this.k = k; bu = 0; bw = 0; }
+        public Cut(double s, double k, double bu, double bw) { this.s = s; this.k = k; this.bu = bu; this.bw = bw; }
         public double At(double w) => s + k * w;
+        /// <summary>Whether this end is at a clipped corner (<see cref="bu"/>, <see cref="bw"/>).</summary>
+        public bool Clipped => bw > 0;
+        /// <summary>Where a strip <paramref name="w"/> out meets the corner's bisector, as (u, w): the far end of its half of the clip.</summary>
+        public (double u, double w) Tip(double w) { double d = w * (k * bu + bw); return (s + bu * d, bw * d); }
     }
 
     /// <summary>Both ends of a strip along an edge.</summary>
