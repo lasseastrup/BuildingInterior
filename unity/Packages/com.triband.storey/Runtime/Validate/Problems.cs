@@ -165,7 +165,7 @@ namespace Triband.Storey.Validate
             {
                 if (!Tiers.ShaftFits(b, s)) o.Add(P(b, s.bottom, Severity.Error, "core-fit", $"{Kind(s)} from {Floor(b, s.bottom)} no longer fit every floor they serve", s.x, s.z));
                 if (s.type == CoreType.Lift && Cores.Stops(b, s).Count < 2) o.Add(P(b, s.bottom, Severity.Warning, "lift-one-stop", "This lift has only one stop", s.x, s.z));
-                foreach (var t in b.shafts) if (string.CompareOrdinal(s.id, t.id) < 0 && Cores.Levels(b, s).Intersect(Cores.Levels(b, t)).Any() && Shafts.Overlap(s, t, 0)) o.Add(P(b, s.bottom, Severity.Error, "core-overlap", $"{Kind(s)} and {Kind(t).ToLowerInvariant()} overlap", (s.x + t.x) / 2, (s.z + t.z) / 2));
+                foreach (var t in b.shafts) if (string.CompareOrdinal(s.id, t.id) < 0 && Cores.Levels(b, s).Intersect(Cores.Levels(b, t)).Any() && Shafts.Overlap(s, t, 0, of: b)) o.Add(P(b, s.bottom, Severity.Error, "core-overlap", $"{Kind(s)} and {Kind(t).ToLowerInvariant()} overlap", (s.x + t.x) / 2, (s.z + t.z) / 2));
             }
             foreach (var v in b.voids)
             {

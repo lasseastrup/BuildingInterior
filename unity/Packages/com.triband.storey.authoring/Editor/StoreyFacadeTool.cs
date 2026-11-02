@@ -31,7 +31,7 @@ namespace Triband.Storey.Editor
         protected override void ToolGUI(StoreyEdit e, BuildingData b, SceneView sv)
         {
             string tool = e.View.facadeTool;
-            if (tool.Length == 0) { Hint("Pick Place doors (Doors), or Blank wall, a detail or Bridge (Details), in the Facade tab, then click a wall."); return; }
+            if (tool.Length == 0) { Hint("Pick Place doors (Doors), Place windows (Windows), or Blank wall, a detail or Bridge (Details), in the Facade tab, then click a wall."); return; }
             if (Event.current.type != EventType.Repaint) return;
             var hit = Hit(b); if (hit == null) return;
             var h = hit.Value; var site = new Site(e.Document.buildings);
@@ -53,6 +53,27 @@ namespace Triband.Storey.Editor
                 // which door a click puts in (the Doors card's Door to place), or which it takes out
                 Label(new Vector3((float)(a.x + dx * d.t + b.pos.x), (float)(Derived.FloorBase(b, d.k) + 2.7), (float)(a.z + dz * d.t + b.pos.z)),
                     d.entrance >= 0 ? "Take out " + StoreySiteEditor.PlacedName(b, b.entrances[d.entrance]) : "Put in " + StoreySiteEditor.PlaceName(e.View, b.style));
+            }
+            else if (tool == "window")
+            {
+                var w = Facades.WindowAt(site, b, h);
+                if (w == null) { Label(At(b, h), "No room for a window on this wall"); return; }
+                // the window there, to take out; or where one would go in, its bay's middle, as big as the style makes its windows
+                var f = Details.EdgeFrameAt(b, w.k, w.edge); var st = Derived.StyleAt(b, w.k); double y = Derived.FloorBase(b, w.k);
+                double u0, u1, y0, y1;
+                if (w.window is { } o) { u0 = o.u0; u1 = o.u1; y0 = o.y0; y1 = o.y1; }
+                else
+                {
+                    double fh = Derived.FloorH(b, w.k); var cu = Facade.CorniceUnder(b, w.k);
+                    var ws = w.k == 0 ? Facade.GroundSpec(st, fh, cu) : Facade.WindowSpec(st.windows, fh, st, cornice: cu);
+                    double c = w.bS + (w.j + 0.5) * w.bay, ww = ws == null ? 1.2 : ws.full != null ? w.bay - ws.full.Value : Math.Min(ws.w, w.bay - 0.5);
+                    u0 = c - ww / 2; u1 = c + ww / 2; y0 = ws?.y0 ?? 0.9; y1 = ws?.y1 ?? 2.3;
+                }
+                var p = f.e.F.At((u0 + u1) / 2, y + (y0 + y1) / 2, Dim.T_EXT / 2);
+                Box(new GhostBox { cx = p.x, cy = p.y, cz = p.z, sx = u1 - u0 + 0.06, sy = y1 - y0 + 0.06, sz = Dim.T_EXT * 2.2, u = f.e.u }, w.window != null ? Bad : Accent);
+                // which window a click takes out, or puts in (the Windows card's Window to place)
+                Label(new Vector3((float)p.x, (float)(y + y1 + 0.35), (float)p.z),
+                    w.window != null ? "Take out " + (w.window.kind == null ? "the built-in window" : StoreySiteEditor.WindowName(w.window.kind.id)) : "Put in " + StoreySiteEditor.PlaceWindowName(e.View, st));
             }
             else if (tool == "bridge")
             {
@@ -112,6 +133,13 @@ namespace Triband.Storey.Editor
                 string? door = StoreySiteEditor.DoorToPlace(e.View, b.style);
                 e.ApplyTo("Door", bb => (err = Facades.ToggleEntrance(new Site(e.Document.buildings), bb, h, door)) == null);
                 if (err == null && door != null && StoreyOpenings.All().FirstOrDefault(o => o.Id == door) is { } asset) StoreyOpenings.Keep(e.Site, asset);
+            }
+            else if (tool == "window")
+            {
+                // the window the Windows card says, its asset kept in the site's list so builds include it
+                string? win = StoreySiteEditor.WindowToPlace(e.View, Derived.StyleAt(b, h.k));
+                e.ApplyTo("Window", bb => (err = Facades.ToggleWindow(new Site(e.Document.buildings), bb, h, win)) == null);
+                if (err == null && win != null && StoreyOpenings.All().FirstOrDefault(o => o.Id == win) is { } asset) StoreyOpenings.Keep(e.Site, asset);
             }
             else if (tool == "bridge")
             {

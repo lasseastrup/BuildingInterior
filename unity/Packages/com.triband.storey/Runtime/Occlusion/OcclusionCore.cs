@@ -268,9 +268,25 @@ namespace Triband.Storey.Occlusion
                 v.active = b; v.floor = floor;
                 v.clipY = floor < N ? Derived.FloorBase(b, floor) + Derived.FloorH(b, floor) - Dim.SLAB - 0.01 : 1e9;
                 v.cutOn = Settings.cutaway; v.cutBase = Derived.FloorBase(b, floor); v.cutTop = Derived.FloorBase(b, floor) + (floor < N ? Derived.FloorH(b, floor) : 3.3) + 0.02;
+                // out on a terrace the player is outdoors: the building is shown whole, every storey and the roof, unless what
+                // stands above the terrace is between the camera and the player, when the view is as indoors (its storey's
+                // ceiling clipped and walls cut away) and the player is seen through it. Storey's own: the prototype clips
+                if (OnTerrace(b, floor, p) && !AnyHits(b, cam, Targets(p, cam), floor)) { v.clipY = 1e9; v.cutOn = false; }
             }
             else { v.active = null; v.clipY = 1e9; v.cutOn = false; }
             View = v;
+        }
+
+        /// <summary>
+        /// The player is out on a terrace of b: on the storey a setback starts at (<paramref name="floor"/>, as
+        /// <see cref="PlayWorld.Locate"/> has it), but past the setback's walls, over the roof of the storeys below. In the
+        /// building's plan, so located in it, as the prototype has it, but outdoors (docs/PLAY.md §4).
+        /// </summary>
+        public static bool OnTerrace(BuildingData b, int floor, PlayerState p)
+        {
+            if (!Derived.IsSetback(b, floor)) return false;
+            double lx = p.x - b.pos.x, lz = p.z - b.pos.z;
+            return Geo.Pip(Derived.OutlineAt(b, floor - 1), lx, lz) && !Geo.Pip(Derived.OutlineAt(b, floor), lx, lz);
         }
 
         // ---- the sliding cutaway ----
@@ -382,7 +398,8 @@ namespace Triband.Storey.Occlusion
         /// parapet on the top one. Grazing or running along an edge counts (a ray down the seam between two joined
         /// buildings touches neither interior, but both walls are there).
         /// </summary>
-        public bool SegmentHits(BuildingData b, (double x, double y, double z) p, (double x, double y, double z) q)
+        /// <param name="from">Only the tiers reaching above this storey's floor: from a terrace, what stands above it.</param>
+        public bool SegmentHits(BuildingData b, (double x, double y, double z) p, (double x, double y, double z) q, int from = 0)
         {
             int N = b.floors.Count; var shape = ShapeOf(b); double extra = shape.rise;
             // the whole segment clear of every tier's box: no hit, and no tier's heights worked out
@@ -391,6 +408,7 @@ namespace Triband.Storey.Occlusion
             for (int ti = 0; ti < shape.tiers.Count; ti++)
             {
                 var (k0, k1) = shape.tiers[ti];
+                if (k1 <= from) continue;
                 double y0 = Derived.FloorBase(b, k0), y1 = Derived.FloorBase(b, k1) + (k1 == N ? extra : 0), dy = q.y - p.y, t0 = 0, t1 = 1;
                 if (Math.Abs(dy) < 1e-9) { if (p.y < y0 || p.y > y1) continue; }
                 else
@@ -494,9 +512,9 @@ namespace Triband.Storey.Occlusion
             return targets;
         }
 
-        bool AnyHits(BuildingData b, (double x, double y, double z) c, (double x, double y, double z)[] tg)
+        bool AnyHits(BuildingData b, (double x, double y, double z) c, (double x, double y, double z)[] tg, int from = 0)
         {
-            foreach (var t in tg) if (SegmentHits(b, c, t)) return true;
+            foreach (var t in tg) if (SegmentHits(b, c, t, from)) return true;
             return false;
         }
 

@@ -28,7 +28,7 @@ namespace Triband.Storey.Edit
         };
 
         /// <summary>
-        /// Apply an edge remap to everything anchored to tier k0's edges, doors and details: <paramref name="fn"/>
+        /// Apply an edge remap to everything anchored to tier k0's edges, doors, details and windows by hand: <paramref name="fn"/>
         /// maps (edge, t) to a new place, or null to drop the item.
         /// </summary>
         static void RemapEdgeItems(BuildingData b, int k0, Func<int, double, (int edge, double t)?> fn)
@@ -49,6 +49,14 @@ namespace Triband.Storey.Edit
                 if (r != null) { d.edge = r.Value.edge; d.t = r.Value.t; details.Add(d); }
             }
             b.details = details;
+            var windows = new List<WindowData>();
+            foreach (var w in b.windows)
+            {
+                if (Derived.TierStart(b, w.k) != k0) { windows.Add(w); continue; }
+                var r = fn(w.edge, w.t);
+                if (r != null) { w.edge = r.Value.edge; w.t = r.Value.t; windows.Add(w); }
+            }
+            b.windows = windows;
         }
 
         /// <summary>A corner in the middle of edge i; returns its index. Doors and details stay where they are on the wall.</summary>
@@ -219,7 +227,7 @@ namespace Triband.Storey.Edit
             foreach (var s in b.shafts)
             {
                 if (!Cores.Levels(b, s).Any(k => k >= k0 && (k < k1 || (k == N && k1 == N)))) continue;
-                if (!Cores.CoreFits(fp, s)) return OutlineIssue.Core;
+                if (!Cores.CoreFits(fp, s, b: b)) return OutlineIssue.Core;
             }
             if (!Voids.FitOutline(b, k0, fp)) return OutlineIssue.Void;
             return OutlineIssue.None;

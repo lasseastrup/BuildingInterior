@@ -34,6 +34,8 @@ The walk model's collision is the prototype's model, not physics: walkable surfa
 
 Straight flights (`CoreType.Flight`) are not in the prototype. Their walk surface and slab holes follow their geometry (docs/EDITOR.md §5) and have their own tests.
 
+**Out on a terrace the building is whole.** A player on a setback's terrace is in the building's plan, so `PlayWorld.Locate` puts them in it, on the storey the setback starts at, as the prototype does (the HUD's floor, the lifts and the walk model are unchanged). But they are outdoors, past the setback's walls (`OcclusionCore.OnTerrace`), and the prototype's indoor view clipped the setback above that storey's ceiling, roof and all. Now the building is shown whole, every storey and its roof, with no walls cut away, unless what stands above the terrace is between the camera and the player: then the view is as indoors, its storey's ceiling clipped and the walls between camera and player cut away, so the player is seen through it. That is tested with the same three rays as the buildings in the way, from the terrace's storey up (`SegmentHits`' *from*): the storeys under the deck can't hide the player. The prototype's walks never stand on a terrace, so their frames are unchanged (`EnterExitTests.OnATerraceTheBuildingIsWholeUnlessItIsInTheWay`).
+
 ## 4. Checking slices 5.3 and 5.4 in the editor
 
 **What is written.**
@@ -70,6 +72,7 @@ The play kit depends on the Input System package. With the project's *Active Inp
    - The floors above are clipped.
    - The walls between the camera and the character slide down to a 1 m stub and come back up as you pass.
    - Turning the camera works from any direction.
+   - Walk out onto a terrace (Linden Court's, through its door on storey 6): the whole building shows, setback and roof. Turn the camera to look through the setback at the character: it is clipped and cut away as indoors until the camera is clear again.
 3. **Stairs:**
    - Climb switchback stairs: the storey switches halfway up the second flight.
    - Climb straight flights, then walk back along the walkway.

@@ -109,7 +109,8 @@ namespace Triband.Storey.Generate
 
         /// <summary>
         /// Whether storey k is its tier's top and its style has a cornice (<see cref="FacadeStyle.corniceH"/>): round the
-        /// top of the walls under the roof, or under a terrace's parapet where a setback starts above. Storey's own.
+        /// top of the tier's walls, under the roof, or where a setback starts above, under its terrace's parapet and on round
+        /// where the setback's wall goes on up. Storey's own.
         /// </summary>
         public static bool CorniceAt(BuildingData b, int k) =>
             Derived.StyleAt(b, k).corniceH.HasValue && (k == b.floors.Count - 1 || Derived.IsSetback(b, k + 1));
@@ -354,11 +355,13 @@ namespace Triband.Storey.Generate
                 if (s.type != CoreType.Lift || !Cores.Serves(b, s, k)) continue;
                 foreach (var f in Cores.CoreFlush(Derived.OutlineAt(b, k), s)) if (f != null && f.i == i) (shaftHere ??= new List<Cores.Flush>()).Add(f);
             }
-            if (Derived.EdgeStateAt(b, k, i) == EdgeState.Open)
+            // the style's windows on an open wall; on any wall, those put in or taken out by hand (WindowData)
+            bool laid = Derived.EdgeStateAt(b, k, i) == EdgeState.Open;
+            if (laid || PutInOn(b, k, i))
             {
                 // fixed bays on the wall's outer face, from the outline (not the caller's span), so every caller has them alike
                 var (oS, oE) = st.bayFit == BayFit.Fixed && i < Derived.OutlineAt(b, k).Count ? OuterFace(b, k, i) : (uS, uE);
-                Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, oS, oE, shaftHere, cornice, shell);
+                Windows(ops, pool, st, h, k == 0, b.id, k, Derived.TierStart(b, k), i, uS, uE, oS, oE, shaftHere, cornice, shell, b.windows.Count > 0 ? b.windows : null, L, laid);
                 // none the roof over the terrace below comes up to (Roofs.TerraceRoofAt): it would cover the window's foot
                 double foot = Derived.FloorBase(b, k) - Roofs.TerraceRoofClear;
                 if (Roofs.TerraceRoofReach(site, b, k) > foot)
@@ -387,8 +390,12 @@ namespace Triband.Storey.Generate
         /// <paramref name="uE"/>, <see cref="Span"/>) allows, its dressing too, is moved in to its end, and left out if it then
         /// meets the window before it.
         /// </summary>
+        /// <param name="hand">The building's windows by hand (<see cref="BuildingData.windows"/>), or null: those on this storey's
+        /// edge, in the bay their <see cref="WindowData.t"/> of <paramref name="L"/> falls in, take that bay's window out or put one
+        /// in (a door or a lift against the wall still wins).</param>
+        /// <param name="laid">The style lays its windows on this wall (an open one): otherwise only those put in by hand.</param>
         internal static void Windows(List<Opening> ops, OpeningPool? pool, FacadeStyle st, double h, bool ground, string id, int k, int k0, int edge, double uS, double uE,
-            double oS, double oE, List<Cores.Flush>? shafts, double? cornice = null, bool shell = false)
+            double oS, double oE, List<Cores.Flush>? shafts, double? cornice = null, bool shell = false, List<WindowData>? hand = null, double L = 0, bool laid = true)
         {
             var set = OpeningSets.Windows(st, ground);
             var (wS, wE) = WindowSpan(st, ground, uS, uE);
@@ -402,10 +409,19 @@ namespace Triband.Storey.Generate
             uint wall = set != null ? OpeningSets.WallSeed(id, k, edge) : 0;
             for (int j = 0; j < n; j++)
             {
-                OpeningKind? wk = one;
-                if (set != null && !(st.windowPick == WindowPick.Generator ? OpeningSets.WindowAsGenerator(st, ground, edge, k, j, out wk)
-                    : OpeningSets.Window(st, ground, st.windowPick == WindowPick.Window ? OpeningSets.At(wall, j) : OpeningSets.WindowSeed(id, st.windowPick, k, k0, edge, j), out wk))) continue;
-                var ws = specs != null ? specs.Of(wk, st, h, ground, cornice, k == 0) : oneSpec;
+                // by hand: taken out, or put in (where the style lays none, or another than its own)
+                var hw = HandAt(hand, k, edge, L, bS, bay, n, j);
+                if (hw != null ? hw.none : !laid) continue;
+                OpeningKind? wk = one; bool named = hw?.window != null && OpeningSets.PlacedWindow(hw.window, out wk);
+                if (!named) wk = one;
+                if (!named && set != null && !(st.windowPick == WindowPick.Generator ? OpeningSets.WindowAsGenerator(st, ground, edge, k, j, out wk)
+                    : OpeningSets.Window(st, ground, st.windowPick == WindowPick.Window ? OpeningSets.At(wall, j) : OpeningSets.WindowSeed(id, st.windowPick, k, k0, edge, j), out wk)))
+                {
+                    // the style's list leaves the bay empty: one put in by hand has the window that stands for its list
+                    if (hw == null) continue;
+                    if (!OpeningSets.Representative(st, ground, out wk)) wk = null;
+                }
+                var ws = specs != null ? specs.Of(wk, st, h, ground, cornice, k == 0) : ReferenceEquals(wk, one) ? oneSpec : ground ? GroundSpec(st, h, wk, cornice) : WindowSpec(st.windows, h, st, wk, cornice, k == 0);
                 if (ws == null || ws.y1 - ws.y0 <= 0.4) continue;
                 double c = bS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : fix && wk != null && !wk.stretch ? ws.w : Math.Min(ws.w, bay - 0.5);
                 if (ww < 0.45) continue;
@@ -433,6 +449,32 @@ namespace Triband.Storey.Generate
                 ops.Add(w); last = u1;
             }
             if (specs != null) { specs.Clear(); SpecCache.Lent.Give(specs); }
+        }
+
+        /// <summary>The bay a point <paramref name="u"/> metres along a wall is in, of <paramref name="n"/> from <paramref name="bS"/>, <paramref name="bay"/> wide (the nearest end one beyond them).</summary>
+        public static int BayOf(double u, double bS, double bay, int n) => Math.Max(0, Math.Min(n - 1, (int)Math.Floor((u - bS) / Math.Max(1e-6, bay))));
+
+        /// <summary>The window by hand in bay j of storey k's edge (<paramref name="L"/> long), the last of any there; null for none.</summary>
+        public static WindowData? HandAt(List<WindowData>? hand, int k, int edge, double L, double bS, double bay, int n, int j)
+        {
+            if (hand == null) return null;
+            WindowData? o = null;
+            for (int x = 0; x < hand.Count; x++) { var w = hand[x]; if (w.k == k && w.edge == edge && BayOf(w.t * L, bS, bay, n) == j) o = w; }
+            return o;
+        }
+
+        /// <summary>A window put in or taken out by hand on storey k's edge i, or (<paramref name="i"/> −1) any of its walls.</summary>
+        public static bool HandOn(BuildingData b, int k, int i = -1)
+        {
+            foreach (var w in b.windows) if (w.k == k && (i < 0 || w.edge == i)) return true;
+            return false;
+        }
+
+        /// <summary>A window put in by hand on storey k's edge i (<see cref="WindowData"/>): a wall the style lays none on still has it.</summary>
+        public static bool PutInOn(BuildingData b, int k, int i)
+        {
+            foreach (var w in b.windows) if (!w.none && w.k == k && w.edge == i) return true;
+            return false;
         }
 
         /// <summary>

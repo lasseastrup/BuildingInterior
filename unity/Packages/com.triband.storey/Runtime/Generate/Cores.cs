@@ -17,6 +17,17 @@ namespace Triband.Storey.Generate
         /// <summary>Either kind of stairs.</summary>
         public static bool IsStairs(CoreData s) => s.type != CoreType.Lift;
 
+        /// <summary>
+        /// Straight flights that climb one storey at most (to the floor above, or the roof): the walkway beside the flight,
+        /// the way back to the next flight's foot, would lead nowhere, so they take the flight lane alone
+        /// (<see cref="Dim.FLIGHT_LANE"/> wide, the −u half), the steps where a longer stack's are. Storey's own.
+        /// </summary>
+        public static bool OneFlight(BuildingData b, CoreData s) =>
+            s.type == CoreType.Flight && Derived.ShaftTop(b, s) - s.bottom + (ShaftRoof(b, s) ? 1 : 0) <= 1;
+
+        // a lone flight's rectangle: its centre this far along u from the core's, and its half width
+        const double LaneAt = -(Dim.FLIGHT_W - Dim.FLIGHT_LANE) / 2, LaneHalf = Dim.FLIGHT_LANE / 2;
+
         static double Rad(CoreData it) => it.rot * Math.PI / 180;
 
         /// <summary>The core's frame in world space (origin at its centre, u along its width).</summary>
@@ -29,16 +40,25 @@ namespace Triband.Storey.Generate
         /// <summary>The core's oriented rectangle in building-local coordinates, grown by a margin.</summary>
         public struct Rect { public Vec2 c, u, w; public double hx, hz; }
 
-        public static Rect RectOf(CoreData it, double m = 0, double? x = null, double? z = null, double? rot = null)
+        /// <summary>
+        /// The rectangle the core takes, grown by a margin: centred on it, the size of its kind, but for a lone flight's
+        /// (<see cref="OneFlight"/>, which takes <paramref name="b"/> to know) the flight lane alone. Without the building, the
+        /// kind's whole size.
+        /// </summary>
+        public static Rect RectOf(CoreData it, double m = 0, double? x = null, double? z = null, double? rot = null, BuildingData? b = null)
         {
             var s = Size(it); double a = (rot ?? it.rot) * Math.PI / 180;
-            return new Rect { c = new Vec2(x ?? it.x, z ?? it.z), u = new Vec2(Math.Cos(a), Math.Sin(a)), w = new Vec2(-Math.Sin(a), Math.Cos(a)), hx = s.W / 2 + m, hz = s.D / 2 + m };
+            var r = new Rect { c = new Vec2(x ?? it.x, z ?? it.z), u = new Vec2(Math.Cos(a), Math.Sin(a)), w = new Vec2(-Math.Sin(a), Math.Cos(a)), hx = s.W / 2 + m, hz = s.D / 2 + m };
+            if (b != null && OneFlight(b, it)) { r.c = new Vec2(r.c.x + r.u.x * LaneAt, r.c.z + r.u.z * LaneAt); r.hx = LaneHalf + m; }
+            return r;
         }
 
-        public static bool Contains(CoreData it, double lx, double lz, double m = 0)
+        /// <summary>A building-local point is on the core's rectangle (<see cref="RectOf"/>), grown by a margin.</summary>
+        public static bool Contains(CoreData it, double lx, double lz, double m = 0, BuildingData? b = null)
         {
             double a = Rad(it), dx = lx - it.x, dz = lz - it.z, qx = dx * Math.Cos(a) + dz * Math.Sin(a), qz = -dx * Math.Sin(a) + dz * Math.Cos(a);
             var s = Size(it);
+            if (b != null && OneFlight(b, it)) return Math.Abs(qx - LaneAt) <= LaneHalf + m && Math.Abs(qz) <= s.D / 2 + m;
             return Math.Abs(qx) <= s.W / 2 + m && Math.Abs(qz) <= s.D / 2 + m;
         }
 
@@ -88,9 +108,9 @@ namespace Triband.Storey.Generate
         /// Which of the core's sides ([−x, +x, front (never), back (never for a flight)]) sit on an outline edge with
         /// their inner face on the line, so the building's wall serves as the core's.
         /// </summary>
-        public static Flush?[] CoreFlush(List<Vec2> fp, CoreData it, double? x = null, double? z = null, double? rot = null)
+        public static Flush?[] CoreFlush(List<Vec2> fp, CoreData it, double? x = null, double? z = null, double? rot = null, BuildingData? b = null)
         {
-            var R = RectOf(it, 0, x, z, rot);
+            var R = RectOf(it, 0, x, z, rot, b);
             double hx = R.hx, hz = R.hz, ex = hx + Dim.CORE_T, ez = hz + Dim.CORE_T;
             Vec2 P2(double a, double c) => new Vec2(R.c.x + R.u.x * a + R.w.x * c, R.c.z + R.u.z * a + R.w.z * c);
             Flush? OnEdge(Vec2 p, Vec2 q)
@@ -113,9 +133,9 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>A core fits an outline when its (grown) corners and edge midpoints are inside and no outline corner pokes into it.</summary>
-        public static bool CoreFits(List<Vec2> fp, CoreData it, double m = 0.16, double? x = null, double? z = null, double? rot = null)
+        public static bool CoreFits(List<Vec2> fp, CoreData it, double m = 0.16, double? x = null, double? z = null, double? rot = null, BuildingData? b = null)
         {
-            var fl = CoreFlush(fp, it, x, z, rot); var R = RectOf(it, 0, x, z, rot);
+            var fl = CoreFlush(fp, it, x, z, rot, b); var R = RectOf(it, 0, x, z, rot, b);
             double Mu(int a) => (a < 0 ? fl[0] : fl[1]) != null ? -0.01 : m - 0.02;
             double Mw(int c) => (c < 0 ? fl[2] : fl[3]) != null ? -0.01 : m - 0.02;
             foreach (var (a, c) in new[] { (-1, -1), (1, -1), (1, 1), (-1, 1), (0, -1), (1, 0), (0, 1), (-1, 0) })

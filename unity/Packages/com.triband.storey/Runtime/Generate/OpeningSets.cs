@@ -121,6 +121,20 @@ namespace Triband.Storey.Generate
             return true;
         }
 
+        /// <summary>
+        /// A window put in by hand names (<see cref="WindowData.window"/>): the built-in one (<see cref="WindowData.Plain"/>, a
+        /// null kind) or a Storey Opening window. False for a window the project doesn't have: the bay then has the style's
+        /// pick. Storey's own.
+        /// </summary>
+        public static bool PlacedWindow(string window, out OpeningKind? kind)
+        {
+            kind = null;
+            if (window == WindowData.Plain) return true;
+            kind = OpeningKinds.Get(window);
+            if (kind == null || kind.door) { kind = null; return false; }
+            return true;
+        }
+
         /// <summary>The street door a hash picks for a style (null: the plain one).</summary>
         public static OpeningKind? Door(FacadeStyle? st, uint hash) => Door(st, hash, out _);
 

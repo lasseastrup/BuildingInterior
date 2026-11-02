@@ -60,6 +60,12 @@ namespace Triband.Storey.Editor
         /// <summary>The doors card's On the walls: the site's Place doors tool. Nothing without walls to place them on.</summary>
         public virtual void DoorsOnWalls(FacadeStyle st) { }
 
+        /// <summary>After the windows card's summary, how many windows are put in or taken out by hand (" · 3 by hand"); nothing without a building.</summary>
+        public virtual string WindowsByHand => "";
+
+        /// <summary>The windows card's On the walls: the site's Place windows tool. Nothing without walls to place them on.</summary>
+        public virtual void WindowsOnWalls(FacadeStyle st) { }
+
         /// <summary>How many details the building has placed by hand, for the details card's summary.</summary>
         public virtual int DetailsByHand => 0;
 
@@ -91,13 +97,14 @@ namespace Triband.Storey.Editor
         {
             OpeningSets.Uses(st, out bool generated, out _, out bool anyOwnSize);
             bool ownSize = !generated && anyOwnSize;
-            string summary = st.windows == WindowType.None ? "None"
-                : $"{(ownSize ? "Own size" : OpeningName(st.windows))} · bays of {st.bay:0.##} m";
+            string summary = (st.windows == WindowType.None ? "None"
+                : $"{(ownSize ? "Own size" : OpeningName(st.windows))} · bays of {st.bay:0.##} m") + t.WindowsByHand;
             using var c = StoreyInspectorUI.Card(t.Cards + "windows", "Windows", StoreyInspectorUI.WindowFrontIcon, StoreyInspectorUI.Tint.Windows, summary,
                 tip: "What fills the walls' openings, how they're spaced, and how they sit in the wall");
             if (!c.Open) return;
             SetRows(t, st, SetOf.Windows, "Window");
             Variety(t, st);
+            t.WindowsOnWalls(st);
 
             StoreyInspectorUI.SubHeader("Size and spacing");
             Openings(t, st, ownSize, anyOwnSize);

@@ -110,7 +110,7 @@ namespace Triband.Storey.Edit
         }
 
         /// <summary>A thing on a cut's own edges, kept while the cut is out: which cut, which of its edges, how far along.</summary>
-        sealed class Kept { public Vec2 at; public int j; public double t; public EntranceData? e; public DetailData? d; public EdgeState state; }
+        sealed class Kept { public Vec2 at; public int j; public double t; public EntranceData? e; public DetailData? d; public WindowData? w; public EdgeState state; }
 
         /// <summary>
         /// Take every cut of tier k0 out: the outline becomes the sharp one. Doors, details and blank walls on the edges
@@ -151,6 +151,14 @@ namespace Triband.Storey.Edit
                 if (r != null) { d.edge = r.Value.Item1; d.t = r.Value.Item2; dets.Add(d); }
             }
             b.details = dets;
+            var wins = new List<WindowData>();
+            foreach (var w in b.windows)
+            {
+                if (Derived.TierStart(b, w.k) != k0) { wins.Add(w); continue; }
+                var r = Remap(w.edge, w.t, () => new Kept { w = w });
+                if (r != null) { w.edge = r.Value.Item1; w.t = r.Value.Item2; wins.Add(w); }
+            }
+            b.windows = wins;
             foreach (int j in Tiers.Blank(b, k0))
                 if (runOf.TryGetValue(j, out var r)) kept.Add(new Kept { at = r.c.at, j = r.j, state = Tiers.State(b, k0, j) });
             Tiers.MapEdges(b, k0, l =>
@@ -198,6 +206,7 @@ namespace Triband.Storey.Edit
                     int edge = (start + kk.j) % fp.Count;
                     if (kk.e != null) { kk.e.edge = edge; kk.e.t = kk.t; b.entrances.Add(kk.e); hasDoor |= kk.e.k == 0; }
                     else if (kk.d != null) { kk.d.edge = edge; kk.d.t = kk.t; b.details.Add(kk.d); }
+                    else if (kk.w != null) { kk.w.edge = edge; kk.w.t = kk.t; b.windows.Add(kk.w); }
                     else if (kk.state != EdgeState.Open) Tiers.SetState(b, k0, edge, kk.state);
                 }
                 if (c.door && !hasDoor && edges == 1) b.entrances.Add(new EntranceData { edge = start, t = 0.5, k = 0 });

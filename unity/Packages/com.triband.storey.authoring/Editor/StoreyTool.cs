@@ -58,7 +58,7 @@ namespace Triband.Storey.Editor
             var site = Site; if (site == null) return;
             var e = StoreyEdit.Of(site);
             if (e == null) { site.View = null; Hint("Edit layout in the Storey Site inspector to use this tool."); return; }
-            if (e.View.tab != Tab) { e.View.tab = Tab; Inspectors(); }
+            if (e.View.tab != Tab) { e.View.ChangeTab(Tab); Inspectors(); }
             var b = e.Selected;
             if (b != null) ClampView(e, b);
             // the layout lives in the site's local space: the meshes are the site's children, so the handles and rays are too
@@ -91,9 +91,16 @@ namespace Triband.Storey.Editor
             a.HasValue == b.HasValue && (!a.HasValue || (a.Value.activeId == b!.Value.activeId && a.Value.clipY == b.Value.clipY && a.Value.cut == b.Value.cut
                 && a.Value.walls == b.Value.walls && a.Value.cutBase == b.Value.cutBase && a.Value.cutTop == b.Value.cutTop && a.Value.isolateId == b.Value.isolateId && a.Value.isolateAmount == b.Value.isolateAmount));
 
+        /// <summary>
+        /// Put away (another tab's tool, another context, another object selected): the site is drawn plainly again, and the
+        /// tab's tools are put down (<see cref="StoreyEditView.PutDown"/>), so none is still picked when the tab is back.
+        /// </summary>
         public override void OnWillBeDeactivated()
         {
-            if (Site != null) Site.View = null;
+            var site = Site;
+            if (site == null) return;
+            site.View = null;
+            if (StoreyEdit.Of(site) is StoreyEdit e) { e.View.PutDown(Tab); Inspectors(); }
         }
 
         void DefaultClick(StoreyEdit e, BuildingData? b, SceneView sv)
@@ -351,7 +358,7 @@ namespace Triband.Storey.Editor
         /// <summary>A core's rectangle on a storey floor, as a closed polyline.</summary>
         protected static Vector3[] CoreOutline(BuildingData b, CoreData it, double y)
         {
-            var R = Generate.Cores.RectOf(it);
+            var R = Generate.Cores.RectOf(it, b: b);
             var pts = new Vector3[5]; int j = 0;
             foreach (var (a, w) in new[] { (-1, -1), (1, -1), (1, 1), (-1, 1), (-1, -1) })
                 pts[j++] = W(b, new Vec2(R.c.x + R.u.x * a * R.hx + R.w.x * w * R.hz, R.c.z + R.u.z * a * R.hx + R.w.z * w * R.hz), y);
@@ -361,18 +368,19 @@ namespace Triband.Storey.Editor
         /// <summary>A core's rectangle on a storey floor.</summary>
         protected static void CoreRect(BuildingData b, CoreData it, double y, Color c)
         {
-            var R = Generate.Cores.RectOf(it);
+            var R = Generate.Cores.RectOf(it, b: b);
             var pts = CoreOutline(b, it, y);
             Handles.color = c;
             Handles.DrawAAPolyLine(3f, pts);
             if (it.type == CoreType.Flight)
             {
-                // which way is up: an arrow up the flight lane (the −u half), and the walkway back beside it dotted
+                // which way is up: an arrow up the flight lane (the −u half), and the walkway back beside it dotted (a lone
+                // flight, Cores.OneFlight, is its lane alone)
                 Vector3 P(double a, double w) => W(b, new Vec2(R.c.x + R.u.x * a + R.w.x * w, R.c.z + R.u.z * a + R.w.z * w), y);
                 double l = R.hz * 0.7, lane = Generate.Dim.FLIGHT_LANE, ax = -R.hx + lane / 2, hh = lane * 0.35, xm = -R.hx + lane;
                 Handles.DrawAAPolyLine(3f, P(ax, -l), P(ax, l));
                 Handles.DrawAAPolyLine(3f, P(ax - hh, l - hh), P(ax, l), P(ax + hh, l - hh));
-                Handles.DrawDottedLine(P(xm, -R.hz), P(xm, R.hz), 3f);
+                if (!Generate.Cores.OneFlight(b, it)) Handles.DrawDottedLine(P(xm, -R.hz), P(xm, R.hz), 3f);
             }
         }
 

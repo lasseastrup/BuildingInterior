@@ -126,6 +126,69 @@ namespace Triband.Storey.Edit
         }
 
         /// <summary>
+        /// A bay of a storey's wall, as the Windows card's Place windows sees it at a facade point: the storey, the edge, the
+        /// bay (of <see cref="n"/>, <see cref="bay"/> wide from <see cref="bS"/> metres along the edge, <see cref="L"/> long) and
+        /// the window it has now, or null. Storey's own.
+        /// </summary>
+        public sealed class WindowSpot
+        {
+            public int k, edge, j, n;
+            public double L, bS, bay;
+            public Opening? window;
+            /// <summary>The bay's middle along the edge, 0..1: where a window by hand is kept.</summary>
+            public double t => (bS + (j + 0.5) * bay) / L;
+            /// <summary>A window by hand is in this bay.</summary>
+            public bool Holds(WindowData w) => w.k == k && w.edge == edge && Facade.BayOf(w.t * L, bS, bay, n) == j;
+        }
+
+        /// <summary>
+        /// The bay of storey k's wall under a facade point, as the style lays its bays out there (<see cref="Facade.Bays"/>, the
+        /// bays <see cref="Facade.Windows"/> fills), and the window in it now. Null where the wall has room for no bay.
+        /// </summary>
+        public static WindowSpot? WindowAt(Site site, BuildingData b, FacadeHit h)
+        {
+            int i = h.i, k = Math.Max(h.k0, Math.Min(h.k, Tiers.End(b, h.k0) - 1));   // on the hit wall's tier, whose edge i is
+            if (k < 0 || k >= b.floors.Count || i >= Derived.OutlineAt(b, k).Count) return null;
+            var f = Details.EdgeFrameAt(b, k, i); var st = Derived.StyleAt(b, k); double L = f.e.L;
+            var (oS, oE) = st.bayFit == BayFit.Fixed ? Facade.OuterFace(b, k, i) : (f.uS, f.uE);
+            var (wS, wE) = Facade.WindowSpan(st, k == 0, f.uS, f.uE);
+            var (n, bay, bS) = Facade.Bays(st, wS, wE, oS, oE);
+            if (n == 0 || L <= 0) return null;
+            var w = new WindowSpot { k = k, edge = i, n = n, L = L, bS = bS, bay = bay, j = Facade.BayOf(h.t * L, bS, bay, n) };
+            double a = bS + w.j * bay, c = a + bay;
+            foreach (var o in Facade.Ops(site, b, k, i, L, f.uS, f.uE)) if (!o.door && o.u1 > a + 1e-6 && o.u0 < c - 1e-6) w.window = o;
+            return w;
+        }
+
+        /// <summary>
+        /// The Windows card's Place windows click (docs/EDITOR.md §6.7): on a bay with a window, take it out; on one without,
+        /// put one in, <paramref name="window"/> (<see cref="WindowData.window"/>; null, the style's pick for the bay, or its
+        /// first where it picks none). The bay keeps one window by hand at most, and none where it is as the style has it. The
+        /// error says why nothing happened.
+        /// </summary>
+        public static string? ToggleWindow(Site site, BuildingData b, FacadeHit h, string? window = null)
+        {
+            var w = WindowAt(site, b, h);
+            if (w == null) return "That wall has no room for a window";
+            bool had = w.window != null;
+            b.windows.RemoveAll(w.Holds);
+            var style = WindowAt(site, b, h)!;   // the bay as the style has it
+            if (had)
+            {
+                if (style.window != null) b.windows.Add(new WindowData { k = w.k, edge = w.edge, t = w.t, none = true });
+                return null;
+            }
+            if (style.window != null && window == null) return null;   // the style's own back
+            b.windows.Add(new WindowData { k = w.k, edge = w.edge, t = w.t, window = window });
+            if (WindowAt(site, b, h)!.window == null)
+            {
+                b.windows.RemoveAt(b.windows.Count - 1);
+                return "No room for a window in that bay: a door, or a lift against the wall, is there, or the storey is too low";
+            }
+            return null;
+        }
+
+        /// <summary>
         /// The Doors card's Place doors click: add an entrance with <paramref name="door"/> (<see cref="EntranceData.door"/>;
         /// null, the style's pick), or remove the one there. The error says why nothing happened.
         /// </summary>

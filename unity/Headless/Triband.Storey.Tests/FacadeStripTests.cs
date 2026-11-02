@@ -178,19 +178,76 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
-        public void ACorniceRunsAlongATerraceAndTheBandWhereTheWallGoesOnUp()
+        public void ACorniceRunsRoundTheTierUnderASetbackWhereItsWallGoesOnUpToo()
         {
             var st = Strips(); st.bandGround = false;
             var (_, b, site) = Block(st, setback: true);
             int N = b.floors.Count; double y = Derived.FloorBase(b, N - 1);
             var op = Lod0.Build(site, b).Op;
-            // on the storey under the setback, the cornice tops the eastern half (the terrace's edge)...
+            // on the storey under the setback, the cornice tops the eastern half (the terrace's edge) and the western half,
+            // whose wall goes on up into the setback: it circles the building at the terrace's level, as LOD2 paints it
             var cn = Enumerable.Range(0, op.Verts).Where(v => op.C[v].slot == ColorSlot.Cornice && Math.Abs(op.P[v].y - y) < 1e-6).Select(v => op.P[v]).ToList();
             Assert.Contains(cn, p => Math.Abs(p.x - 14.5) < 1e-6);
-            // ...and the band the western half, whose wall goes on up into the setback
-            var band = Enumerable.Range(0, op.Verts).Where(v => op.C[v].slot == ColorSlot.Band && Math.Abs(op.P[v].y - y) < 1e-6).Select(v => op.P[v]).ToList();
-            Assert.Contains(band, p => Math.Abs(p.x - (-0.4)) < 1e-6);
-            Assert.DoesNotContain(band, p => p.x > 7.5);
+            Assert.Contains(cn, p => Math.Abs(p.x - (-0.5)) < 1e-6);
+            // and takes the band's place there, as on the top storey
+            Assert.DoesNotContain(Enumerable.Range(0, op.Verts), v => op.C[v].slot == ColorSlot.Band && Math.Abs(op.P[v].y - y) < 1e-6);
+            Assert.True(Lod2.Build(site, b).Rows.Count(r => r.corniceH > 0) >= 2);   // LOD2: the tier's top, and the setback's
+        }
+
+        /// <summary>
+        /// A two-storey building with a setback over half of it: the ground storey's cornice goes all round the building, on
+        /// the terrace's three sides and on along the walls the setback stands on, in LOD0 and LOD1.
+        /// </summary>
+        [Fact]
+        public void TheCorniceUnderASetbackGoesAllRoundATwoStoreyBuilding()
+        {
+            var st = Strips();
+            var (_, b, site) = Block(st, setback: true, storeys: 2);
+            double y = Derived.FloorBase(b, 1);
+            foreach (var op in new[] { Lod0.Build(site, b).Op, Lod1.Build(site, b) })
+            {
+                var cn = Enumerable.Range(0, op.Verts).Where(v => op.C[v].slot == ColorSlot.Cornice && Math.Abs(op.P[v].y - y) < 1e-6).Select(v => op.P[v]).ToList();
+                // each of the four faces, the cornice's outer face 20 cm out from the wall's, over its whole length
+                Assert.Contains(cn, p => Math.Abs(p.z - (-0.5)) < 1e-6 && p.x < 0); Assert.Contains(cn, p => Math.Abs(p.z - (-0.5)) < 1e-6 && p.x > 14);
+                Assert.Contains(cn, p => Math.Abs(p.z - 10.5) < 1e-6 && p.x < 0); Assert.Contains(cn, p => Math.Abs(p.z - 10.5) < 1e-6 && p.x > 14);
+                Assert.Contains(cn, p => Math.Abs(p.x - (-0.5)) < 1e-6); Assert.Contains(cn, p => Math.Abs(p.x - 14.5) < 1e-6);
+            }
+            var r0 = CoplanarCheck.Run(Lod0.Build(site, b, solids: true).Op);
+            Assert.True(r0.Overlaps.Count == 0, string.Join("\n", r0.Overlaps.Take(10)));
+        }
+
+        /// <summary>
+        /// A fire escape on a wall the setback's goes on up from climbs on into the setback (<see cref="Details.EscapeRun"/>):
+        /// the cornice under the setback stops either side of it, as for a bridge's deck, and runs on past it.
+        /// </summary>
+        [Fact]
+        public void AFireEscapeClimbingIntoTheSetbackBreaksTheCornice()
+        {
+            var st = Strips();
+            var (_, b, site) = Block(st, setback: true);
+            b.details.Add(new DetailData { kind = DetailKinds.Escape, k = 1, edge = 0, t = 0.25 });   // x = 3.5 on the south wall, under the setback
+            int N = b.floors.Count; double y = Derived.FloorBase(b, N - 1);
+            Assert.Contains(Details.EscapeRun(b, 1, 0, 3.5, 1.4), s => s.k == N - 1);
+            var op = Lod0.Build(site, b).Op;
+            var south = Enumerable.Range(0, op.Verts).Where(v => op.C[v].slot == ColorSlot.Cornice && Math.Abs(op.P[v].y - y) < 1e-6 && op.P[v].z < -0.05).Select(v => op.P[v]).ToList();
+            Assert.DoesNotContain(south, p => p.x > 2.2 && p.x < 4.8);   // the escape's 2.6 m and 10 cm each side
+            Assert.Contains(south, p => Math.Abs(p.x - 2.1) < 1e-6); Assert.Contains(south, p => Math.Abs(p.x - 4.9) < 1e-6);
+            var r0 = CoplanarCheck.Run(Lod0.Build(site, b, solids: true).Op);
+            Assert.True(r0.Overlaps.Count == 0, string.Join("\n", r0.Overlaps.Take(10)));
+        }
+
+        /// <summary>A setback stepping out over the wall below stands on it: the cornice under it is left out there, and only there.</summary>
+        [Fact]
+        public void NoCorniceRunsUnderASetbackSteppingOut()
+        {
+            var st = Strips();
+            var (_, b, site) = Block(st, storeys: 3);
+            b.floors[2].shape = new List<Vec2> { new Vec2(0, 0), new Vec2(14, 0), new Vec2(14, 12), new Vec2(0, 12) };   // 2 m out over the north wall
+            double y = Derived.FloorBase(b, 2);
+            var op = Lod0.Build(site, b).Op;
+            var cn = Enumerable.Range(0, op.Verts).Where(v => op.C[v].slot == ColorSlot.Cornice && Math.Abs(op.P[v].y - y) < 1e-6).Select(v => op.P[v]).ToList();
+            Assert.Contains(cn, p => Math.Abs(p.z - (-0.5)) < 1e-6);   // the south wall's, which nothing stands over
+            Assert.DoesNotContain(cn, p => Math.Abs(p.z - 10.5) < 1e-6 && p.x > 0.5 && p.x < 13.5);   // none along the north wall, under the step
         }
 
         [Fact]

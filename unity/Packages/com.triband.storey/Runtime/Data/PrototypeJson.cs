@@ -127,6 +127,13 @@ namespace Triband.Storey
                 c.Check(dob, dp, Keys.Detail);
             }
             i = 0;
+            foreach (var ww in c.Array(o, "windows", w))
+            {
+                var wp = w.In("windows", i++); var wo = c.Obj(ww, wp);
+                b.windows.Add(new WindowData { k = c.Int(wo, "k", 0, wp), edge = c.Int(wo, "edge", 0, wp), t = c.Num(wo, "t", 0.5, wp), none = c.Bool(wo, "none", false, wp), window = c.OptStr(wo, "window", wp) });
+                c.Check(wo, wp, Keys.Window);
+            }
+            i = 0;
             foreach (var vv in c.Array(o, "voids", w))
             {
                 var vp = w.In("voids", i++); var vo = c.Obj(vv, vp);
@@ -442,6 +449,18 @@ namespace Triband.Storey
                 }
                 o["details"] = ds;
             }
+            if (b.windows.Count > 0)
+            {
+                var ws = new List<object?>();
+                foreach (var wd in b.windows)
+                {
+                    var wobj = new Dictionary<string, object?> { ["k"] = wd.k, ["edge"] = wd.edge, ["t"] = wd.t };
+                    if (wd.none) wobj["none"] = true;
+                    if (wd.window != null) wobj["window"] = wd.window;
+                    ws.Add(wobj);
+                }
+                o["windows"] = ws;
+            }
             o["blank"] = Ints(b.blank);   // the prototype always writes it, empty or not
             if (b.quiet is { Count: > 0 }) o["quiet"] = Ints(b.quiet);
             if (b.bare is { Count: > 0 }) o["bare"] = Ints(b.bare);
@@ -655,9 +674,10 @@ namespace Triband.Storey
         {
             public static readonly string[] Root = { "v", "seq", "spawn", "buildings", "palette" };
             public static readonly string[] PaletteEntry = { "name", "hex" };
-            public static readonly string[] Building = { "id", "name", "pos", "elevation", "footprint", "floors", "shafts", "entrances", "details", "blank", "quiet", "bare", "groundHeight", "floorHeight", "interior", "style", "gen", "colliders", "voids", "bridges", "corners" };
+            public static readonly string[] Building = { "id", "name", "pos", "elevation", "footprint", "floors", "shafts", "entrances", "details", "windows", "blank", "quiet", "bare", "groundHeight", "floorHeight", "interior", "style", "gen", "colliders", "voids", "bridges", "corners" };
             public static readonly string[] Entrance = { "edge", "t", "k", "door" };
             public static readonly string[] Detail = { "kind", "k", "edge", "t", "y" };
+            public static readonly string[] Window = { "k", "edge", "t", "none", "window" };
             public static readonly string[] Void = { "id", "kind", "shape", "bottom" };
             public static readonly string[] Bridge = { "id", "to", "k", "at", "toK", "width", "open" };
             public static readonly string[] Corner = { "at", "shape", "size", "door", "pts" };

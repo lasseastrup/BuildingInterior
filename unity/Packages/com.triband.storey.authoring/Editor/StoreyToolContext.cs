@@ -102,7 +102,7 @@ namespace Triband.Storey.Editor
             if (Selection.activeGameObject != site.gameObject) Selection.activeGameObject = site.gameObject;
             var e = StoreyEdit.Begin(site);
             if (id != null && e.Document.buildings.Exists(x => x.id == id)) e.View.Select(id);
-            if (TabOf(ToolManager.activeToolType) is StoreyTab inUse) e.View.tab = inUse;
+            if (TabOf(ToolManager.activeToolType) is StoreyTab inUse) e.View.ChangeTab(inUse);
             SceneView.RepaintAll();
             // Unity makes the site's tools once it has the selection: show the tab's then (Show waits longer if it must)
             var tab = e.View.tab;
@@ -141,6 +141,8 @@ namespace Triband.Storey.Editor
         {
             var ray = click; click = null;
             var go = Selection.activeGameObject;
+            // a site's tools are put down once anything else is selected: back on it, nothing is still being placed
+            StoreyEdit.PutDownToolsBut(go != null ? go.GetComponent<StoreySite>() : null);
             var site = go != null ? MadeBy(go) : null;
             bool clicked = ray != null && GUIUtility.hotControl == 0 && EditorWindow.focusedWindow is SceneView;
             picked = site != null ? (go, site.Renderer!.BuildingOf(go!) ?? (clicked ? BuildingAt(site, ray!.Value) : null)) : (null, null);

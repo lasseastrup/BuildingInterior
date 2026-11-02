@@ -53,9 +53,9 @@ namespace Triband.Storey.Edit
             return Area(Clipper.Intersect(grown, new PathsD { Path(c) }, FillRule.NonZero, 6)) > 1e-4;
         }
 
-        static List<Vec2> CoreRect(CoreData s)
+        static List<Vec2> CoreRect(BuildingData b, CoreData s)
         {
-            var r = Cores.RectOf(s);
+            var r = Cores.RectOf(s, b: b);
             return new List<Vec2>
             {
                 new Vec2(r.c.x - r.u.x * r.hx - r.w.x * r.hz, r.c.z - r.u.z * r.hx - r.w.z * r.hz), new Vec2(r.c.x + r.u.x * r.hx - r.w.x * r.hz, r.c.z + r.u.z * r.hx - r.w.z * r.hz),
@@ -71,7 +71,7 @@ namespace Triband.Storey.Edit
 
         /// <summary>A core in the way of a void taking room on these storeys.</summary>
         public static bool CoreInWay(BuildingData b, CoreData s, List<Vec2> shape, IEnumerable<int> storeys) =>
-            Cores.Levels(b, s).Intersect(storeys).Any() && Meets(shape, CoreRect(s), CoreGap);
+            Cores.Levels(b, s).Intersect(storeys).Any() && Meets(shape, CoreRect(b, s), CoreGap);
 
         /// <summary>
         /// Can building b take this void? A simple polygon of at least 2.5 × 2.5 m, 1.5 m inside the outline of every storey
@@ -109,8 +109,8 @@ namespace Triband.Storey.Edit
         public static bool CoreClear(BuildingData b, CoreData s, int k0, int k1, double? x = null, double? z = null, double? rot = null)
         {
             if (b.voids.Count == 0) return true;
-            var it = new CoreData { type = s.type, x = x ?? s.x, z = z ?? s.z, rot = rot ?? s.rot };
-            var rect = CoreRect(it); var levels = Enumerable.Range(k0, Math.Max(0, k1 - k0 + 1)).ToList();
+            var it = new CoreData { type = s.type, x = x ?? s.x, z = z ?? s.z, rot = rot ?? s.rot, bottom = s.bottom, top = s.top, roof = s.roof };
+            var rect = CoreRect(b, it); var levels = Enumerable.Range(k0, Math.Max(0, k1 - k0 + 1)).ToList();
             foreach (var v in b.voids)
                 if (Courtyards.Live(b, v) && levels.Intersect(Storeys(b, v.kind, v.bottom)).Any() && Meets(v.shape, rect, CoreGap)) return false;
             return true;

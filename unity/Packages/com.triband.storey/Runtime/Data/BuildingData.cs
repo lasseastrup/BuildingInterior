@@ -61,6 +61,8 @@ namespace Triband.Storey
         public List<EntranceData> entrances = new List<EntranceData>();
         /// <summary>Hand-placed facade details; style rules add more at generation time (SPEC §4.4).</summary>
         public List<DetailData> details = new List<DetailData>();
+        /// <summary>Windows put in or taken out by hand, bay by bay (<see cref="WindowData"/>). Storey's own.</summary>
+        public List<WindowData> windows = new List<WindowData>();
         /// <summary>Blank (windowless) edges of the base outline.</summary>
         public List<int> blank = new List<int>();
         /// <summary>
@@ -227,6 +229,31 @@ namespace Triband.Storey
 
         /// <summary>The built-in door, as <see cref="door"/> names it.</summary>
         public const string Plain = "plain";
+    }
+
+    /// <summary>
+    /// A window put in or taken out by hand (docs/EDITOR.md §6.7, the Windows card's Place windows), in the bay of storey
+    /// <see cref="k"/>'s wall <see cref="edge"/> that <see cref="t"/> falls in, as the style lays its bays out there. Taken out
+    /// (<see cref="none"/>), the bay is wall whatever the style puts there; put in, it has a window where the style has none (a
+    /// blank wall, a bay its list leaves empty), or another than the style's. A door or a lift against the wall still wins.
+    /// Kept as a facade detail placed by hand is: on its storey, with the outline's edges. Storey's own.
+    /// </summary>
+    public sealed class WindowData
+    {
+        /// <summary>The storey, and the edge of its outline.</summary>
+        public int k, edge;
+        /// <summary>Along the edge, 0..1: the middle of its bay when it was placed.</summary>
+        public double t;
+        /// <summary>Taken out: the bay has no window.</summary>
+        public bool none;
+        /// <summary>
+        /// Put in, its window: null, the one the style picks for the bay (or its first, where it picks none); <see cref="Plain"/>,
+        /// the built-in window; otherwise a Storey Opening window's id. One the project no longer has is the style's pick.
+        /// </summary>
+        public string? window;
+
+        /// <summary>The built-in window, as <see cref="window"/> names it.</summary>
+        public const string Plain = EntranceData.Plain;
     }
 
     public sealed class DetailData

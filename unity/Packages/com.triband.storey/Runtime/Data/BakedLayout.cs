@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 10;
+        public const int Version = 11;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -227,6 +227,8 @@ namespace Triband.Storey
             for (n = r.Count(); n > 0; n--)
                 b.details.Add(new DetailData { kind = Str(ref r)!, k = r.Int(), edge = r.Int(), t = r.F64(), y = r.Opt() });
             for (n = r.Count(); n > 0; n--)
+                b.windows.Add(new WindowData { k = r.Int(), edge = r.Int(), t = r.F64(), none = r.Bool(), window = Str(ref r) });
+            for (n = r.Count(); n > 0; n--)
             {
                 var v = new VoidData { id = Str(ref r)!, kind = E<VoidKind>(ref r), bottom = r.Int() };
                 Points(ref r, v.shape);
@@ -417,6 +419,8 @@ namespace Triband.Storey
             foreach (var e in b.entrances) { w.Int(e.edge); w.F64(e.t); w.Int(e.k); w.Count(S(e.door)); }
             w.Count(b.details.Count);
             foreach (var dd in b.details) { w.Count(S(dd.kind)); w.Int(dd.k); w.Int(dd.edge); w.F64(dd.t); w.Opt(dd.y); }
+            w.Count(b.windows.Count);
+            foreach (var wd in b.windows) { w.Int(wd.k); w.Int(wd.edge); w.F64(wd.t); w.Bool(wd.none); w.Count(S(wd.window)); }
             w.Count(b.voids.Count);
             foreach (var v in b.voids) { w.Count(S(v.id)); w.E(v.kind); w.Int(v.bottom); w.Points(v.shape); }
             w.Count(b.bridges.Count);

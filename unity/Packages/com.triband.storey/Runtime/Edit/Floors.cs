@@ -26,6 +26,7 @@ namespace Triband.Storey.Edit
             foreach (var s in b.shafts) { if (s.bottom > k) s.bottom++; if (s.top >= 0 && s.top > k) s.top++; }
             foreach (var e in b.entrances) if (e.k > k) e.k++;
             foreach (var d in b.details) if (d.k > k) d.k++;
+            foreach (var w in b.windows) if (w.k > k) w.k++;
         }
 
         /// <summary>
@@ -43,6 +44,8 @@ namespace Triband.Storey.Edit
             foreach (var e in b.entrances) if (e.k > k) e.k--;
             b.details.RemoveAll(d => d.k == k);
             foreach (var d in b.details) if (d.k > k) d.k--;
+            b.windows.RemoveAll(w => w.k == k);
+            foreach (var w in b.windows) if (w.k > k) w.k--;
             var g = b.floors[0];
             if (g.HasShape) { b.footprint = g.shape; b.blank = g.blank; b.quiet = g.quiet; b.bare = g.bare; g.shape = new List<Vec2>(); g.blank = new List<int>(); g.quiet = null; g.bare = null; }   // a setback that became the ground floor is the new base
             b.shafts.RemoveAll(s => s.bottom == k && s.top == k);

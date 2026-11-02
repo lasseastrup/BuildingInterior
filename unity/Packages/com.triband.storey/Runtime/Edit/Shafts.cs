@@ -18,19 +18,22 @@ namespace Triband.Storey.Edit
 
         /// <summary>The core serving storey k under a point (15 cm grace), if any.</summary>
         public static CoreData? At(BuildingData b, int k, Vec2 p) =>
-            b.shafts.FirstOrDefault(s => Cores.Levels(b, s).Contains(k) && Cores.Contains(s, p.x, p.z, 0.15));
+            b.shafts.FirstOrDefault(s => Cores.Levels(b, s).Contains(k) && Cores.Contains(s, p.x, p.z, 0.15, b));
 
         /// <summary>A core fits the outline of every storey from k0 to k1.</summary>
         public static bool FitsLevels(BuildingData b, CoreData it, int k0, int k1, double? x = null, double? z = null, double? rot = null)
         {
-            for (int k = k0; k <= k1; k++) if (!Cores.CoreFits(Derived.OutlineAt(b, k), it, 0.16, x, z, rot)) return false;
+            for (int k = k0; k <= k1; k++) if (!Cores.CoreFits(Derived.OutlineAt(b, k), it, 0.16, x, z, rot, b)) return false;
             return Voids.CoreClear(b, it, k0, k1, x, z, rot);   // and clear of the courtyards and atria open there
         }
 
-        /// <summary>Two cores closer than the gap (separating-axis test on the oriented rectangles).</summary>
-        public static bool Overlap(CoreData a, CoreData b, double gap = 0.3, double? bx = null, double? bz = null, double? brot = null)
+        /// <summary>
+        /// Two cores closer than the gap (separating-axis test on the oriented rectangles); with the building
+        /// <paramref name="of"/> they stand in, a lone flight's is its lane (<see cref="Cores.OneFlight"/>).
+        /// </summary>
+        public static bool Overlap(CoreData a, CoreData b, double gap = 0.3, double? bx = null, double? bz = null, double? brot = null, BuildingData? of = null)
         {
-            var A = Cores.RectOf(a, gap / 2); var B = Cores.RectOf(b, gap / 2, bx, bz, brot);
+            var A = Cores.RectOf(a, gap / 2, b: of); var B = Cores.RectOf(b, gap / 2, bx, bz, brot, of);
             static double Ext(Cores.Rect Q, Vec2 ax) => Q.hx * Math.Abs(Q.u.x * ax.x + Q.u.z * ax.z) + Q.hz * Math.Abs(Q.w.x * ax.x + Q.w.z * ax.z);
             foreach (var ax in new[] { A.u, A.w, B.u, B.w })
             {
@@ -53,9 +56,9 @@ namespace Triband.Storey.Edit
         }
 
         /// <summary>Pull a core the last few centimetres onto an outline edge that runs along one of its sides, so it shares that wall.</summary>
-        public static Vec2 Snap(List<Vec2> fp, CoreData it, double x, double z, double rot)
+        public static Vec2 Snap(List<Vec2> fp, CoreData it, double x, double z, double rot, BuildingData? b = null)
         {
-            var R = Cores.RectOf(it, 0, x, z, rot);
+            var R = Cores.RectOf(it, 0, x, z, rot, b);
             var n = new Vec2?[] { new Vec2(-R.u.x, -R.u.z), R.u, null, R.w }; var hh = new[] { R.hx, R.hx, 0, R.hz };
             double sx = x, sz = z;
             foreach (var sides in it.type == CoreType.Flight ? new[] { new[] { 0, 1 } } : new[] { new[] { 0, 1 }, new[] { 3 } })   // a flight's back is a way out
@@ -87,15 +90,16 @@ namespace Triband.Storey.Edit
         public static (CoreData it, bool ok) Placement(BuildingData b, int k, Vec2 p, CoreType type, double placeRot)
         {
             double x = Tiers.Cm(p.x), z = Tiers.Cm(p.z);
-            var it = new CoreData { type = type, x = x, z = z, rot = (WallAngle(Derived.OutlineAt(b, k), x, z) + placeRot) % 360 };
+            // the floors Place gives it (from k to the top floor, stairs on to the roof): a lone flight's ghost is its lane
+            var it = new CoreData { type = type, x = x, z = z, rot = (WallAngle(Derived.OutlineAt(b, k), x, z) + placeRot) % 360, bottom = k, top = -1, roof = type != CoreType.Lift };
             int N = b.floors.Count;
             if (k < N)
             {
-                var sn = Snap(Derived.OutlineAt(b, k), it, x, z, it.rot);
+                var sn = Snap(Derived.OutlineAt(b, k), it, x, z, it.rot, b);
                 if (FitsLevels(b, it, k, N - 1, sn.x, sn.z)) { it.x = sn.x; it.z = sn.z; }
             }
             bool ok = k < N && FitsLevels(b, it, k, N - 1);
-            if (ok) ok = !b.shafts.Any(s => Overlap(s, it));
+            if (ok) ok = !b.shafts.Any(s => Overlap(s, it, of: b));
             return (it, ok);
         }
 
@@ -121,8 +125,8 @@ namespace Triband.Storey.Edit
             double offX = it.x - grab.x, offZ = it.z - grab.z;
             double nx = Tiers.Cm(p.x + offX), nz = Tiers.Cm(p.z + offZ);
             int top = Derived.ShaftTop(b, it);
-            bool Free(double x, double z) => FitsLevels(b, it, it.bottom, top, x, z) && !b.shafts.Any(s => !ReferenceEquals(s, it) && Overlap(s, it, 0.3, x, z));
-            var sn = Snap(Derived.OutlineAt(b, it.bottom), it, nx, nz, it.rot);
+            bool Free(double x, double z) => FitsLevels(b, it, it.bottom, top, x, z) && !b.shafts.Any(s => !ReferenceEquals(s, it) && Overlap(s, it, 0.3, x, z, of: b));
+            var sn = Snap(Derived.OutlineAt(b, it.bottom), it, nx, nz, it.rot, b);
             if (Free(sn.x, sn.z)) { nx = sn.x; nz = sn.z; }
             if (Free(nx, nz) && (nx != it.x || nz != it.z)) { it.x = nx; it.z = nz; return true; }
             return false;
@@ -137,11 +141,11 @@ namespace Triband.Storey.Edit
         {
             if (Drag(b, it, grab, p)) return true;
             int top = Derived.ShaftTop(b, it);
-            bool Free(Vec2 q) => FitsLevels(b, it, it.bottom, top, q.x, q.z) && !b.shafts.Any(s => !ReferenceEquals(s, it) && Overlap(s, it, 0.3, q.x, q.z));
+            bool Free(Vec2 q) => FitsLevels(b, it, it.bottom, top, q.x, q.z) && !b.shafts.Any(s => !ReferenceEquals(s, it) && Overlap(s, it, 0.3, q.x, q.z, of: b));
             var cur = new Vec2(it.x, it.z);
             if (!Free(cur)) return false;   // already somewhere it does not fit (a wall moved under it): leave it to the user
             var to = new Vec2(p.x + it.x - grab.x, p.z + it.z - grab.z);
-            var R = Cores.RectOf(it);
+            var R = Cores.RectOf(it, b: b);
             Vec2 Cm2(Vec2 q) => new Vec2(Tiers.Cm(q.x), Tiers.Cm(q.z));
 
             // the farthest free point from a towards a + d (the free stretch from a is taken to be one piece)
@@ -164,7 +168,7 @@ namespace Triband.Storey.Edit
             {
                 var q1 = Far(cur, Along(cur, first)); var q = Far(q1, Along(q1, second));
                 // pulled flush onto a wall when that is close and free, as a drag is
-                var sn = Snap(Derived.OutlineAt(b, it.bottom), it, q.x, q.z, it.rot);
+                var sn = Snap(Derived.OutlineAt(b, it.bottom), it, q.x, q.z, it.rot, b);
                 if (Free(sn)) q = sn;
                 double d = Tiers.Hypot(q.x - to.x, q.z - to.z);
                 if (d < bd - 1e-9) { bd = d; pick = q; }
@@ -179,7 +183,7 @@ namespace Triband.Storey.Edit
         {
             double r = Tiers.JsRound((((deg % 360) + 360) % 360) * 10) / 10;
             var turned = new CoreData { id = sh.id, type = sh.type, x = sh.x, z = sh.z, rot = r, bottom = sh.bottom, top = sh.top, roof = sh.roof };
-            if (!Tiers.ShaftFits(b, turned) || b.shafts.Any(x => !ReferenceEquals(x, sh) && Overlap(x, turned))) return false;
+            if (!Tiers.ShaftFits(b, turned) || b.shafts.Any(x => !ReferenceEquals(x, sh) && Overlap(x, turned, of: b))) return false;
             sh.rot = r;
             return true;
         }
@@ -200,7 +204,7 @@ namespace Triband.Storey.Edit
             if (sh.type == type) return true;
             if (sh.type == CoreType.Lift || type == CoreType.Lift) return false;
             var other = new CoreData { id = sh.id, type = type, x = sh.x, z = sh.z, rot = sh.rot, bottom = sh.bottom, top = sh.top, roof = sh.roof };
-            if (!Tiers.ShaftFits(b, other) || b.shafts.Any(x => !ReferenceEquals(x, sh) && Overlap(x, other))) return false;
+            if (!Tiers.ShaftFits(b, other) || b.shafts.Any(x => !ReferenceEquals(x, sh) && Overlap(x, other, of: b))) return false;
             sh.type = type;
             return true;
         }

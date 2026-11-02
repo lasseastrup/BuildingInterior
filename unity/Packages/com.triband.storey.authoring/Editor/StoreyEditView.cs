@@ -21,7 +21,7 @@ namespace Triband.Storey.Editor
         /// <summary>The storey the Interior tab edits; the floor count means the roof.</summary>
         [SerializeField] internal int floor;
         [SerializeField] internal InteriorTool interiorTool;
-        /// <summary>The Facade tab's click tool: "", "entrance" (the Doors card's Place doors), "blank", "bridge", or a detail kind ("ac", "vent", "dish", "escape", "awning").</summary>
+        /// <summary>The Facade tab's click tool: "", "entrance" (the Doors card's Place doors), "window" (the Windows card's Place windows), "blank", "bridge", or a detail kind ("ac", "vent", "dish", "escape", "awning").</summary>
         [SerializeField] internal string facadeTool = "";
         /// <summary>
         /// The door Place doors puts in (<see cref="EntranceData.door"/>), where the style has several: one of its list
@@ -29,6 +29,12 @@ namespace Triband.Storey.Editor
         /// empty, or one no longer in the list, the list's first.
         /// </summary>
         [SerializeField] internal string placeDoor = "";
+        /// <summary>
+        /// The window Place windows puts in (<see cref="WindowData.window"/>), where the style has several: one of its list
+        /// (<see cref="WindowData.Plain"/> for the built-in one, or a Storey Opening's id), or "*" for the style's pick for the
+        /// bay; empty, or one no longer in the list, the list's first.
+        /// </summary>
+        [SerializeField] internal string placeWindow = "";
         /// <summary>What the Blank wall tool makes a wall (docs/EDITOR.md §6.7): blank, quiet or bare.</summary>
         [SerializeField] internal EdgeState wallState = EdgeState.Blank;
         [SerializeField] internal int placeRot;
@@ -56,5 +62,30 @@ namespace Triband.Storey.Editor
             if (selectedId == id) return;
             selectedId = id; tier = 0; floor = 0; selectedCore = ""; selectedWall = -1; selectedCorner = -1; selectedVoid = "";
         }
+
+        /// <summary>
+        /// Go to another tab (docs/EDITOR.md §6.10): the tab left puts its tools down (<see cref="PutDown"/>), so nothing it
+        /// was placing is still picked when it is back. A tool picked for the tab gone to is kept (the Library's Place it by
+        /// hand picks one, then goes to the Facade tab).
+        /// </summary>
+        internal void ChangeTab(StoreyTab t)
+        {
+            if (t != tab) PutDown(tab);
+            tab = t;
+        }
+
+        /// <summary>
+        /// Put a tab's tools down: what a click in the Scene view would place or take away. The Facade tab's Place doors,
+        /// Place windows, Blank wall, details and Bridge are unpicked; the Interior tab goes back to Select. What is selected
+        /// (a corner, a wall, stairs) stays, and so do the tools' settings (the door to place, the stairs' kind).
+        /// </summary>
+        internal void PutDown(StoreyTab t)
+        {
+            if (t == StoreyTab.Facade) facadeTool = "";
+            else if (t == StoreyTab.Interior) interiorTool = InteriorTool.Select;
+        }
+
+        /// <summary>Put every tab's tools down: the site is no longer what is selected.</summary>
+        internal void PutDownAll() { PutDown(StoreyTab.Facade); PutDown(StoreyTab.Interior); }
     }
 }

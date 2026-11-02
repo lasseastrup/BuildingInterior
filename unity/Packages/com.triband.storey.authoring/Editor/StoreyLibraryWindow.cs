@@ -921,7 +921,7 @@ namespace Triband.Storey.Editor
                     m.AddSeparator("");
                     m.AddItem(new GUIContent("Place it by hand in the Scene view"), false, () =>
                     {
-                        var v = e.View; v.facadeTool = i.key; v.tab = StoreyTab.Facade;
+                        var v = e.View; v.ChangeTab(StoreyTab.Facade); v.facadeTool = i.key;
                         StoreyToolContext.Show(StoreyTab.Facade);
                         SceneView.RepaintAll();
                         if (SceneView.lastActiveSceneView != null) SceneView.lastActiveSceneView.Focus();
@@ -955,7 +955,7 @@ namespace Triband.Storey.Editor
                 if (start is (FacadeStyle sty, string sk)) Styles.Apply(nb, 0, sty, sk);
                 id = nb.id; return true;
             });
-            e.View.Select(id); e.View.tab = StoreyTab.Shape;
+            e.View.Select(id); e.View.ChangeTab(StoreyTab.Shape);
             StoreyToolContext.Show(StoreyTab.Shape);
             Done($"A building from {i.title} is in {site.layout!.name}, near the Scene view's middle.");
         }
@@ -1029,7 +1029,7 @@ namespace Triband.Storey.Editor
         {
             Selection.activeGameObject = site.gameObject;
             var e = StoreyEdit.Begin(site);
-            e.View.Select(id); e.View.tab = StoreyTab.Facade;
+            e.View.Select(id); e.View.ChangeTab(StoreyTab.Facade);
             StoreyToolContext.Show(StoreyTab.Facade);
             var sv = SceneView.lastActiveSceneView;
             if (sv != null && StoreyToolContext.FrameBounds(site) is Bounds bounds) sv.Frame(bounds, false);

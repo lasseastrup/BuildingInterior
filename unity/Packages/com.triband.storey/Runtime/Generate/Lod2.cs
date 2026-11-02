@@ -382,8 +382,10 @@ namespace Triband.Storey.Generate
                 for (int k = t.k0; k < t.k1; k++)
                 {
                     double h = Derived.FloorH(b, k); bool gnd = k == 0;
-                    // a tier's top storey under a cornice is a run of its own: its windows stay under the cornice, which it paints
-                    if (runs.Count > 0 && k > alone && !runs[runs.Count - 1].g && !gnd && Math.Abs(runs[runs.Count - 1].h - h) < 1e-6 && !Facade.CorniceAt(b, k)) { var r = runs[runs.Count - 1]; r.k1 = k + 1; runs[runs.Count - 1] = r; }
+                    // a tier's top storey under a cornice is a run of its own: its windows stay under the cornice, which it paints; so is
+                    // a storey with windows put in or taken out by hand (WindowData), whose walls are painted bay by bay
+                    if (runs.Count > 0 && k > alone && !runs[runs.Count - 1].g && !gnd && Math.Abs(runs[runs.Count - 1].h - h) < 1e-6 && !Facade.CorniceAt(b, k)
+                        && !Facade.HandOn(b, k) && !Facade.HandOn(b, k - 1)) { var r = runs[runs.Count - 1]; r.k1 = k + 1; runs[runs.Count - 1] = r; }
                     else runs.Add((k, k + 1, h, gnd, 0, false));
                 }
                 for (int ri = 0; ri < runs.Count; ri++)
@@ -420,12 +422,14 @@ namespace Triband.Storey.Generate
                         // (fixed bays: the whole bays on the wall's outer face, as Facade.Ops works it out from the outline)
                         var (uS, uE) = Facade.WindowSpan(st, r.g, sS, sE);
                         var es = Derived.EdgeStateAt(b, t.k0, i);
-                        double bay = 0;
-                        if (es == EdgeState.Open)
+                        // windows by hand on the run's storey (a run of its own): its wall painted bay by bay, a blank one too
+                        bool hand = r.k1 == r.k0 + 1 && Facade.HandOn(b, r.k0, i);
+                        double bay = 0; int nbays = 0;
+                        if (es == EdgeState.Open || hand)
                         {
                             var (oS, oE) = st.bayFit == BayFit.Fixed ? Facade.OuterFace(fp, g.ccw, i) : (uS, uE);
                             var (nb, wb, bS) = Facade.Bays(st, uS, uE, oS, oE);
-                            bay = nb > 0 ? wb : 0;
+                            bay = nb > 0 ? wb : 0; nbays = nb;
                             if (st.bayFit == BayFit.Fixed) { uS = bS; uE = bS + nb * wb; }
                         }
                         if (es == EdgeState.Bare && M.Rows[r.slot].run[1] > 0)
@@ -434,24 +438,31 @@ namespace Triband.Storey.Generate
                             if (bareSlots[ri] == 0) { var src = M.Rows[r.slot]; bareSlots[ri] = 1 + Row(C, src.spec, new[] { src.run[0], 0, src.run[2], src.run[3] }); M.Rows[bareSlots[ri] - 1].band = src.band; }
                             slot = bareSlots[ri] - 1;
                         }
-                        // a storey the roof over the terrace below can reach: the bays whose painted window it comes up to are painted
-                        // without one (bay 0), the wall in pieces where that changes
+                        // a storey the roof over the terrace below can reach, or with windows by hand: the bays whose window that roof comes
+                        // up to, or that is taken out, are painted without one (bay 0), and those put in on a wall the style lays none on
+                        // with one, the wall in pieces where that changes
                         var sp = M.Rows[r.slot].spec; double ww = sp[0] >= 0 ? bay - sp[0] : Math.Min(sp[1], bay - 0.5);
                         int bays = bay > 0 ? (int)Math.Round((uE - uS) / bay) : 0;
-                        if (r.k0 < alone && bays > 0 && ww >= 0.45 && sp[3] > sp[2] + 0.4)
+                        if ((r.k0 < alone || hand) && bays > 0 && ww >= 0.45 && sp[3] > sp[2] + 0.4)
                         {
                             double foot = y0 + sp[2] - Roofs.TerraceRoofClear, ua = s1;
-                            bool prev = UnderTerraceRoof(site, b, r.k0, i, uS, bay, ww, 0, foot);
+                            bool Painted(int j)
+                            {
+                                var hw = hand ? Facade.HandAt(b.windows, r.k0, i, e.L, uS, bay, nbays, j) : null;
+                                if (hw != null ? hw.none : es != EdgeState.Open) return false;
+                                return !(r.k0 < alone && UnderTerraceRoof(site, b, r.k0, i, uS, bay, ww, j, foot));
+                            }
+                            bool prev = Painted(0);
                             for (int j = 1; j <= bays; j++)
                             {
-                                bool cur = j < bays && UnderTerraceRoof(site, b, r.k0, i, uS, bay, ww, j, foot);
+                                bool cur = j < bays && Painted(j);
                                 if (j < bays && cur == prev) continue;
                                 double ub = j < bays ? uS + j * bay : e1;
-                                Quad(F.At(ua, y0, T), F.At(ub, y0, T), F.At(ub, y1, T), F.At(ua, y1, T), outN, prev ? 0 : bay, 1, ua, ub, H, uS, uE);
+                                Quad(F.At(ua, y0, T), F.At(ub, y0, T), F.At(ub, y1, T), F.At(ua, y1, T), outN, prev ? bay : 0, 1, ua, ub, H, uS, uE);
                                 ua = ub; prev = cur;
                             }
                         }
-                        else Quad(F.At(s1, y0, T), F.At(e1, y0, T), F.At(e1, y1, T), F.At(s1, y1, T), outN, bay, 1, s1, e1, H, uS, uE);
+                        else Quad(F.At(s1, y0, T), F.At(e1, y0, T), F.At(e1, y1, T), F.At(s1, y1, T), outN, es == EdgeState.Open ? bay : 0, 1, s1, e1, H, uS, uE);
                         ClipWall(F, m.S, T, y0, y1, 1, H); ClipWall(F, m.E, T, y0, y1, 1, H);   // a neighbour's corner cut has no clip
                         // the tier's corner is cut for a neighbour lower than the run's top: above the neighbour the cut leaves a slit
                         // to the corner, closed by Unity only (the prototype's massing has it too)

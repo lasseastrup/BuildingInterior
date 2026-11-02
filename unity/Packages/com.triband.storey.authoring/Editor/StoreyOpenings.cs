@@ -105,6 +105,8 @@ namespace Triband.Storey.Editor
                 }
                 // and the doors placed by name (the Doors card), which may be in no style's list any more
                 foreach (var en in b.entrances) if (en.door != null && en.door != EntranceData.Plain) used.Add(en.door);
+                // and the windows put in by name (the Windows card)
+                foreach (var w in b.windows) if (w.window != null && w.window != WindowData.Plain) used.Add(w.window);
             }
             var want = All().Where(o => used.Contains(o.Id)).ToList();
             if (want.Count == site.openings.Count && want.All(site.openings.Contains)) return;

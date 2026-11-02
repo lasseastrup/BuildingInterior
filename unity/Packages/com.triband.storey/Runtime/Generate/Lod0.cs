@@ -434,8 +434,9 @@ namespace Triband.Storey.Generate
 
         /// <summary>
         /// Floor bands, the cornice at a tier's top and the ground-floor plinth along one facade piece (ends against a party
-        /// wall are left open). The cornice runs where nothing stands on the wall above: under the roof, or along a terrace
-        /// where a setback starts; elsewhere on that storey (where the setback's wall goes on up) the band stays.
+        /// wall are left open). The cornice runs round the whole top of the tier: under the roof, along a terrace where a
+        /// setback starts, and on round where the setback's wall goes on up; only under a setback stepping out over the wall
+        /// is it left out. It takes the band's place on its storey.
         /// </summary>
         /// <param name="rooms">The strips' backs over openings are the rooms' (<see cref="Facade.StripBacks"/>).</param>
         public void PieceStrips(MeshBuilder op, int k, Frame F, Miter m, Party.Piece pc, List<Opening> ops, double y, double h, Palette C, bool rooms = false)
@@ -451,14 +452,22 @@ namespace Triband.Storey.Generate
             int n = Derived.OutlineAt(b, k).Count;
             bool bare = Derived.EdgeStateAt(b, k, i) == EdgeState.Bare;
             bool sqS = !bare && Derived.EdgeStateAt(b, k, (i - 1 + n) % n) == EdgeState.Bare, sqE = !bare && Derived.EdgeStateAt(b, k, (i + 1) % n) == EdgeState.Bare;
-            // the cornice: along the parts of the edge nothing stands on (all of it under the roof; along a setback's terrace)
+            // the cornice: round the whole top of the tier's walls, under the roof and along a setback's terrace, and on round
+            // where the setback's wall goes on up from it, so it circles the building at the terrace's level (as LOD2 paints
+            // it, and as the storey's windows are kept under it); not where a setback stepping out stands over the wall
             List<(double, double)>? cornice = null;
             if (Facade.CorniceAt(b, k) && !bare)
             {
                 double ch = Facade.CorniceH(st.corniceH!.Value), cd = Facade.CorniceDepth(st), drop = Facade.CorniceDrop(b, k);
-                cornice = new List<(double, double)>();
-                if (k == N - 1) cornice.Add((-1e9, 1e9));
-                else foreach (var (s0, e0) in Geo.ExposedRanges(Derived.OutlineAt(b, k), Derived.OutlineAt(b, k + 1), i)) cornice.Add((s0 < 0.06 ? -1e9 : s0, e0 > L - 0.06 ? 1e9 : e0));
+                cornice = new List<(double, double)> { (-1e9, 1e9) };
+                if (k < N - 1)
+                {
+                    var over = new List<(double, double)>();
+                    foreach (var (s0, e0) in Geo.ExposedRanges(Derived.OutlineAt(b, k), Derived.OutlineAt(b, k + 1), i, true)) over.Add((s0 < 0.06 ? -1e9 : s0, e0 > L - 0.06 ? 1e9 : e0));
+                    // a fire escape climbing on into the setback breaks it, as a bridge's deck does
+                    if (Climbing(k, i) is { } climbs) over.AddRange(climbs);
+                    cornice = Geo.MinusRanges(cornice, over);
+                }
                 var span = new List<(double, double)> { Clip(m.Span(T, T + cd)) };
                 var rc = Geo.MinusRanges(Geo.MinusRanges(span, Geo.MinusRanges(span, cornice)), Decks(k + 1, F, T, T + cd) ?? NoRanges);
                 rc.RemoveAll(r => r.Item2 - r.Item1 <= 0.02);
@@ -512,6 +521,25 @@ namespace Triband.Storey.Generate
                     Facade.StripBacks(op, F, rp, ops, y, y + fTop, y + pTop, T, pc0, rooms);
                 }
             }
+        }
+
+        /// <summary>
+        /// Along edge i of storey k, where a detail going up the wall (a fire escape, <see cref="Details.EscapeRun"/>) climbs on
+        /// past the storey's top into the setback above, its width and 10 cm each side; null where none does. A cornice under
+        /// the setback stops either side of it.
+        /// </summary>
+        List<(double, double)>? Climbing(int k, int i)
+        {
+            List<(double, double)>? o = null;
+            foreach (var d in b.details)
+            {
+                if (d.k > k || !(DetailKinds.Get(d.kind) is DetailKind kind) || kind.anchor != Details.Anchor.Tier) continue;
+                var run = Details.EscapeRun(b, d.k, d.edge, d.t * Geo.EdgeLen(Derived.OutlineAt(b, d.k), d.edge), Details.RunHalf(kind));
+                if (run[run.Count - 1].k <= k) continue;
+                double half = (kind.w > 0 ? kind.w : 1) / 2 + 0.1;
+                foreach (var s in run) if (s.k == k && s.i == i) (o ??= new List<(double, double)>()).Add((s.u - half, s.u + half));
+            }
+            return o;
         }
 
         /// <summary>
@@ -786,7 +814,9 @@ namespace Triband.Storey.Generate
                 if (!Cores.ShaftRoof(b, s) && !Cores.StairHoleAt(b, s, N)) continue;
                 var f = Cores.FrameOf(b, s);
                 double hx = s.type == CoreType.Stairs ? 1.6 : s.type == CoreType.Flight ? Dim.FLIGHT_W / 2 + 0.1 : 1.5, hz = s.type == CoreType.Stairs ? 2.9 : s.type == CoreType.Flight ? Dim.FLIGHT_D / 2 + 0.1 : 1.5;
-                var box = new List<Vec2> { f.At2(-hx, -hz), f.At2(hx, -hz), f.At2(hx, hz), f.At2(-hx, hz) };
+                // one flight alone up to the roof (Cores.OneFlight) takes its lane alone
+                double ua = -hx, ub = Cores.OneFlight(b, s) ? -Dim.FLIGHT_W / 2 + Dim.FLIGHT_LANE + 0.1 : hx;
+                var box = new List<Vec2> { f.At2(ua, -hz), f.At2(ub, -hz), f.At2(ub, hz), f.At2(ua, hz) };
                 cut.Add(Path(box));   // the core's frame is in site space
             }
             foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, N)) cut.AddRange(Off(v.shape, T + 0.05));
@@ -865,7 +895,7 @@ namespace Triband.Storey.Generate
                 void Bx(double x0, double x1, double y0, double y1, double z0, double z1, Swatch c, Swatch? ci = null, Skip sk = Skip.None) => op.OBox(f, x0, x1, y0, y1, z0, z1, c, ci, sk);
                 void S(double px, double pz, double qx, double qz, double r) { var a = f.At2(px, pz); var c = f.At2(qx, qz); sg.Add(new Seg(a.x, a.z, c.x, c.z, r)); }
                 const Skip TB = Skip.Top | Skip.Bot;
-                var fl = Cores.CoreFlush(Derived.OutlineAt(b, k), s); bool fL = fl[0] != null, fR = fl[1] != null, fB = fl[3] != null; double TE = Dim.T_EXT;
+                var fl = Cores.CoreFlush(Derived.OutlineAt(b, k), s, b: b); bool fL = fl[0] != null, fR = fl[1] != null, fB = fl[3] != null; double TE = Dim.T_EXT;
                 // a core wall's end against the building's own wall, whose windows show it (the prototype's faces are two-sided):
                 // only Unity draws it, a centimetre in
                 void End(double x0, double x1, double y0, double y1, double z0, double z1, Skip face)
@@ -947,6 +977,8 @@ namespace Triband.Storey.Generate
                     // the roof included: no bulkhead, the opening is railed like any other storey's.
                     double hw = Dim.FLIGHT_W / 2, hd = Dim.FLIGHT_D / 2, xm = -hw + Dim.FLIGHT_LANE;
                     double z0 = -hd + Dim.FLIGHT_LANDING, z1 = hd - Dim.FLIGHT_LANDING;
+                    // one flight alone (Cores.OneFlight) has no walkway: its lane's other side can stand against a wall too
+                    bool wR = fR && Cores.OneFlight(b, s);
                     op.Ctx(null, 0);
                     if (Cores.StairHoleAt(b, s, k))
                     {
@@ -958,12 +990,12 @@ namespace Triband.Storey.Generate
                             Bx(x - 0.02, x + 0.02, y, y + 1.02, z1 - 0.04, z1, C.rail, null, Skip.Bot);
                             S(x, z0, x, z1, 0.04);
                         }
-                        RailZ(xm + 0.04);
+                        if (!wR) RailZ(xm + 0.04);
                         if (!fL) RailZ(-hw - 0.04);
                         if (!Cores.HasFlight(b, s, k))
                         {
                             // the top: nothing carries on up, so the front of the opening is railed too
-                            double zr = z0 - 0.04, x0 = fL ? -hw + 0.02 : -hw - 0.06, x1 = xm + 0.06;
+                            double zr = z0 - 0.04, x0 = fL ? -hw + 0.02 : -hw - 0.06, x1 = wR ? xm - 0.02 : xm + 0.06;
                             Bx(x0 + 0.04, x1 - 0.04, y + 0.95, y + 1.02, zr - 0.02, zr + 0.02, C.rail);
                             Bx(x0, x0 + 0.04, y, y + 1.02, zr - 0.02, zr + 0.02, C.rail, null, Skip.Bot);
                             Bx(x1 - 0.04, x1, y, y + 1.02, zr - 0.02, zr + 0.02, C.rail, null, Skip.Bot);
@@ -975,7 +1007,7 @@ namespace Triband.Storey.Generate
                         // risers of about 18 cm, whatever the storey's height, over a fixed run
                         double fh = Derived.FloorH(b, k); int n = Math.Max(8, (int)Math.Round(fh / 0.18)); double run = (z1 - z0) / n;
                         // against a wall, a step's side would lie in the wall's inner face and flicker with it: left out
-                        for (int i = 0; i < n; i++) { double za = z0 + i * run, t = y + (i + 1) * fh / n; Bx(-hw, xm, t - 0.2, t, za, za + run, C.step, null, fL ? Skip.UStart : Skip.None); }
+                        for (int i = 0; i < n; i++) { double za = z0 + i * run, t = y + (i + 1) * fh / n; Bx(-hw, xm, t - 0.2, t, za, za + run, C.step, null, (fL ? Skip.UStart : Skip.None) | (wR ? Skip.UEnd : Skip.None)); }
                     }
                 }
                 else

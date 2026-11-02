@@ -147,7 +147,7 @@ namespace Triband.Storey.Tests
         }
 
         // the bay of the massing's facade quad over point p of a wall facing n (-1: none)
-        static double BayAt(Lod2Mesh m, P3 p, P3 n)
+        internal static double BayAt(Lod2Mesh m, P3 p, P3 n)
         {
             for (int t = 0; t < m.I.Count; t += 3)
             {

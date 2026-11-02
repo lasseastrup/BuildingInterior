@@ -185,6 +185,15 @@ namespace Triband.Storey.Editor
         }
         EditSession Core => core ??= new EditSession(text);
 
+        /// <summary>
+        /// Another object was selected: every open edit but <paramref name="selected"/>'s puts its tools down
+        /// (<see cref="StoreyEditView.PutDownAll"/>), so none is still picked when its site is selected again.
+        /// </summary>
+        internal static void PutDownToolsBut(StoreySite? selected)
+        {
+            foreach (var e in open) if (e != null && e.view != null && (selected == null || e.site != selected)) e.view.PutDownAll();
+        }
+
         /// <summary>The edit open on a site, if any. Allocates nothing: the selection outline asks every editor update.</summary>
         public static StoreyEdit? Of(StoreySite s)
         {

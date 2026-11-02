@@ -37,6 +37,7 @@ namespace Triband.Storey.Edit
         public static void Remove(BuildingData b, int k0)
         {
             b.details.RemoveAll(d => Derived.TierStart(b, d.k) == k0);
+            b.windows.RemoveAll(w => Derived.TierStart(b, w.k) == k0);
             b.entrances.RemoveAll(e => Tiers.DoorOn(b, e, k0));
             var f = b.floors[k0]; f.shape = new List<Vec2>(); f.blank = new List<int>(); f.quiet = null; f.bare = null; f.corners = new List<CornerData>(); f.terraceRoof = null;
         }
@@ -48,12 +49,14 @@ namespace Triband.Storey.Edit
         public static bool Move(BuildingData b, int k0, int k)
         {
             var tb = b.details.Select(d => Derived.TierStart(b, d.k)).ToList();
+            var tw = b.windows.Select(w => Derived.TierStart(b, w.k)).ToList();
             var te = b.entrances.Select(e => e.k == k0 ? -1 : Derived.TierStart(b, e.k)).ToList();
             var f = b.floors[k0]; var g = b.floors[k];
             g.shape = f.shape; g.corners = f.corners; f.shape = new List<Vec2>(); f.corners = new List<CornerData>(); Tiers.MoveEdges(f, g);
             if (f.terraceRoof != null) { g.terraceRoof = f.terraceRoof; f.terraceRoof = null; }
             foreach (var e in b.entrances) if (e.k == k0) e.k = k;
             b.details = b.details.Where((d, j) => Derived.TierStart(b, d.k) == tb[j]).ToList();
+            b.windows = b.windows.Where((w, j) => Derived.TierStart(b, w.k) == tw[j]).ToList();
             b.entrances = b.entrances.Where((e, j) => te[j] < 0 || Derived.TierStart(b, e.k) == te[j]).ToList();
             return b.shafts.All(s => Tiers.ShaftFits(b, s)) && Outlines.Issue(b, k, g.shape) == OutlineIssue.None;
         }
@@ -68,6 +71,7 @@ namespace Triband.Storey.Edit
         public static void ApplyFootprint(BuildingData b, IReadOnlyList<Vec2> footprint, IEnumerable<CornerData>? corners = null)
         {
             b.details.RemoveAll(d => Derived.TierStart(b, d.k) == 0);
+            b.windows.RemoveAll(w => Derived.TierStart(b, w.k) == 0);
             b.footprint = new List<Vec2>(footprint);
             b.corners = corners?.Select(c => new CornerData { at = c.at, shape = c.shape, size = c.size, door = c.door, pts = new List<Vec2>(c.pts) }).ToList() ?? new List<CornerData>();
             var kept = b.entrances.Where(e => e.k != 0 && Derived.TierStart(b, e.k) != 0).ToList();

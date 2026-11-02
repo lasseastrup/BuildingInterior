@@ -89,7 +89,7 @@ namespace Triband.Storey.Edit
         /// <summary>A stair or lift fits every storey it serves.</summary>
         public static bool ShaftFits(BuildingData b, CoreData s)
         {
-            for (int k = s.bottom; k <= Derived.ShaftTop(b, s); k++) if (!Cores.CoreFits(Derived.OutlineAt(b, k), s)) return false;
+            for (int k = s.bottom; k <= Derived.ShaftTop(b, s); k++) if (!Cores.CoreFits(Derived.OutlineAt(b, k), s, b: b)) return false;
             return Voids.CoreClear(b, s, s.bottom, Derived.ShaftTop(b, s));
         }
 
