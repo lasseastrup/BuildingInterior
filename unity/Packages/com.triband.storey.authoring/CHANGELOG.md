@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+- **The floors are set in the inspector** (docs/EDITOR.md §6.6): the Shape tab's *Storey heights* card is *Floors*, first after *Placement*, with how many floors the building has: typed, or − and + (a new floor copies the top floor's rooms; − takes the top floor off), each one undo step, up to 40. The Interior tab's *Floor* card has *Copy up* (the floor's rooms to every floor above), *Duplicate* and *Delete* for the floor being edited.
+
+### Removed
+- **The Storey Floors overlay** in the Scene view: what it did is in the inspector (above). `StoreyToolContext.Editing`, which only it read, went with it, and the overlay types from the stubs.
+
 ### Added
 - **Moving a building moves its Storey Props** (docs/EDITOR.md §6.11, docs/PROPS.md §2.4, `StoreyPropsFollow`): the Shape tool's move gizmo, across and up and down, and *Snap to ground* take the props in the building along by as much as it moves, each prop's transform recorded in the move's own undo step, so one Undo puts them all back. The props in it are those the props manager files under it (`StoreyProp.BuildingId`, the building their inspector names) and, switched off, by where their pivot stands (`PropLocator.BuildingAt`); a prop under another that moves goes with that one. *Its props move with it*, in Shape ▸ Placement, turns it off, kept per user.
 - **Place windows** (docs/EDITOR.md §6.7), in the Windows card's *On the walls*, as *Place doors* is in the Doors card: a click on a window in the Scene view takes it out, a click on a bay without one puts one in, on any storey and wall, a blank one's too (`Facades.ToggleWindow`). Where the style has several windows, *Window to place* says which a click puts in: one of its list by name, or *Any of them, by weight*. The Scene view shows the window a click takes out or puts in, by name; the card's summary counts the windows by hand (*· 3 by hand*), and *The style's windows back* drops the tier's. The site's list of windows and doors keeps the windows put in by name.

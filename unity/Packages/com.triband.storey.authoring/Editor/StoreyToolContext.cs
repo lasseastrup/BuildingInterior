@@ -219,12 +219,5 @@ namespace Triband.Storey.Editor
             var centre = new Vector3((float)((x0 + x1) / 2), (float)((y0 + y1) / 2), (float)((z0 + z1) / 2));
             return new Bounds(site.transform.TransformPoint(centre), new Vector3((float)(x1 - x0), (float)(y1 - y0), (float)(z1 - z0)));
         }
-
-        /// <summary>
-        /// A building is being edited: a Storey tool is active on a site with a building picked. The Storey Floors overlay
-        /// shows only then.
-        /// </summary>
-        internal static bool Editing =>
-            typeof(StoreyTool).IsAssignableFrom(ToolManager.activeToolType) && SelectedSite() is StoreySite s && StoreyEdit.Of(s)?.Selected != null;
     }
 }

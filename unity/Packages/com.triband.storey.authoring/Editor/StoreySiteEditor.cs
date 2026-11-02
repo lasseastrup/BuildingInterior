@@ -72,6 +72,7 @@ namespace Triband.Storey.Editor
                 if (EditorGUIUtility.currentViewWidth < 470) StoreyInspectorUI.ModeHintLine(Modes[(int)v.tab].hint);
                 if (!StoreyToolActive() && GUILayout.Button(new GUIContent("Show the Storey handles in the Scene view", "The Scene view's Storey tools edit what this tab shows"))) SetTab(v, v.tab);
                 if (message != null) EditorGUILayout.HelpBox(message, MessageType.Info);
+                StoreyTool.ClampView(e, b);   // the floor and setback picked, kept to it (floors taken off in the Shape tab)
                 switch (v.tab)
                 {
                     case StoreyTab.Shape: ShapeTab(e, b); break;
@@ -346,21 +347,49 @@ namespace Triband.Storey.Editor
         {
             var v = e.View; int k0 = v.tier; var ts = Tiers.Of(b); var cur = ts.First(t => t.k0 == k0);
             Placement(e, b);
+            using (var c = StoreyInspectorUI.Card("heights", "Floors", StoreyInspectorUI.HeightsIcon, StoreyInspectorUI.Tint.Doors,
+                $"{b.floors.Count} floor{(b.floors.Count == 1 ? "" : "s")} · {Derived.RoofY(b):0.0} m tall", tip: "How many floors, and how high; one floor can differ (Interior tab)"))
+                if (c.Open)
+                {
+                    if (FloorCount(e, b)) return;   // the floors are others now: the rest is drawn as they are next time round
+                    Slider(e, "Ground", b.groundHeight, 3, 6, 0.1, (bb, x) => bb.groundHeight = x);
+                    Slider(e, "Upper", b.floorHeight, 2.7, 4.5, 0.1, (bb, x) => bb.floorHeight = x);
+                    StoreyInspectorUI.Note($"{Math.Abs(Geo.Area2(Tiers.Outline(b, k0))) / 2:0} m² per floor · {Derived.RoofY(b):0.0} m tall");
+                }
             using (var c = StoreyInspectorUI.Card("outline", "Outline", StoreyInspectorUI.ShapeIcon, StoreyInspectorUI.Tint.Windows,
                 $"{Math.Abs(Geo.Area2(Tiers.Outline(b, k0))) / 2:0} m²" + (ts.Count > 1 ? $" · {ts.Count - 1} setback{(ts.Count > 2 ? "s" : "")}" : ""),
                 tip: "The building's footprint, and the setbacks above it that each have their own outline"))
                 if (c.Open) Outline(e, b, k0, ts, cur);
             CornerSection(e, b, k0);
             VoidSection(e, b);
-            using (var c = StoreyInspectorUI.Card("heights", "Storey heights", StoreyInspectorUI.HeightsIcon, StoreyInspectorUI.Tint.Doors,
-                $"{b.floors.Count} storeys · {Derived.RoofY(b):0.0} m tall", tip: "Every storey's height; one storey can differ (Interior tab)"))
-                if (c.Open)
-                {
-                    Slider(e, "Ground", b.groundHeight, 3, 6, 0.1, (bb, x) => bb.groundHeight = x);
-                    Slider(e, "Upper", b.floorHeight, 2.7, 4.5, 0.1, (bb, x) => bb.floorHeight = x);
-                    StoreyInspectorUI.Note($"{Math.Abs(Geo.Area2(Tiers.Outline(b, k0))) / 2:0} m² per floor · {Derived.RoofY(b):0.0} m tall");
-                }
         }
+
+        /// <summary>
+        /// How many floors the building has (docs/EDITOR.md §6.6): typed, one more on top (with the top floor's rooms), or the top
+        /// one taken off, each one undo step. The ground floor counts; the roof doesn't. True when it changed.
+        /// </summary>
+        bool FloorCount(StoreyEdit e, BuildingData b)
+        {
+            int N = b.floors.Count; bool changed = false;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.PrefixLabel(FloorCountLabel);
+                int n = EditorGUILayout.DelayedIntField(N);
+                int to = Math.Max(1, Math.Min(Floors.MaxFloors, n));
+                if (to != N) changed = e.ApplyTo($"{to} floors", bb => { Floors.SetCount(bb, to); return true; });
+                using (new EditorGUI.DisabledScope(N <= 1))
+                    if (GUILayout.Button(new GUIContent("−", "Take the top floor off"), EditorStyles.miniButtonLeft, GUILayout.Width(26)))
+                        changed = e.ApplyTo("Top floor removed", bb => Floors.Delete(bb, bb.floors.Count - 1));
+                using (new EditorGUI.DisabledScope(N >= Floors.MaxFloors))
+                    if (GUILayout.Button(new GUIContent("+", "A floor on top, with the top floor's rooms"), EditorStyles.miniButtonRight, GUILayout.Width(26)))
+                        changed = e.ApplyTo($"Floor {N} added", bb => { Floors.AddTop(bb); return true; });
+            }
+            if (changed) StoreyTool.ClampView(e, e.Selected ?? b);
+            return changed;
+        }
+
+        static readonly GUIContent FloorCountLabel = new GUIContent("Floors",
+            $"How many floors, the ground floor with them (the roof isn't one), up to {Floors.MaxFloors}. New ones copy the top floor's rooms; taking floors off takes the top ones");
 
         /// <summary>The outlines: the base's and each setback's, picked to edit, added and removed; a setback's start and its terrace; templates to start from.</summary>
         void Outline(StoreyEdit e, BuildingData b, int k0, List<Tier> ts, Tier cur)
@@ -1069,7 +1098,7 @@ namespace Triband.Storey.Editor
                 }
             if (!b.interior) return;
             using (var c = StoreyInspectorUI.Card("floor", "Floor", StoreyInspectorUI.FloorPlanIcon, StoreyInspectorUI.Tint.Doors,
-                Floor(b, k) + (k < N && b.floors[k].filled ? " · filled" : ""), tip: "The storey being edited; the Storey Floors overlay in the Scene view picks it too"))
+                Floor(b, k) + (k < N && b.floors[k].filled ? " · filled" : ""), tip: "The storey being edited: pick it, copy its rooms up, duplicate it or delete it"))
             {
                 if (c.Open) k = FloorSettings(e, b, k);
             }
@@ -1079,7 +1108,10 @@ namespace Triband.Storey.Editor
                 if (c.Open) Tools(e, b, k);
         }
 
-        /// <summary>The storey being edited (picked here or in the Scene view's overlay), how its walls show, rooms or filled, its height; on the roof, which stairs and lifts reach it. Returns the storey picked.</summary>
+        /// <summary>
+        /// The storey being edited, its rooms copied to the floors above, duplicated or deleted; how its walls show, rooms or
+        /// filled, its height; on the roof, which stairs and lifts reach it. Returns the storey picked.
+        /// </summary>
         int FloorSettings(StoreyEdit e, BuildingData b, int k)
         {
             var v = e.View; int N = b.floors.Count;
@@ -1089,6 +1121,32 @@ namespace Triband.Storey.Editor
                 if (pickF != N - k) { v.floor = N - pickF; k = v.floor; v.selectedCore = ""; v.selectedWall = -1; SceneView.RepaintAll(); }
                 v.followFloor = GUILayout.Toggle(v.followFloor, new GUIContent("Camera follows", "The Scene view's camera moves up and down with the active floor"), EditorStyles.miniButton, GUILayout.Width(100));
             }
+            if (k < N)
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    // the floor list's actions, on the floor being edited (the floor count is in the Shape tab); after one the
+                    // floors are others, so nothing more is drawn this time round
+                    EditorGUILayout.PrefixLabel(" ");
+                    int kk = k; string label = Floor(b, k), above = N - 1 - k == 1 ? "the floor above" : $"the {N - 1 - k} floors above";
+                    using (new EditorGUI.DisabledScope(k >= N - 1))
+                        if (GUILayout.Button(new GUIContent("Copy up", "Its rooms (walls and doors) to every floor above it, in place of theirs"), EditorStyles.miniButtonLeft))
+                        {
+                            e.ApplyTo($"{label} copied to {above}", bb => { Floors.CopyLayoutUp(bb, kk); return true; });
+                            return k;
+                        }
+                    using (new EditorGUI.DisabledScope(N >= Floors.MaxFloors))
+                        if (GUILayout.Button(new GUIContent("Duplicate", "A copy of it, rooms and all, goes in above it; the floors above move up"), EditorStyles.miniButtonMid))
+                        {
+                            if (e.ApplyTo($"{label} duplicated", bb => { Floors.InsertAbove(bb, kk); return true; })) v.floor = k + 1;
+                            return v.floor;
+                        }
+                    using (new EditorGUI.DisabledScope(N <= 1))
+                        if (GUILayout.Button(new GUIContent("Delete", "Delete this floor; the floors above move down"), EditorStyles.miniButtonRight))
+                        {
+                            if (e.ApplyTo($"{label} deleted", bb => Floors.Delete(bb, kk))) { v.floor = Math.Min(k, N - 2); v.selectedCore = ""; v.selectedWall = -1; }
+                            return v.floor;
+                        }
+                }
             int wm = EditorGUILayout.Popup(new GUIContent("Walls", "This storey's walls in the Scene view"), (int)v.walls, new[]
             {
                 new GUIContent("Down", "Every wall low, so the rooms show from any side; nothing moves as the camera goes round"),
@@ -1099,7 +1157,7 @@ namespace Triband.Storey.Editor
             if (k == N)
             {
                 if (Roofs.IsPitched(b)) { StoreyInspectorUI.Note("A pitched roof has no roof access. Switch the roof to Flat in the Facade tab to put stairs up here."); return k; }
-                if (b.shafts.Count == 0) StoreyInspectorUI.Note("No stairs or lifts yet. Pick a floor in the Storey Floors overlay, then place stairs.");
+                if (b.shafts.Count == 0) StoreyInspectorUI.Note("No stairs or lifts yet. Pick a floor below the roof, then place stairs.");
                 for (int i = 0; i < b.shafts.Count; i++)
                 {
                     var s = b.shafts[i]; bool reach = Derived.ShaftTop(b, s) == N - 1; string id = s.id;

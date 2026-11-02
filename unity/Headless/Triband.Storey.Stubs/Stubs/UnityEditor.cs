@@ -509,24 +509,6 @@ namespace UnityEditor.EditorTools
     }
 }
 
-namespace UnityEditor.Overlays
-{
-    public sealed class OverlayAttribute : System.Attribute
-    {
-        public OverlayAttribute(System.Type editorWindowType, string displayName, bool defaultDisplay) { }
-    }
-
-    public abstract class IMGUIOverlay
-    {
-        public abstract void OnGUI();
-    }
-
-    public interface ITransientOverlay
-    {
-        bool visible { get; }
-    }
-}
-
 namespace UnityEditor.Callbacks
 {
     public sealed class OnOpenAssetAttribute : System.Attribute

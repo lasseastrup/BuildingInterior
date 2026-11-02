@@ -14,8 +14,8 @@ namespace Triband.Storey.Editor
     /// time (SPEC §9), a click that hits nothing of the tool's selects the building under the pointer (another site's too,
     /// which is then the one edited), and the site is
     /// drawn with the view the tab wants (the active storey clipped and cut away as in play in the Interior tab). They
-    /// belong to <see cref="StoreyToolContext"/>. No keyboard shortcuts: everything is a button in the inspector or the
-    /// Storey Floors overlay.
+    /// belong to <see cref="StoreyToolContext"/>. No keyboard shortcuts: everything is a button in the inspector or in the
+    /// Scene view.
     /// </summary>
     internal abstract class StoreyTool : EditorTool
     {
@@ -127,7 +127,8 @@ namespace Triband.Storey.Editor
             else if (ev.type == EventType.MouseDrag && GUIUtility.hotControl == id) { ev.Use(); sv.Repaint(); }
         }
 
-        static void ClampView(StoreyEdit e, BuildingData b)
+        /// <summary>The view's active floor and setback kept to the building as it is now (floors taken off, a setback gone).</summary>
+        internal static void ClampView(StoreyEdit e, BuildingData b)
         {
             var v = e.View;
             v.floor = System.Math.Max(0, System.Math.Min(b.floors.Count, v.floor));

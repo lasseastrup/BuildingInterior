@@ -6,5 +6,5 @@ Because a package's dependencies cannot be git URLs, projects installing from gi
 
 ## Editing layouts
 
-Add **Storey Site** to a GameObject, assign a `.storey` layout and the three materials, and press **Edit layout** in its inspector. The inspector's Shape, Facade and Interior tabs switch the Scene view's Storey tool. The Storey Floors overlay holds the floor count and the floor list. See `docs/EDITOR.md` for what each tool does and how to check it.
+Add **Storey Site** to a GameObject, assign a `.storey` layout and the three materials, and press **Edit layout** in its inspector. The inspector's Shape, Facade and Interior tabs switch the Scene view's Storey tool. The Shape tab's Floors card holds the floor count; the Interior tab's Floor card picks the floor to edit, and copies, duplicates and deletes it. See `docs/EDITOR.md` for what each tool does and how to check it.
 
