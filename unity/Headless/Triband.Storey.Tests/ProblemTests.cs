@@ -124,6 +124,31 @@ namespace Triband.Storey.Tests
             Assert.Contains(ps, p => p.code == "bridge" && p.buildingId == c.id);
         }
 
+        [Fact]
+        public void AShellOnlyBuildingKeepsItsInsideWithNoProblemsInIt()
+        {
+            // a walk-in building with something wrong of every kind inside it: stairs into each other, stairs through the
+            // outside wall, a lift with one stop, an atrium the stairs stand in, a wall outside its storey, a room with no door
+            var d = new StoreyDocument(); var b = Box(d, 0, 0, 3, 18, 12);
+            b.shafts.Add(new CoreData { id = "s1", type = CoreType.Stairs, x = 4, z = 6 });
+            b.shafts.Add(new CoreData { id = "s2", type = CoreType.Stairs, x = 5, z = 6 });
+            b.shafts.Add(new CoreData { id = "s3", type = CoreType.Stairs, x = 17.5, z = 3 });
+            b.shafts.Add(new CoreData { id = "l1", type = CoreType.Lift, x = 15, z = 10, bottom = 1, top = 1 });
+            b.voids.Add(new VoidData { id = "v1", kind = VoidKind.Atrium, bottom = 0, shape = new() { new Vec2(2, 2), new Vec2(7, 2), new Vec2(7, 8), new Vec2(2, 8) } });
+            b.floors[1].walls.Add(new WallData { a = new Vec2(22, 2), b = new Vec2(26, 2) });
+            b.floors[0].walls.Add(new WallData { a = new Vec2(10, 0), b = new Vec2(10, 12) });
+            var walkIn = Check(d).Where(p => p.buildingId == b.id).Select(p => p.code).Distinct().OrderBy(c => c).ToList();
+            output.WriteLine(string.Join(", ", walkIn));
+            foreach (var code in new[] { "core-overlap", "core-fit", "lift-one-stop", "void", "wall-outside", "unreached-part" }) Assert.Contains(code, walkIn);
+            // shell only: the inside is kept for when it is walk-in again, but nothing of it is built, so none of it is a problem
+            b.interior = false;
+            var shell = Check(d).Where(p => p.buildingId == b.id).ToList();
+            Assert.True(shell.Count == 0, string.Join("\n", shell.Select(p => p.code + ": " + p.message)));
+            // and back: they all are again
+            b.interior = true;
+            Assert.Equal(walkIn, Check(d).Where(p => p.buildingId == b.id).Select(p => p.code).Distinct().OrderBy(c => c).ToList());
+        }
+
         [Theory]
         [InlineData("demo")]
         [InlineData("variants")]

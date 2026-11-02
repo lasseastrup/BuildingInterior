@@ -303,6 +303,8 @@ What it finds:
 - **Buildings that overlap.**
 - **Artist windows** whose dressing (shutters, a surround) meets the next window's: the bays it needs (§6.9).
 
+A shell-only building keeps its rooms, stairs and lifts for when it is made walk-in again, but builds none of them, so none of what is inside it is a problem: not its reach, its walls, its stairs and lifts, nor stairs or a lift in an atrium's way (`ProblemTests.AShellOnlyBuildingKeepsItsInsideWithNoProblemsInIt`). Made walk-in again, they are checked again. Its outside still is: its doors, courtyards and atria, bridges, overlaps and windows.
+
 It runs on a worker thread, on its own copy of the layout, so the editor never waits for it.
 - **The first check** covers the whole layout.
 - **After that**, only what changed since the last check is checked again, and the result is merged into the list (`Problems.Scope`, `Changed`, `Merge`). The changes are found by comparing each building's text. What gets rechecked:

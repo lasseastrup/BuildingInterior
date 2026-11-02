@@ -77,7 +77,8 @@ namespace Triband.Storey.Edit
         /// Can building b take this void? A simple polygon of at least 2.5 × 2.5 m, 1.5 m inside the outline of every storey
         /// from its bottom up (and the roof's), clear of the cores on the storeys it opens, and of the other voids.
         /// </summary>
-        public static VoidIssue Issue(BuildingData b, VoidData v, List<Vec2>? shape = null, int? bottom = null, VoidKind? kind = null)
+        /// <param name="cores">Whether stairs and lifts in its way count: not a shell-only building's, kept but not built (Problems).</param>
+        public static VoidIssue Issue(BuildingData b, VoidData v, List<Vec2>? shape = null, int? bottom = null, VoidKind? kind = null, bool cores = true)
         {
             var sh = shape ?? v.shape; int bt = bottom ?? v.bottom; var kd = kind ?? v.kind; int N = b.floors.Count;
             if (sh.Count < 3 || !Tiers.SimplePoly(sh)) return VoidIssue.Shape;
@@ -86,7 +87,7 @@ namespace Triband.Storey.Edit
             if (bt < 0 || bt >= N) return VoidIssue.Outside;
             for (int k = bt; k <= N; k++) if (!Inside(sh, Derived.OutlineAt(b, k), WallGap)) return VoidIssue.Outside;
             var storeys = Storeys(b, kd, bt).ToList();
-            if (b.shafts.Any(s => CoreInWay(b, s, sh, storeys))) return VoidIssue.Core;
+            if (cores && b.shafts.Any(s => CoreInWay(b, s, sh, storeys))) return VoidIssue.Core;
             if (b.voids.Any(o => !ReferenceEquals(o, v) && Meets(sh, o.shape, 1.0))) return VoidIssue.Overlap;
             return VoidIssue.None;
         }

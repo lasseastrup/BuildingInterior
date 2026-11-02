@@ -161,15 +161,18 @@ namespace Triband.Storey.Validate
                 if (b.interior && Derived.Filled(b, e.k))
                     o.Add(P(b, e.k, Severity.Warning, "door-filled", $"A door opens into {Floor(b, e.k)}, which is filled", ex, ez));
             }
-            foreach (var s in b.shafts)
-            {
-                if (!Tiers.ShaftFits(b, s)) o.Add(P(b, s.bottom, Severity.Error, "core-fit", $"{Kind(s)} from {Floor(b, s.bottom)} no longer fit every floor they serve", s.x, s.z));
-                if (s.type == CoreType.Lift && Cores.Stops(b, s).Count < 2) o.Add(P(b, s.bottom, Severity.Warning, "lift-one-stop", "This lift has only one stop", s.x, s.z));
-                foreach (var t in b.shafts) if (string.CompareOrdinal(s.id, t.id) < 0 && Cores.Levels(b, s).Intersect(Cores.Levels(b, t)).Any() && Shafts.Overlap(s, t, 0, of: b)) o.Add(P(b, s.bottom, Severity.Error, "core-overlap", $"{Kind(s)} and {Kind(t).ToLowerInvariant()} overlap", (s.x + t.x) / 2, (s.z + t.z) / 2));
-            }
+            // a shell-only building keeps its walls, stairs and lifts for when it is walk-in again, but builds none of them:
+            // nothing of them is a problem meanwhile (as its walls and its reach, above and in Reach)
+            if (b.interior)
+                foreach (var s in b.shafts)
+                {
+                    if (!Tiers.ShaftFits(b, s)) o.Add(P(b, s.bottom, Severity.Error, "core-fit", $"{Kind(s)} from {Floor(b, s.bottom)} no longer fit every floor they serve", s.x, s.z));
+                    if (s.type == CoreType.Lift && Cores.Stops(b, s).Count < 2) o.Add(P(b, s.bottom, Severity.Warning, "lift-one-stop", "This lift has only one stop", s.x, s.z));
+                    foreach (var t in b.shafts) if (string.CompareOrdinal(s.id, t.id) < 0 && Cores.Levels(b, s).Intersect(Cores.Levels(b, t)).Any() && Shafts.Overlap(s, t, 0, of: b)) o.Add(P(b, s.bottom, Severity.Error, "core-overlap", $"{Kind(s)} and {Kind(t).ToLowerInvariant()} overlap", (s.x + t.x) / 2, (s.z + t.z) / 2));
+                }
             foreach (var v in b.voids)
             {
-                var why = Voids.Issue(b, v); if (why == VoidIssue.None) continue;
+                var why = Voids.Issue(b, v, cores: b.interior); if (why == VoidIssue.None) continue;
                 var c = v.shape.Count > 0 ? Centre(v.shape) : Centre(b.footprint);
                 o.Add(P(b, Math.Min(v.bottom, N - 1), Severity.Error, "void", $"{(v.kind == VoidKind.Courtyard ? "A courtyard" : "An atrium")}: {Voids.Why(why).TrimEnd('.')}", c.x, c.z));
             }
