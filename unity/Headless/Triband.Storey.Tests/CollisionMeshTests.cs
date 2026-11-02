@@ -131,6 +131,56 @@ namespace Triband.Storey.Tests
             Assert.True(bad.Count == 0, $"{bad.Count} of {n}:\n" + string.Join("\n", bad.Take(12)));
         }
 
+        // the nearest wall a ray meets, or null
+        static double? WallHit(CollisionMesh m, P3 o, P3 d)
+        {
+            double? best = null;
+            for (int t = 0; t < m.Tris; t++)
+            {
+                if (m.Kind[t] != CollisionKind.Wall) continue;
+                var h = Hit(o, d, m.P[m.I[3 * t]], m.P[m.I[3 * t + 1]], m.P[m.I[3 * t + 2]]);
+                if (h != null && (best == null || h < best)) best = h;
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// A terrace's parapet is a wall as high as it is, 1.1 m, not a storey high: Linden Court's terrace (the roof of its six
+        /// lower storeys, east of its setback) stops a ray at its deck's level and lets one at head height over it, to the setback's
+        /// wall 10 m in. The wall it stands on, the same line a storey down, ends at the parapet's top with it.
+        /// </summary>
+        [Fact]
+        public void ATerracesParapetIsAsHighAsItIs()
+        {
+            var (_, world) = PlayWorldTests.World("demo");
+            var b = world.Site.Buildings.First(x => x.name == "Linden Court");
+            var m = CollisionMesh.Build(world.Site, b, world.ShapeOf(b));
+            double deck = Derived.FloorBase(b, 6);
+            // 2 m east of the terrace's outer edge (Linden Court's local x 16), over its middle, looking west
+            var d = new P3(-1, 0, 0); double x = b.pos.x + 18, z = b.pos.z + 4;
+            Assert.Equal(2 - Dim.T_EXT, WallHit(m, new P3(x, deck + 0.5, z), d)!.Value, 6);   // the wall stands outside the outline
+            Assert.True(WallHit(m, new P3(x, deck + 1.5, z), d) is double over && over > 9.5, "a wall over the parapet");
+            Assert.True(WallHit(m, new P3(x, deck - 1.0, z), d) is double below && below < 2.1);   // the wall below it, as before
+            Assert.DoesNotContain(Enumerable.Range(0, m.P.Count), v => m.P[v].x > b.pos.x + 15.5 && m.P[v].y > deck + Lod0.Shared.TerraceParapet + 1e-6 && m.P[v].y < deck + 3);
+        }
+
+        /// <summary>The rails round a straight flight's opening are walls 1.02 m high, as they are, not a storey high.</summary>
+        [Fact]
+        public void AStairOpeningsRailsAreAsHighAsTheyAre()
+        {
+            var d = new StoreyDocument();
+            var b = Edit.Buildings.Add(d, "rect", new Vec2(0, 0)); b.pos = new Vec2(0, 0);
+            b.footprint = new() { new Vec2(0, 0), new Vec2(12, 0), new Vec2(12, 9), new Vec2(0, 9) };
+            b.floors = Enumerable.Range(0, 3).Select(_ => new FloorData()).ToList(); b.interior = true; b.shafts.Clear();
+            Assert.NotNull(Edit.Shafts.Place(b, 0, new Vec2(6, 4.5), CoreType.Flight, 0, Edit.Shafts.NewId(d)));
+            var site = new Site(d.buildings);
+            var m = CollisionMesh.Build(site, b, Lod0.BuildShape(site, b));
+            // on storey 1, across the opening from the walkway's side: the rail along the flight lane at x 6.04, then the far one
+            double y = Derived.FloorBase(b, 1); var dir = new P3(-1, 0, 0);
+            Assert.True(WallHit(m, new P3(8, y + 0.5, 4.5), dir) is double low && low < 2.0);
+            Assert.True(WallHit(m, new P3(8, y + 1.5, 4.5), dir) is double high && high > 7, "a wall over the rails");
+        }
+
         [Theory, MemberData(nameof(Corpora))]
         public void FloorsAndStairsFaceUp(string corpus)
         {

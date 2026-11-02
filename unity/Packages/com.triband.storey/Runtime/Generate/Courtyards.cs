@@ -251,7 +251,7 @@ namespace Triband.Storey.Generate
                     if (j == posts) continue;   // the next edge's first post stands at this corner
                     op.OBox(F, u - 0.02, u + 0.02, y, y + RailH - 0.08, w0, w1, C.rail, null, Skip.Bot);
                 }
-                if (sg != null) Facade.PushSeg(sg, F, m.Span(0.04, 0.04).Item1, m.Span(0.04, 0.04).Item2, 0.04, 0.04);
+                if (sg != null) Facade.PushSeg(sg, F, m.Span(0.04, 0.04).Item1, m.Span(0.04, 0.04).Item2, 0.04, 0.04, RailH);
             }
         }
 

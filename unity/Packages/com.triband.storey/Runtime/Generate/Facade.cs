@@ -810,10 +810,11 @@ namespace Triband.Storey.Generate
             return into;
         }
 
-        public static void PushSeg(List<Seg> sg, Frame F, double s, double e, double wo, double r)
+        /// <param name="h">How high it stands, where it is lower than its storey (<see cref="Seg.h"/>); 0 for all of it.</param>
+        public static void PushSeg(List<Seg> sg, Frame F, double s, double e, double wo, double r, double h = 0)
         {
             var a = F.At2(s, wo); var b = F.At2(e, wo);
-            sg.Add(new Seg(a.x, a.z, b.x, b.z, r));
+            sg.Add(new Seg(a.x, a.z, b.x, b.z, r, h));
         }
 
         /// <summary>A wall as stacked boxes around its openings (used for core fronts).</summary>

@@ -359,6 +359,12 @@ namespace Triband.Storey.Generate
             }
         }
 
+        /// <summary>A terrace's parapet's height over its deck, its coping's top: the collision mesh's wall stops there (<see cref="Seg.h"/>).</summary>
+        public const double TerraceParapet = 1.1;
+
+        /// <summary>The rails round a stair opening: their top over the floor (<see cref="Seg.h"/>).</summary>
+        public const double StairRail = 1.02;
+
         public void Terrace(MeshBuilder op, List<Seg>? sg, int k, Palette C)
         {
             double y = Derived.FloorBase(b, k), T = Dim.T_EXT;
@@ -367,8 +373,8 @@ namespace Triband.Storey.Generate
                 var F = new Frame(r.a, r.u, r.w);
                 op.Ctx(Geo.WallCtx(new Vec2(r.a.x + r.u.x * r.S.s, r.a.z + r.u.z * r.S.s), r.u, r.w, Math.Max(r.E.s - r.S.s, 0.05)), 1);
                 op.MBox(F, r.S, r.E, y, y + 1.0, 0, T, C.wall, C.inner, Skip.Top | Skip.Bot | Skip.UStart | Skip.UEnd);
-                op.MBox(F, r.S, r.E, y + 1.0, y + 1.1, -0.04, T, C.trim, C.trim, Skip.UStart | Skip.UEnd);
-                if (sg != null) Facade.PushSeg(sg, F, r.S.s + r.S.k * T / 2, r.E.s + r.E.k * T / 2, T / 2, T / 2);
+                op.MBox(F, r.S, r.E, y + 1.0, y + TerraceParapet, -0.04, T, C.trim, C.trim, Skip.UStart | Skip.UEnd);
+                if (sg != null) Facade.PushSeg(sg, F, r.S.s + r.S.k * T / 2, r.E.s + r.E.k * T / 2, T / 2, T / 2, TerraceParapet);
             }
         }
 
@@ -893,7 +899,7 @@ namespace Triband.Storey.Generate
                     return Geo.WallCtx(a, new Vec2((c.x - a.x) / L, (c.z - a.z) / L), new Vec2(f.u.x * nx + f.w.x * nz, f.u.z * nx + f.w.z * nz), L);
                 }
                 void Bx(double x0, double x1, double y0, double y1, double z0, double z1, Swatch c, Swatch? ci = null, Skip sk = Skip.None) => op.OBox(f, x0, x1, y0, y1, z0, z1, c, ci, sk);
-                void S(double px, double pz, double qx, double qz, double r) { var a = f.At2(px, pz); var c = f.At2(qx, qz); sg.Add(new Seg(a.x, a.z, c.x, c.z, r)); }
+                void S(double px, double pz, double qx, double qz, double r, double hs = 0) { var a = f.At2(px, pz); var c = f.At2(qx, qz); sg.Add(new Seg(a.x, a.z, c.x, c.z, r, hs)); }
                 const Skip TB = Skip.Top | Skip.Bot;
                 var fl = Cores.CoreFlush(Derived.OutlineAt(b, k), s, b: b); bool fL = fl[0] != null, fR = fl[1] != null, fB = fl[3] != null; double TE = Dim.T_EXT;
                 // a core wall's end against the building's own wall, whose windows show it (the prototype's faces are two-sided):
@@ -962,7 +968,7 @@ namespace Triband.Storey.Generate
                         Bx(x0 + 0.04, x1 - 0.04, y + 0.95, y + 1.02, -1.64, -1.56, C.rail);
                         Bx(x0, x0 + 0.04, y, y + 1.02, -1.62, -1.58, C.rail, null, Skip.Bot);
                         Bx(x1 - 0.04, x1, y, y + 1.02, -1.62, -1.58, C.rail, null, Skip.Bot);
-                        S(x0, -1.6, x1, -1.6, 0.04);
+                        S(x0, -1.6, x1, -1.6, 0.04, StairRail);
                     }
                     int T = Derived.ShaftTop(b, s);
                     if (!Cores.HasFlight(b, s, k)) Rail(-1.3, -0.05);                        // nothing goes on up from here (the top, or a filled storey above)
@@ -988,7 +994,7 @@ namespace Triband.Storey.Generate
                             Bx(x - 0.02, x + 0.02, y + 0.95, y + 1.02, z0 + 0.04, z1 - 0.04, C.rail);
                             Bx(x - 0.02, x + 0.02, y, y + 1.02, z0, z0 + 0.04, C.rail, null, Skip.Bot);
                             Bx(x - 0.02, x + 0.02, y, y + 1.02, z1 - 0.04, z1, C.rail, null, Skip.Bot);
-                            S(x, z0, x, z1, 0.04);
+                            S(x, z0, x, z1, 0.04, StairRail);
                         }
                         if (!wR) RailZ(xm + 0.04);
                         if (!fL) RailZ(-hw - 0.04);
@@ -999,7 +1005,7 @@ namespace Triband.Storey.Generate
                             Bx(x0 + 0.04, x1 - 0.04, y + 0.95, y + 1.02, zr - 0.02, zr + 0.02, C.rail);
                             Bx(x0, x0 + 0.04, y, y + 1.02, zr - 0.02, zr + 0.02, C.rail, null, Skip.Bot);
                             Bx(x1 - 0.04, x1, y, y + 1.02, zr - 0.02, zr + 0.02, C.rail, null, Skip.Bot);
-                            S(x0, zr, x1, zr, 0.04);
+                            S(x0, zr, x1, zr, 0.04, StairRail);
                         }
                     }
                     if (Cores.HasFlight(b, s, k))

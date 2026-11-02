@@ -134,6 +134,13 @@ namespace Triband.Storey.Generate
     public struct Seg
     {
         public double ax, az, bx, bz, r;
-        public Seg(double ax, double az, double bx, double bz, double r) { this.ax = ax; this.az = az; this.bx = bx; this.bz = bz; this.r = r; }
+        /// <summary>
+        /// How high it stands above its storey's floor, where that is less than the storey (a terrace's parapet, the rails
+        /// round a stair opening or an atrium); 0 for the storey's whole height. The walk model takes every segment as a wall
+        /// all the way up; the collision mesh stops it here (<see cref="Play.CollisionMesh"/>). Storey's own.
+        /// </summary>
+        public double h;
+        public Seg(double ax, double az, double bx, double bz, double r) { this.ax = ax; this.az = az; this.bx = bx; this.bz = bz; this.r = r; h = 0; }
+        public Seg(double ax, double az, double bx, double bz, double r, double h) : this(ax, az, bx, bz, r) { this.h = h; }
     }
 }

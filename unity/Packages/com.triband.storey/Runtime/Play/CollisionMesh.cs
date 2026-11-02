@@ -15,8 +15,9 @@ namespace Triband.Storey.Play
     /// A building's collision mesh for Unity physics (a <c>MeshCollider</c>): the walk model's world as triangles, so
     /// characters, rigid bodies, raycasts and NavMesh baking meet what <see cref="PlayWorld"/> walks on and is stopped by.
     /// <list type="bullet">
-    /// <item>Walls: LOD0's collision segments, each a thin box as thick as its radius says, as tall as its storey. A wall
-    /// that carries on up through the storeys above is one box.</item>
+    /// <item>Walls: LOD0's collision segments, each a thin box as thick as its radius says, as tall as its storey, or as the
+    /// parapet or rail it is where that is lower (<see cref="Seg.h"/>). A wall that carries on up through the storeys above is
+    /// one box, ending at the top of its last storey's piece.</item>
     /// <item>Floors: one polygon per level (the floor, terrace or roof), as far out as the walk model lets the player step,
     /// with the stair holes cut out; none inside storeys nobody can enter (shell-only buildings, filled storeys).</item>
     /// <item>Stairs: a ramp up each flight, a flat mid landing.</item>
@@ -92,29 +93,38 @@ namespace Triband.Storey.Play
         void Walls(BuildingData b, Lod0Shape l0)
         {
             int N = b.floors.Count;
-            // runs of the same segment up consecutive storeys: (key) -> (seg, y0, y1)
+            // runs of the same segment up consecutive storeys: (key) -> (seg, y0, y1). A run goes on only from a piece as tall as
+            // its storey: one stopping lower (a parapet, a rail, Seg.h) ends it at its own top
             var open = new Dictionary<(double, double, double, double, double), (Seg s, double y0, double y1)>();
-            var here = new HashSet<(double, double, double, double, double)>();   // a storey's, made once for every storey
+            var here = new Dictionary<(double, double, double, double, double), int>();   // a storey's, made once for every storey
+            var tops = new List<(Seg s, double top)>();                                    // and their tops, in the order met
             var done = new List<(double, double, double, double, double)>();
             for (int k = 0; k < l0.Segs.Count; k++)
             {
                 double y0 = Derived.FloorBase(b, k), y1 = k < N ? Derived.FloorBase(b, k + 1) : y0 + RoofWallHeight;
-                here.Clear();
+                here.Clear(); tops.Clear();
                 foreach (var s in l0.Segs[k])
                 {
                     var key = (s.ax, s.az, s.bx, s.bz, s.r);
-                    if (!here.Add(key)) continue;   // the same segment twice on a storey
-                    if (open.TryGetValue(key, out var run) && Math.Abs(run.y1 - y0) < 1e-9) open[key] = (s, run.y0, y1);
+                    double top = s.h > 0 ? Math.Min(y1, y0 + s.h) : y1;
+                    // the same segment twice on a storey: the taller
+                    if (here.TryGetValue(key, out int at)) { if (top > tops[at].top) tops[at] = (tops[at].s, top); continue; }
+                    here[key] = tops.Count; tops.Add((s, top));
+                }
+                foreach (var (s, top) in tops)
+                {
+                    var key = (s.ax, s.az, s.bx, s.bz, s.r);
+                    if (open.TryGetValue(key, out var run) && Math.Abs(run.y1 - y0) < 1e-9) open[key] = (s, run.y0, top);
                     else
                     {
                         if (open.TryGetValue(key, out run)) Box(run.s, run.y0, run.y1);
-                        open[key] = (s, y0, y1);
+                        open[key] = (s, y0, top);
                     }
                 }
                 // runs that stop below this storey are done
                 done.Clear(); done.AddRange(open.Keys);
                 foreach (var key in done)
-                    if (!here.Contains(key)) { var r = open[key]; Box(r.s, r.y0, r.y1); open.Remove(key); }
+                    if (!here.ContainsKey(key)) { var r = open[key]; Box(r.s, r.y0, r.y1); open.Remove(key); }
             }
             foreach (var r in open.Values) Box(r.s, r.y0, r.y1);
         }
