@@ -106,6 +106,8 @@ The inspector says which building and storey it's in.
 - **Steady copies:** a group's props move to their materials' steady copies, and back, as the building's steady answer changes (§2.2, step 4).
 - **Rigidbodies:** held still while their building has no collider, and while their site is loading (§2.6).
 
+**Moving a building in the editor moves its props.** The Shape tool's move gizmo and *Snap to ground* take the building's props along by as much as it moves, in the same undo step: those the manager files under it, the building their inspector names, and the switched-off ones by where their pivot stands (docs/EDITOR.md §6.11). *Its props move with it* (Shape ▸ Placement) turns it off.
+
 **Tools ▸ Storey ▸ Props ▸ Show Prop Buildings** tints every prop by its building, and magenta in the street. A prop that doesn't change colour has a shader without the nodes. This is also the quickest check that the user value reaches the shader with your settings.
 
 ### 2.5 Hide Whole: for shaders that can't take the nodes

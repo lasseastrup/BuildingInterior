@@ -576,6 +576,8 @@ Each building has an **elevation**: its ground floor's height above the Storey S
 
 **Snap to ground** casts down onto the scene's colliders (a Terrain has one) at the building's corners (30 cm in), its edges' middles and its centre, skipping the site's own colliders (`Ground.Samples`). The building stands on the highest ground found, so it never sinks into the slope. Where the ground falls away by more than 5 cm, its foundation (Facade ▸ *Walls*) reaches 10 cm past the lowest point, so it never floats (`Ground.Snap`). One undo step.
 
+**Its props go with it.** Moving a building moves the Storey Props in it by as much (docs/PROPS.md): the move gizmo's moves, across and up and down, and *Snap to ground*'s. The props in it are those the props manager files under it, the building their inspector names (inside its outline, from a metre below its ground floor to 4 m above its roof base), and a prop switched off by where its pivot stands. A prop under another that moves goes with that one. Each prop's transform is recorded in the move's own undo step, so one Undo puts the building and its props back (`StoreyPropsFollow`). *Its props move with it*, under *Placement*, turns it off (kept for you, for every site). Props in the street, and other objects, stay where they are, and so do the props of the buildings it's moved past.
+
 **Neighbours at different heights** share a wall only over the heights both reach: from the higher elevation to the lower top (`Party.Range.Lo` to `Hp`). The taller one still owns that band and builds it blank. Each building's storeys outside the band keep their own outside wall, windows and all: a ground floor below a raised neighbour, or the storeys of a raised building above a lower one. Two buildings that share less than half a metre of height share nothing. A storey counts as in the band if its floor is.
 
 A template comes in at elevation 0 (it lands somewhere else); a duplicate keeps its source's.
@@ -586,7 +588,8 @@ A template comes in at elevation 0 (it lands somewhere else); a duplicate keeps 
 1. Put a Terrain with a slope under a site. Select a building, Shape ▸ *Snap to ground*: it stands on the high side, and its foundation reaches the ground on the low side.
 2. Drag the move gizmo's up arrow: the building moves up, inside and out, and a label says how high. Bring it down near the ground: it stops level with it. Undo puts it back in one step. Walk into it with the play kit, and up its stairs: the floor clip and the cutaway follow.
 3. Raise one of two buildings back to back by a storey: the lower one's ground floor along the shared wall gets windows; the raised one's top storey above its neighbour does too.
-4. Undo each step.
+4. Put Storey Props in a house, one on its roof and one in the street beside it. Drag the house across and up with the move gizmo: the props inside and on the roof go with it, the one in the street stays. One Undo puts the house and its props back. *Snap to ground* takes them up or down with it. With *Its props move with it* off, they stay.
+5. Undo each step.
 
 ### 6.12 Artist-made facade details
 

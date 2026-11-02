@@ -303,6 +303,8 @@ namespace Triband.Storey.Editor
                 tip: "Where the building stands in the site: its ground floor's height above the site's ground");
             if (!c.Open) return;
             StoreyInspectorUI.Note("Move the building with the move gizmo in the Scene view; its up arrow raises and lowers it, level with the ground or a neighbour as it passes them (Alt: free).");
+            bool follow = EditorGUILayout.Toggle(PropsFollowLabel, StoreyPropsFollow.Enabled);
+            if (follow != StoreyPropsFollow.Enabled) StoreyPropsFollow.Enabled = follow;
             using (new EditorGUILayout.HorizontalScope())
             {
                 GUILayout.FlexibleSpace();
@@ -310,6 +312,9 @@ namespace Triband.Storey.Editor
                     SnapToGround(e, b);
             }
         }
+
+        static readonly GUIContent PropsFollowLabel = new GUIContent("Its props move with it",
+            "The Storey Props in the building (the building their inspector names) move with it, the move gizmo's moves and Snap to ground, in the same undo step. Kept for you, for every site");
 
         void SnapToGround(StoreyEdit e, BuildingData b)
         {
@@ -328,7 +333,10 @@ namespace Triband.Storey.Editor
                 if (!float.IsPositiveInfinity(best)) heights.Add(at);
             }
             double? drop = null;
-            if (heights.Count > 0) e.ApplyTo("Snap to ground", bb => (drop = Ground.Snap(bb, heights)) != null);
+            // its Storey Props with it, up or down as far as it goes
+            var follow = StoreyPropsFollow.Of(e, b); double was = b.elevation; string id = b.id;
+            if (heights.Count > 0 && e.ApplyTo("Snap to ground", bb => (drop = Ground.Snap(bb, heights)) != null) && e.Document.buildings.Find(x => x.id == id) is { } now && now.elevation != was)
+                follow?.MoveBy(new Vector3(0, (float)(now.elevation - was), 0), "Snap to ground");
             message = drop == null ? "No ground found under the building: Snap to ground casts down onto colliders (a Terrain has one), and none were under it."
                 : drop > 0.05 ? $"Standing on the highest ground under it, {b.elevation:0.00} m; the foundation reaches {drop:0.00} m further down to the lowest."
                 : $"Standing on the ground, {b.elevation:0.00} m.";

@@ -28,9 +28,11 @@ namespace UnityEngine
         public static T Instantiate<T>(T original, Transform parent) where T : Object => original;
         public static T FindAnyObjectByType<T>() where T : Object => null;
         public static T[] FindObjectsByType<T>(FindObjectsSortMode sortMode) where T : Object => new T[0];
+        public static T[] FindObjectsByType<T>(FindObjectsInactive findObjectsInactive, FindObjectsSortMode sortMode) where T : Object => new T[0];
     }
 
     public enum FindObjectsSortMode { None = 0, InstanceID = 1 }
+    public enum FindObjectsInactive { Exclude = 0, Include = 1 }
 
     /// <summary>An object's identity in the engine (Unity 6.3's successor to the instance id).</summary>
     public struct EntityId { }
@@ -755,6 +757,8 @@ namespace UnityEngine
         public int hierarchyCount => 1;
         public int hierarchyCapacity { get; set; }
         public Vector3 TransformPoint(Vector3 position) => position;
+        public Vector3 TransformVector(Vector3 vector) => vector;
+        public Vector3 InverseTransformPoint(Vector3 position) => position;
     }
 
     public class AsyncOperation
