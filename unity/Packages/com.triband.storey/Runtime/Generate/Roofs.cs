@@ -21,6 +21,12 @@ namespace Triband.Storey.Generate
         /// </summary>
         public Frame? WinF;
         public Opening? WinO;
+        /// <summary>
+        /// The edge of the outline the roof was made on (its index there) whose wall the part hangs over: an eave's fascia
+        /// and soffit, the end closing its soffit at a rake, and the slope rising from it; -1 for none. Below the wall's
+        /// top, the cutaway takes it away with that wall (<see cref="Roofs.Draw"/>). Storey's own.
+        /// </summary>
+        public int Edge = -1;
     }
 
     public enum RoofKind { Roof, Trim, Soffit, Wall, Window }
@@ -252,6 +258,14 @@ namespace Triband.Storey.Generate
                 if (brk.Count > 0) region = Clipper.BooleanOp(ClipType.Difference, region, brk, FillRule.NonZero, 6);
             }
             var bands = new Dictionary<int, List<List<Vec2>>>();   // each eave's sloped face in plan, for the dormers
+            // each planning edge's edge of the outline (its index there), the one along it: whose wall a slope hangs over
+            var rawOf = new int[m];
+            if (src == null) for (int j = 0; j < m; j++) rawOf[j] = em[j];
+            else
+            {
+                for (int j = 0; j < m; j++) rawOf[j] = -1;
+                for (int j = 0; j < n; j++) if (src[j] >= 0 && rawOf[src[j]] < 0) rawOf[src[j]] = em[j];
+            }
             foreach (var f in faces)
             {
                 var subj = new PathD(); foreach (var q in f.pts) subj.Add(new PointD(q[0], q[1]));
@@ -264,7 +278,7 @@ namespace Triband.Storey.Generate
                 foreach (var pl in polys)
                 {
                     if (pl[0].Count < 3) continue;
-                    var part = new RoofPart { N = nrm, Kind = RoofKind.Roof };
+                    var part = new RoofPart { N = nrm, Kind = RoofKind.Roof, Edge = rawOf[f.j] };
                     foreach (var p in pl[0]) { var q = new P3(p.x, HOf(f.j, p.x, p.z), p.z); rise = Math.Max(rise, q.y - top); part.Pts.Add(q); }
                     for (int r = 1; r < pl.Count; r++) { var hole = new List<P3>(); foreach (var p in pl[r]) hole.Add(new P3(p.x, HOf(f.j, p.x, p.z), p.z)); part.Holes.Add(hole); }
                     parts.Add(part); clipped.Add((f.j, part.Pts));
@@ -332,8 +346,8 @@ namespace Triband.Storey.Generate
                     // a cut corner's eave runs round inside the sharp roof's eave line: as high as the roof is at each end
                     if (e < 0.05) continue;
                     double hA = RoofAt(A.x, A.z), hB = RoofAt(B.x, B.z), ya = hA - 0.15, yb2 = hB - 0.15; var Wa = W[j]; var Wb = W[(j + 1) % n];
-                    parts.Add(new RoofPart { Pts = { new P3(A.x, ya, A.z), new P3(B.x, yb2, B.z), new P3(B.x, hB, B.z), new P3(A.x, hA, A.z) }, N = outN, Kind = RoofKind.Trim });
-                    parts.Add(new RoofPart { Pts = { new P3(A.x, ya, A.z), new P3(B.x, yb2, B.z), new P3(Wb.x, yb2, Wb.z), new P3(Wa.x, ya, Wa.z) }, N = new P3(0, -1, 0), Kind = RoofKind.Soffit });
+                    parts.Add(new RoofPart { Pts = { new P3(A.x, ya, A.z), new P3(B.x, yb2, B.z), new P3(B.x, hB, B.z), new P3(A.x, hA, A.z) }, N = outN, Kind = RoofKind.Trim, Edge = em[j] });
+                    parts.Add(new RoofPart { Pts = { new P3(A.x, ya, A.z), new P3(B.x, yb2, B.z), new P3(Wb.x, yb2, Wb.z), new P3(Wa.x, ya, Wa.z) }, N = new P3(0, -1, 0), Kind = RoofKind.Soffit, Edge = em[j] });
                     if (Math.Min(ya, yb2) > top + 0.01) parts.Add(new RoofPart { Pts = { new P3(Wa.x, top, Wa.z), new P3(Wb.x, top, Wb.z), new P3(Wb.x, yb2, Wb.z), new P3(Wa.x, ya, Wa.z) }, N = outN, Kind = RoofKind.Wall });
                     continue;
                 }
@@ -341,8 +355,8 @@ namespace Triband.Storey.Generate
                 {
                     if (e < 0.05) continue;
                     double hE = EaveH(j), yb = hE - 0.15; var Wa = W[j]; var Wb = W[(j + 1) % n];
-                    parts.Add(new RoofPart { Pts = { new P3(A.x, yb, A.z), new P3(B.x, yb, B.z), new P3(B.x, hE, B.z), new P3(A.x, hE, A.z) }, N = outN, Kind = RoofKind.Trim });
-                    parts.Add(new RoofPart { Pts = { new P3(A.x, yb, A.z), new P3(B.x, yb, B.z), new P3(Wb.x, yb, Wb.z), new P3(Wa.x, yb, Wa.z) }, N = new P3(0, -1, 0), Kind = RoofKind.Soffit });
+                    parts.Add(new RoofPart { Pts = { new P3(A.x, yb, A.z), new P3(B.x, yb, B.z), new P3(B.x, hE, B.z), new P3(A.x, hE, A.z) }, N = outN, Kind = RoofKind.Trim, Edge = em[j] });
+                    parts.Add(new RoofPart { Pts = { new P3(A.x, yb, A.z), new P3(B.x, yb, B.z), new P3(Wb.x, yb, Wb.z), new P3(Wa.x, yb, Wa.z) }, N = new P3(0, -1, 0), Kind = RoofKind.Soffit, Edge = em[j] });
                     if (yb > top + 0.01) parts.Add(new RoofPart { Pts = { new P3(Wa.x, top, Wa.z), new P3(Wb.x, top, Wb.z), new P3(Wb.x, yb, Wb.z), new P3(Wa.x, yb, Wa.z) }, N = outN, Kind = RoofKind.Wall });
                     continue;
                 }
@@ -377,7 +391,7 @@ namespace Triband.Storey.Generate
                     if (nb < 0) continue; double yb = EaveH(nb) - 0.15, a0 = Math.Min(tc, tw), a1 = Math.Max(tc, tw); if (a1 - a0 < 1e-4) continue;
                     var sp = Span(a0, a1); sp.Reverse();
                     var cp = new List<P3> { Lift(a0, yb), Lift(a1, yb) }; foreach (var q in sp) cp.Add(Lift(q[0], q[1]));
-                    if (Math.Abs(PolyArea3(cp)) > 1e-4) parts.Add(new RoofPart { Pts = cp, N = outN, Kind = RoofKind.Wall });
+                    if (Math.Abs(PolyArea3(cp)) > 1e-4) parts.Add(new RoofPart { Pts = cp, N = outN, Kind = RoofKind.Wall, Edge = em[nb] });   // the eave's end
                 }
             }
             return new RoofParts { Parts = cut != null ? CutParts(parts, cut) : parts, Rise = Math.Max(rise, 0) };
@@ -454,7 +468,7 @@ namespace Triband.Storey.Generate
             return a / 2;
         }
 
-        static void Collect(PolyPathD node, List<List<List<Vec2>>> out_)
+        internal static void Collect(PolyPathD node, List<List<List<Vec2>>> out_)
         {
             for (int i = 0; i < node.Count; i++)
             {
@@ -496,7 +510,7 @@ namespace Triband.Storey.Generate
                     foreach (var pl in polys)
                     {
                         if (pl[0].Count < 3) continue;
-                        var np = new RoofPart { N = p.N, Kind = p.Kind };
+                        var np = new RoofPart { N = p.N, Kind = p.Kind, Edge = p.Edge };
                         foreach (var q in pl[0]) np.Pts.Add(new P3(q.x, Y(q.x, q.z), q.z));
                         for (int r = 1; r < pl.Count; r++) { var hole = new List<P3>(); foreach (var q in pl[r]) hole.Add(new P3(q.x, Y(q.x, q.z), q.z)); np.Holes.Add(hole); }
                         out_.Add(np);
@@ -536,7 +550,7 @@ namespace Triband.Storey.Generate
                     if (poly.Count >= 3)
                     {
                         var pts = new List<P3>(); foreach (var q in poly) pts.Add(new P3(a.x + d[0] * q[0], q[1], a.z + d[1] * q[0]));
-                        if (Math.Abs(PolyArea3(pts)) > 1e-5) out_.Add(new RoofPart { Pts = pts, N = p.N, Kind = p.Kind });
+                        if (Math.Abs(PolyArea3(pts)) > 1e-5) out_.Add(new RoofPart { Pts = pts, N = p.N, Kind = p.Kind, Edge = p.Edge });
                     }
                 }
             }
@@ -694,14 +708,21 @@ namespace Triband.Storey.Generate
         /// Emit roof parts into a mesh. Returns false when there are none. A dormer's window is dressed by the style
         /// <paramref name="st"/> as the facade's are (LOD0), or a plain pane with the window shader's coordinates (LOD1).
         /// </summary>
-        public static bool Draw(MeshBuilder op, RoofParts? R, Palette C, FacadeStyle? st = null)
+        /// <param name="walls">
+        /// The cutaway ids of the walls the roof sits on, by the edge of the outline it was made on (0: none): each part that
+        /// hangs over one (<see cref="RoofPart.Edge"/>) slides away with it (<see cref="MeshBuilder.CtxOf"/>). The ceiling clip
+        /// takes the roof off the storey under it but for an eave's foot, which hangs below the clip: over a wall the cutaway
+        /// had taken down, it was left in the air (Storey's own). Null: none (LOD1's, which nothing cuts).
+        /// </param>
+        public static bool Draw(MeshBuilder op, RoofParts? R, Palette C, FacadeStyle? st = null, int[]? walls = null)
         {
             if (R == null) return false;
-            op.Ctx(null, 0);
+            op.Ctx(null, 0); int ctx = 0;
             foreach (var p in R.Parts)
             {
                 if (p.Kind == RoofKind.Window && p.WinF is Frame wf && p.WinO is Opening wo)
                 {
+                    if (ctx != 0) { op.Ctx(null, 0); ctx = 0; }
                     if (op.Lean) Facade.Pane(op, wf, wo.u0, wo.u1, wo.y0, wo.y1, Dim.T_EXT * 0.45, C.glassDark, false);
                     else
                     {
@@ -712,6 +733,8 @@ namespace Triband.Storey.Generate
                     op.Ctx(null, 0);
                     continue;
                 }
+                int id = walls != null && p.Edge >= 0 && p.Edge < walls.Length ? walls[p.Edge] : 0;
+                if (id != ctx) { op.CtxOf(id); ctx = id; }
                 var col = p.Kind == RoofKind.Roof ? C.roof : p.Kind == RoofKind.Trim ? C.trim : p.Kind == RoofKind.Soffit ? C.trimShade : p.Kind == RoofKind.Window ? C.glassDark : C.wall;
                 var pts = new List<P3>(p.Pts); foreach (var h in p.Holes) pts.AddRange(h);
                 var tris = Triangulate.Planar(p.Pts, p.Holes, p.N);

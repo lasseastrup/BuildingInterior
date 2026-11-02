@@ -75,7 +75,7 @@ struct StoreyVarying
 {
     float3 worldPos;    // world position after displacement
     float4 wall;        // cutaway data: wall start (xy), normal scaled by 1 + length (zw)
-    float kind;         // 0 slab, 1 wall, 2 tall part; + 8 × (neighbour index + 1) for party walls
+    float kind;         // 0 slab, 1 wall, 2 tall part, 3 inside another wall; + 8 × (neighbour index + 1) for party walls
     float wid;          // global wall id (0 = none)
     float bid;          // building index
     float lod;          // LOD this mesh is
@@ -196,6 +196,9 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
 #ifndef STOREY_DEPTH
     // 1. everything above the ceiling of the active floor
     if (act && v.worldPos.y > _StoreyActive.y) clip(-1);
+    // a wall's face inside another wall, where one runs into the other (MeshBuilder.Buried): hidden while that wall stands,
+    // but the cut (1, and 2 below) opens walls from above, and it showed inside the section cap. Storey's own
+    if (act && abs(kind - 3.0) < 0.5) clip(-1);
     // 2. cutaway: walls between camera and focus drop to stub height; tall parts on the camera side too
     if (actCut && _StoreyCut.x > 0.5 && kind > 0.5 && v.worldPos.y > _StoreyCut.z + _StoreyCut.y && v.worldPos.y < _StoreyCut.w && v.worldPos.y > _StoreyCut.z - 0.05)
     {
@@ -219,7 +222,7 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
                 if (nl < 1.01 || (s > -0.5 && s < nl - 1.0 + 0.5)) clip(-1);
             }
         }
-        else if (dot(v.wall.xy - _StoreyFocus.xz, _StoreyCamDir) > 0.4) clip(-1);
+        else if (kind < 2.5 && dot(v.wall.xy - _StoreyFocus.xz, _StoreyCamDir) > 0.4) clip(-1);
     }
     // 3. buildings between the camera and the player (never the player's own building, which is sliced above)
     bool mateUp = mate >= 0.0 && _StoreyState[StoreyRow((int)mate)].w < 0.5;

@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using Clipper2Lib;
 
 namespace Triband.Storey.Generate
 {
@@ -850,6 +851,9 @@ namespace Triband.Storey.Generate
                 var jamb = cur > uA ? skip & Skip.UStart : Skip.None;
                 if (jamb != Skip.None) { bool b0 = gb.Backing; gb.Backing = true; gb.OBox(F, cur, uB, y0, y0 + h, w0, w1, c, cIn, AllBut(jamb)); gb.Backing = b0; }
             }
+            // the wall's foot, left open by its boxes, closed but under its doors (MeshBuilder.Foot)
+            if ((skip & Skip.Bot) != 0 && gb.WallId > 0)
+                foreach (var (a, e) in SolidRanges(uA, uB, ops)) gb.Foot(F, a, e, y0, w0, w1, c);
         }
 
         /// <summary>Every face of a box skipped but <paramref name="keep"/>.</summary>
@@ -870,16 +874,23 @@ namespace Triband.Storey.Generate
             public Swatch? thresholdC;
             /// <summary>The style recesses its doors (<see cref="FacadeStyle.doorRecess"/>).</summary>
             public bool doorsRecessed;
+            /// <summary>
+            /// Where a face of the panel lies inside another wall (Storey's own): given the face's two ends in plan (site
+            /// space), the parts of it that do, as fractions from the first, in order and apart; null or none for none. Those
+            /// parts are made as buried (<see cref="MeshBuilder.Buried"/>): hidden while the other wall stands, and left out of
+            /// the building the player is in, where a cut opens that wall and they showed inside it. LOD0's alone.
+            /// </summary>
+            public Func<Vec2, Vec2, List<(double, double)>?>? buried;
 
             /// <summary>Where opening <paramref name="o"/>'s reveal starts, out from the wall's inner face (the panel's <paramref name="w0"/>), as <see cref="WallPanel"/> makes it.</summary>
             public double RevealFrom(Opening o, double w0) => o.door && doorRevealFrom is double dr ? o.recess is double or ? ShellRevealFrom(or, true, o.kind) : dr : revealFrom ?? w0;
 
             /// <summary>Every option set, as a new one with these would be (for options used again panel after panel).</summary>
             public PanelOpt Set(bool outer = true, bool inner = true, bool ends = false, bool threshold = false, double? revealFrom = null, Swatch? revealC = null, bool rooms = false, double? doorRevealFrom = null, Swatch? thresholdC = null,
-                bool doorsRecessed = false)
+                bool doorsRecessed = false, Func<Vec2, Vec2, List<(double, double)>?>? buried = null)
             {
                 this.outer = outer; this.inner = inner; this.ends = ends; this.threshold = threshold; this.revealFrom = revealFrom; this.revealC = revealC; this.rooms = rooms;
-                this.doorRevealFrom = doorRevealFrom; this.thresholdC = thresholdC; this.doorsRecessed = doorsRecessed;
+                this.doorRevealFrom = doorRevealFrom; this.thresholdC = thresholdC; this.doorsRecessed = doorsRecessed; this.buried = buried;
                 return this;
             }
         }
@@ -921,9 +932,25 @@ namespace Triband.Storey.Generate
             var sc = gb.Panel ??= new PanelScratch();
             var os = MergeOps(ops, sc.Merged, sc.Sorted, sc.Copies);
             P3 X(double uu, double yy, double wv) => F.At(uu, y0 + yy, wv);
+            // the parts of a face from (ua, wa) to (ub, wb) inside another wall (PanelOpt.buried), as fractions; null for none
+            List<(double, double)>? Buried(double ua, double wa, double ub, double wb) => opt.buried == null || gb.Lean ? null : opt.buried(F.At2(ua, wa), F.At2(ub, wb));
             void Face(double wv, int sign, Swatch c)
             {
                 double s = m.S.At(wv), e = m.E.At(wv);
+                if (Buried(s, wv, e, wv) is { Count: > 0 } bur)
+                {
+                    // in pieces: those inside another wall made as buried
+                    var nr = new P3(F.w.x * sign, 0, F.w.z * sign); double at = s;
+                    foreach (var (t0, t1) in bur)
+                    {
+                        double a = s + (e - s) * t0, z = s + (e - s) * t1;
+                        if (a > at + 1e-6) FacePart(gb, F, y0, h, wv, at, a, os, nr, c);
+                        bool was = gb.Buried; gb.Buried = true; FacePart(gb, F, y0, h, wv, Math.Max(a, at), z, os, nr, c); gb.Buried = was;
+                        at = Math.Max(at, z);
+                    }
+                    if (e > at + 1e-6) FacePart(gb, F, y0, h, wv, at, e, os, nr, c);
+                    return;
+                }
                 var cont = sc.Cont; cont.Clear(); cont.Add(new Vec2(s, 0));
                 foreach (var o in os) if (o.y0 <= 1e-3) { cont.Add(new Vec2(o.u0, 0)); cont.Add(new Vec2(o.u0, o.y1)); cont.Add(new Vec2(o.u1, o.y1)); cont.Add(new Vec2(o.u1, 0)); }
                 cont.Add(new Vec2(e, 0)); cont.Add(new Vec2(e, h));
@@ -957,8 +984,48 @@ namespace Triband.Storey.Generate
             if (opt.ends)
             {
                 double s0 = m.S.At(w0), s1 = m.S.At(w1), e0 = m.E.At(w0), e1 = m.E.At(w1);
-                gb.Quad(X(s0, 0, w0), X(s1, 0, w1), X(s1, h, w1), X(s0, h, w0), Geo.EndNormal(F, s0, s1, w0, w1, -1), cOut);
-                gb.Quad(X(e0, 0, w0), X(e1, 0, w1), X(e1, h, w1), X(e0, h, w0), Geo.EndNormal(F, e0, e1, w0, w1, 1), cOut);
+                End(s0, s1, Geo.EndNormal(F, s0, s1, w0, w1, -1)); End(e0, e1, Geo.EndNormal(F, e0, e1, w0, w1, 1));
+            }
+            // an end, across from w0 to w1: in pieces where it lies inside another wall, those made as buried
+            void End(double a0, double a1, P3 nr)
+            {
+                void Q(double ta, double tb)
+                {
+                    double ua = a0 + (a1 - a0) * ta, ub = a0 + (a1 - a0) * tb, wa = w0 + (w1 - w0) * ta, wb = w0 + (w1 - w0) * tb;
+                    gb.Quad(X(ua, 0, wa), X(ub, 0, wb), X(ub, h, wb), X(ua, h, wa), nr, cOut);
+                }
+                if (!(Buried(a0, w0, a1, w1) is { Count: > 0 } bur)) { Q(0, 1); return; }
+                double at = 0;
+                foreach (var (t0, t1) in bur)
+                {
+                    if (t0 > at + 1e-6) Q(at, t0);
+                    bool was = gb.Buried; gb.Buried = true; Q(Math.Max(t0, at), t1); gb.Buried = was;
+                    at = Math.Max(at, t1);
+                }
+                if (at < 1 - 1e-6) Q(at, 1);
+            }
+            // its foot, closed from below (Storey's own; only Unity draws it, MeshBuilder.Backing). A wall the cutaway takes
+            // down, or the ceiling clip cuts, is seen into from above: the backs of its faces show as the section cap
+            // (STOREY_CAP), but an eye looking down along it went on down past them, through the walls of every storey under
+            // it, to the ground. The foot faces down, so from above it is the cap too. A walk-in storey's walls alone (nothing
+            // cuts the rest), a centimetre up off the floor they stand on (Dim.BACK); none under a door
+            if (opt.inner && !gb.Lean)
+            {
+                bool was = gb.Backing; gb.Backing = true;
+                double? from = null;
+                foreach (var o in os) if (o.y0 <= 1e-3) { Foot(from, o.u0); from = o.u1; }
+                Foot(from, null);
+                gb.Backing = was;
+            }
+            // the foot from a door's side (or the wall's mitred end, null) to the next
+            void Foot(double? a, double? z)
+            {
+                double s0 = a ?? m.S.At(w0), s1 = a ?? m.S.At(w1), e0 = z ?? m.E.At(w0), e1 = z ?? m.E.At(w1);
+                if (e0 - s0 < 1e-4 || e1 - s1 < 1e-4) return;
+                var down = new P3(0, -1, 0);
+                gb.Quad(X(s0, Dim.BACK, w0), X(e0, Dim.BACK, w0), X(e1, Dim.BACK, w1), X(s1, Dim.BACK, w1), down, cOut);
+                if (a == null) gb.ClipFlat(F, m.S, w0, w1, y0 + Dim.BACK, false, cOut);
+                if (z == null) gb.ClipFlat(F, m.E, w0, w1, y0 + Dim.BACK, false, cOut);
             }
             if (gb.Solids != null)
             {
@@ -969,6 +1036,37 @@ namespace Triband.Storey.Generate
                 });
                 foreach (var o in os) { Put(cur, o.u0, 0, h); if (o.y0 > 1e-3) Put(o.u0, o.u1, 0, o.y0); if (o.y1 < h - 1e-3) Put(o.u0, o.u1, o.y1, h); cur = o.u1; }
                 Put(cur, null, 0, h);
+            }
+        }
+
+        /// <summary>
+        /// The part of a panel's face at w = <paramref name="wv"/> between u = <paramref name="ua"/> and <paramref name="ub"/>, the
+        /// storey's height <paramref name="h"/> less the openings <paramref name="os"/> (merged), facing <paramref name="nr"/>: a
+        /// piece <see cref="WallPanel"/> splits off where the face goes inside another wall (<see cref="PanelOpt.buried"/>).
+        /// </summary>
+        static void FacePart(MeshBuilder gb, Frame F, double y0, double h, double wv, double ua, double ub, List<Opening> os, P3 nr, Swatch c)
+        {
+            if (ub - ua < 1e-6) return;
+            var holes = new PathsD();
+            foreach (var o in os)
+            {
+                double a = Math.Max(o.u0, ua), z = Math.Min(o.u1, ub);
+                if (z - a < 1e-6) continue;
+                // one from the floor or to the top opens the face's edge: past it, so no sliver is left
+                double oy0 = o.y0 <= 1e-3 ? -1 : o.y0, oy1 = o.y1 >= h - 1e-3 ? h + 1 : o.y1;
+                holes.Add(new PathD { new PointD(a, oy0), new PointD(z, oy0), new PointD(z, oy1), new PointD(a, oy1) });
+            }
+            var rect = new PathsD { new PathD { new PointD(ua, 0), new PointD(ub, 0), new PointD(ub, h), new PointD(ua, h) } };
+            var tree = new PolyTreeD();
+            Clipper.BooleanOp(ClipType.Difference, rect, holes, tree, FillRule.NonZero, 6);
+            var polys = new List<List<List<Vec2>>>(); Roofs.Collect(tree, polys);
+            foreach (var pl in polys)
+            {
+                if (pl[0].Count < 3) continue;
+                var tris = Triangulate.Shape(pl[0], pl.Count > 1 ? pl.GetRange(1, pl.Count - 1) : null);
+                var pts = new List<P3>();
+                foreach (var ring in pl) foreach (var q in ring) pts.Add(F.At(q.x, y0 + q.z, wv));
+                gb.PolyTris(pts, tris, nr, c);
             }
         }
 

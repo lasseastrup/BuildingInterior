@@ -37,7 +37,10 @@ namespace Triband.Storey.Generate
         /// builder's table of its swatches.
         /// </summary>
         public readonly IndexedList<Swatch> C = new IndexedList<Swatch>(EqualityComparer<Swatch>.Default);
-        /// <summary>Kind per vertex: 0 slab/roof, 1 wall, 2 tall part; + 8 × (neighbour index + 1) for party walls.</summary>
+        /// <summary>
+        /// Kind per vertex: 0 slab/roof, 1 wall, 2 tall part, 3 a wall's face inside another wall (<see cref="Buried"/>);
+        /// + 8 × (neighbour index + 1) for party walls.
+        /// </summary>
         public readonly ChunkList<int> K = new ChunkList<int>();
         /// <summary>Wall id per vertex, 1-based within the building; 0 = none.</summary>
         public readonly ChunkList<int> WI = new ChunkList<int>();
@@ -121,6 +124,14 @@ namespace Triband.Storey.Generate
         bool backing;
         int backingFrom;
 
+        /// <summary>
+        /// What is made from now on lies inside another wall (Storey's own): a face of one wall where another meets it, hidden
+        /// while that wall stands. Its vertices are kind 3, with no wall id (the kind's neighbour kept), which the shaders leave
+        /// out of the building the player is in: a cut opens that wall from above, and it showed in the section cap. Until it is
+        /// set false again.
+        /// </summary>
+        public bool Buried;
+
         /// <summary>The triangles made from now on are the rooms' (<see cref="InsideTris"/>), until it is set false again.</summary>
         public bool Inside
         {
@@ -171,7 +182,7 @@ namespace Triband.Storey.Generate
             lock (spares) if (spares.Contains(this)) return;
             P.Clear(); N.Clear(); C.Clear(); K.Clear(); WI.Clear(); I.Clear(); PaneUV.Clear(); InsideTris.Clear(); BackingTris.Clear();
             Walls = new List<(double[], int)>(); WallBase = new List<double>(); Solids = null;
-            StoreyBase = 0; curW = Zero4; curK = curI = 0; Welded = false; inside = false; insideFrom = 0; SeeThrough = 0; backing = false; backingFrom = 0;
+            StoreyBase = 0; curW = Zero4; curK = curI = 0; Welded = false; inside = false; insideFrom = 0; SeeThrough = 0; backing = false; backingFrom = 0; Buried = false;
             lock (spares) if (spares.Count < Spares) spares.Add(this);
         }
 
@@ -287,11 +298,27 @@ namespace Triband.Storey.Generate
             return this;
         }
 
+        /// <summary>The id of the wall the cutaway context names (<see cref="Ctx"/>, <see cref="CtxOf"/>), 1-based; 0 for none.</summary>
+        public int WallId => curI;
+
+        /// <summary>
+        /// The cutaway context of a wall already numbered, by its id (<see cref="WallId"/>), for what follows: it slides with
+        /// that wall, taking no id of its own. Storey's own: a pitched roof's eave goes with the wall under it (<see
+        /// cref="Roofs.Draw"/>). No wall (0, or a lean builder's): as <c>Ctx(null, 0)</c>.
+        /// </summary>
+        public MeshBuilder CtxOf(int id)
+        {
+            if (Lean || id <= 0 || id > Walls.Count) return Ctx(null, 0);
+            var (w, k) = Walls[id - 1];
+            curW = w; curK = k; curI = id;
+            return this;
+        }
+
         /// <summary>A vertex, in the cutaway context set (<see cref="Ctx"/>).</summary>
         internal void V(P3 q, P3 nr, Swatch c)
         {
             P.Add(q); N.Add(nr); C.Add(c);
-            if (!Lean) { K.Add(curK); WI.Add(curI); }
+            if (!Lean) { if (Buried) { K.Add(curK - curK % 8 + 3); WI.Add(0); } else { K.Add(curK); WI.Add(curI); } }
         }
 
         /// <summary>
@@ -302,7 +329,7 @@ namespace Triband.Storey.Generate
         void V(P3 q, int ne, int ce)
         {
             P.Add(q); N.Index.Add(ne); C.Index.Add(ce);
-            if (!Lean) { K.Add(curK); WI.Add(curI); }
+            if (!Lean) { if (Buried) { K.Add(curK - curK % 8 + 3); WI.Add(0); } else { K.Add(curK); WI.Add(curI); } }
         }
 
         /// <summary>
@@ -406,6 +433,22 @@ namespace Triband.Storey.Generate
             if ((skip & Skip.UStart) == 0) Quad(Pt(u0, y0, w0), Pt(u0, y0, w1), Pt(u0, y1, w1), Pt(u0, y1, w0), new P3(-nu.x, 0, -nu.z), c);
             if ((skip & Skip.Top) == 0) Quad(Pt(u0, y1, w0), Pt(u1, y1, w0), Pt(u1, y1, w1), Pt(u0, y1, w1), new P3(0, 1, 0), c);
             if ((skip & Skip.Bot) == 0) Quad(Pt(u0, y0, w0), Pt(u1, y0, w0), Pt(u1, y0, w1), Pt(u0, y0, w1), new P3(0, -1, 0), c);
+        }
+
+        /// <summary>
+        /// The foot of a wall's box in frame F (u0..u1 along, w0..w1 across) standing on y, where the box leaves its bottom open:
+        /// closed from below a centimetre up (Dim.BACK), facing down, and only Unity draws it (<see cref="Backing"/>). The cutaway
+        /// and the ceiling clip cut walls, and their faces' backs show as the section cap; an eye looking down along one went on
+        /// down through it to whatever lies under it, seeing into the wall (Storey's own, as <see cref="Facade.WallPanel"/>'s
+        /// foot). Only in a wall's cutaway context (<see cref="WallId"/>): nothing cuts the rest.
+        /// </summary>
+        public void Foot(Frame F, double u0, double u1, double y, double w0, double w1, Swatch c)
+        {
+            if (curI <= 0 || ShapeOnly || u1 - u0 < 1e-4 || w1 - w0 < 1e-4) return;
+            bool was = Backing; Backing = true;
+            double yf = y + Dim.BACK;
+            Quad(F.At(u0, yf, w0), F.At(u1, yf, w0), F.At(u1, yf, w1), F.At(u0, yf, w1), new P3(0, -1, 0), c);
+            Backing = was;
         }
 
         /// <summary>A box whose start and end faces are slanted: u_start(w) = sA + kA·w, u_end(w) = eB + kB·w.</summary>

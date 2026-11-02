@@ -137,6 +137,9 @@ namespace Triband.Storey.Generate
             // stair (its flights and landings close the well beyond), and every storey up a straight flight's stack
             bool shownBelow = false; (int ranges, int end)? markBelow = null;
             bool Up(int k, bool straight) { foreach (var s in b.shafts) if (Cores.HasFlight(b, s, k) && (!straight || s.type == CoreType.Flight)) return true; return false; }
+            // the facade walls of the storey below, by its outline's edge: a pitched roof over them (the building's, or a
+            // terrace's) slides away with them in the cutaway (Roofs.Draw)
+            int[]? wallsBelow = null;
             for (int k = 0; k <= N; k++)
             {
                 var sg = new List<Seg>(); var g = At(k); bool sb = Derived.IsSetback(b, k); var Cb = At(Math.Max(0, k - 1)).C;
@@ -144,21 +147,23 @@ namespace Triband.Storey.Generate
                 // a filled storey is built as a shell-only building's storeys are; a slab between two of them is not needed
                 bool sh = Derived.ShellAt(b, k), shBelow = Derived.ShellAt(b, k - 1);
                 if ((!(sh && shBelow) || k == N || sb) && !op.ShapeOnly) Slab(op, k, Cb, sh, false);   // no walls or segments: none for a shape
-                if (sb) { if (Roofs.Draw(op, Roofs.TerraceRoof(site, b, k), Cb)) TerraceTops(op, k, Cb); else Terrace(op, sg, k, Cb); Overhang(op, k, g.C); }
+                if (sb) { if (Roofs.Draw(op, Roofs.TerraceRoof(site, b, k), Cb, null, wallsBelow)) TerraceTops(op, k, Cb); else Terrace(op, sg, k, Cb); Overhang(op, k, g.C); }
                 foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && k == v.bottom && Courtyards.Live(b, v)) Courtyards.Pave(op, b, v, g.C);
                 // the storey's rooms are kept apart unless one of its openings shows them at any distance (a doorway, an
                 // artist's glass), which is known once its walls are made: until then they are only marked
                 bool apart = k < N && !open && !(bulkhead && k == N - 1) && !shownBelow; var mark = op.InsideMark; int seen = op.SeeThrough;
+                // a pitched roof comes over this storey's walls: the building's, or a terrace's where the next storey sets back
+                int[]? walls = k < N && !op.ShapeOnly && !op.Lean && (k == N - 1 ? Roofs.IsPitched(b) : Derived.IsSetback(b, k + 1) && b.floors[k + 1].terraceRoof != null) ? new int[g.Wp.Count] : null;
                 if (k < N)
                 {
-                    FacadeStorey(op, gl, sg, k, g, apart); Details.Build(op, site, b, k, g.C, 0);
+                    FacadeStorey(op, gl, sg, k, g, apart, walls); Details.Build(op, site, b, k, g.C, 0);
                     foreach (var br in b.bridges) if (br.k == k && Bridges.Span(site, b, br) is BridgeSpan bs) Bridges.Build(op, gl, r.Extra, bs, g.C);
-                    foreach (var v in b.voids) if (Courtyards.WallsAt(b, v, k)) Courtyards.Walls(op, gl, sg, b, v, k, g.C, apart);
+                    foreach (var v in b.voids) if (Courtyards.WallsAt(b, v, k)) Courtyards.Walls(op, gl, sg, b, v, k, g.C, apart, IntoWalls(op, k));
                     if (!sh) { op.Inside = apart; Interior(op, sg, k, g.C); foreach (var v in b.voids) if (Courtyards.RailsAt(b, v, k)) Courtyards.Rails(op, sg, b, v, k, g.C); op.Inside = false; }
                 }
                 else
                 {
-                    Roof(op, sg, g, Cb);
+                    Roof(op, sg, g, Cb, wallsBelow);
                     if (!Roofs.IsPitched(b)) foreach (var v in b.voids) if (v.kind == VoidKind.Atrium && Courtyards.HoleAt(b, v, N)) Courtyards.Skylight(op, gl, sg, b, v, Cb);
                 }
                 if (!shell && !Derived.Filled(b, k)) Shafts(op, sg, k, g.C, apart);
@@ -167,6 +172,7 @@ namespace Triband.Storey.Generate
                 else if (shows && apart) op.TakeBackInside(mark);
                 shownBelow = shows && Up(k, false) || shownBelow && Up(k, true);
                 markBelow = apart && !shows ? mark : ((int, int)?)null;
+                wallsBelow = walls;
                 r.Segs.Add(sg);
                 yield return k;
             }
@@ -402,25 +408,32 @@ namespace Triband.Storey.Generate
         /// <summary>LOD0 facade of one storey: panels with window and door holes, recessed panes, frames and trims.</summary>
         /// <param name="rooms">The walls' inner faces are the rooms' (<see cref="MeshBuilder.Inside"/>), and what only clear glass
         /// shows from outside (the slab's edges, the strips' backs).</param>
-        public void FacadeStorey(MeshBuilder op, MeshBuilder gl, List<Seg> sg, int k, TierCtx g, bool rooms = false)
+        /// <param name="walls">Filled with each edge's cutaway id (<see cref="MeshBuilder.WallId"/>): its first wall that isn't a party
+        /// wall, 0 for none. For the roof over them (<see cref="Roofs.Draw"/>).</param>
+        public void FacadeStorey(MeshBuilder op, MeshBuilder gl, List<Seg> sg, int k, TierCtx g, bool rooms = false, int[]? walls = null)
         {
             var Wp = g.Wp; var C = g.C; int n = Wp.Count; bool shell = Derived.ShellAt(b, k); double h = Derived.FloorH(b, k), y = Derived.FloorBase(b, k), T = Dim.T_EXT;   // shell: this storey (a filled one is closed as a shell building is)
+            var into = IntoWalls(op, k);   // where the rooms' walls run into the inner faces
+            if (into != null) { openK = k; openAt = new List<(double, double)>[n]; }
             for (int i = 0; i < n; i++)
             {
                 var e = Geo.EdgeInfo(Wp, i, g.ccw); var F = e.F;
                 var m = Geo.MiterOf(g.cor, i, e.L); var (uS, uE) = Facade.Span(m, e.L);
                 WallPool.Reset();
                 var all = Facade.Ops(site, b, k, i, e.L, uS, uE, WallOps, WallPool);
+                if (into != null) { var oa = openAt![i] = new List<(double, double)>(all.Count); foreach (var o in all) oa.Add((o.u0, o.u1)); }
                 foreach (var pc in Party.WallPieces(site, b, k, i, e.L, m))
                 {
                     if (pc.kind == Party.PieceKind.Skip) continue;
                     var pm = new Miter(pc.S, pc.E); bool party = pc.kind == Party.PieceKind.Party;
                     var ops = Piece(all, party, pc.lo, pc.hi);
                     var wc = Geo.WallCtx(e.a, e.u, e.w, e.L);
-                    op.Ctx(wc, party ? 1 + 8 * (pc.r!.pIdx + 1) : 1); gl.Ctx(wc, 1);
+                    op.Ctx(wc, party ? 1 + 8 * (pc.r!.pIdx + 1) : 1);
+                    if (!party && walls != null && walls[i] == 0) walls[i] = op.WallId;
+                    gl.Ctx(wc, 1);
                     var stk = Derived.StyleAt(b, k);
                     Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : Wall(stk, C, k == 0), C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? Facade.ShellRevealFrom(stk, false, OpeningSets.Representative(stk, k == 0, out var rk) ? rk : null) : 0, rooms: rooms,
-                        doorRevealFrom: shell ? Facade.ShellRevealFrom(stk, true, OpeningKinds.Of(stk, true)) : (double?)null, thresholdC: k == 0 ? C.foundation : (Swatch?)null, doorsRecessed: stk.doorRecess.HasValue));
+                        doorRevealFrom: shell ? Facade.ShellRevealFrom(stk, true, OpeningKinds.Of(stk, true)) : (double?)null, thresholdC: k == 0 ? C.foundation : (Swatch?)null, doorsRecessed: stk.doorRecess.HasValue, buried: into));
                     Facade.Dress(op, gl, F, ops, y, C, shell, stk, Wall(stk, C, k == 0), Panel, pm, h);
                     if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
                     if (!party && stk.bricks is double density && density > 0)
@@ -618,14 +631,178 @@ namespace Triband.Storey.Generate
 
         public void Interior(MeshBuilder op, List<Seg> sg, int k, Palette C)
         {
-            double y = Derived.FloorBase(b, k), hh = Derived.FloorH(b, k) - Dim.SLAB, ox = b.pos.x, oz = b.pos.z, E = Dim.T_INT / 2 - 0.02, t = Dim.T_INT / 2 + 0.025;
+            double y = Derived.FloorBase(b, k), hh = Derived.FloorH(b, k) - Dim.SLAB, E = RoomWall.E, t = Dim.T_INT / 2 + 0.025;
+            var walls = RoomWalls(k);
+            if (openK == k && openAt != null) foreach (var r in walls) { r.stubA = IntoSolid(k, r.a); r.stubB = IntoSolid(k, new Vec2(r.a.x + r.u.x * r.L, r.a.z + r.u.z * r.L)); }
+            for (int i = 0; i < walls.Count; i++)
+            {
+                var r = walls[i]; var F = new Frame(r.a, r.u, r.w); var ops = r.ops; double L = r.L; int self = i;
+                op.Ctx(Geo.WallCtx(r.a, r.u, r.w, L), 1);
+                // where it runs into another (and that one into it), its faces lie inside the other: buried (PanelOpt.buried)
+                Facade.WallPanel(op, F, new Miter(new Cut(-E, 0), new Cut(L + E, 0)), -Dim.T_INT / 2, Dim.T_INT / 2, y, hh, ops, C.inner, C.inner,
+                    new Facade.PanelOpt { ends = true, buried = !op.ShapeOnly && !op.Lean && (walls.Count > 1 || r.stubA || r.stubB) ? (p, q) => RoomWall.Inside(walls, p, q, self) : null });
+                foreach (var o in Facade.MergeOps(ops)) Casing(op, F, o, y, t, C.doorTrim, walls, self);
+                foreach (var (s0, e0) in Facade.SolidRanges(-E, L + E, ops)) Facade.PushSeg(sg, F, s0, e0, 0, Dim.T_INT / 2);
+            }
+        }
+
+        /// <summary>
+        /// A room wall's door casing: a side each way and the head, boxes through the wall standing out t either side, the
+        /// faces OBox makes, with those of their parts in the wall's thickness, beside the door and over it, buried (<see
+        /// cref="MeshBuilder.Buried"/>): the cut opens the wall from above, and they showed in the section cap (Storey's own).
+        /// A side's top, under the head's foot, is buried whole; the head's foot, facing down, shows from above as the cap.
+        /// The sides' feet closed (<see cref="MeshBuilder.Foot"/>).
+        /// </summary>
+        static void Casing(MeshBuilder op, Frame F, Opening o, double y, double t, Swatch c, List<RoomWall> walls, int self)
+        {
+            if (op.ShapeOnly) return;   // faces only
+            double a0 = o.u0 - 0.07, a1 = o.u0 + 0.01, b0 = o.u1 - 0.01, b1 = o.u1 + 0.07, yt = y + 2.19, yh = y + 2.27;
+            op.OBox(F, a0, a1, y, yt, -t, t, c, c, Skip.Bot | Skip.UStart | Skip.Top); op.Foot(F, a0, a1, y, -t, t, c);
+            CasingEnd(op, F, a0, -1, y, yt, t, c, walls, self); CasingTop(op, F, a0, a1, yt, -t, t, c);
+            op.OBox(F, b0, b1, y, yt, -t, t, c, c, Skip.Bot | Skip.UEnd | Skip.Top); op.Foot(F, b0, b1, y, -t, t, c);
+            CasingEnd(op, F, b1, 1, y, yt, t, c, walls, self); CasingTop(op, F, b0, b1, yt, -t, t, c);
+            // the head: over the door the wall goes on above it, so its top's middle lies in the wall all along (its ends, 8 cm
+            // high, are left whole: only the ceiling's cut, high above, shows them, and the census of triangles is close)
+            double hw = Dim.T_INT / 2;
+            op.OBox(F, a0, b1, yt, yh, -t, t, c, c, Skip.Top);
+            if (op.Lean) { CasingTop(op, F, a0, b1, yh, -t, t, c, false); return; }
+            CasingTop(op, F, a0, b1, yh, -t, -hw, c, false); CasingTop(op, F, a0, b1, yh, -hw, hw, c); CasingTop(op, F, a0, b1, yh, hw, t, c, false);
+        }
+
+        /// <summary>A casing's top at y over ua..ub, wa to wb across, buried (the default) or not.</summary>
+        static void CasingTop(MeshBuilder op, Frame F, double ua, double ub, double y, double wa, double wb, Swatch c, bool buried = true)
+        {
+            bool was = op.Buried; op.Buried = buried && !op.Lean;
+            op.Quad(F.At(ua, y, wa), F.At(ub, y, wa), F.At(ub, y, wb), F.At(ua, y, wb), new P3(0, 1, 0), c);
+            op.Buried = was;
+        }
+
+        /// <summary>
+        /// A casing's end facing along the wall (<paramref name="dir"/> -1 back, 1 on) at u, from -t to t across, y0 to y1: in
+        /// three, the middle one, in the wall's thickness, buried. Whole where it meets another of the storey's room walls (a
+        /// door by a crossing wall), whose face it may lie on: split, the two showed apart to the coplanar check.
+        /// </summary>
+        static void CasingEnd(MeshBuilder op, Frame F, double u, int dir, double y0, double y1, double t, Swatch c, List<RoomWall> walls, int self)
+        {
+            double hw = Dim.T_INT / 2; var n = new P3(F.u.x * dir, 0, F.u.z * dir);
+            void Q(double wa, double wb) => op.Quad(F.At(u, y0, wa), F.At(u, y0, wb), F.At(u, y1, wb), F.At(u, y1, wa), n, c);
+            if (op.Lean || RoomWall.Inside(walls, F.At2(u, -t), F.At2(u, t), self, -1e-4) != null) { Q(-t, t); return; }
+            Q(-t, -hw);
+            bool was = op.Buried; op.Buried = true; Q(-hw, hw); op.Buried = was;
+            Q(hw, t);
+        }
+
+        /// <summary>A wall of a storey's rooms as <see cref="Interior"/> builds it, in site space.</summary>
+        public sealed class RoomWall
+        {
+            /// <summary>How far a room wall runs on past each end of its line, into what it meets.</summary>
+            public const double E = Dim.T_INT / 2 - 0.02;
+            /// <summary>Its line's start, the way along it and across it, and its length.</summary>
+            public Vec2 a, u, w; public double L;
+            /// <summary>Its doors, in order along it.</summary>
+            public List<Opening> ops = null!;
+            /// <summary>
+            /// Its start (stubA) or its end (stubB) is against the storey's outside wall where that is solid (no opening across
+            /// it): what runs on past it (<see cref="E"/>) lies inside that wall.
+            /// </summary>
+            public bool stubA, stubB;
+
+            /// <summary>
+            /// The parts of the segment p–q (site space, in plan) inside one of a storey's room walls (but wall
+            /// <paramref name="self"/>), as fractions from p, in order and apart; null for none. Strictly inside: a face on a
+            /// wall's side is not (<paramref name="eps"/> in from its sides; negative, out past them). Not across a door, open
+            /// below its head, nor by one, where its casing runs on into what meets the wall there. What <see
+            /// cref="Facade.PanelOpt.buried"/> asks of a room wall's faces, and of the inner faces of the storey's outside walls,
+            /// where room walls run into them.
+            /// </summary>
+            public static List<(double, double)>? Inside(List<RoomWall> walls, Vec2 p, Vec2 q, int self, double eps = 1e-4)
+            {
+                double Eps = eps, hw = Dim.T_INT / 2, casing = 0.07 + Math.Abs(eps);
+                List<(double, double)>? o = null;
+                if (self >= 0 && (walls[self].stubA || walls[self].stubB))
+                {
+                    // its own ends run on into the outside wall (stubA, stubB): past its line's ends
+                    var r = walls[self];
+                    double pu = (p.x - r.a.x) * r.u.x + (p.z - r.a.z) * r.u.z, du = (q.x - p.x) * r.u.x + (q.z - p.z) * r.u.z, t0 = 0, t1 = 1;
+                    if (r.stubA && Between(pu, du, double.NegativeInfinity, -Eps, ref t0, ref t1) && t1 - t0 > 1e-6) (o ??= new List<(double, double)>()).Add((t0, t1));
+                    t0 = 0; t1 = 1;
+                    if (r.stubB && Between(pu, du, r.L + Eps, double.PositiveInfinity, ref t0, ref t1) && t1 - t0 > 1e-6) (o ??= new List<(double, double)>()).Add((t0, t1));
+                }
+                for (int j = 0; j < walls.Count; j++)
+                {
+                    if (j == self) continue;
+                    var r = walls[j];
+                    // along and across wall j at p, and how they change from p to q
+                    double pu = (p.x - r.a.x) * r.u.x + (p.z - r.a.z) * r.u.z, pw = (p.x - r.a.x) * r.w.x + (p.z - r.a.z) * r.w.z;
+                    double du = (q.x - p.x) * r.u.x + (q.z - p.z) * r.u.z, dw = (q.x - p.x) * r.w.x + (q.z - p.z) * r.w.z;
+                    double t0 = 0, t1 = 1;
+                    if (!Between(pu, du, -E + Eps, r.L + E - Eps, ref t0, ref t1) || !Between(pw, dw, -hw + Eps, hw - Eps, ref t0, ref t1) || t1 - t0 < 1e-6) continue;
+                    var rs = new List<(double, double)> { (t0, t1) };
+                    foreach (var d in r.ops)
+                    {
+                        double d0 = 0, d1 = 1;
+                        if (Between(pu, du, d.u0 - casing, d.u1 + casing, ref d0, ref d1)) rs = Geo.MinusRanges(rs, new List<(double, double)> { (d0, d1) });
+                    }
+                    foreach (var x in rs) if (x.Item2 - x.Item1 > 1e-6) (o ??= new List<(double, double)>()).Add(x);
+                }
+                if (o == null) return null;
+                o.Sort((x, z) => x.Item1.CompareTo(z.Item1));
+                var m = new List<(double, double)>(o.Count);
+                foreach (var x in o)
+                {
+                    int n = m.Count;
+                    if (n > 0 && x.Item1 <= m[n - 1].Item2 + 1e-9) m[n - 1] = (m[n - 1].Item1, Math.Max(m[n - 1].Item2, x.Item2));
+                    else m.Add(x);
+                }
+                return m;
+            }
+
+            // narrows t0..t1 to where v + dv·t lies strictly between lo and hi; false when nowhere does
+            static bool Between(double v, double dv, double lo, double hi, ref double t0, ref double t1)
+            {
+                if (Math.Abs(dv) < 1e-12) return v > lo && v < hi;
+                double a = (lo - v) / dv, c = (hi - v) / dv; if (a > c) (a, c) = (c, a);
+                t0 = Math.Max(t0, a); t1 = Math.Min(t1, c); return t0 < t1;
+            }
+        }
+
+        readonly Dictionary<int, List<RoomWall>> roomWalls = new Dictionary<int, List<RoomWall>>();
+        // the openings of each edge of storey openK's outside walls, as FacadeStorey placed them: where a room wall's end
+        // against one is in its thickness (IntoSolid)
+        int openK = -1; List<(double, double)>[]? openAt;
+
+        /// <summary>
+        /// Whether a room wall's line ending at <paramref name="at"/> (site space) ends against storey k's outside wall where
+        /// that is solid: on an edge of its outline, with no opening across the room wall's width there (FacadeStorey's).
+        /// </summary>
+        bool IntoSolid(int k, Vec2 at)
+        {
+            var fp = Derived.OutlineAt(b, k); int n = fp.Count; double x = at.x - b.pos.x, z = at.z - b.pos.z, hw = Dim.T_INT / 2 + 0.05;
+            if (openK != k || openAt == null || openAt.Length != n) return false;
+            for (int i = 0; i < n; i++)
+            {
+                var p = fp[i]; var q = fp[(i + 1) % n]; double ex = q.x - p.x, ez = q.z - p.z, L = Geo.Hypot(ex, ez); if (L < 1e-9) continue;
+                double u = ((x - p.x) * ex + (z - p.z) * ez) / L, d = Math.Abs((x - p.x) * ez - (z - p.z) * ex) / L;
+                if (d > 1e-5 || u < -1e-5 || u > L + 1e-5) continue;
+                // the edge runs as FacadeStorey's from p (Geo.EdgeInfo): u along it from there
+                foreach (var (o0, o1) in openAt[i]) if (o1 > u - hw && o0 < u + hw) return false;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>Storey k's room walls: its plan's walls clipped to its outline and out of its courtyards, their doors placed. Made once a build.</summary>
+        public List<RoomWall> RoomWalls(int k)
+        {
+            if (roomWalls.TryGetValue(k, out var l)) return l;
+            l = new List<RoomWall>(); double ox = b.pos.x, oz = b.pos.z;
             var fp = Derived.OutlineAt(b, k);
             foreach (var w0 in b.floors[k].walls)
                 foreach (var wl in Courtyards.ClipOut(b, k, Geo.ClipWall(fp, w0)))
                 {
                     var a = new Vec2(wl.a.x + ox, wl.a.z + oz); var c = new Vec2(wl.b.x + ox, wl.b.z + oz);
                     double dx = c.x - a.x, dz = c.z - a.z, L = Geo.Hypot(dx, dz); if (L < 0.05) continue;
-                    var u = new Vec2(dx / L, dz / L); var w = new Vec2(-u.z, u.x); var F = new Frame(a, u, w);
+                    var u = new Vec2(dx / L, dz / L);
                     var ops = new List<Opening>();
                     foreach (var d in wl.doors)
                     {
@@ -633,16 +810,21 @@ namespace Triband.Storey.Generate
                         ops.Add(new Opening { u0 = mm - Dim.DOOR_INT / 2, u1 = mm + Dim.DOOR_INT / 2, y0 = 0, y1 = 2.2, door = true });
                     }
                     ops.Sort((p, q) => p.u0.CompareTo(q.u0));
-                    op.Ctx(Geo.WallCtx(a, u, w, L), 1);
-                    Facade.WallPanel(op, F, new Miter(new Cut(-E, 0), new Cut(L + E, 0)), -Dim.T_INT / 2, Dim.T_INT / 2, y, hh, ops, C.inner, C.inner, new Facade.PanelOpt { ends = true });
-                    foreach (var o in Facade.MergeOps(ops))
-                    {
-                        op.OBox(F, o.u0 - 0.07, o.u0 + 0.01, y, y + 2.19, -t, t, C.doorTrim, C.doorTrim, Skip.Bot);
-                        op.OBox(F, o.u1 - 0.01, o.u1 + 0.07, y, y + 2.19, -t, t, C.doorTrim, C.doorTrim, Skip.Bot);
-                        op.OBox(F, o.u0 - 0.07, o.u1 + 0.07, y + 2.19, y + 2.27, -t, t, C.doorTrim);
-                    }
-                    foreach (var (s0, e0) in Facade.SolidRanges(-E, L + E, ops)) Facade.PushSeg(sg, F, s0, e0, 0, Dim.T_INT / 2);
+                    l.Add(new RoomWall { a = a, u = u, w = new Vec2(-u.z, u.x), L = L, ops = ops });
                 }
+            roomWalls[k] = l;
+            return l;
+        }
+
+        /// <summary>
+        /// What <see cref="Facade.PanelOpt.buried"/> asks of storey k's outside walls: where its room walls run into their inner
+        /// faces (Storey's own). Null with none, or on a storey with no rooms.
+        /// </summary>
+        Func<Vec2, Vec2, List<(double, double)>?>? IntoWalls(MeshBuilder op, int k)
+        {
+            if (op.Lean || op.ShapeOnly || Derived.ShellAt(b, k)) return null;
+            var walls = RoomWalls(k);
+            return walls.Count == 0 ? null : (p, q) => RoomWall.Inside(walls, p, q, -1);
         }
 
         // ---- roof ----------------------------------------------------------------------------
@@ -659,9 +841,10 @@ namespace Triband.Storey.Generate
             return out_;
         }
 
-        public void Roof(MeshBuilder op, List<Seg>? sg, TierCtx g, Palette C)
+        /// <param name="walls">The top storey's facade walls, by edge (<see cref="FacadeStorey"/>): a pitched roof's eave slides away with them.</param>
+        public void Roof(MeshBuilder op, List<Seg>? sg, TierCtx g, Palette C, int[]? walls = null)
         {
-            if (Roofs.Draw(op, Roofs.Parts(site, b), C, Derived.StyleAt(b, N))) { WallTops(op, g, C); return; }   // hip, gable or shed (no roof access, no parapet)
+            if (Roofs.Draw(op, Roofs.Parts(site, b), C, Derived.StyleAt(b, N), walls)) { WallTops(op, g, C); return; }   // hip, gable or shed (no roof access, no parapet)
             double y = Derived.RoofY(b), T = Dim.T_EXT; int n = g.Wp.Count, k0 = Derived.TierStart(b, N);
             var stN = Derived.StyleAt(b, N); bool parapet = stN.parapet;
             // a cap on the roof's edge (RoofCap): a raised one takes the curb's place and lifts the parapet
@@ -898,7 +1081,11 @@ namespace Triband.Storey.Generate
                     var a = f.At2(x0, z0); var c = f.At2(x1, z1); double L = Geo.Hypot(c.x - a.x, c.z - a.z);
                     return Geo.WallCtx(a, new Vec2((c.x - a.x) / L, (c.z - a.z) / L), new Vec2(f.u.x * nx + f.w.x * nz, f.u.z * nx + f.w.z * nz), L);
                 }
-                void Bx(double x0, double x1, double y0, double y1, double z0, double z1, Swatch c, Swatch? ci = null, Skip sk = Skip.None) => op.OBox(f, x0, x1, y0, y1, z0, z1, c, ci, sk);
+                void Bx(double x0, double x1, double y0, double y1, double z0, double z1, Swatch c, Swatch? ci = null, Skip sk = Skip.None)
+                {
+                    op.OBox(f, x0, x1, y0, y1, z0, z1, c, ci, sk);
+                    if ((sk & Skip.Bot) != 0 && !op.Backing) op.Foot(f, x0, x1, y0, z0, z1, c);   // a core wall's open foot, closed (MeshBuilder.Foot)
+                }
                 void S(double px, double pz, double qx, double qz, double r, double hs = 0) { var a = f.At2(px, pz); var c = f.At2(qx, qz); sg.Add(new Seg(a.x, a.z, c.x, c.z, r, hs)); }
                 const Skip TB = Skip.Top | Skip.Bot;
                 var fl = Cores.CoreFlush(Derived.OutlineAt(b, k), s, b: b); bool fL = fl[0] != null, fR = fl[1] != null, fB = fl[3] != null; double TE = Dim.T_EXT;

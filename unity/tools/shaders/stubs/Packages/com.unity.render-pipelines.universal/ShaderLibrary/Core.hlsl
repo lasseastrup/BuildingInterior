@@ -1,6 +1,7 @@
 // Stub of URP's Core.hlsl: only what Storey's shaders call, with URP's signatures, for a compile check outside Unity.
 #ifndef URP_CORE_STUB
 #define URP_CORE_STUB
+#define PI 3.14159265358979323846   // the core render pipeline's Macros.hlsl, which Core.hlsl includes
 #define CBUFFER_START(name) cbuffer name {
 #define CBUFFER_END };
 #define TEXTURE2D(name) Texture2D name

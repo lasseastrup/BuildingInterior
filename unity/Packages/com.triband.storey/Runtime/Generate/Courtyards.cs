@@ -158,7 +158,8 @@ namespace Triband.Storey.Generate
         /// glass, frames, bands and collision; LOD1: the outside only, with opaque panes.
         /// </summary>
         /// <param name="rooms">LOD0: the walls' inner faces are the rooms' (<see cref="MeshBuilder.Inside"/>).</param>
-        public static void Walls(MeshBuilder op, MeshBuilder? gl, List<Seg>? sg, BuildingData b, VoidData v, int k, Palette C, bool rooms = false)
+        /// <param name="buried">LOD0: where the storey's room walls run into the inner faces (<see cref="Facade.PanelOpt.buried"/>).</param>
+        public static void Walls(MeshBuilder op, MeshBuilder? gl, List<Seg>? sg, BuildingData b, VoidData v, int k, Palette C, bool rooms = false, Func<Vec2, Vec2, List<(double, double)>?>? buried = null)
         {
             var g = RingOf(b, v); int n = g.Wp.Count; double T = Dim.T_EXT, y = Derived.FloorBase(b, k), h = Derived.FloorH(b, k);
             bool shell = Derived.ShellAt(b, k), lod1 = gl == null, bands = Facade.BandAt(b, k);
@@ -176,7 +177,7 @@ namespace Triband.Storey.Generate
                 }
                 else
                 {
-                    Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.inner, new Facade.PanelOpt { inner = !shell, threshold = k == v.bottom, revealFrom = shell ? Facade.PaneW(Derived.StyleAt(b, k), false) : 0, doorRevealFrom = shell ? Facade.PaneW(Derived.StyleAt(b, k), true) : (double?)null, rooms = rooms });
+                    Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.inner, new Facade.PanelOpt { inner = !shell, threshold = k == v.bottom, revealFrom = shell ? Facade.PaneW(Derived.StyleAt(b, k), false) : 0, doorRevealFrom = shell ? Facade.PaneW(Derived.StyleAt(b, k), true) : (double?)null, rooms = rooms, buried = buried });
                     Facade.Dress(op, gl!, F, ops, y, C, shell, Derived.StyleAt(b, k));
                     if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
                 }
