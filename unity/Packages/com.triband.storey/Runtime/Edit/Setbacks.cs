@@ -44,7 +44,8 @@ namespace Triband.Storey.Edit
 
         /// <summary>
         /// Start the setback at k0 at floor k instead. Terrace doors move with it; a door or detail whose storey changes
-        /// outline goes. False when a core or the outline no longer fits there (the tools then undo it).
+        /// outline goes. False when a core (a walk-in building's: <see cref="Outlines.Issue"/>) or the outline no longer fits
+        /// there (the tools then undo it).
         /// </summary>
         public static bool Move(BuildingData b, int k0, int k)
         {
@@ -58,7 +59,7 @@ namespace Triband.Storey.Edit
             b.details = b.details.Where((d, j) => Derived.TierStart(b, d.k) == tb[j]).ToList();
             b.windows = b.windows.Where((w, j) => Derived.TierStart(b, w.k) == tw[j]).ToList();
             b.entrances = b.entrances.Where((e, j) => te[j] < 0 || Derived.TierStart(b, e.k) == te[j]).ToList();
-            return b.shafts.All(s => Tiers.ShaftFits(b, s)) && Outlines.Issue(b, k, g.shape) == OutlineIssue.None;
+            return (!b.interior || b.shafts.All(s => Tiers.ShaftFits(b, s))) && Outlines.Issue(b, k, g.shape) == OutlineIssue.None;
         }
 
         /// <summary>Replace the footprint with a preset: one entrance on the first edge; setbacks and cores that no longer fit go.</summary>
@@ -66,7 +67,8 @@ namespace Triband.Storey.Edit
 
         /// <summary>
         /// Replace the footprint with another (a building template's, with its cut corners): one entrance on the first edge;
-        /// the ground tier's details go, and setbacks, cores and courtyards that no longer fit.
+        /// the ground tier's details go, and setbacks, cores and courtyards that no longer fit. A shell-only building's cores
+        /// stay, kept for when it is walk-in again (<see cref="Outlines.Issue"/>).
         /// </summary>
         public static void ApplyFootprint(BuildingData b, IReadOnlyList<Vec2> footprint, IEnumerable<CornerData>? corners = null)
         {
@@ -80,7 +82,7 @@ namespace Triband.Storey.Edit
             b.blank = new List<int>(); b.quiet = null; b.bare = null;
             foreach (var t in Tiers.Of(b))
                 if (t.k0 > 0 && Outlines.Issue(b, t.k0, Derived.OutlineAt(b, t.k0)) != OutlineIssue.None) Remove(b, t.k0);
-            b.shafts = b.shafts.Where(s => Tiers.ShaftFits(b, s)).ToList();
+            if (b.interior) b.shafts = b.shafts.Where(s => Tiers.ShaftFits(b, s)).ToList();
             b.voids = b.voids.Where(v => Voids.Issue(b, v) == VoidIssue.None).ToList();
         }
     }

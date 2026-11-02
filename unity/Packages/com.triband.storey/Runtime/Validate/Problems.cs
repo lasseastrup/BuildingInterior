@@ -172,7 +172,7 @@ namespace Triband.Storey.Validate
                 }
             foreach (var v in b.voids)
             {
-                var why = Voids.Issue(b, v, cores: b.interior); if (why == VoidIssue.None) continue;
+                var why = Voids.Issue(b, v); if (why == VoidIssue.None) continue;
                 var c = v.shape.Count > 0 ? Centre(v.shape) : Centre(b.footprint);
                 o.Add(P(b, Math.Min(v.bottom, N - 1), Severity.Error, "void", $"{(v.kind == VoidKind.Courtyard ? "A courtyard" : "An atrium")}: {Voids.Why(why).TrimEnd('.')}", c.x, c.z));
             }

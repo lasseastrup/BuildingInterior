@@ -6,7 +6,7 @@ Buildings are made in Unity, so the editor is where Storey is used (SPEC §9 map
 
 The prototype's editing is plain functions over the layout: add or delete a floor, insert or drag a corner, push an edge, add a setback, place a core, draw a wall. They carry the rules that make the tool pleasant: new floors copy the top floor, cores follow the floor count, doors and details keep their place when an outline gains a corner, a setback must stand on the floor below.
 
-These rules are ported to the engine-free `Runtime/Edit/` and judged against the prototype the way the generator is. `prototype/tools/export-ops.mjs` runs sequences of operations in the prototype and writes the resulting buildings to `unity/Fixtures/ops.json`, and the C# operations must produce the same JSON. The Unity tools are then thin: a handle or a button calls an operation inside one undo step and redraws.
+These rules are ported to the engine-free `Runtime/Edit/` and judged against the prototype the way the generator is. `prototype/tools/export-ops.mjs` runs sequences of operations in the prototype and writes the resulting buildings to `unity/Fixtures/ops.json`, and the C# operations must produce the same JSON. One difference is Storey's own: a shell-only building's stairs and lifts never stop an outline edit nor go with one (§6.5), so the prototype's cases on its one shell with stairs (the variants' *rect/curtain*) are replayed as on a walk-in building. The Unity tools are then thin: a handle or a button calls an operation inside one undo step and redraws.
 
 ## 2. Authoring model in the editor
 
@@ -102,7 +102,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Drag an orange bar to push a wall.
    - Drag the move gizmo's arrows or squares (Unity's own, on the building's ground floor): the building moves along that axis or in that plane and snaps against a neighbour along it, which then shares the wall. Its up arrow raises and lowers it (§6.11).
    - Add setback, Inset 1.5 m, Starts at, and what it leaves uncovered below (a terrace, or a roof: the floors below's *Terrace roof* card, Facade tab).
-   - Something refused says why next to the pointer, for example "Stairs or a lift are in the way".
+   - Something refused says why next to the pointer, for example "Stairs or a lift are in the way". Never on a shell-only building, whose stairs and lifts are kept but not built: drag a wall through them and it goes. Make it walk-in again: *Problems* lists the stairs that no longer fit (§6.5).
    - Each drag is one undo step.
 3. **Facade:**
    - The **Preset** list (every Facade Style asset: the package's five, then the project's; *Custom* once a field of the style is edited by hand, its roof aside; presets keep the roof), windows, the three colours (Color Pipeline's picker if installed), the roof fields on the top style only.
@@ -301,7 +301,7 @@ What it finds:
 - **Buildings that overlap.**
 - **Artist windows** whose dressing (shutters, a surround) meets the next window's: the bays it needs (§6.9).
 
-A shell-only building keeps its rooms, stairs and lifts for when it is made walk-in again, but builds none of them, so none of what is inside it is a problem: not its reach, its walls, its stairs and lifts, nor stairs or a lift in an atrium's way (`ProblemTests.AShellOnlyBuildingKeepsItsInsideWithNoProblemsInIt`). Made walk-in again, they are checked again. Its outside still is: its doors, courtyards and atria, bridges, overlaps and windows.
+A shell-only building keeps its rooms, stairs and lifts for when it is made walk-in again, but builds none of them, so none of what is inside it is a problem: not its reach, its walls, its stairs and lifts, nor stairs or a lift in an atrium's way (`ProblemTests.AShellOnlyBuildingKeepsItsInsideWithNoProblemsInIt`). Nor do its stairs and lifts stop an edit: an outline, a corner cut, *Inset*, a setback's outline and where it starts, and a courtyard or atrium can go through them, and another footprint (*Start from*) leaves them where they are (`ShellEditTests`). Made walk-in again, they are checked again, and the list shows those that no longer fit. Its outside still is checked: its doors, courtyards and atria, bridges, overlaps and windows.
 
 It runs on a worker thread, on its own copy of the layout, so the editor never waits for it.
 - **The first check** covers the whole layout.

@@ -58,7 +58,13 @@ namespace Triband.Storey.Tests
                 var b = PrototypeJson.ReadBuilding(corpus.buildings[i]);
                 var neighbours = corpus.doc.buildings.Select((x, j) => j == i ? b : x).ToList();
                 var args = c.GetProperty("args").EnumerateArray().ToArray();
+                // Storey's own: a shell-only building's stairs and lifts, kept but not built, never stop an edit nor go with
+                // one (ShellEditTests); the prototype's do. Its cases on a shell with stairs (the variants' rect/curtain) are
+                // replayed as on a walk-in building, which is how the prototype's edits treat it
+                bool asWalkIn = !b.interior && b.shafts.Count > 0;
+                if (asWalkIn) b.interior = true;
                 string? why = Check(op, b, neighbours, args, c.GetProperty("ret"));
+                if (asWalkIn) b.interior = false;
                 string want = PrototypeJson.Write(PrototypeJson.ReadBuilding(c.GetProperty("after").GetRawText())), got = PrototypeJson.Write(b);
                 if (why == null && want != got) why = "building differs:\n  want " + Diff(want, got) + "\n  got  " + Diff(got, want);
                 if (why != null && failures.Count < 8) failures.Add($"{c.GetProperty("corpus").GetString()}[{i}] {b.name} {op}({string.Join(", ", args.Select(a => a.GetRawText()))}): {why}");

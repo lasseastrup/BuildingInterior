@@ -205,7 +205,9 @@ namespace Triband.Storey.Edit
 
         /// <summary>
         /// Can tier k0 take this outline? It must stay a simple polygon, stand on the tier below, hold the tier above,
-        /// leave a usable terrace wherever it steps in, and keep every core it serves inside it.
+        /// leave a usable terrace wherever it steps in, and keep every core it serves inside it: a walk-in building's (a
+        /// shell-only one keeps its stairs and lifts for when it is walk-in again, builds none of them, and they are no reason
+        /// to refuse; Storey's own, the prototype has no shell with stairs).
         /// </summary>
         public static OutlineIssue Issue(BuildingData b, int k0, List<Vec2> fp)
         {
@@ -224,11 +226,12 @@ namespace Triband.Storey.Edit
                 if (!Stands(up, fp)) return OutlineIssue.Up;
                 if (!Tiers.TerraceClear(up, fp)) return OutlineIssue.Thin;
             }
-            foreach (var s in b.shafts)
-            {
-                if (!Cores.Levels(b, s).Any(k => k >= k0 && (k < k1 || (k == N && k1 == N)))) continue;
-                if (!Cores.CoreFits(fp, s, b: b)) return OutlineIssue.Core;
-            }
+            if (b.interior)
+                foreach (var s in b.shafts)
+                {
+                    if (!Cores.Levels(b, s).Any(k => k >= k0 && (k < k1 || (k == N && k1 == N)))) continue;
+                    if (!Cores.CoreFits(fp, s, b: b)) return OutlineIssue.Core;
+                }
             if (!Voids.FitOutline(b, k0, fp)) return OutlineIssue.Void;
             return OutlineIssue.None;
         }
