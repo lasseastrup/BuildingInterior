@@ -577,7 +577,7 @@ namespace Triband.Storey.Editor
                     if (c.Open)
                     {
                         Presets(e, b, k0, st);
-                        StoreyInspectorUI.Note("Start from a preset. Changing anything below makes the style this building's own.");
+                        StoreyInspectorUI.Note("Start from a preset: with the list open, the building wears the one you point at, and a click keeps it. Changing anything below makes the style this building's own.");
                     }
                 StoreyStyleCards.WindowsCard(target, st);
                 if (k0 == 0) StoreyStyleCards.DoorsCard(target, st);
@@ -884,30 +884,17 @@ namespace Triband.Storey.Editor
             message = e.Selected != null && Tiers.Of(e.Selected).Count < had ? "Setbacks that no longer fit were removed." : null;
         }
 
+        static readonly GUIContent PresetLabel = new GUIContent("Preset",
+            "Open the list and point at the presets: the building wears each in the Scene view. A click applies one; a click outside the list leaves the style as it was");
+
         void Presets(StoreyEdit e, BuildingData b, int k0, FacadeStyle st)
         {
-            // one list, every preset a Facade Style asset: the package's, then the project's; "Custom" when the style carries
-            // no preset's key (a field of it edited by hand since, or it never came from one)
-            var all = FacadeStylePreset.All();
             var cur = FacadeStylePreset.Of(st);
-            var items = new List<(string name, int i)>();   // i: the preset, -1 for Custom and the separators
-            if (cur == null) { items.Add(("Custom", -1)); items.Add(("", -1)); }
-            for (int i = 0; i < all.Count; i++)
-            {
-                if (i > 0 && all[i].own != all[i - 1].own) items.Add(("", -1));
-                items.Add(((all[i].own ? "" : "Project/") + all[i].asset.name, i));
-            }
-            int shown = cur == null ? 0 : items.FindIndex(x => x.i >= 0 && all[x.i] == cur);
             using (new EditorGUILayout.HorizontalScope())
             {
-                int pick = EditorGUILayout.Popup("Preset", shown, items.Select(x => x.name).ToArray());
-                if (pick != shown && pick >= 0 && items[pick].i >= 0)
-                {
-                    var p = all[items[pick].i]; FacadeStyle? style = null;
-                    try { style = p.asset.Style; }
-                    catch (Exception ex) { Debug.LogWarning($"Storey: the Facade Style \"{p.asset.name}\" holds no style it can read ({ex.Message}).", p.asset); }
-                    if (style != null) e.ApplyTo(p.asset.name + " applied", bb => { Styles.Apply(bb, k0, style, p.key); return true; });
-                }
+                var r = EditorGUI.PrefixLabel(EditorGUILayout.GetControlRect(), PresetLabel);
+                if (EditorGUI.DropdownButton(r, new GUIContent(cur?.asset.name ?? "Custom"), FocusType.Keyboard, EditorStyles.popup))
+                    PresetList(e, b.id, k0, cur, r);
                 if (GUILayout.Button(new GUIContent("Save as preset…", "Keep this style as a Facade Style asset, shared with every building, in the list with the package's"), EditorStyles.miniButton))
                 {
                     string path = EditorUtility.SaveFilePanelInProject("Facade style", st.label.Length > 0 ? st.label : "Facade Style", "asset", "Where the style preset goes");
@@ -922,6 +909,58 @@ namespace Triband.Storey.Editor
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// The Preset list (docs/EDITOR.md §6.10), opened under its drop-down at <paramref name="at"/>: every Facade Style
+        /// asset, the package's, then the project's under Project, with Custom at the top when the style carries no preset's
+        /// key (a field of it edited by hand since, or it never came from one). While it is open the building wears the
+        /// preset under the pointer, in the Scene view alone (<see cref="StoreyEdit.Preview"/>); a click applies it, one undo
+        /// step, and closed with none picked the building is as it was.
+        /// </summary>
+        void PresetList(StoreyEdit e, string id, int k0, FacadeStylePreset.Entry? cur, Rect at)
+        {
+            var all = FacadeStylePreset.All();
+            int current = -1;   // Custom's value: no preset's
+            var rows = new List<StoreyPreviewMenu.Row>();
+            if (cur == null) { rows.Add(StoreyPreviewMenu.Row.Choice("Custom", current)); rows.Add(StoreyPreviewMenu.Row.Line); }
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (!all[i].own && (i == 0 || all[i - 1].own)) rows.Add(StoreyPreviewMenu.Row.Group("Project"));
+                rows.Add(StoreyPreviewMenu.Row.Choice(all[i].asset.name, i));
+                if (all[i] == cur) current = i;
+            }
+            // each preset read once, the first time it is shown or picked
+            var read = new Dictionary<int, FacadeStyle?>();
+            FacadeStyle? Read(int i)
+            {
+                if (read.TryGetValue(i, out var s)) return s;
+                try { s = all[i].asset.Style; }
+                catch (Exception ex) { s = null; Debug.LogWarning($"Storey: the Facade Style \"{all[i].asset.name}\" holds no style it can read ({ex.Message}).", all[i].asset); }
+                return read[i] = s;
+            }
+            // the tier's style, while it has one to take a preset (an undo with the list open may take a setback's away)
+            bool Apply(BuildingData bb, FacadeStyle s, string key)
+            {
+                if (k0 > 0 && (k0 >= bb.floors.Count || bb.floors[k0].style == null)) return false;
+                Styles.Apply(bb, k0, s, key);
+                return true;
+            }
+            PopupWindow.Show(at, new StoreyPreviewMenu(rows, current,
+                show: i =>
+                {
+                    if (e == null) return;
+                    if (i is int j && Read(j) is FacadeStyle s) e.Preview(bb => Apply(bb, s, all[j].key), id);
+                    else e.EndPreview();
+                },
+                pick: i =>
+                {
+                    if (e == null || !(Read(i) is FacadeStyle s)) return;
+                    var p = all[i];
+                    e.ApplyTo(p.asset.name + " applied", bb => Apply(bb, s, p.key), id);
+                    if (this != null) Repaint();
+                },
+                minWidth: at.width));
         }
 
         // ---- Interior ----

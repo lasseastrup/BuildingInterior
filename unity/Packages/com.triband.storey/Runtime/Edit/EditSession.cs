@@ -88,27 +88,60 @@ namespace Triband.Storey.Edit
             return Diff(PrototypeJson.Read(text).Document);
         }
 
+        /// <summary>
+        /// The layout with <paramref name="b"/> in place of its building, to show and not keep: a preview, such as a preset
+        /// hovered in the Facade tab's list (docs/EDITOR.md §6.10). The document shares every other building, and the palette
+        /// block, with <see cref="Document"/>, which is left as it is, as is <see cref="Text"/>. The change is what an edit
+        /// making the building <paramref name="b"/> would build again: the building, those a bridge joins to it, and the
+        /// neighbours whose party walls it may change. Building the same again with <see cref="Document"/> shows the layout
+        /// after the preview. Null when the layout has no building with its id.
+        /// </summary>
+        public (StoreyDocument doc, SessionChange change)? With(BuildingData b)
+        {
+            int i = Document.buildings.FindIndex(x => x.id == b.id);
+            if (i < 0) return null;
+            var d = new StoreyDocument { v = Document.v, seq = Document.seq, spawn = Document.spawn, palette = Document.palette, buildings = new List<BuildingData>(Document.buildings) };
+            d.buildings[i] = b;
+            // the layout changed and not committed: which buildings are shown isn't known, so everything is built again
+            if (i >= shown.Count || shown[i].id != b.id) return (d, new SessionChange { structural = true });
+            // the buildings bridging to it are the same ones: only its own bridges can have changed
+            var linked = new HashSet<string>(shown[i].linked, StringComparer.Ordinal);
+            foreach (var br in b.bridges) linked.Add(br.to);
+            var now = new List<(string id, string json, (double x0, double z0, double x1, double z1) bounds, HashSet<string> linked)>(shown);
+            now[i] = (b.id, PrototypeJson.Write(b), Site.BoundsOf(b), linked);
+            return (d, Changes(shown, now));
+        }
+
         SessionChange Diff(StoreyDocument next)
         {
             var now = Snapshot(next);
-            var c = new SessionChange();
-            if (now.Count != shown.Count || now.Where((x, i) => x.Item1 != shown[i].id).Any()) c.structural = true;
-            else
-            {
-                var changed = new List<int>();
-                for (int i = 0; i < now.Count; i++) if (now[i].Item2 != shown[i].json) changed.Add(i);
-                foreach (int i in changed)
-                {
-                    c.rebuild.Add(now[i].Item1);
-                    foreach (var id in now[i].Item4.Concat(shown[i].linked)) c.rebuild.Add(id);
-                    for (int j = 0; j < now.Count; j++)
-                        if (j != i && (Touch(now[j].Item3, now[i].Item3) || Touch(now[j].Item3, shown[i].bounds) || Touch(shown[j].bounds, shown[i].bounds)))
-                            c.rebuild.Add(now[j].Item1);
-                }
-            }
+            var c = Changes(shown, now);
             Document = next;
             Text = PrototypeJson.Write(next);
             shown = now; shownMeta = Meta(next);
+            return c;
+        }
+
+        /// <summary>
+        /// What to build again going from the buildings as <paramref name="was"/> has them to <paramref name="now"/> (each a
+        /// snapshot of the layout's buildings, in order): each building that changed, those a bridge joins to it, and every
+        /// building within reach of where it was or is now, whose party walls may change; everything when buildings came, went
+        /// or were reordered.
+        /// </summary>
+        static SessionChange Changes(List<(string id, string json, (double x0, double z0, double x1, double z1) bounds, HashSet<string> linked)> was,
+            List<(string id, string json, (double x0, double z0, double x1, double z1) bounds, HashSet<string> linked)> now)
+        {
+            var c = new SessionChange();
+            if (now.Count != was.Count || now.Where((x, i) => x.id != was[i].id).Any()) { c.structural = true; return c; }
+            for (int i = 0; i < now.Count; i++)
+            {
+                if (now[i].json == was[i].json) continue;
+                c.rebuild.Add(now[i].id);
+                foreach (var id in now[i].linked.Concat(was[i].linked)) c.rebuild.Add(id);
+                for (int j = 0; j < now.Count; j++)
+                    if (j != i && (Touch(now[j].bounds, now[i].bounds) || Touch(now[j].bounds, was[i].bounds) || Touch(was[j].bounds, was[i].bounds)))
+                        c.rebuild.Add(now[j].id);
+            }
             return c;
         }
 

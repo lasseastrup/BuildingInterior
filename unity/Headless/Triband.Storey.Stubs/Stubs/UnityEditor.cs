@@ -110,6 +110,7 @@ namespace UnityEditor
         public bool DrawDefaultInspector() => false;
         public SerializedObject serializedObject { get; } = new SerializedObject();
         public static void CreateCachedEditor(Object targetObject, System.Type editorType, ref Editor previousEditor) { }
+        public void Repaint() { }
     }
 
     public class AssetPostprocessor { }
@@ -177,6 +178,21 @@ namespace UnityEditor
         public bool docked => false;
         public void Show() { }
         public void Focus() { }
+        public void Close() { }
+    }
+
+    public class PopupWindow : EditorWindow
+    {
+        public static void Show(Rect activatorRect, PopupWindowContent windowContent) { }
+    }
+
+    public abstract class PopupWindowContent
+    {
+        public EditorWindow editorWindow => null;
+        public virtual void OnGUI(Rect rect) { }
+        public virtual Vector2 GetWindowSize() => default;
+        public virtual void OnOpen() { }
+        public virtual void OnClose() { }
     }
 
     public static class Menu
@@ -263,6 +279,7 @@ namespace UnityEditor
         public static GUIStyle toolbar => new GUIStyle();
         public static GUIStyle toolbarButton => new GUIStyle();
         public static GUIStyle toolbarDropDown => new GUIStyle();
+        public static GUIStyle popup => new GUIStyle();
     }
 
     public sealed class GenericMenu
@@ -342,6 +359,7 @@ namespace UnityEditor
         public static void DrawRect(Rect rect, Color color) { }
         public static Rect PrefixLabel(Rect totalPosition, GUIContent label) => totalPosition;
         public static int Popup(Rect position, int selectedIndex, string[] displayedOptions, GUIStyle style) => selectedIndex;
+        public static bool DropdownButton(Rect position, GUIContent content, FocusType focusType, GUIStyle style) => false;
         public static void FocusTextInControl(string name) { }
         public sealed class IndentLevelScope : System.IDisposable
         {

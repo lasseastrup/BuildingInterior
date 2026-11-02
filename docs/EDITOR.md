@@ -48,7 +48,7 @@ Each slice is usable on its own and ends with its tests green. 6.1 and 6.2 are h
 
 ## 4. Checking slice 6.3 in the editor
 
-Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildings an edit or an undo rebuilds; `ColorRowBookTests`: rows kept in place) and the Unity code compiles against the stubs. What only the editor can show:
+Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildings an edit or an undo rebuilds; `EditSessionPreviewTests`: a preview rebuilds the same and leaves the layout as it is; `ColorRowBookTests`: rows kept in place) and the Unity code compiles against the stubs. What only the editor can show:
 
 1. Add **Storey Site** to an empty GameObject; assign a `.storey` layout (the demo street, or `unity/Parity/demo-project.storey`) and the three materials (`Storey/…`, or the Color Palette Lit variants). The street draws **without pressing Play**, and nothing of it is saved with the scene (the generated objects are greyed out in the Hierarchy).
 2. Select the site (editing starts at once), pick a building, type a floor count. The building (and the neighbours it shares walls with) changes at once; the rest of the street does not flicker.
@@ -108,6 +108,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Each drag is one undo step.
 3. **Facade:**
    - The **Preset** list (every Facade Style asset: the package's five, then the project's; *Custom* once a field of the style is edited by hand, its roof aside; presets keep the roof), windows, the three colours (Color Pipeline's picker if installed), the roof fields on the top style only.
+   - Open the **Preset** list and move the pointer down it: the building wears each preset in the Scene view as the pointer passes it, and the ticked one shows it as it is. Move the pointer off the list: the last one stays on. Click outside the list: the building is as it was, and Undo has nothing new to undo. Open it again and click one: it's applied, as one undo step. Do the same on a setback with its own style (*Style for*), and with a project preset under *Project*.
    - With Color Pipeline: a preset or a new building shows palette names, never "not a palette colour", and the Console lists each colour that was matched. Opening the demo street for editing matches its colours as one undo step. Under *More options*, a default the project hasn't set shows as its nearest palette colour ("Brass (nearest to #8A8F93)"). **Store the defaults in Storey Color Settings** stores those colours, creating `Assets/Resources/StoreyColorSettings.asset` if there is none.
    - Give a setback its own style.
    - Doors ▸ *Place doors*, Details ▸ Blank wall, then each detail (the package's five, then the project's Facade Details): ghosts in orange (add) or green (remove), a door's naming the door a click puts in or takes out, and refusals as a notification.
@@ -542,6 +543,8 @@ The site's inspector reads top to bottom in the order you work: which layout, wh
    - **Interior:** *Inside* (walk-in or shell; the colours inside), *Floor* (the storey, how its walls show, rooms or filled, its height; on the roof, which stairs and lifts reach it), *Tools* (and what is selected with them).
 6. **Site settings** (folded): materials, the LOD shown, colliders, and the artist's windows, doors and facade details the layout uses.
 
+**The Preset list shows each preset on the building before it is picked.** While the list is open, the building in the Scene view wears the preset under the pointer, as applying it would make it: its roof kept, its colours matched to the palette. A click applies it, one undo step. A click outside the list puts the building back as it was. The current preset is ticked (*Custom*, at the top, when the style is no preset's), and pointing at it shows the building as it is; off the presets, the last one pointed at stays on, so the pointer can go to the Scene view without losing it. Nothing is written to the layout or the undo history while the pointer moves: the building is built from a copy with the preset applied, and its neighbours, as an edit builds them again (`StoreyEdit.Preview`, `EditSession.With`). An edit, an undo or the list closing shows the layout again (`StoreyEdit.EndPreview`). Unity's own drop-down says nothing until a choice is made, so the list is Storey's own (`StoreyPreviewMenu`). Like the rest of the editor, it reads no keys (§2).
+
 Cards and foldouts remember whether they're open for the rest of the editor session (`SessionState`). A Facade Detail's button shows its name in words, without what all the project's details' names start with (`Visual_BuildingDetail_EdgeBricks` is *Edge Bricks*), and short of room without its asides in brackets, then cut with an ellipsis; its tooltip has its asset's name. The buttons in a row share its width, so the inspector never scrolls sideways.
 
 The colours: Style purple, Windows blue, Doors amber, Walls terracotta, Colours pink, Roof teal, Details green; the Shape and Interior cards take the same set. Each has a light-skin shade.
@@ -551,7 +554,7 @@ The rules follow Unity's editor guidelines: groups set apart by space, headers a
 - [NN/g: common region](https://www.nngroup.com/articles/common-region/), [Laws of UX: common region](https://lawsofux.com/law-of-common-region/)
 - [UX Planet: how to design a properties panel](https://uxplanet.org/how-to-design-properties-panel-4d562cc47da3), [Retool: simplifying the inspector](https://retool.com/blog/simplifying-retools-inspector)
 
-Code: `StoreyInspectorUI` (`Card`, `SubHeader`, `Feature`, `Segmented`, `Note`, `Fold`, `ModeBar`, `ShortNames`, `Fit`, the `Tint` colours and the icons, drawn so they follow the editor skin).
+Code: `StoreyInspectorUI` (`Card`, `SubHeader`, `Feature`, `Segmented`, `Note`, `Fold`, `ModeBar`, `ShortNames`, `Fit`, the `Tint` colours and the icons, drawn so they follow the editor skin); `StoreyPreviewMenu` (a drop-down that hands the caller the choice under the pointer, and null as it closes).
 
 **Checks:**
 1. Select a site. The layout, the building box, the problems line and the three mode buttons are all visible without scrolling at a normal inspector height.

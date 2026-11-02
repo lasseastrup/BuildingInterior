@@ -70,6 +70,49 @@ namespace Triband.Storey.Editor
             });
         }
 
+        // what a preview shows otherwise (Preview): built again from the layout when it ends
+        SessionChange? previewed;
+
+        /// <summary>
+        /// Show the building with <paramref name="id"/> (the selected one when null) as <paramref name="op"/> would make it, in
+        /// the scene alone: the layout stays as it is, with no undo step and nothing to save. The Facade tab's Preset list
+        /// shows the preset under the pointer this way (docs/EDITOR.md §6.10). <see cref="EndPreview"/>, an edit or an undo shows
+        /// the layout again; another preview takes this one's place. False, with the layout shown as it is, when the
+        /// building is gone or <paramref name="op"/> refuses.
+        /// </summary>
+        public bool Preview(Func<BuildingData, bool> op, string? id = null)
+        {
+            string bid = id ?? View.selectedId;
+            var b = Document.buildings.FirstOrDefault(x => x.id == bid);
+            if (site == null || b == null) { EndPreview(); return false; }
+            using var _t = StoreyTimings.Time("preview");
+            // a copy, changed as ApplyTo changes the building: the layout's own is never touched
+            b = PrototypeJson.ReadBuilding(PrototypeJson.Write(b));
+            var looks = Styles.Looks(b);
+            if (!op(b)) { EndPreview(); return false; }
+            Styles.ForgetEdited(b, looks);
+            // inside the palette, as every edit ends: the copy alone, with a copy of the palette block, so a preview
+            // changes nothing else in the layout
+            if (StoreyColorField.Conform != null)
+                StoreyColorField.Conform(new StoreyDocument { buildings = { b }, palette = new SortedDictionary<string, PaletteEntry>(Document.palette, StringComparer.Ordinal) });
+            if (!(Core.With(b) is (StoreyDocument doc, SessionChange change))) { EndPreview(); return false; }
+            // a building an earlier preview showed otherwise goes back too, should this one be another
+            if (previewed != null) { change.structural |= previewed.structural; change.rebuild.UnionWith(previewed.rebuild); }
+            previewed = change;
+            site.Preview(doc, text, change);
+            Poke();
+            return true;
+        }
+
+        /// <summary>Show the layout as it is after <see cref="Preview"/>: what the preview showed otherwise is built again from it.</summary>
+        public void EndPreview()
+        {
+            var change = previewed; previewed = null;
+            if (change == null || site == null) return;
+            site.Preview(Core.Document, text, change);
+            Poke();
+        }
+
         int group = -1;
         string? dragText;
         StoreyDocument? dragStart;
@@ -118,6 +161,7 @@ namespace Triband.Storey.Editor
             if (dragText == null) return ApplyTo(undoName, op);
             StoreyTimingLog.Edited(undoName);
             using var _t = StoreyTimings.Time("edit (all of the below)");
+            EndPreview();
             string bid = View.selectedId;
             using (StoreyTimings.Time("edit: undo record")) Undo.RecordObject(this, undoName);
             // back to where the drag began: only the dragged building, when it is the selected one (reading the whole
@@ -179,6 +223,7 @@ namespace Triband.Storey.Editor
         internal void Reattach(StoreySite s)
         {
             site = s; siteId = s.GetInstanceID();
+            previewed = null;   // everything is built again from the layout
             site.Preview(Core.Document, text, null);
             Poke();
         }
@@ -200,6 +245,7 @@ namespace Triband.Storey.Editor
         {
             StoreyTimingLog.Edited(undoName);
             using var _t = StoreyTimings.Time("edit (all of the below)");
+            EndPreview();   // an edit changes the layout as it is, and is shown with it
             using (StoreyTimings.Time("edit: undo record")) Undo.RecordObject(this, undoName);
             bool ok;
             using (StoreyTimings.Time("edit: the operation")) ok = op(Core.Document);
@@ -221,6 +267,7 @@ namespace Triband.Storey.Editor
         void Restored()
         {
             if (site == null || text == Core.Text) return;
+            EndPreview();
             var change = Core.Load(text);
             site.Preview(Core.Document, text, change);
             Poke();
@@ -257,7 +304,9 @@ namespace Triband.Storey.Editor
         public void End()
         {
             open.Remove(this);
-            if (site != null) site.Preview(null, Dirty ? null : text, null);
+            // a building shown otherwise by a preview: everything is built again from the file
+            if (site != null) site.Preview(null, Dirty || previewed != null ? null : text, null);
+            previewed = null;
             Undo.ClearUndo(this);
             Poke();
             if (file != null) DestroyImmediate(file);

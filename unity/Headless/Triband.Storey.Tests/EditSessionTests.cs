@@ -131,3 +131,79 @@ namespace Triband.Storey.Tests
         }
     }
 }
+
+namespace Triband.Storey.Tests
+{
+    /// <summary>
+    /// A preview (<see cref="EditSession.With"/>): a building shown as an edit would make it, a preset hovered in the Facade
+    /// tab's list, with the layout left as it is, and the same buildings built again as the edit would build.
+    /// </summary>
+    public class EditSessionPreviewTests
+    {
+        static EditSession Demo() => new EditSession(Fixtures.Text("demo.json"));
+        static BuildingData Copy(BuildingData b) => PrototypeJson.ReadBuilding(PrototypeJson.Write(b));
+        static string[] Names(EditSession s, SessionChange c) => c.rebuild.Select(id => s.Document.buildings.First(b => b.id == id).name).OrderBy(n => n).ToArray();
+
+        [Fact]
+        public void APreviewLeavesTheLayoutAsItIs()
+        {
+            var s = Demo(); string before = s.Text;
+            int i = s.Document.buildings.FindIndex(b => b.name == "Row House");
+            var row = s.Document.buildings[i];
+            var glass = Copy(row); Styles.ApplyPreset(glass, 0, "glass");
+            var (doc, _) = s.With(glass)!.Value;
+            Assert.Same(glass, doc.buildings[i]);
+            Assert.Same(row, s.Document.buildings[i]);   // the layout keeps its own
+            Assert.NotSame(s.Document.buildings, doc.buildings);
+            for (int j = 0; j < doc.buildings.Count; j++) if (j != i) Assert.Same(s.Document.buildings[j], doc.buildings[j]);
+            Assert.Equal(before, s.Text);
+            Assert.Equal(before, PrototypeJson.Write(s.Document));
+            Assert.True(s.Commit().None);   // an edit after it starts from the layout
+        }
+
+        [Fact]
+        public void APreviewBuildsAgainWhatTheEditWould()
+        {
+            var shown = Demo(); var edited = Demo();
+            var preview = Copy(shown.Document.buildings.First(b => b.name == "Row House"));
+            Styles.ApplyPreset(preview, 0, "glass");
+            var change = shown.With(preview)!.Value.change;
+            Styles.ApplyPreset(edited.Document.buildings.First(b => b.name == "Row House"), 0, "glass");
+            var edit = edited.Commit();
+            Assert.False(change.structural);
+            Assert.Equal(Names(edited, edit), Names(shown, change));
+            // the Row House stands between the Corner Shop and the Dockside Store: their party walls are built again too
+            Assert.Equal(new[] { "Corner Shop", "Dockside Store", "Row House" }, Names(shown, change));
+        }
+
+        [Fact]
+        public void APreviewOfABridgedBuildingBuildsTheOtherEnd()
+        {
+            var (d, A, B) = BridgeTests.Street();
+            BridgeTests.Add(d, A);   // A builds the bridge, and B a door for it
+            var s = new EditSession(PrototypeJson.Write(d));
+            var b = Copy(s.Document.buildings.First(x => x.id == B.id)); Styles.ApplyPreset(b, 0, "warehouse");
+            var c = s.With(b)!.Value.change;
+            Assert.Contains(A.id, c.rebuild); Assert.Contains(B.id, c.rebuild);
+        }
+
+        [Fact]
+        public void APreviewLikeTheLayoutBuildsNothing()
+        {
+            var s = Demo();
+            Assert.True(s.With(Copy(s.Document.buildings[2]))!.Value.change.None);
+        }
+
+        [Fact]
+        public void ABuildingNotInTheLayoutHasNoPreview() => Assert.Null(Demo().With(new BuildingData { id = "no-such-building" }));
+
+        [Fact]
+        public void AnUncommittedLayoutBuildsEverything()
+        {
+            var s = Demo();
+            var last = Copy(s.Document.buildings[^1]);
+            s.Document.buildings.RemoveAt(0);   // changed, and not committed
+            Assert.True(s.With(last)!.Value.change.structural);
+        }
+    }
+}
