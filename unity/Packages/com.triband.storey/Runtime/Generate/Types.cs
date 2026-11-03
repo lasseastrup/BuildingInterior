@@ -136,10 +136,16 @@ namespace Triband.Storey.Generate
         public double ax, az, bx, bz, r;
         /// <summary>
         /// How high it stands above its storey's floor, where that is less than the storey (a terrace's parapet, the rails
-        /// round a stair opening or an atrium); 0 for the storey's whole height. The walk model takes every segment as a wall
-        /// all the way up; the collision mesh stops it here (<see cref="Play.CollisionMesh"/>). Storey's own.
+        /// round a stair opening or an atrium, a flat roof's curb or cap where it has no parapet); 0 for the storey's whole
+        /// height; <see cref="Flush"/> for nothing above the floor. The walk model takes every segment as a wall all the way
+        /// up; the collision mesh stops it here (<see cref="Play.CollisionMesh"/>). Storey's own.
         /// </summary>
         public double h;
+        /// <summary>
+        /// <see cref="h"/> for a segment that nothing stands on over its floor: a flat roof's edge round a cap set in, where the
+        /// walls' top is closed flush with the roof. A wall to the walk model alone; the collision mesh has none there.
+        /// </summary>
+        public const double Flush = -1;
         public Seg(double ax, double az, double bx, double bz, double r) { this.ax = ax; this.az = az; this.bx = bx; this.bz = bz; this.r = r; h = 0; }
         public Seg(double ax, double az, double bx, double bz, double r, double h) : this(ax, az, bx, bz, r) { this.h = h; }
     }

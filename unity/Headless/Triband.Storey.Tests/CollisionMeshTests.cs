@@ -113,8 +113,11 @@ namespace Triband.Storey.Tests
                     foreach (var s in segs[k])
                     {
                         double dx = s.bx - s.ax, dz = s.bz - s.az, L = Math.Sqrt(dx * dx + dz * dz); if (L < 0.05) continue;
+                        if (s.h < 0) continue;   // nothing stands on it over its floor (Seg.Flush): no wall there, by design
                         double nx = -dz / L, nz = dx / L, mx = (s.ax + s.bx) / 2, mz = (s.az + s.bz) / 2;
-                        double y = Derived.FloorBase(b, k) + (k < N ? 1.0 : 0.6);
+                        // a metre up a storey, 60 cm over the roof, or halfway up one lower than that (a roof's curb without a parapet)
+                        double up = k < N ? 1.0 : 0.6; if (s.h > 0 && s.h <= up) up = s.h / 2;
+                        double y = Derived.FloorBase(b, k) + up;
                         var o = new P3(mx + nx * 2, y, mz + nz * 2); var d = new P3(-nx, 0, -nz);
                         bool hit = false;
                         for (int t = 0; t < m.Tris && !hit; t++)
@@ -179,6 +182,66 @@ namespace Triband.Storey.Tests
             double y = Derived.FloorBase(b, 1); var dir = new P3(-1, 0, 0);
             Assert.True(WallHit(m, new P3(8, y + 0.5, 4.5), dir) is double low && low < 2.0);
             Assert.True(WallHit(m, new P3(8, y + 1.5, 4.5), dir) is double high && high > 7, "a wall over the rails");
+        }
+
+        /// <summary>
+        /// A flat roof's edge is as high in the collider as what stands on it: a parapet's wall
+        /// (<see cref="CollisionMesh.RoofWallHeight"/>) only where the style has its parapet on. Without one, the 30 cm curb (which
+        /// a cap hanging from the edge leaves), a raised cap's top (the roof lifted with it, a lid), or round a cap set in, where
+        /// the walls' top is closed flush with the roof, nothing over the roof. A ray from 2 m west of the west wall meets the edge
+        /// under its top and goes over the whole roof above it, and no wall stands higher. The walk model keeps every edge as a
+        /// wall, as before: the roof's segments are the same lines whatever stands on them.
+        /// </summary>
+        [Theory]
+        [InlineData(true, null, null, CollisionMesh.RoofWallHeight)]   // the parapet
+        [InlineData(false, null, null, Lod0.Shared.RoofCurb)]          // the curb
+        [InlineData(false, -0.6, -0.3, Lod0.Shared.RoofCurb)]          // a cap hanging from the edge, under the curb
+        [InlineData(false, 0.6, -0.25, 0.6)]                           // a raised cap, the roof lifted to its top
+        [InlineData(false, 0.5, 0.5, 0.0)]                             // a cap set in: nothing on the walls
+        [InlineData(true, 0.5, 0.5, CollisionMesh.RoofWallHeight)]     // a cap set in, inside the parapet
+        public void ARoofsEdgeIsAsHighAsWhatStandsOnIt(bool parapet, double? capH, double? capDepth, double high)
+        {
+            (Site site, BuildingData b) Block(bool withParapet)
+            {
+                var d = new StoreyDocument();
+                var b = Edit.Buildings.Add(d, "rect", new Vec2(0, 0)); b.pos = new Vec2(0, 0);
+                b.footprint = new() { new Vec2(0, 0), new Vec2(14, 0), new Vec2(14, 10), new Vec2(0, 10) };
+                b.details.Clear(); b.shafts.Clear(); b.interior = true;
+                b.floors = Enumerable.Range(0, 3).Select(_ => new FloorData()).ToList();
+                b.style.parapet = withParapet; b.style.capH = capH; b.style.capDepth = capDepth;
+                b.style.windows = WindowType.None;   // the top storey's wall solid where the ray under the roof meets it
+                return (new Site(d.buildings), b);
+            }
+            var (site, b) = Block(parapet);
+            var shape = Lod0.BuildShape(site, b);
+            var m = CollisionMesh.Build(site, b, shape);
+            double roof = Derived.RoofY(b); var east = new P3(1, 0, 0);
+            if (high > 0) Assert.Equal(2 - Dim.T_EXT, WallHit(m, new P3(-2, roof + high / 2, 5), east)!.Value, 6);   // its outer face
+            Assert.Null(WallHit(m, new P3(-2, roof + high + 0.05, 5), east));
+            Assert.True(WallHit(m, new P3(-2, roof - 1.0, 5), east) is double below && Math.Abs(below - (2 - Dim.T_EXT)) < 1e-6, "the top storey's wall");
+            double top = Enumerable.Range(0, m.Tris).Where(t => m.Kind[t] == CollisionKind.Wall).SelectMany(t => new[] { 0, 1, 2 }.Select(c => m.P[m.I[3 * t + c]].y)).Max();
+            Assert.Equal(roof + high, top, 9);
+            // the walk model's walls: the roof's edge as with a parapet
+            var (site1, b1) = Block(true);
+            static IEnumerable<(double, double, double, double, double)> Lines(List<Seg> sg) => sg.Select(s => (s.ax, s.az, s.bx, s.bz, s.r));
+            int N = b.floors.Count;
+            Assert.Equal(Lines(Lod0.BuildShape(site1, b1).Segs[N]), Lines(shape.Segs[N]));
+            Assert.NotEmpty(shape.Segs[N]);
+        }
+
+        /// <summary>A courtyard's edge on a flat roof without a parapet is its 30 cm curb in the collider too, not a parapet's wall.</summary>
+        [Fact]
+        public void ACourtyardsCurbIsAsHighAsItIs()
+        {
+            var (d, b) = CourtyardTests.Block();
+            CourtyardTests.Court(b);   // (6, 5) to (14, 11); its walls stand just inside it
+            b.style.parapet = false;
+            var site = new Site(d.buildings);
+            var m = CollisionMesh.Build(site, b, Lod0.BuildShape(site, b));
+            double roof = Derived.RoofY(b); var west = new P3(-1, 0, 0);
+            // from the courtyard's middle, looking west at its west side (x 6, the wall from 6 to 6.3)
+            Assert.True(WallHit(m, new P3(10, roof + 0.15, 8), west) is double low && Math.Abs(low - (4 - Dim.T_EXT)) < 1e-6, "the curb");
+            Assert.True(WallHit(m, new P3(10, roof + 0.6, 8), west) is null, "a wall over the curb");
         }
 
         [Theory, MemberData(nameof(Corpora))]

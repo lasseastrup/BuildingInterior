@@ -371,6 +371,19 @@ namespace Triband.Storey.Generate
         /// <summary>The rails round a stair opening: their top over the floor (<see cref="Seg.h"/>).</summary>
         public const double StairRail = 1.02;
 
+        /// <summary>The curb round a flat roof without a parapet (and round a courtyard through it): its top over the roof.</summary>
+        public const double RoofCurb = 0.3;
+
+        /// <summary>
+        /// How high a flat roof's edge stands over the roof, as its collision segments say (<see cref="Seg.h"/>): with a
+        /// parapet 0, a wall as high as the roof storey's others in the collision mesh, as before; without one the curb
+        /// (<see cref="RoofCurb"/>, which a hanging cap leaves), a raised cap in its place, or nothing round a cap set in, where
+        /// the walls' top is closed flush with the roof (<see cref="Seg.Flush"/>). <paramref name="cap"/> is the roof's
+        /// (<see cref="RoofCap.Of(FacadeStyle)"/>); a courtyard's edge has none.
+        /// </summary>
+        public static double RoofEdgeH(bool parapet, RoofCap? cap) =>
+            parapet ? 0 : cap is RoofCap c && !c.fascia ? (c.inset ? Seg.Flush : c.h) : RoofCurb;
+
         public void Terrace(MeshBuilder op, List<Seg>? sg, int k, Palette C)
         {
             double y = Derived.FloorBase(b, k), T = Dim.T_EXT;
@@ -852,6 +865,8 @@ namespace Triband.Storey.Generate
             Swatch capC = C.CapOf(stN), rimC = C.CapRimOf(stN);
             // the walls' top under no curb, parapet or raised cap: the roof's, in its colour round an inset cap's block (Slab)
             Swatch wallTop = whole && stN.capRim != null && cap is RoofCap ri && ri.inset ? rimC : C.roof;
+            // the edge in the collision mesh as high as what stands on it: no parapet's wall where there is none
+            double edgeH = RoofEdgeH(parapet, cap);
             for (int i = 0; i < n; i++)
             {
                 var e = Geo.EdgeInfo(g.Wp, i, g.ccw); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L);
@@ -870,7 +885,7 @@ namespace Triband.Storey.Generate
                         Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), yp, yp + 1.0, 0, T, C.wall, C.inner, Skip.Top | Skip.Bot);
                         Facade.StripPieces(op, F, m, ranges(m.Span(-0.04, T + 0.05)), yp + 1.0, yp + 1.1, -0.04, T + 0.05, C.trim, null);
                     }
-                    else if (cap == null || cap.Value.fascia) Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), y, y + 0.3, 0, T, C.trim, C.trim, Skip.Bot);
+                    else if (cap == null || cap.Value.fascia) Facade.StripPieces(op, F, m, ranges(m.Span(0, T)), y, y + RoofCurb, 0, T, C.trim, C.trim, Skip.Bot);
                     // an inset cap takes the curb's place, as the old generator has none, but stands clear of the walls: their
                     // top is closed flush with the roof, or the roof's edge is open into the wall
                     else if (cap.Value.inset) Facade.StripFace(op, F, m, ranges(m.Span(0, T)), 0, T, y, 0, T, true, wallTop);
@@ -886,7 +901,7 @@ namespace Triband.Storey.Generate
                     Edge(r => { var all = Geo.MinusRanges(Clip(r), party); return Geo.MinusRanges(all, Geo.MinusRanges(all, cores)); });
                     op.Backing = false;
                 }
-                if (sg != null) foreach (var (cs, ce) in R(m.Span(T / 2, T / 2))) Facade.PushSeg(sg, F, cs, ce, T / 2, T / 2);
+                if (sg != null) foreach (var (cs, ce) in R(m.Span(T / 2, T / 2))) Facade.PushSeg(sg, F, cs, ce, T / 2, T / 2, edgeH);
             }
             foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && Courtyards.HoleAt(b, v, N)) Courtyards.RoofEdge(op, sg, b, v, C);
             if (cap is RoofCap ci && ci.inset) InsetCap(op, ci, y, stN.capStrip > 0 ? capC : C.roof, capC, whole ? C.roof : (Swatch?)null);

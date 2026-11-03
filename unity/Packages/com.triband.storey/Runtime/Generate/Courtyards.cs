@@ -208,10 +208,14 @@ namespace Triband.Storey.Generate
             }
         }
 
-        /// <summary>A flat roof round a courtyard: the parapet (or a curb), standing on the courtyard's walls.</summary>
+        /// <summary>
+        /// A flat roof round a courtyard: the parapet (or a curb), standing on the courtyard's walls. Its collision segments
+        /// are as high as the roof's edge (<see cref="Lod0.Shared.RoofEdgeH"/>).
+        /// </summary>
         public static void RoofEdge(MeshBuilder op, List<Seg>? sg, BuildingData b, VoidData v, Palette C)
         {
             var g = RingOf(b, v); double y = Derived.RoofY(b), T = Dim.T_EXT; bool parapet = Derived.StyleAt(b, b.floors.Count).parapet;
+            double h = Lod0.Shared.RoofEdgeH(parapet, null);
             for (int i = 0; i < g.Wp.Count; i++)
             {
                 var e = Geo.EdgeInfo(g.Wp, i, g.flag); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L);
@@ -221,8 +225,8 @@ namespace Triband.Storey.Generate
                     Facade.StripPieces(op, F, m, new List<(double, double)> { m.Span(0, T) }, y, y + 1.0, 0, T, C.wall, C.inner, Skip.Top | Skip.Bot);
                     Facade.StripPieces(op, F, m, new List<(double, double)> { m.Span(-0.04, T + 0.05) }, y + 1.0, y + 1.1, -0.04, T + 0.05, C.trim, null);
                 }
-                else Facade.StripPieces(op, F, m, new List<(double, double)> { m.Span(0, T) }, y, y + 0.3, 0, T, C.trim, C.trim, Skip.Bot);
-                if (sg != null) { var (cs, ce) = m.Span(T / 2, T / 2); Facade.PushSeg(sg, F, cs, ce, T / 2, T / 2); }
+                else Facade.StripPieces(op, F, m, new List<(double, double)> { m.Span(0, T) }, y, y + Lod0.Shared.RoofCurb, 0, T, C.trim, C.trim, Skip.Bot);
+                if (sg != null) { var (cs, ce) = m.Span(T / 2, T / 2); Facade.PushSeg(sg, F, cs, ce, T / 2, T / 2, h); }
             }
         }
 

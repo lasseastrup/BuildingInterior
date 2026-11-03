@@ -16,8 +16,10 @@ namespace Triband.Storey.Play
     /// characters, rigid bodies, raycasts and NavMesh baking meet what <see cref="PlayWorld"/> walks on and is stopped by.
     /// <list type="bullet">
     /// <item>Walls: LOD0's collision segments, each a thin box as thick as its radius says, as tall as its storey, or as the
-    /// parapet or rail it is where that is lower (<see cref="Seg.h"/>). A wall that carries on up through the storeys above is
-    /// one box, ending at the top of its last storey's piece.</item>
+    /// parapet or rail it is where that is lower (<see cref="Seg.h"/>). A flat roof's edge is a parapet's height
+    /// (<see cref="RoofWallHeight"/>) only where it has a parapet: without one it is as high as its curb or raised cap, and
+    /// round a cap set in, where nothing stands on the walls, no wall at all (<see cref="Seg.Flush"/>). A wall that carries on
+    /// up through the storeys above is one box, ending at the top of its last storey's piece.</item>
     /// <item>Floors: one polygon per level (the floor, terrace or roof), as far out as the walk model lets the player step,
     /// with the stair holes cut out; none inside storeys nobody can enter (shell-only buildings, filled storeys).</item>
     /// <item>Stairs: a ramp up each flight, a flat mid landing.</item>
@@ -35,7 +37,10 @@ namespace Triband.Storey.Play
         public readonly List<CollisionKind> Kind = new List<CollisionKind>();
         public int Tris => I.Count / 3;
 
-        /// <summary>A roof storey's walls (parapets, roof edges): high enough to stop the player, not a bulkhead's full height.</summary>
+        /// <summary>
+        /// A roof storey's walls that stand their storey's whole height (<see cref="Seg.h"/> 0: a parapet, a bulkhead): high
+        /// enough to stop the player, not a bulkhead's full height.
+        /// </summary>
         public const double RoofWallHeight = 1.2;
 
         public static CollisionMesh Build(Site site, BuildingData b, Lod0Shape l0)
@@ -105,6 +110,7 @@ namespace Triband.Storey.Play
                 here.Clear(); tops.Clear();
                 foreach (var s in l0.Segs[k])
                 {
+                    if (s.h < 0) continue;   // nothing stands on it over the floor (Seg.Flush): the walk model's wall alone
                     var key = (s.ax, s.az, s.bx, s.bz, s.r);
                     double top = s.h > 0 ? Math.Min(y1, y0 + s.h) : y1;
                     // the same segment twice on a storey: the taller
