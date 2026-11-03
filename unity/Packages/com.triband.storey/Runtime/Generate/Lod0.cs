@@ -375,14 +375,21 @@ namespace Triband.Storey.Generate
         public const double RoofCurb = 0.3;
 
         /// <summary>
-        /// How high a flat roof's edge stands over the roof, as its collision segments say (<see cref="Seg.h"/>): with a
-        /// parapet 0, a wall as high as the roof storey's others in the collision mesh, as before; without one the curb
-        /// (<see cref="RoofCurb"/>, which a hanging cap leaves), a raised cap in its place, or nothing round a cap set in, where
-        /// the walls' top is closed flush with the roof (<see cref="Seg.Flush"/>). <paramref name="cap"/> is the roof's
-        /// (<see cref="RoofCap.Of(FacadeStyle)"/>); a courtyard's edge has none.
+        /// A flat roof's parapet in the collision mesh: its top over what it stands on, the walls or a raised cap, 10 cm over
+        /// its coping (<see cref="Seg.h"/>). The roof storey's walls that don't say how high they stand are as high
+        /// (<see cref="Play.CollisionMesh.RoofWallHeight"/>).
+        /// </summary>
+        public const double RoofParapet = 1.2;
+
+        /// <summary>
+        /// How high a flat roof's edge stands over the roof, as its collision segments say (<see cref="Seg.h"/>): a parapet
+        /// <see cref="RoofParapet"/> over what it stands on (a raised cap lifts it, <see cref="RoofCap.Lift"/>); without one the
+        /// curb (<see cref="RoofCurb"/>, which a hanging cap leaves), a raised cap in its place, however high, or nothing round
+        /// a cap set in, where the walls' top is closed flush with the roof (<see cref="Seg.Flush"/>). <paramref name="cap"/> is
+        /// the roof's (<see cref="RoofCap.Of(FacadeStyle)"/>); a courtyard's edge has none.
         /// </summary>
         public static double RoofEdgeH(bool parapet, RoofCap? cap) =>
-            parapet ? 0 : cap is RoofCap c && !c.fascia ? (c.inset ? Seg.Flush : c.h) : RoofCurb;
+            parapet ? (cap?.Lift ?? 0) + RoofParapet : cap is RoofCap c && !c.fascia ? (c.inset ? Seg.Flush : c.h) : RoofCurb;
 
         public void Terrace(MeshBuilder op, List<Seg>? sg, int k, Palette C)
         {
@@ -865,7 +872,7 @@ namespace Triband.Storey.Generate
             Swatch capC = C.CapOf(stN), rimC = C.CapRimOf(stN);
             // the walls' top under no curb, parapet or raised cap: the roof's, in its colour round an inset cap's block (Slab)
             Swatch wallTop = whole && stN.capRim != null && cap is RoofCap ri && ri.inset ? rimC : C.roof;
-            // the edge in the collision mesh as high as what stands on it: no parapet's wall where there is none
+            // the edge in the collision mesh as high as what stands on it: a parapet over its cap, no parapet's wall without one
             double edgeH = RoofEdgeH(parapet, cap);
             for (int i = 0; i < n; i++)
             {

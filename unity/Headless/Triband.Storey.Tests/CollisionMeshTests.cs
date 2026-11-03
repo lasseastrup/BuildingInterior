@@ -184,49 +184,119 @@ namespace Triband.Storey.Tests
             Assert.True(WallHit(m, new P3(8, y + 1.5, 4.5), dir) is double high && high > 7, "a wall over the rails");
         }
 
+        // a 14 × 10 m block of three storeys under a flat roof, with the parapet and roof cap given and no windows (the top
+        // storey's wall is solid where a ray under the roof meets it); with stairs, up to the roof at (10, 5) under a bulkhead
+        static (Site site, BuildingData b) Roofed(bool parapet, double? capH, double? capDepth, bool stairs = false)
+        {
+            var d = new StoreyDocument();
+            var b = Edit.Buildings.Add(d, "rect", new Vec2(0, 0)); b.pos = new Vec2(0, 0);
+            b.footprint = new() { new Vec2(0, 0), new Vec2(14, 0), new Vec2(14, 10), new Vec2(0, 10) };
+            b.details.Clear(); b.shafts.Clear(); b.interior = true;
+            b.floors = Enumerable.Range(0, 3).Select(_ => new FloorData()).ToList();
+            b.style.parapet = parapet; b.style.capH = capH; b.style.capDepth = capDepth; b.style.windows = WindowType.None;
+            if (stairs) b.shafts.Add(new CoreData { id = "c", type = CoreType.Stairs, x = 10, z = 5, roof = true });
+            return (new Site(d.buildings), b);
+        }
+
         /// <summary>
-        /// A flat roof's edge is as high in the collider as what stands on it: a parapet's wall
-        /// (<see cref="CollisionMesh.RoofWallHeight"/>) only where the style has its parapet on. Without one, the 30 cm curb (which
-        /// a cap hanging from the edge leaves), a raised cap's top (the roof lifted with it, a lid), or round a cap set in, where
-        /// the walls' top is closed flush with the roof, nothing over the roof. A ray from 2 m west of the west wall meets the edge
-        /// under its top and goes over the whole roof above it, and no wall stands higher. The walk model keeps every edge as a
-        /// wall, as before: the roof's segments are the same lines whatever stands on them.
+        /// A flat roof's edge is as high in the collider as what stands on it. A parapet is a parapet's height
+        /// (<see cref="Lod0.Shared.RoofParapet"/>) over what it stands on: the walls, or a raised cap, which lifts it. Without
+        /// one, the edge is the 30 cm curb (which a cap hanging from the edge leaves), a raised cap's top however high (the roof
+        /// lifted with it, a lid), or round a cap set in, where the walls' top is closed flush with the roof, nothing over the
+        /// roof. A ray from 2 m west of the west wall meets the edge under its top and goes over it above, and no wall on the
+        /// edge stands higher. The walk model keeps every edge as a wall, as before: the roof's segments are the same lines
+        /// whatever stands on them.
         /// </summary>
         [Theory]
-        [InlineData(true, null, null, CollisionMesh.RoofWallHeight)]   // the parapet
-        [InlineData(false, null, null, Lod0.Shared.RoofCurb)]          // the curb
-        [InlineData(false, -0.6, -0.3, Lod0.Shared.RoofCurb)]          // a cap hanging from the edge, under the curb
-        [InlineData(false, 0.6, -0.25, 0.6)]                           // a raised cap, the roof lifted to its top
-        [InlineData(false, 0.5, 0.5, 0.0)]                             // a cap set in: nothing on the walls
-        [InlineData(true, 0.5, 0.5, CollisionMesh.RoofWallHeight)]     // a cap set in, inside the parapet
+        [InlineData(true, null, null, Lod0.Shared.RoofParapet)]          // the parapet
+        [InlineData(false, null, null, Lod0.Shared.RoofCurb)]            // the curb
+        [InlineData(false, -0.6, -0.3, Lod0.Shared.RoofCurb)]            // a cap hanging from the edge, under the curb
+        [InlineData(false, 0.6, -0.25, 0.6)]                             // a raised cap, the roof lifted to its top
+        [InlineData(false, 2.0, -0.25, 2.0)]                             // one higher than the roof storey's other walls
+        [InlineData(true, 0.6, -0.25, 0.6 + Lod0.Shared.RoofParapet)]    // the parapet on a raised cap
+        [InlineData(false, 0.5, 0.5, 0.0)]                               // a cap set in: nothing on the walls
+        [InlineData(true, 0.5, 0.5, Lod0.Shared.RoofParapet)]            // a cap set in, inside the parapet
         public void ARoofsEdgeIsAsHighAsWhatStandsOnIt(bool parapet, double? capH, double? capDepth, double high)
         {
-            (Site site, BuildingData b) Block(bool withParapet)
-            {
-                var d = new StoreyDocument();
-                var b = Edit.Buildings.Add(d, "rect", new Vec2(0, 0)); b.pos = new Vec2(0, 0);
-                b.footprint = new() { new Vec2(0, 0), new Vec2(14, 0), new Vec2(14, 10), new Vec2(0, 10) };
-                b.details.Clear(); b.shafts.Clear(); b.interior = true;
-                b.floors = Enumerable.Range(0, 3).Select(_ => new FloorData()).ToList();
-                b.style.parapet = withParapet; b.style.capH = capH; b.style.capDepth = capDepth;
-                b.style.windows = WindowType.None;   // the top storey's wall solid where the ray under the roof meets it
-                return (new Site(d.buildings), b);
-            }
-            var (site, b) = Block(parapet);
+            var (site, b) = Roofed(parapet, capH, capDepth);
             var shape = Lod0.BuildShape(site, b);
             var m = CollisionMesh.Build(site, b, shape);
             double roof = Derived.RoofY(b); var east = new P3(1, 0, 0);
             if (high > 0) Assert.Equal(2 - Dim.T_EXT, WallHit(m, new P3(-2, roof + high / 2, 5), east)!.Value, 6);   // its outer face
-            Assert.Null(WallHit(m, new P3(-2, roof + high + 0.05, 5), east));
+            Assert.True(WallHit(m, new P3(-2, roof + high + 0.05, 5), east) is not double over || over > 2 + 1e-6, "a wall over the edge");
             Assert.True(WallHit(m, new P3(-2, roof - 1.0, 5), east) is double below && Math.Abs(below - (2 - Dim.T_EXT)) < 1e-6, "the top storey's wall");
-            double top = Enumerable.Range(0, m.Tris).Where(t => m.Kind[t] == CollisionKind.Wall).SelectMany(t => new[] { 0, 1, 2 }.Select(c => m.P[m.I[3 * t + c]].y)).Max();
+            // the highest wall on the west edge, which a cap set in stands 20 cm in from
+            double top = Enumerable.Range(0, m.Tris).Where(t => m.Kind[t] == CollisionKind.Wall)
+                .SelectMany(t => new[] { 0, 1, 2 }.Select(c => m.P[m.I[3 * t + c]])).Where(p => p.x < 0.1).Max(p => p.y);
             Assert.Equal(roof + high, top, 9);
             // the walk model's walls: the roof's edge as with a parapet
-            var (site1, b1) = Block(true);
+            var (site1, b1) = Roofed(true, capH, capDepth);
             static IEnumerable<(double, double, double, double, double)> Lines(List<Seg> sg) => sg.Select(s => (s.ax, s.az, s.bx, s.bz, s.r));
             int N = b.floors.Count;
             Assert.Equal(Lines(Lod0.BuildShape(site1, b1).Segs[N]), Lines(shape.Segs[N]));
             Assert.NotEmpty(shape.Segs[N]);
+        }
+
+        /// <summary>
+        /// A cap set in on a flat roof is in the collider as high as it is: here 0.5 m high, its outer side 0.5 m in from the
+        /// walls' face (20 cm in from the outline). On a roof nothing comes up through, it is a block: a ray from outside meets
+        /// its side, one dropped on it lands on its top (the roof's kind, <see cref="CollisionKind.Roof"/>), and the walk model's
+        /// roof is still a floor under it and between it and the walls. With stairs up to the roof, it is a ring the wall's
+        /// thickness wide, met from outside and from the roof inside it, its top a wall's, the roof inside it clear. Nothing
+        /// stands over its top.
+        /// </summary>
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void ACapSetInIsAsHighAsItIs(bool stairs)
+        {
+            var (site, b) = Roofed(false, 0.5, 0.5, stairs);
+            var m = CollisionMesh.Build(site, b, Lod0.BuildShape(site, b));
+            double roof = Derived.RoofY(b), h = 0.5; var ms = new[] { m }; var east = new P3(1, 0, 0);
+            Assert.Equal(2.2, WallHit(m, new P3(-2, roof + h / 2, 5), east)!.Value, 6);   // its outer side
+            Assert.True(WallHit(m, new P3(-2, roof + h + 0.05, 5), east) is not double over || over > 2.5 + 1e-6, "a wall over the cap");
+            // between it and the walls: the roof, nothing over it
+            Assert.Equal(roof, Down(ms, 0.1, roof + 5, 5, k => k == CollisionKind.Floor)!.Value, 9);
+            Assert.Null(Down(ms, 0.1, roof + 5, 5, k => k != CollisionKind.Floor));
+            Assert.Equal(roof, Down(ms, 3, roof + 5, 5, k => k == CollisionKind.Floor)!.Value, 9);   // the walk model's roof
+            if (!stairs)
+            {
+                Assert.Equal(roof + h, Down(ms, 3, roof + 5, 5, k => k == CollisionKind.Roof)!.Value, 9);   // the block's top
+                return;
+            }
+            Assert.Equal(roof + h, Down(ms, 0.35, roof + 5, 5, k => k == CollisionKind.Wall)!.Value, 9);   // the ring's top
+            Assert.Equal(2.5, WallHit(m, new P3(3, roof + h / 2, 5), new P3(-1, 0, 0))!.Value, 6);       // its inner side, from the roof
+            Assert.Null(Down(ms, 3, roof + 5, 5, k => k != CollisionKind.Floor));                            // inside it, the roof clear
+        }
+
+        /// <summary>
+        /// Every roof cap of the old generator's themes (<see cref="RoofCapTests.Caps"/>), with and without the parapet, on a
+        /// rectangle and an L (concave, with an edge a deep inset swallows), walk-in with stairs up to the roof or shell-only,
+        /// alone and against a neighbour: no triangle of the collider is degenerate (it is cooked without cleaning,
+        /// docs/PLAY.md §5), its floors and roofs face up, and the highest thing over the roof is its edge, its cap set in or a
+        /// bulkhead (<see cref="CollisionMesh.RoofWallHeight"/>), as high as each says.
+        /// </summary>
+        [Theory, MemberData(nameof(RoofCapTests.Caps), MemberType = typeof(RoofCapTests))]
+        public void EveryRoofCapMakesACleanCollider(double h, double depth, double strip, bool parapet)
+        {
+            foreach (var outline in new[] { RoofCapTests.Rect, RoofCapTests.Ell })
+                foreach (bool interior in new[] { true, false })
+                    foreach (bool neighbour in new[] { false, true })
+                    {
+                        var (_, b, site) = RoofCapTests.Block(RoofCapTests.Capped(h, depth, strip > 0 ? strip : null, parapet), outline, interior, core: interior, neighbour: neighbour);
+                        var m = CollisionMesh.Build(site, b, Lod0.BuildShape(site, b));
+                        string what = $"{(outline == RoofCapTests.Rect ? "a rectangle" : "an L")}{(interior ? " with stairs" : "")}{(neighbour ? " against a neighbour" : "")}";
+                        for (int t = 0; t < m.Tris; t++)
+                        {
+                            var cr = P3.Cross(m.P[m.I[3 * t + 1]] - m.P[m.I[3 * t]], m.P[m.I[3 * t + 2]] - m.P[m.I[3 * t]]);
+                            Assert.True(cr.Length > 1e-9, $"{what}: a degenerate {m.Kind[t]} triangle");
+                            if (m.Kind[t] != CollisionKind.Wall) Assert.True(cr.y > 0, $"{what}: a {m.Kind[t]} triangle faces down");
+                        }
+                        var cap = RoofCap.Of(b);
+                        double want = Math.Max(Math.Max(Lod0.Shared.RoofEdgeH(parapet, cap), 0), cap is RoofCap c && c.inset ? c.h : 0);
+                        if (interior) want = Math.Max(want, CollisionMesh.RoofWallHeight);   // the stairs' bulkhead
+                        Assert.True(Math.Abs(m.P.Max(p => p.y) - (Derived.RoofY(b) + want)) < 1e-9, $"{what}: the highest point {m.P.Max(p => p.y) - Derived.RoofY(b):0.###} m over the roof, not {want:0.###}");
+                    }
         }
 
         /// <summary>A courtyard's edge on a flat roof without a parapet is its 30 cm curb in the collider too, not a parapet's wall.</summary>

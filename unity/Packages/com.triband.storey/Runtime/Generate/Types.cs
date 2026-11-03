@@ -135,10 +135,12 @@ namespace Triband.Storey.Generate
     {
         public double ax, az, bx, bz, r;
         /// <summary>
-        /// How high it stands above its storey's floor, where that is less than the storey (a terrace's parapet, the rails
-        /// round a stair opening or an atrium, a flat roof's curb or cap where it has no parapet); 0 for the storey's whole
-        /// height; <see cref="Flush"/> for nothing above the floor. The walk model takes every segment as a wall all the way
-        /// up; the collision mesh stops it here (<see cref="Play.CollisionMesh"/>). Storey's own.
+        /// How high it stands above its storey's floor. On a storey, where that is less than the storey (a terrace's parapet,
+        /// the rails round a stair opening or an atrium), 0 for the whole storey. On the roof, where no storey is over it,
+        /// however high it is (a flat roof's edge: its parapet, curb or raised cap, <see cref="Lod0.Shared.RoofEdgeH"/>; the
+        /// rails round a flight's opening), 0 for a parapet's height (a bulkhead). <see cref="Flush"/> for nothing above the
+        /// floor. The walk model takes every segment as a wall all the way up; the collision mesh stops it here
+        /// (<see cref="Play.CollisionMesh"/>). Storey's own.
         /// </summary>
         public double h;
         /// <summary>
