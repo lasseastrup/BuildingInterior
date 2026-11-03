@@ -1,0 +1,18 @@
+{
+  "name": "Triband.Storey.Editor.Navigation",
+  "rootNamespace": "Triband.Storey.Editor.Navigation",
+  "references": [
+    "Triband.Storey.Unity",
+    "Unity.AI.Navigation",
+    "Unity.AI.Navigation.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "defineConstraints": ["STOREY_AI_NAVIGATION"],
+  "versionDefines": [
+    { "name": "com.unity.ai.navigation", "expression": "[1.1.0,3.0.0-0)", "define": "STOREY_AI_NAVIGATION" }
+  ],
+  "autoReferenced": true,
+  "noEngineReferences": false
+}

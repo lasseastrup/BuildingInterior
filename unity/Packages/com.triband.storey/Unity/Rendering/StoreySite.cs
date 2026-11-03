@@ -36,7 +36,7 @@ namespace Triband.Storey.Unity
         public bool showLodStats;
         [Tooltip("Give every building a MeshCollider from a collision mesh of its floors, stairs, walls and roofs, for physics characters and raycasts; a building whose Colliders are off on its card gets none. Storey's own play kit walks without them.")]
         public bool generateColliders = true;
-        [Tooltip("Colliders in edit mode too, rebuilt with every edit (raycasts and physics previews in the editor). Off, edits cook nothing.")]
+        [Tooltip("Colliders in edit mode too, rebuilt with every edit (raycasts and physics previews in the editor). Off, edits cook nothing. A NavMesh bake doesn't need it: every building's collider is made while a NavMesh Surface is selected or baking.")]
         public bool collidersInEditMode;
         [Tooltip("In Play mode, make every building's collider as the site loads, before physics first steps, and keep them all, instead of each with its building's LOD0 as the camera nears: nothing placed on a building falls through it at the start, a prop or not. The layout then loads at once, not over frames. About a millisecond a building on one desktop core, shared by the build threads, plus PhysX's cooking, and every collider kept (2 to 12 KB of mesh a building, besides PhysX's copy): for a level's layout, not a streamed city. Off, Storey Props wait for their building's collider.")]
         public bool collidersAtLoad;
@@ -136,6 +136,55 @@ namespace Triband.Storey.Unity
         }
         readonly List<(Vector3 at, float radius, float until)> prefetchAt = new List<(Vector3, float, float)>();
         readonly List<string> nearIds = new List<string>();
+
+        /// <summary>
+        /// Every building's collider in every enabled site, until the handle this returns is disposed (docs/PLAY.md §5.1): for
+        /// a NavMesh bake, which takes the colliders in the scene as it starts, or anything else that reads them in edit mode.
+        /// Before this returns, each site makes every collider it is missing, whatever LOD each building shows and wherever
+        /// the camera is, in edit mode as in Play mode; it keeps them all and makes an edited building's again with the edit,
+        /// as <see cref="collidersAtLoad"/> does in Play mode. A site enabled meanwhile makes them as it loads (in Play mode,
+        /// one loading over frames as its load ends: <see cref="Loading"/>). When the last handle is disposed, each site's own
+        /// switches decide again. A site with <see cref="generateColliders"/> off, and a building with its Colliders off
+        /// (<see cref="BuildingData.colliders"/>), make none. No setting changes and nothing is saved with the scene. The
+        /// authoring package holds one while a NavMesh Surface can be baked and while it bakes; a script's own bake holds its
+        /// own: <c>using (StoreySite.EveryCollider()) surface.BuildNavMesh();</c>. Main thread only.
+        /// </summary>
+        public static IDisposable EveryCollider()
+        {
+            var hold = new ColliderHold();
+            holds.Add(hold);
+            if (holds.Count == 1) ApplyColliders();
+            return hold;
+        }
+
+        // the handles EveryCollider has given out and not had back; a set, so disposing one twice gives back one
+        static readonly HashSet<ColliderHold> holds = new HashSet<ColliderHold>();
+
+        sealed class ColliderHold : IDisposable
+        {
+            public void Dispose() { if (holds.Remove(this) && holds.Count == 0) ApplyColliders(); }
+        }
+
+        /// <summary>
+        /// Every enabled site's colliders as its switches and <see cref="EveryCollider"/> say, now. A site that throws is
+        /// logged and the rest go on: thrown out of EveryCollider, the hold it had taken would be lost, holding them for good.
+        /// </summary>
+        static void ApplyColliders()
+        {
+            foreach (var s in all)
+                try { s.SetColliders(); }
+                catch (Exception ex) { Debug.LogException(ex); }
+        }
+
+        /// <summary>The site's colliders as its switches say, every building's while <see cref="EveryCollider"/> is held.</summary>
+        void SetColliders()
+        {
+            if (site == null) return;   // nothing built yet: the first Refresh sets them
+            bool every = generateColliders && holds.Count > 0;
+            site.Colliders = generateColliders && (Application.isPlaying || collidersInEditMode || every);
+            // every collider made as the layout is built (docs/PLAY.md §5): at load, before physics steps, or while held
+            site.AllColliders = (collidersAtLoad && generateColliders && Application.isPlaying) || every;
+        }
 
         /// <summary>
         /// Hide one building of the layout, or show it again, at run time (docs/PLAY.md §6): for a game's own occlusion, which
@@ -327,9 +376,7 @@ namespace Triband.Storey.Unity
                 if (layout.DocumentOffMainThread() == null) parsing = true;
                 foreach (var n in neighbours) if (n != null && n.layout != null && n.layout.Baked == null && n.layout.DocumentOffMainThread() == null) parsing = true;
             }
-            site.Colliders = generateColliders && (Application.isPlaying || collidersInEditMode);
-            // every collider made as the layout is built, before physics steps (docs/PLAY.md §5): a load is at once then
-            site.AllColliders = collidersAtLoad && generateColliders && Application.isPlaying;
+            SetColliders();
             // the neighbouring districts, for party walls along the edge: a change builds everything again
             // (the layouts' texts compared as objects: a reimport makes a new one, and nothing is read or hashed)
             bool neighboursChanged = neighboursFor != layout || neighboursSeen.Count != neighbours.Count;

@@ -663,7 +663,9 @@ namespace Triband.Storey.Unity
 
         /// <summary>
         /// Give every building a <see cref="MeshCollider"/> on its root, from <see cref="CollisionMesh"/> (floors, stairs,
-        /// walls and pitched roofs; a few hundred triangles a building, not the drawn mesh). Turning it off removes them.
+        /// walls and pitched roofs; a few hundred triangles a building, not the drawn mesh). Turning it off removes them, and
+        /// the buildings' objects that held them: a NavMesh bake in the editor gives every building one for a while
+        /// (<see cref="StoreySite.EveryCollider"/>), which would leave an empty object a building in the hierarchy after.
         /// </summary>
         public bool Colliders
         {
@@ -673,7 +675,11 @@ namespace Triband.Storey.Unity
                 if (colliders == value) return;
                 colliders = value;
                 if (value) { foreach (var bt in built.Values) if (bt.collider) colliderPending.Add(bt.id); if (allColliders && load == null) MakeColliders(); }
-                else { FinishBake(true, discard: true); colliderPending.Clear(); foreach (var b in built.Values) { RemoveCollider(b); b.collisionMade = null; } }
+                else
+                {
+                    FinishBake(true, discard: true); colliderPending.Clear();
+                    foreach (var b in built.Values) { RemoveCollider(b); b.collisionMade = null; if (b.root != null) { Kill(b.root); b.root = null; } }
+                }
             }
         }
 

@@ -121,7 +121,7 @@ Each triangle is tagged Floor, Stair, Wall or Roof (`CollisionMesh.Kind`). The d
 
 **Performance.**
 - **Run time:** a collider is built only when a building is. Its collision mesh is made on the build thread with the building's first LOD0. The buildings built since the last batch are cooked together, in parallel with `Physics.BakeMesh` in an `IJobParallelFor` on Unity's job workers, while the frames go on: the colliders are assigned in a later frame, once the batch has finished, so cooking never holds a frame. No mesh is destroyed while its batch cooks (a building released meanwhile waits for it), and in edit mode, which updates only when asked, the batch is finished at once. Each mesh is given to its collider with the same cooking options, so assigning it cooks nothing. The options are `UseFastMidphase` only: the mesh is already welded and has no degenerate triangles, so cleaning and welding are skipped. The mesh is positions and indices only, with 16-bit indices.
-- **Edit time:** no colliders by default, so dragging a wall cooks nothing. **Colliders in edit mode** turns them on for editor raycasts. Each edit then rebuilds the colliders of only the buildings it touched.
+- **Edit time:** no colliders by default, so dragging a wall cooks nothing. **Colliders in edit mode** turns them on for editor raycasts. Each edit then rebuilds the colliders of only the buildings it touched. A NavMesh bake doesn't need it (§5.1).
 
 **When a building's collider is there.** It comes with the building's LOD0 (in view and near enough, docs/CITY.md §2), assigned a frame or two after the LOD0 is up, and a site loading over frames builds no LOD0 before it has read its layout. Physics doesn't wait, so a rigid body placed on a building falls through until the collider is there.
 - **Colliders At Load** on the Storey Site makes every building's collider as the site loads in Play mode, before physics first steps, and keeps them all (**Colliders Kept** doesn't apply): nothing placed on a building falls through it at the start, a prop or not. Off by default.
@@ -146,6 +146,40 @@ Each triangle is tagged Floor, Stair, Wall or Roof (`CollisionMesh.Kind`). The d
 - Lift shafts are solid floor: the walk model does not let the player fall down them either.
 - Gable ends above the top storey are not walls in the collision mesh. The pitched roof itself is.
 - Without Colliders At Load, a building out of view or far away has no collider until its LOD0 is built. Storey Props there stay held; any other rigid body falls through it.
+
+### 5.1 Baking a NavMesh
+
+A NavMesh Surface (Unity's AI Navigation package) with **Use Geometry** set to **Physics Colliders** bakes the buildings from their colliders: their floors, stairs, walls and roofs (§5). A bake takes the colliders in the scene as it starts. In edit mode a site has none unless **Colliders in edit mode** is on, and then only for its buildings at LOD0, near the Scene view's camera. So every bake needed that switch turned on by hand on every site first, and off again after.
+
+**Now there is nothing to switch.** While a NavMesh Surface can be baked, every enabled site has every building's collider. That is from when a surface is selected, or shown in an Inspector (a locked one too), until neither is true and its bake has finished.
+- They are made at once as that starts, whatever LOD each building shows and wherever the camera is, as with Colliders At Load (§5). An edit meanwhile makes its buildings' colliders again.
+- After, each site's own switches decide again: with Colliders in edit mode off, the colliders go.
+- No setting changes, so there is no undo step, and the colliders are never saved with the scene.
+- Edit mode only, as the Bake button is.
+- The authoring package does it where the AI Navigation package (1.1 or 2.x) is installed: `StoreyNavMeshBake`, in an assembly of its own that only builds then.
+
+**What it costs.** Selecting a surface makes every collider of every open site at once. That is tens of milliseconds for a level's layout, and about a second for 3,000 buildings (the table in §5, plus PhysX's cooking). While a surface stays selected or shown, each edit makes its buildings' colliders again, as Colliders in edit mode does. A surface on the Storey Site's own object is selected whenever the site is, so give it an object of its own.
+
+**What the bake sees.**
+- The site's layer must be in the surface's **Include Layers**.
+- A site with **Generate colliders** off, and a building with its **Colliders** off (§5), give the NavMesh nothing, as they give physics nothing.
+- A NavMesh Modifier on the site's object, with **Apply To Children**, applies to its buildings: their colliders are on objects under the site.
+- **Render Meshes** would take the meshes the site draws, which aren't shapes to walk on: glass, rooms, and every building's massing in the merged cells, which the shaders hide where a building shows its detail. Use Physics Colliders.
+
+**A script's own bake** holds the colliders itself with `StoreySite.EveryCollider()`, and disposes of it when the bake is done:
+
+```csharp
+using (StoreySite.EveryCollider())
+    surface.BuildNavMesh();
+```
+
+The colliders are made before `EveryCollider` returns. For an asynchronous bake (`NavMeshSurface.UpdateNavMesh`, `NavMeshAssetManager.StartBakingSurfaces`), keep the handle until the operation is done. In Play mode, a site still loading over frames makes the rest as its load ends, so wait for `StoreySite.Loading` to clear first. The same handle serves any other tool that reads the colliders in edit mode.
+
+**Checks in Unity:**
+1. Give a NavMesh Surface (Physics Colliders) an object of its own, in a scene with a Storey Site whose *Colliders in edit mode* is off. Select the surface: every building gets a MeshCollider, also those far from the Scene view's camera. Bake: the NavMesh covers the floors and stairs and goes round the walls, on every building.
+2. Select something else: the colliders go once the bake has finished. The Undo history has no step for them, and the site's settings haven't changed.
+3. Open a second Inspector and lock it on the surface. Select the site, and in the other Inspector move a wall: the building's collider follows. Bake in the locked one: so does the NavMesh.
+4. With the surface selected, enter Play mode: the site makes its colliders as its own switches say.
 
 ## 6. Hiding a building at run time
 

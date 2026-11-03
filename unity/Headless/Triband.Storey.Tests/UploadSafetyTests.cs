@@ -173,7 +173,8 @@ namespace Triband.Storey.Tests
             Assert.Contains("public bool collidersAtLoad;", site);
             Assert.Contains("bool OverFrames => LoadOverFrames && !(collidersAtLoad && generateColliders);", site);
             Assert.DoesNotContain("Application.isPlaying && LoadOverFrames", site);
-            Assert.Contains("site.AllColliders = collidersAtLoad && generateColliders && Application.isPlaying;", site);
+            // (or every collider while a NavMesh bake holds them, NavMeshBakeTests)
+            Assert.Contains("site.AllColliders = (collidersAtLoad && generateColliders && Application.isPlaying) || every;", site);
         }
     }
 }

@@ -78,6 +78,7 @@ namespace UnityEditor
         public static Object activeObject { get; set; } = new Object();
         public static GameObject activeGameObject { get => new GameObject(""); set { } }
         public static Object[] objects { get => new Object[0]; set { } }
+        public static GameObject[] gameObjects => new GameObject[0];
         public static System.Action selectionChanged;
     }
 
@@ -111,6 +112,12 @@ namespace UnityEditor
         public SerializedObject serializedObject { get; } = new SerializedObject();
         public static void CreateCachedEditor(Object targetObject, System.Type editorType, ref Editor previousEditor) { }
         public void Repaint() { }
+        public static event System.Action<Editor> finishedDefaultHeaderGUI { add { } remove { } }
+    }
+
+    public class ScriptableSingleton<T> : ScriptableObject where T : ScriptableObject
+    {
+        public static T instance => null;
     }
 
     public class AssetPostprocessor { }
@@ -121,6 +128,7 @@ namespace UnityEditor
         public static event System.Func<bool> wantsToQuit;
         public static event System.Action projectChanged { add { } remove { } }
         public static event System.Action<PlayModeStateChange> playModeStateChanged;
+        public static bool isPlayingOrWillChangePlaymode => false;
         public static void QueuePlayerLoopUpdate() { }
         public static void EnterPlaymode() { }
         public static double timeSinceStartup => 0;

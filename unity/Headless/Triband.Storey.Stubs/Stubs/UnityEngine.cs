@@ -779,6 +779,7 @@ namespace UnityEngine
         public Transform transform { get; } = new Transform();
         public T AddComponent<T>() where T : Component, new() => new T();
         public T GetComponent<T>() => default!;
+        public bool TryGetComponent<T>(out T component) { component = default!; return false; }
         public T GetComponentInParent<T>() => default!;
         public T[] GetComponentsInChildren<T>(bool includeInactive) => System.Array.Empty<T>();
     }

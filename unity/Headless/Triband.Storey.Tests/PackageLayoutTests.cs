@@ -385,6 +385,8 @@ namespace Triband.Storey.Tests
             ["UnityEngine.UI"] = "com.unity.ugui",
             ["Unity.Addressables"] = "com.unity.addressables",
             ["Unity.ResourceManager"] = "com.unity.addressables",
+            ["Unity.AI.Navigation"] = "com.unity.ai.navigation",
+            ["Unity.AI.Navigation.Editor"] = "com.unity.ai.navigation",
         };
 
         // ---- what Unity needs beside every file ------------------------------------
