@@ -42,6 +42,15 @@ namespace Triband.Storey.Occlusion
         /// is off.
         /// </summary>
         public bool holdAfterExit = true;
+        /// <summary>
+        /// The cutaway takes down every wall that faces the camera, as well as those between the camera and the player: the
+        /// storey opens on the camera's side, as a doll's house does, and its far walls stand. A wall faces the camera when
+        /// the camera's direction is on its outside (its normal's side; for a neighbour's party wall, the neighbour's), so a
+        /// wall goes down or up only as the camera turns past it, never as the player walks about. A partition, with a room
+        /// either side, faces both ways and goes down as before, when it is between the camera and the player
+        /// (<see cref="Generate.MeshBuilder.Partitions"/>). Storey's own; the prototype's is off.
+        /// </summary>
+        public bool wallsFacingCamera = false;
     }
 
     /// <summary>The view's occlusion state for the shaders (SPEC §5): the building the player is in, cut and clipped.</summary>
@@ -134,8 +143,8 @@ namespace Triband.Storey.Occlusion
         readonly List<BuildingData> cand = new List<BuildingData>(), near = new List<BuildingData>();
         readonly HashSet<BuildingData> candSeen = new HashSet<BuildingData>();
         // each building's slides by wall, and the frame each wall was last looked at, where they were keyed by (id, wall) in
-        // maps (85 % of the cutaway's time was hashing those); and the walls down now
-        sealed class WallState { public double[] slide = Array.Empty<double>(); public int[] seen = Array.Empty<int>(); public bool sorted; }
+        // maps (85 % of the cutaway's time was hashing those); its partitions, which face both ways; and the walls down now
+        sealed class WallState { public double[] slide = Array.Empty<double>(); public int[] seen = Array.Empty<int>(); public bool[] partition = Array.Empty<bool>(); public bool sorted; }
         readonly Dictionary<BuildingData, WallState> wallStates = new Dictionary<BuildingData, WallState>();
         readonly List<(BuildingData b, int wall)> down = new List<(BuildingData, int)>();
         int cutFrame;
@@ -305,11 +314,33 @@ namespace Triband.Storey.Occlusion
             return st > -0.5 && st < nl - 1 + 0.5;
         }
 
+        /// <summary>
+        /// How far round past a wall's plane the camera must turn before the walls facing the camera (<see
+        /// cref="OcclusionSettings.wallsFacingCamera"/>) start to drop it: the sine of the angle, about 2°. Once it is going
+        /// down, turning back past the plane raises it, so a wall seen edge-on doesn't drop and rise again as the camera
+        /// wavers about its plane.
+        /// </summary>
+        public const double FacingMargin = 0.035;
+
+        /// <summary>
+        /// The test of the walls facing the camera for one wall: the camera's direction from the player (in plan, of unit
+        /// length) is on the wall's outside, by more than <paramref name="margin"/> (the sine of the angle). Its outside is
+        /// its normal's side, or with <paramref name="outward"/> false the other (a neighbour's party wall, whose normal
+        /// points out of the neighbour, into the building the player is in). A direction, not the camera's place: a camera
+        /// trailing the player moves as the player does, and a wall pointing at it would rise and fall as they walked by.
+        /// </summary>
+        public static bool WallFaces(double[] W, double dirX, double dirZ, bool outward = true, double margin = 0)
+        {
+            double nl = Tiers.Hypot(W[2], W[3]); if (nl == 0) return false;   // no data: no wall
+            double d = (W[2] * dirX + W[3] * dirZ) / nl;
+            return (outward ? d : -d) > margin;
+        }
+
         void UpdateCutaway(double dt)
         {
             double step = dt / CutSlide;
             int frame = ++cutFrame;
-            var act = View.active;
+            var act = View.active; bool facing = Settings.wallsFacingCamera;
             if (View.cutOn && act != null)
             {
                 int ai = World.Site.IndexOf(act);
@@ -331,8 +362,11 @@ namespace Triband.Storey.Occlusion
                         if (b != act && (walls[i].K < 8 || (walls[i].K >> 3) - 1 != ai)) continue;
                         st.seen[i] = frame;
                         double a = st.slide[i];
-                        // a wall starts down only with the player clear of its line, and stays down until they cross back
-                        bool up = WallBlocks(walls[i].W, View.cx, View.cz, View.fx, View.fz, a > 0 ? 0 : Settings.wallMargin);
+                        // a wall starts down only with the player clear of its line, and stays down until they cross back;
+                        // or, with the walls facing the camera, once the camera has turned onto its outside (never a
+                        // partition's: it faces both ways)
+                        bool up = WallBlocks(walls[i].W, View.cx, View.cz, View.fx, View.fz, a > 0 ? 0 : Settings.wallMargin)
+                            || facing && !st.partition[i] && WallFaces(walls[i].W, View.dirX, View.dirZ, b == act, a > 0 ? 0 : FacingMargin);
                         if (!up && a == 0) continue;
                         SetWall(b, st, i, Math.Max(0, Math.Min(1, a + (up ? step : -step))));
                     }
@@ -354,7 +388,8 @@ namespace Triband.Storey.Occlusion
             int n = shape.Walls.Count;
             if (wallStates.TryGetValue(b, out var st) && st.slide.Length == n) return st;
             if (st != null) for (int i = 0; i < st.slide.Length; i++) if (st.slide[i] > 0) SetWall(b, st, i, 0);
-            st = wallStates[b] = new WallState { slide = new double[n], seen = new int[n], sorted = true };
+            st = wallStates[b] = new WallState { slide = new double[n], seen = new int[n], partition = new bool[n], sorted = true };
+            foreach (int i in shape.Partitions) if (i < n) st.partition[i] = true;
             var bases = shape.WallBase;
             for (int i = 1; i < bases.Count; i++) if (bases[i] < bases[i - 1]) { st.sorted = false; break; }
             return st;

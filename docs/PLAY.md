@@ -45,6 +45,13 @@ Straight flights (`CoreType.Flight`) are not in the prototype. Their walk surfac
 
 A ray test holds it (`CutawayWallTests.ACutWallIsSolidLookingDownIt`): from inside every full-height stretch of the walk-in storeys' walls of both corpora, cut at the stub and at the ceiling clip, a ray straight down meets the cap every time, and of those slanting along and across the wall the test asks 98.5 % (99 % do on the demo street, all but one on the variants; the rest leave by a door or a window beside, or meet a core's wall or a casing head's end, left whole to keep the triangle count near the prototype's).
 
+**The walls facing the camera can go down too.** The cutaway takes down the walls between the camera and the player, and only those: the walls beside that one stand, though the camera looks at their outsides and they hide the room. In a building with a notch, or one seen at an angle, the player runs through it with walls sliding up and down beside them as the sightline sweeps across their ends. With **Walls Facing Camera** on (`OcclusionSettings.wallsFacingCamera`, off by default), every wall of the player's storey whose outside faces the camera goes down as well: the storey opens on the camera's side like a doll's house, and its far walls stand.
+- **Which walls.** A wall faces the camera when the camera's direction from the player, in plan, is on its outside (`OcclusionCore.WallFaces`). That is its normal's side: LOD0 makes outside walls, courtyard walls, parapets, details and cores face out of what they close. For a neighbour's party wall it is the neighbour's side.
+- **Nothing moves as the player walks.** The test takes the camera's direction, not its place, so a wall goes down or up only as the camera turns past it. A wall starts down once the camera is 2° round onto its outside (`OcclusionCore.FacingMargin`), and goes back up once the camera turns back past its plane, so a wall seen edge-on doesn't drop and rise as the camera wavers.
+- **Partitions.** A room's walls and a stair's middle wall have an inside on either side and face both ways (`MeshBuilder.Partitions`, `Lod0Shape.Partitions`, marked as LOD0 makes them), so for them the test says nothing. They go down as before, when they are between the camera and the player.
+
+The walls between the camera and the player still go down as without the option, a wall facing away too (round a notch, or with the player just stepped out and the building held). With it off, the walks' slides are the prototype's (`FacingWallsTests`).
+
 ## 4. Checking slices 5.3 and 5.4 in the editor
 
 **What is written.**
@@ -59,6 +66,7 @@ A ray test holds it (`CutawayWallTests.ACutWallIsSolidLookingDownIt`): from insi
   - **Wall Margin** (0.3 m): a wall starts to drop only once the player is that far past its line, and stays down until they cross back. A wall seen edge-on, pointing at the camera, no longer drops and rises again as the player passes it. The prototype's is 0.
   - **Hold After Exit** (on): a building the player steps out of stays cut away (the floors above clipped, the walls between camera and player down) while it still stands between the camera and the player, by the same three rays as the buildings in the way. A camera trailing behind is no longer buried in it. It's let go as soon as the camera is clear of it, or the player walks into another building.
   - Only the buildings next to the one the player is in are checked for shared walls, so walking into the first building no longer builds every building's LOD0 for the walk model.
+- **Walls Facing Camera** (off): the cutaway takes down every wall facing the camera too, not only those between the camera and the player, and they move only as the camera turns (§3).
 - **The play kit:** add **Storey Play Kit** to any object (*Add Component ▸ Storey ▸ Play Kit*). It adds the occlusion system to the site if there is none, and makes the character and the camera. The character walks the walk model, with no physics.
 - **The HUD:** where the character is, the lift panel and the touch joystick. It is drawn by its own component (`StoreyHud`), which the character adds and switches with **Show Hud** (on by default). Turn it off for measurement runs: then nothing is drawn or asked for it. The character works out the place and the lift once a frame, and a lift's stops once per lift, where the HUD asked on every GUI event (docs/PERFORMANCE.md §11.4).
 
@@ -80,6 +88,7 @@ The play kit depends on the Input System package. With the project's *Active Inp
 2. **Walking:** walk in through a street door.
    - The floors above are clipped.
    - The walls between the camera and the character slide down to a 1 m stub and come back up as you pass.
+   - With **Walls Facing Camera** on: every wall facing the camera is down from the first step, and the far walls stand. Walk about: none of them moves. Turn the camera: each wall goes down or up as the camera passes its plane.
    - Turning the camera works from any direction.
    - Walk out onto a terrace (Linden Court's, through its door on storey 6): the whole building shows, setback and roof. Turn the camera to look through the setback at the character: it is clipped and cut away as indoors until the camera is clear again.
 3. **Stairs:**

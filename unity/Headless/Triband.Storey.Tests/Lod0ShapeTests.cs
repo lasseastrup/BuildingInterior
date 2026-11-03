@@ -43,6 +43,7 @@ namespace Triband.Storey.Tests
             Assert.True(want.Walls.Count == got.Walls.Count, $"{what}: {got.Walls.Count} walls, the full build {want.Walls.Count}");
             for (int i = 0; i < want.Walls.Count; i++)
                 Assert.True(want.Walls[i].K == got.Walls[i].K && want.Walls[i].W.SequenceEqual(got.Walls[i].W) && want.WallBase[i] == got.WallBase[i], $"{what}: wall {i} differs");
+            Assert.True(want.Partitions.SequenceEqual(got.Partitions), $"{what}: the partitions differ");
         }
 
         [Fact]

@@ -15,6 +15,8 @@ namespace Triband.Storey.Unity
         public OccluderMode buildingsInTheWay = OccluderMode.Sink;
         [Tooltip("Cut away the walls between the camera and the player in the building they are in.")]
         public bool cutaway = true;
+        [Tooltip("Cutaway: take down every wall facing the camera too, not only those between the camera and the player. The storey opens on the camera's side like a doll's house and its far walls stand; a wall goes down or up only as the camera turns past it, never as the player walks about. Room walls, which face both ways, go down as before, when they are between the camera and the player.")]
+        public bool wallsFacingCamera = false;
         [Tooltip("How high a cut wall stays, in metres above the floor.")]
         [Range(0.2f, 2.6f)] public float wallStub = 1.0f;
         [Tooltip("Cutout and Fade: the solid dark base above the floor of the player's storey, in metres.")]
@@ -33,7 +35,7 @@ namespace Triband.Storey.Unity
         /// <summary>Copy into the engine-free settings.</summary>
         public void ApplyTo(OcclusionSettings s)
         {
-            s.mode = buildingsInTheWay; s.cutaway = cutaway; s.stub = wallStub; s.baseHeight = baseHeight;
+            s.mode = buildingsInTheWay; s.cutaway = cutaway; s.wallsFacingCamera = wallsFacingCamera; s.stub = wallStub; s.baseHeight = baseHeight;
             s.holeRadius = holeRadius; s.assist = cameraAssist; s.silhouette = silhouette;
             s.wallMargin = wallMargin; s.holdAfterExit = holdAfterExit;
         }

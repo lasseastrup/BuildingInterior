@@ -33,13 +33,16 @@ namespace Triband.Storey.Generate
         public readonly List<(double[] W, int K)> Walls;
         /// <summary>The floor height of the storey each wall was made on.</summary>
         public readonly List<double> WallBase;
+        /// <summary>The walls that face both ways, by index, in order: room walls, a stair's middle wall (<see cref="MeshBuilder.Partitions"/>).</summary>
+        public readonly List<int> Partitions;
 
-        /// <summary>The lists themselves, trimmed to their length: nothing is added to a built building's.</summary>
-        public Lod0Shape(List<List<Seg>> segs, List<(Seg s, double y0, double y1)> extra, List<(double[] W, int K)> walls, List<double> wallBase)
+        /// <summary>The lists themselves, trimmed to their length: nothing is added to a built building's. No partitions: none.</summary>
+        public Lod0Shape(List<List<Seg>> segs, List<(Seg s, double y0, double y1)> extra, List<(double[] W, int K)> walls, List<double> wallBase, List<int>? partitions = null)
         {
+            partitions ??= new List<int>();
             foreach (var l in segs) l.TrimExcess();
-            segs.TrimExcess(); extra.TrimExcess(); walls.TrimExcess(); wallBase.TrimExcess();
-            Segs = segs; Extra = extra; Walls = walls; WallBase = wallBase;
+            segs.TrimExcess(); extra.TrimExcess(); walls.TrimExcess(); wallBase.TrimExcess(); partitions.TrimExcess();
+            Segs = segs; Extra = extra; Walls = walls; WallBase = wallBase; Partitions = partitions;
         }
     }
 
@@ -72,11 +75,11 @@ namespace Triband.Storey.Generate
             int idx = site.IndexOf(b);
             var r = new Lod0Result { Op = MeshBuilder.Make(idx, shapeOnly: shapeOnly), Glass = MeshBuilder.Make(idx, shapeOnly: shapeOnly) };
             r.Glass.Walls = r.Op.Walls;   // glass shares the wall ids of the walls it sits in
-            r.Glass.WallBase = r.Op.WallBase;
+            r.Glass.WallBase = r.Op.WallBase; r.Glass.Partitions = r.Op.Partitions;
             if (solids) r.Op.Solids = new List<Solid>();
             foreach (var _ in self.Steps(r))
                 if (stop != null && stop()) { r.Op.Recycle(); r.Glass.Recycle(); return null; }
-            r.Shape = new Lod0Shape(r.Segs, r.Extra, r.Op.Walls, r.Op.WallBase);
+            r.Shape = new Lod0Shape(r.Segs, r.Extra, r.Op.Walls, r.Op.WallBase, r.Op.Partitions);
             return r;
         }
 
@@ -637,7 +640,7 @@ namespace Triband.Storey.Generate
             for (int i = 0; i < walls.Count; i++)
             {
                 var r = walls[i]; var F = new Frame(r.a, r.u, r.w); var ops = r.ops; double L = r.L; int self = i;
-                op.Ctx(Geo.WallCtx(r.a, r.u, r.w, L), 1);
+                op.Ctx(Geo.WallCtx(r.a, r.u, r.w, L), 1, partition: true);   // a room either side: its normal's sign is the way it was drawn
                 // where it runs into another (and that one into it), its faces lie inside the other: buried (PanelOpt.buried)
                 Facade.WallPanel(op, F, new Miter(new Cut(-E, 0), new Cut(L + E, 0)), -Dim.T_INT / 2, Dim.T_INT / 2, y, hh, ops, C.inner, C.inner,
                     new Facade.PanelOpt { ends = true, buried = !op.ShapeOnly && !op.Lean && (walls.Count > 1 || r.stubA || r.stubB) ? (p, q) => RoomWall.Inside(walls, p, q, self) : null });
@@ -1112,7 +1115,7 @@ namespace Triband.Storey.Generate
                         if (ow && fL) End(xL, xR, y, y + h, 2.6, 2.75, Skip.UStart); if (ow && fR) End(xL, xR, y, y + h, 2.6, 2.75, Skip.UEnd);
                     }
                     else if (atRoof) Bx(fL ? -1.3 - TE : -1.45, fR ? 1.3 + TE : 1.45, y, y + h, 2.6, 2.6 + TE, C.wall, C.coreIn, TB);
-                    op.Ctx(Wl(0, -1.6, 0, 1.6, 1, 0), 1); Bx(-0.05, 0.05, y, y + (atRoof ? 1.1 : h), -1.6, 1.6, C.coreIn);
+                    op.Ctx(Wl(0, -1.6, 0, 1.6, 1, 0), 1, partition: true); Bx(-0.05, 0.05, y, y + (atRoof ? 1.1 : h), -1.6, 1.6, C.coreIn);   // between the flights
                     if (!fL) S(-1.375, -2.6, -1.375, 2.6, 0.075); else if (atRoof) S(-1.3 - TE / 2, -2.75, -1.3 - TE / 2, 2.75, TE / 2);
                     if (!fR) S(1.375, -2.6, 1.375, 2.6, 0.075); else if (atRoof) S(1.3 + TE / 2, -2.75, 1.3 + TE / 2, 2.75, TE / 2);
                     if (!fB) S(-1.45, 2.675, 1.45, 2.675, 0.075); else if (atRoof) S(-1.6, 2.6 + TE / 2, 1.6, 2.6 + TE / 2, TE / 2);

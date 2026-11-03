@@ -49,6 +49,14 @@ namespace Triband.Storey.Generate
         public List<(double[] W, int K)> Walls = new List<(double[], int)>();
         /// <summary>The floor height of the storey each wall in <see cref="Walls"/> was made on (the editor slides only the active storey's).</summary>
         public List<double> WallBase = new List<double>();
+        /// <summary>
+        /// The walls in <see cref="Walls"/> that face both ways, by index, in order: partitions, with an inside on either
+        /// side (a storey's room walls, a stair's middle wall), whose normal's sign says nothing. Every other wall's normal
+        /// points out of what it closes: the storey (its outside walls, their party walls and details, a courtyard's walls,
+        /// a terrace's parapet) or a core. The cutaway's walls facing the camera go by it
+        /// (<see cref="Occlusion.OcclusionSettings.wallsFacingCamera"/>). Storey's own.
+        /// </summary>
+        public List<int> Partitions = new List<int>();
         /// <summary>The floor height of the storey being generated, recorded with each wall.</summary>
         public double StoreyBase;
         public List<Solid>? Solids;
@@ -181,7 +189,7 @@ namespace Triband.Storey.Generate
             if (ShapeOnly) return;
             lock (spares) if (spares.Contains(this)) return;
             P.Clear(); N.Clear(); C.Clear(); K.Clear(); WI.Clear(); I.Clear(); PaneUV.Clear(); InsideTris.Clear(); BackingTris.Clear();
-            Walls = new List<(double[], int)>(); WallBase = new List<double>(); Solids = null;
+            Walls = new List<(double[], int)>(); WallBase = new List<double>(); Partitions = new List<int>(); Solids = null;
             StoreyBase = 0; curW = Zero4; curK = curI = 0; Welded = false; inside = false; insideFrom = 0; SeeThrough = 0; backing = false; backingFrom = 0; Buried = false;
             lock (spares) if (spares.Count < Spares) spares.Add(this);
         }
@@ -289,11 +297,18 @@ namespace Triband.Storey.Generate
             return pi == pj && (!pi || ui.Equals(uj));
         }
 
-        /// <summary>Set the cutaway context for what follows. A wall (kind 1) gets an id so it can slide.</summary>
-        public MeshBuilder Ctx(double[]? w, int k)
+        /// <summary>
+        /// Set the cutaway context for what follows. A wall (kind 1) gets an id so it can slide; a <paramref name="partition"/>
+        /// faces both ways (<see cref="Partitions"/>).
+        /// </summary>
+        public MeshBuilder Ctx(double[]? w, int k, bool partition = false)
         {
             curW = w ?? Zero4; curK = k;
-            if (!Lean && curK % 8 == 1) { Walls.Add(((double[])curW.Clone(), curK)); WallBase.Add(StoreyBase); curI = Walls.Count; }
+            if (!Lean && curK % 8 == 1)
+            {
+                Walls.Add(((double[])curW.Clone(), curK)); WallBase.Add(StoreyBase); curI = Walls.Count;
+                if (partition) Partitions.Add(curI - 1);
+            }
             else curI = 0;
             return this;
         }
