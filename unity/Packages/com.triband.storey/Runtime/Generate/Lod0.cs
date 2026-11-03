@@ -13,15 +13,20 @@ namespace Triband.Storey.Generate
         public List<List<Seg>> Segs = new List<List<Seg>>();
         /// <summary>Collision segments outside the storeys (a bridge's sides), each with the heights it stands between.</summary>
         public List<(Seg s, double y0, double y1)> Extra = new List<(Seg, double, double)>();
+        /// <summary>
+        /// The collision mesh's solids besides its walls (<see cref="Block"/>): a roof cap's pieces, and a shell-only building's
+        /// roof edge along a core it doesn't build.
+        /// </summary>
+        public List<Block> Blocks = new List<Block>();
         /// <summary>What is kept of it once the meshes are uploaded (made with the result: its lists, not copies).</summary>
         public Lod0Shape Shape = null!;
     }
 
     /// <summary>
     /// What is read of a building's LOD0 after its meshes are uploaded (docs/CITY.md §7): the collision segments (the walk
-    /// model, colliders, the problem list) and the walls given ids (the cutaway). Tens of kilobytes, about 1% of the LOD0's
-    /// GPU meshes, where the generator's whole result is several megabytes. <see cref="Lod0.BuildShape"/> makes it
-    /// without the meshes.
+    /// model, colliders, the problem list), the collider's other solids, and the walls given ids (the cutaway). Tens of
+    /// kilobytes, about 1% of the LOD0's GPU meshes, where the generator's whole result is several megabytes.
+    /// <see cref="Lod0.BuildShape"/> makes it without the meshes.
     /// </summary>
     public sealed class Lod0Shape
     {
@@ -29,17 +34,22 @@ namespace Triband.Storey.Generate
         public readonly List<List<Seg>> Segs;
         /// <summary>Collision segments outside the storeys (a bridge's sides), each with the heights it stands between.</summary>
         public readonly List<(Seg s, double y0, double y1)> Extra;
+        /// <summary>
+        /// The collision mesh's solids besides its walls (<see cref="Block"/>): a roof cap's pieces, and a shell-only building's
+        /// roof edge along a core it doesn't build. Not the walk model's.
+        /// </summary>
+        public readonly List<Block> Blocks;
         /// <summary>The walls given ids, in id order (wall i carries id i + 1 in the mesh): the cutaway's data and kind.</summary>
         public readonly List<(double[] W, int K)> Walls;
         /// <summary>The floor height of the storey each wall was made on.</summary>
         public readonly List<double> WallBase;
 
         /// <summary>The lists themselves, trimmed to their length: nothing is added to a built building's.</summary>
-        public Lod0Shape(List<List<Seg>> segs, List<(Seg s, double y0, double y1)> extra, List<(double[] W, int K)> walls, List<double> wallBase)
+        public Lod0Shape(List<List<Seg>> segs, List<(Seg s, double y0, double y1)> extra, List<Block> blocks, List<(double[] W, int K)> walls, List<double> wallBase)
         {
             foreach (var l in segs) l.TrimExcess();
-            segs.TrimExcess(); extra.TrimExcess(); walls.TrimExcess(); wallBase.TrimExcess();
-            Segs = segs; Extra = extra; Walls = walls; WallBase = wallBase;
+            segs.TrimExcess(); extra.TrimExcess(); blocks.TrimExcess(); walls.TrimExcess(); wallBase.TrimExcess();
+            Segs = segs; Extra = extra; Blocks = blocks; Walls = walls; WallBase = wallBase;
         }
     }
 
@@ -76,7 +86,7 @@ namespace Triband.Storey.Generate
             if (solids) r.Op.Solids = new List<Solid>();
             foreach (var _ in self.Steps(r))
                 if (stop != null && stop()) { r.Op.Recycle(); r.Glass.Recycle(); return null; }
-            r.Shape = new Lod0Shape(r.Segs, r.Extra, r.Op.Walls, r.Op.WallBase);
+            r.Shape = new Lod0Shape(r.Segs, r.Extra, r.Blocks, r.Op.Walls, r.Op.WallBase);
             return r;
         }
 
@@ -163,7 +173,7 @@ namespace Triband.Storey.Generate
                 }
                 else
                 {
-                    Roof(op, sg, g, Cb, wallsBelow);
+                    Roof(op, sg, g, Cb, wallsBelow, r.Blocks);
                     if (!Roofs.IsPitched(b)) foreach (var v in b.voids) if (v.kind == VoidKind.Atrium && Courtyards.HoleAt(b, v, N)) Courtyards.Skylight(op, gl, sg, b, v, Cb);
                 }
                 if (!shell && !Derived.Filled(b, k)) Shafts(op, sg, k, g.C, apart);
@@ -862,7 +872,8 @@ namespace Triband.Storey.Generate
         }
 
         /// <param name="walls">The top storey's facade walls, by edge (<see cref="FacadeStorey"/>): a pitched roof's eave slides away with them.</param>
-        public void Roof(MeshBuilder op, List<Seg>? sg, TierCtx g, Palette C, int[]? walls = null)
+        /// <param name="blocks">Takes the collision mesh's solids past the walk model's walls (<see cref="Lod0Shape.Blocks"/>: a cap standing out, a shell-only building's edge along a flush core), with <paramref name="sg"/>.</param>
+        public void Roof(MeshBuilder op, List<Seg>? sg, TierCtx g, Palette C, int[]? walls = null, List<Block>? blocks = null)
         {
             if (Roofs.Draw(op, Roofs.Parts(site, b), C, Derived.StyleAt(b, N), walls)) { WallTops(op, g, C); return; }   // hip, gable or shed (no roof access, no parapet)
             double y = Derived.RoofY(b), T = Dim.T_EXT; int n = g.Wp.Count, k0 = Derived.TierStart(b, N);
@@ -902,16 +913,49 @@ namespace Triband.Storey.Generate
                 // building without insides builds none (LOD0 its cores, LOD1 its bulkheads, only for a walk-in one), and LOD1's
                 // stand clear of the wall: there the wall's top is open, so the parapet the prototype leaves out is filled in, by
                 // Unity only
+                List<(double, double)> Along((double, double) r) { var all = Geo.MinusRanges(Clip(r), party); return Geo.MinusRanges(all, Geo.MinusRanges(all, cores)); }
                 if ((shell || op.Lean) && cores.Count > 0)
                 {
                     op.Backing = true;
-                    Edge(r => { var all = Geo.MinusRanges(Clip(r), party); return Geo.MinusRanges(all, Geo.MinusRanges(all, cores)); });
+                    Edge(Along);
                     op.Backing = false;
                 }
                 if (sg != null) foreach (var (cs, ce) in R(m.Span(T / 2, T / 2))) Facade.PushSeg(sg, F, cs, ce, T / 2, T / 2, edgeH);
+                // the collision mesh's solids past the walk model's walls: a cap standing out past the walls, and along a
+                // shell-only building's flush core the edge, as high as it stands, where its parapet is filled in above (the walk
+                // model's walls stop there, as the prototype's)
+                if (sg != null && blocks != null)
+                {
+                    bool fill = shell && cores.Count > 0;
+                    if (cap is RoofCap cb && !cb.inset)
+                    {
+                        double ya = cb.raised ? y : y - cb.h, yb = cb.raised ? y + cb.h : y;
+                        Pieces(blocks, F, m, R(m.Span(cb.wIn, cb.wOut)), cb.wIn, cb.wOut, ya, yb);
+                        if (fill) Pieces(blocks, F, m, Along(m.Span(cb.wIn, cb.wOut)), cb.wIn, cb.wOut, ya, yb);
+                    }
+                    if (fill && edgeH > 0) Pieces(blocks, F, m, Along(m.Span(0, T)), 0, T, y, y + edgeH);
+                }
             }
             foreach (var v in b.voids) if (v.kind == VoidKind.Courtyard && Courtyards.HoleAt(b, v, N)) Courtyards.RoofEdge(op, sg, b, v, C);
             if (cap is RoofCap ci && ci.inset) InsetCap(op, ci, y, stN.capStrip > 0 ? capC : C.roof, capC, whole ? C.roof : (Swatch?)null);
+        }
+
+        /// <summary>
+        /// A strip's pieces along one edge for the collision mesh (<see cref="Block"/>), as <see cref="Facade.StripPieces"/>
+        /// draws them: over <paramref name="ranges"/>, from <paramref name="wa"/> to <paramref name="wb"/> across, each ended as
+        /// it ends them (the edge's mitre where it reaches the corner, square where it stops short), and none where it would be a
+        /// sliver, as <see cref="MeshBuilder.MBox(Frame, double, double, double, double, double, double, double, double, Swatch, Swatch?, Skip)"/>
+        /// draws none. A corner too sharp to mitre in full is left without its clipped tip.
+        /// </summary>
+        static void Pieces(List<Block> blocks, Frame F, Miter m, List<(double, double)> ranges, double wa, double wb, double y0, double y1)
+        {
+            var (s0, e0) = m.Span(wa, wb);
+            foreach (var (a, e) in ranges)
+            {
+                var S = a <= s0 + 1e-6 ? m.S : new Cut(a, 0); var E = e >= e0 - 1e-6 ? m.E : new Cut(e, 0);
+                if (E.At(wa) - S.At(wa) < 1e-4 || E.At(wb) - S.At(wb) < 1e-4 || y1 - y0 < 1e-4 || wb - wa < 1e-4) continue;
+                blocks.Add(new Block(F, S, E, wa, wb, y0, y1));
+            }
         }
 
         /// <summary>

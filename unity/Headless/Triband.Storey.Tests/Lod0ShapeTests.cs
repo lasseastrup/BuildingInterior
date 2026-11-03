@@ -33,6 +33,12 @@ namespace Triband.Storey.Tests
                 var (cd, b) = CourtyardTests.Block(5); CourtyardTests.Court(b, kind, kind == VoidKind.Atrium ? 1 : 0);
                 yield return (kind.ToString(), new Site(cd.buildings), 1);
             }
+            // roof caps standing out past the walls, a slab and a fascia, on an L against a neighbour (their pieces, Blocks)
+            foreach (var (h, depth) in new[] { (0.4, -0.25), (-0.4, -0.3) })
+            {
+                var (_, _, site) = RoofCapTests.Block(RoofCapTests.Capped(h, depth, parapet: h > 0), RoofCapTests.Ell, core: true, neighbour: true);
+                yield return (h > 0 ? "raised cap" : "fascia", site, 1);
+            }
         }
 
         static void Same(Lod0Shape want, Lod0Shape got, string what)
@@ -40,6 +46,7 @@ namespace Triband.Storey.Tests
             Assert.True(want.Segs.Count == got.Segs.Count, $"{what}: {got.Segs.Count} storeys of segments, the full build {want.Segs.Count}");
             for (int k = 0; k < want.Segs.Count; k++) Assert.True(want.Segs[k].SequenceEqual(got.Segs[k]), $"{what}: storey {k}'s segments differ");
             Assert.True(want.Extra.SequenceEqual(got.Extra), $"{what}: the bridges' segments differ");
+            Assert.True(want.Blocks.SequenceEqual(got.Blocks), $"{what}: the roof cap's pieces differ");
             Assert.True(want.Walls.Count == got.Walls.Count, $"{what}: {got.Walls.Count} walls, the full build {want.Walls.Count}");
             for (int i = 0; i < want.Walls.Count; i++)
                 Assert.True(want.Walls[i].K == got.Walls[i].K && want.Walls[i].W.SequenceEqual(got.Walls[i].W) && want.WallBase[i] == got.WallBase[i], $"{what}: wall {i} differs");
@@ -48,16 +55,17 @@ namespace Triband.Storey.Tests
         [Fact]
         public void AShapeIsTheFullBuildsToTheLastBit()
         {
-            int n = 0, walls = 0, extra = 0;
+            int n = 0, walls = 0, extra = 0, blocks = 0;
             foreach (var (name, site, every) in Layouts())
                 for (int i = 0; i < site.Buildings.Count; i += every)
                 {
                     var b = site.Buildings[i]; var shape = Lod0.BuildShape(site, b);
                     Same(Lod0.Build(site, b).Shape, shape, $"{name}: {b.name}");
-                    n++; walls += shape.Walls.Count; extra += shape.Extra.Count;
+                    n++; walls += shape.Walls.Count; extra += shape.Extra.Count; blocks += shape.Blocks.Count;
                 }
-            output.WriteLine($"{n} buildings, {walls} walls, {extra} bridge segments: the same");
+            output.WriteLine($"{n} buildings, {walls} walls, {extra} bridge segments, {blocks} roof cap pieces: the same");
             Assert.True(extra > 0, "no bridge segments: the layouts don't test them");
+            Assert.True(blocks > 0, "no roof cap pieces: the layouts don't test them");
         }
 
         [Fact]

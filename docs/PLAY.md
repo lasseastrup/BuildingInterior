@@ -113,6 +113,8 @@ For a project's own physics character, raycasts or props, every building gets on
 - **Stairs:** a ramp per flight, at the walk model's heights, for both kinds of stairs.
 - **Pitched roofs.**
 - **A roof cap set in** (`RoofCap.inset`), where LOD0 stands it (`Lod0.Shared.InsetCapRegion`) and as high as it is. Its sides are walls. A ring's top is a wall's; a block's, over a whole roof, is the roof's (`CollisionKind.Roof`). The walk model has no cap: it walks the roof under it, which stays a floor.
+- **A roof cap standing out past the walls**, a slab on them or a fascia hanging from the roof's edge: out as far as its *Overhang* sets it. Its pieces are the boxes LOD0 draws it with, cut where it is cut (along party walls, at corners cut for a neighbour, at bulkheads) and mitred at the corners (`Lod0Shape.Blocks`, `Block`). It had only the wall's thickness, so the Overhang didn't change the collider. The walk model's walls stay the wall's.
+- **A shell-only building** keeps its stairs and lifts for when it is walk-in again, but builds none of them, and the collider has none of them: no ramps and no holes in its roof. Along a core flush with its wall, where a walk-in building's bulkhead takes the parapet's place, its roof's edge is the edge's height, as its parapet is drawn there. The walk model keeps them all, as the prototype's does; nobody gets into a shell to use them.
 
 Each triangle is tagged Floor, Stair, Wall or Roof (`CollisionMesh.Kind`). The demo street's buildings have 64 to 871 triangles each: 1 to 15% of their LOD0.
 
@@ -145,7 +147,7 @@ Each triangle is tagged Floor, Stair, Wall or Roof (`CollisionMesh.Kind`). The d
 
 **Limits.**
 - A bulkhead and an atrium's skylight curb are walls a parapet's height, 1.2 m, on the roof.
-- A raised cap's overhang past the walls is not in the collision mesh, as a cornice isn't: the roof's edge is the wall's thickness.
+- A cornice, bands, a plinth and the facade's details are not in the collision mesh: a wall is its thickness.
 - The walk model keeps a roof at its own height under a cap over it: a raised cap's lid and a block set in are the collider's alone.
 - Lift shafts are solid floor: the walk model does not let the player fall down them either.
 - Gable ends above the top storey are not walls in the collision mesh. The pitched roof itself is.

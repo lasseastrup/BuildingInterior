@@ -21,6 +21,9 @@ namespace Triband.Storey.Play
     /// where one lifts it); without a parapet as high as its curb or raised cap, and round a cap set in, where nothing stands
     /// on the walls, no wall at all (<see cref="Seg.Flush"/>). A wall that carries on up through the storeys above is one
     /// box, ending at the top of its last storey's piece.</item>
+    /// <item>A raised roof cap or a fascia: its pieces as LOD0 draws them (<see cref="Lod0Shape.Blocks"/>), out past the
+    /// walls as far as it stands out; and a shell-only building's roof edge along a core flush with its wall, filled in as its
+    /// parapet is.</item>
     /// <item>Floors: one polygon per level (the floor, terrace or roof), as far out as the walk model lets the player step,
     /// with the stair holes cut out; none inside storeys nobody can enter (shell-only buildings, filled storeys).</item>
     /// <item>Stairs: a ramp up each flight, a flat mid landing.</item>
@@ -28,6 +31,8 @@ namespace Triband.Storey.Play
     /// <item>A roof cap set in (<see cref="RoofCap.inset"/>): where it stands, as high as it is, its sides walls and its top a
     /// wall's (a ring) or a roof's (a block over the whole roof, which the walk model walks under).</item>
     /// </list>
+    /// A shell-only building keeps its stairs for when it is walk-in again, but builds none: none here, nor a hole for them,
+    /// though the walk model keeps them as the prototype's does (no one gets in to use them).
     /// Engine-free, from the building's LOD0 shape (kept from the LOD0 built for rendering), in the layout's coordinates. One-sided:
     /// each triangle faces out of what it bounds (floors and ramps up). Vertices are shared within a piece; there are no
     /// normals or colours.
@@ -51,6 +56,7 @@ namespace Triband.Storey.Play
         {
             var m = new CollisionMesh();
             m.Walls(b, l0);
+            m.Blocks(l0);
             m.Floors(b);
             m.Stairs(b);
             m.PitchedRoof(site, b);
@@ -162,7 +168,35 @@ namespace Triband.Storey.Play
             Quad(c4, c5, c6, c7, Up, CollisionKind.Wall);                       // the top
         }
 
+        /// <summary>
+        /// The solids LOD0 gives besides the walls (<see cref="Lod0Shape.Blocks"/>: a raised cap's or a fascia's pieces, a
+        /// shell-only building's edge along a flush core), each a box between its two cuts as
+        /// <see cref="MeshBuilder.MBox(Frame, double, double, double, double, double, double, double, double, Swatch, Swatch?, Skip)"/>
+        /// draws one: every face facing out of it, its underside too (an overhang's).
+        /// </summary>
+        void Blocks(Lod0Shape l0)
+        {
+            foreach (var k in l0.Blocks)
+            {
+                var F = k.F; double sa = k.S.At(k.w0), sb = k.S.At(k.w1), ea = k.E.At(k.w0), eb = k.E.At(k.w1);
+                int Pt(double u, double w, double y) { var p = F.At(u, y, w); return V(p.x, p.y, p.z); }
+                // the plan's corners, the inner side's then the outer's, at its foot and its top
+                int a0 = Pt(sa, k.w0, k.y0), b0 = Pt(ea, k.w0, k.y0), c0 = Pt(eb, k.w1, k.y0), d0 = Pt(sb, k.w1, k.y0);
+                int a1 = Pt(sa, k.w0, k.y1), b1 = Pt(ea, k.w0, k.y1), c1 = Pt(eb, k.w1, k.y1), d1 = Pt(sb, k.w1, k.y1);
+                var w = new P3(F.w.x, 0, F.w.z);
+                Quad(d0, c0, c1, d1, w, CollisionKind.Wall);                                         // its outer side
+                Quad(a0, b0, b1, a1, new P3(-w.x, 0, -w.z), CollisionKind.Wall);                     // its inner side
+                Quad(b0, c0, c1, b1, Geo.EndNormal(F, ea, eb, k.w0, k.w1, 1), CollisionKind.Wall);   // its end
+                Quad(a0, d0, d1, a1, Geo.EndNormal(F, sa, sb, k.w0, k.w1, -1), CollisionKind.Wall);  // its start
+                Quad(a1, b1, c1, d1, Up, CollisionKind.Wall);                                        // its top
+                Quad(a0, b0, c0, d0, new P3(0, -1, 0), CollisionKind.Wall);                          // its underside
+            }
+        }
+
         // ---- floors ----
+
+        /// <summary>A stair's hole in the slab at level k: a walk-in building's (a shell-only one keeps its stairs, builds none).</summary>
+        static bool StairHole(BuildingData b, CoreData s, int k) => b.interior && Cores.StairHoleAt(b, s, k);
 
         /// <summary>Where a stair's slab is open, as a world rectangle.</summary>
         static List<Vec2> HoleOf(BuildingData b, CoreData s)
@@ -194,7 +228,7 @@ namespace Triband.Storey.Play
                 ulong open = 0;
                 if (keyed)
                 {
-                    for (int i = 0; i < b.shafts.Count; i++) if (Cores.StairHoleAt(b, b.shafts[i], k)) open |= 1UL << i;
+                    for (int i = 0; i < b.shafts.Count; i++) if (StairHole(b, b.shafts[i], k)) open |= 1UL << i;
                     for (int i = 0; i < b.voids.Count; i++) if (Courtyards.HoleAt(b, b.voids[i], k)) open |= 1UL << (b.shafts.Count + i);
                 }
                 var key = (below as object, at as object, open);
@@ -204,7 +238,7 @@ namespace Triband.Storey.Play
                     if (below != null) outlines.Add(World(b, below));   // the storey below's roof or terrace
                     if (at != null) outlines.Add(World(b, at));         // this storey's floor (an overhang reaches past the one below)
                     var holes = new List<List<Vec2>>();
-                    foreach (var s in b.shafts) if (Cores.StairHoleAt(b, s, k)) holes.Add(HoleOf(b, s));
+                    foreach (var s in b.shafts) if (StairHole(b, s, k)) holes.Add(HoleOf(b, s));
                     foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, k)) holes.Add(World(b, v.shape));
                     // as far out as the walk model lets the player stand: slabs run out under the walls
                     polys = Geo.GrownUnion(outlines, Dim.T_EXT + 0.02, holes);
@@ -238,6 +272,7 @@ namespace Triband.Storey.Play
 
         void Stairs(BuildingData b)
         {
+            if (!b.interior) return;   // a shell-only building keeps its stairs for when it is walk-in again, but builds none
             int N = b.floors.Count;
             foreach (var s in b.shafts)
             {

@@ -151,4 +151,20 @@ namespace Triband.Storey.Generate
         public Seg(double ax, double az, double bx, double bz, double r) { this.ax = ax; this.az = az; this.bx = bx; this.bz = bz; this.r = r; h = 0; }
         public Seg(double ax, double az, double bx, double bz, double r, double h) : this(ax, az, bx, bz, r) { this.h = h; }
     }
+
+    /// <summary>
+    /// A solid the collision mesh has besides its walls (<see cref="Play.CollisionMesh"/>): a box along an edge's frame
+    /// between two cuts (mitred where the strip turns a corner), from <see cref="w0"/> to <see cref="w1"/> across and from
+    /// <see cref="y0"/> to <see cref="y1"/> up, as <see cref="MeshBuilder.MBox(Frame, Cut, Cut, double, double, double, double, Swatch, Swatch?, Skip)"/>
+    /// draws one: a roof cap's pieces, out past the walls as far as it stands out (<see cref="RoofCap"/>), and along a core
+    /// flush with a shell-only building's wall, which it doesn't build, the roof's edge, where the walk model's walls stop as
+    /// the prototype's do. Not the walk model's. Storey's own.
+    /// </summary>
+    public readonly struct Block
+    {
+        public readonly Frame F;
+        public readonly Cut S, E;
+        public readonly double w0, w1, y0, y1;
+        public Block(Frame f, Cut s, Cut e, double w0, double w1, double y0, double y1) { F = f; S = s; E = e; this.w0 = w0; this.w1 = w1; this.y0 = y0; this.y1 = y1; }
+    }
 }
