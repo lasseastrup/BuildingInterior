@@ -16,13 +16,23 @@ namespace Triband.Storey.Play
     /// characters, rigid bodies, raycasts and NavMesh baking meet what <see cref="PlayWorld"/> walks on and is stopped by.
     /// <list type="bullet">
     /// <item>Walls: LOD0's collision segments, each a thin box as thick as its radius says, as tall as its storey, or as the
-    /// parapet or rail it is where that is lower (<see cref="Seg.h"/>). A wall that carries on up through the storeys above is
-    /// one box, ending at the top of its last storey's piece.</item>
+    /// parapet or rail it is where that is lower (<see cref="Seg.h"/>). On the roof, as high as it says: a flat roof's edge
+    /// a parapet's height over what the parapet stands on (<see cref="Lod0.Shared.RoofParapet"/>, over a raised cap's top
+    /// where one lifts it); without a parapet as high as its curb or raised cap, and round a cap set in, where nothing stands
+    /// on the walls, no wall at all (<see cref="Seg.Flush"/>). A wall that carries on up through the storeys above is one
+    /// box, ending at the top of its last storey's piece.</item>
+    /// <item>A raised roof cap or a fascia: its pieces as LOD0 draws them (<see cref="Lod0Shape.Blocks"/>), out past the
+    /// walls as far as it stands out; and a shell-only building's roof edge along a core flush with its wall, filled in as its
+    /// parapet is.</item>
     /// <item>Floors: one polygon per level (the floor, terrace or roof), as far out as the walk model lets the player step,
     /// with the stair holes cut out; none inside storeys nobody can enter (shell-only buildings, filled storeys).</item>
     /// <item>Stairs: a ramp up each flight, a flat mid landing.</item>
     /// <item>Pitched roofs: their planes.</item>
+    /// <item>A roof cap set in (<see cref="RoofCap.inset"/>): where it stands, as high as it is, its sides walls and its top a
+    /// wall's (a ring) or a roof's (a block over the whole roof, which the walk model walks under).</item>
     /// </list>
+    /// A shell-only building keeps its stairs for when it is walk-in again, but builds none: none here, nor a hole for them,
+    /// though the walk model keeps them as the prototype's does (no one gets in to use them).
     /// Engine-free, from the building's LOD0 shape (kept from the LOD0 built for rendering), in the layout's coordinates. One-sided:
     /// each triangle faces out of what it bounds (floors and ramps up). Vertices are shared within a piece; there are no
     /// normals or colours.
@@ -35,16 +45,22 @@ namespace Triband.Storey.Play
         public readonly List<CollisionKind> Kind = new List<CollisionKind>();
         public int Tris => I.Count / 3;
 
-        /// <summary>A roof storey's walls (parapets, roof edges): high enough to stop the player, not a bulkhead's full height.</summary>
-        public const double RoofWallHeight = 1.2;
+        /// <summary>
+        /// The roof storey's walls that don't say how high they stand (<see cref="Seg.h"/> 0: a bulkhead, an atrium's skylight
+        /// curb): a parapet's height (<see cref="Lod0.Shared.RoofParapet"/>), high enough to stop the player, not a bulkhead's
+        /// full height.
+        /// </summary>
+        public const double RoofWallHeight = Lod0.Shared.RoofParapet;
 
         public static CollisionMesh Build(Site site, BuildingData b, Lod0Shape l0)
         {
             var m = new CollisionMesh();
             m.Walls(b, l0);
+            m.Blocks(l0);
             m.Floors(b);
             m.Stairs(b);
             m.PitchedRoof(site, b);
+            m.InsetCap(site, b);
             m.Bridged(site, b, l0);
             return m;
         }
@@ -105,8 +121,11 @@ namespace Triband.Storey.Play
                 here.Clear(); tops.Clear();
                 foreach (var s in l0.Segs[k])
                 {
+                    if (s.h < 0) continue;   // nothing stands on it over the floor (Seg.Flush): the walk model's wall alone
                     var key = (s.ax, s.az, s.bx, s.bz, s.r);
-                    double top = s.h > 0 ? Math.Min(y1, y0 + s.h) : y1;
+                    // no higher than its storey; on the roof, with no storey over it, as high as it says (a parapet on a raised
+                    // cap, a cap higher than the roof storey's other walls)
+                    double top = s.h > 0 ? (k < N ? Math.Min(y1, y0 + s.h) : y0 + s.h) : y1;
                     // the same segment twice on a storey: the taller
                     if (here.TryGetValue(key, out int at)) { if (top > tops[at].top) tops[at] = (tops[at].s, top); continue; }
                     here[key] = tops.Count; tops.Add((s, top));
@@ -149,7 +168,35 @@ namespace Triband.Storey.Play
             Quad(c4, c5, c6, c7, Up, CollisionKind.Wall);                       // the top
         }
 
+        /// <summary>
+        /// The solids LOD0 gives besides the walls (<see cref="Lod0Shape.Blocks"/>: a raised cap's or a fascia's pieces, a
+        /// shell-only building's edge along a flush core), each a box between its two cuts as
+        /// <see cref="MeshBuilder.MBox(Frame, double, double, double, double, double, double, double, double, Swatch, Swatch?, Skip)"/>
+        /// draws one: every face facing out of it, its underside too (an overhang's).
+        /// </summary>
+        void Blocks(Lod0Shape l0)
+        {
+            foreach (var k in l0.Blocks)
+            {
+                var F = k.F; double sa = k.S.At(k.w0), sb = k.S.At(k.w1), ea = k.E.At(k.w0), eb = k.E.At(k.w1);
+                int Pt(double u, double w, double y) { var p = F.At(u, y, w); return V(p.x, p.y, p.z); }
+                // the plan's corners, the inner side's then the outer's, at its foot and its top
+                int a0 = Pt(sa, k.w0, k.y0), b0 = Pt(ea, k.w0, k.y0), c0 = Pt(eb, k.w1, k.y0), d0 = Pt(sb, k.w1, k.y0);
+                int a1 = Pt(sa, k.w0, k.y1), b1 = Pt(ea, k.w0, k.y1), c1 = Pt(eb, k.w1, k.y1), d1 = Pt(sb, k.w1, k.y1);
+                var w = new P3(F.w.x, 0, F.w.z);
+                Quad(d0, c0, c1, d1, w, CollisionKind.Wall);                                         // its outer side
+                Quad(a0, b0, b1, a1, new P3(-w.x, 0, -w.z), CollisionKind.Wall);                     // its inner side
+                Quad(b0, c0, c1, b1, Geo.EndNormal(F, ea, eb, k.w0, k.w1, 1), CollisionKind.Wall);   // its end
+                Quad(a0, d0, d1, a1, Geo.EndNormal(F, sa, sb, k.w0, k.w1, -1), CollisionKind.Wall);  // its start
+                Quad(a1, b1, c1, d1, Up, CollisionKind.Wall);                                        // its top
+                Quad(a0, b0, c0, d0, new P3(0, -1, 0), CollisionKind.Wall);                          // its underside
+            }
+        }
+
         // ---- floors ----
+
+        /// <summary>A stair's hole in the slab at level k: a walk-in building's (a shell-only one keeps its stairs, builds none).</summary>
+        static bool StairHole(BuildingData b, CoreData s, int k) => b.interior && Cores.StairHoleAt(b, s, k);
 
         /// <summary>Where a stair's slab is open, as a world rectangle.</summary>
         static List<Vec2> HoleOf(BuildingData b, CoreData s)
@@ -181,7 +228,7 @@ namespace Triband.Storey.Play
                 ulong open = 0;
                 if (keyed)
                 {
-                    for (int i = 0; i < b.shafts.Count; i++) if (Cores.StairHoleAt(b, b.shafts[i], k)) open |= 1UL << i;
+                    for (int i = 0; i < b.shafts.Count; i++) if (StairHole(b, b.shafts[i], k)) open |= 1UL << i;
                     for (int i = 0; i < b.voids.Count; i++) if (Courtyards.HoleAt(b, b.voids[i], k)) open |= 1UL << (b.shafts.Count + i);
                 }
                 var key = (below as object, at as object, open);
@@ -191,7 +238,7 @@ namespace Triband.Storey.Play
                     if (below != null) outlines.Add(World(b, below));   // the storey below's roof or terrace
                     if (at != null) outlines.Add(World(b, at));         // this storey's floor (an overhang reaches past the one below)
                     var holes = new List<List<Vec2>>();
-                    foreach (var s in b.shafts) if (Cores.StairHoleAt(b, s, k)) holes.Add(HoleOf(b, s));
+                    foreach (var s in b.shafts) if (StairHole(b, s, k)) holes.Add(HoleOf(b, s));
                     foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, k)) holes.Add(World(b, v.shape));
                     // as far out as the walk model lets the player stand: slabs run out under the walls
                     polys = Geo.GrownUnion(outlines, Dim.T_EXT + 0.02, holes);
@@ -225,6 +272,7 @@ namespace Triband.Storey.Play
 
         void Stairs(BuildingData b)
         {
+            if (!b.interior) return;   // a shell-only building keeps its stairs for when it is walk-in again, but builds none
             int N = b.floors.Count;
             foreach (var s in b.shafts)
             {
@@ -288,6 +336,39 @@ namespace Triband.Storey.Play
                     for (int i = 0; i < (closed ? cnt - 1 : cnt); i++) ids.Add(V(r[i].x, r[i].y, r[i].z));
                 }
                 for (int t = 0; t + 2 < tris.Count; t += 3) Tri(ids[tris[t]], ids[tris[t + 1]], ids[tris[t + 2]], n, CollisionKind.Roof);
+            }
+        }
+
+        // ---- a roof cap set in ----
+
+        /// <summary>
+        /// A cap set in on a flat roof (<see cref="RoofCap.inset"/>), where LOD0 stands it (<see cref="Lod0.Shared.InsetCapRegion"/>),
+        /// as high as it is: its sides walls from the roof up, facing out of it (<see cref="Lod0.Shared.InsetCapSides"/>), and its
+        /// top a wall's for a ring, the roof's for a block over the whole roof (<see cref="RoofCap.Whole"/>): the walk model has
+        /// no cap, and walks the roof under it. Each of its polygons one piece, its sides and top sharing their points.
+        /// </summary>
+        void InsetCap(Site site, BuildingData b)
+        {
+            if (!(RoofCap.Of(b) is RoofCap c) || !c.inset) return;
+            bool block = RoofCap.Whole(b);
+            double y = Derived.RoofY(b), y1 = y + c.h;
+            var feet = new Dictionary<(double, double), int>(); var tops = new Dictionary<(double, double), int>();
+            int At(Dictionary<(double, double), int> made, Vec2 p, double py) { if (!made.TryGetValue((p.x, p.z), out int v)) made[(p.x, p.z)] = v = V(p.x, py, p.z); return v; }
+            foreach (var (ring, holes) in new Lod0.Shared(site, b).InsetCapRegion(c, block))
+            {
+                feet.Clear(); tops.Clear();
+                foreach (var (a, e, nx, nz) in Lod0.Shared.InsetCapSides(ring, holes))
+                    Quad(At(feet, a, y), At(feet, e, y), At(tops, e, y1), At(tops, a, y1), new P3(nx, 0, nz), CollisionKind.Wall);
+                var tris = Triangulate.Shape(ring, holes);
+                // the triangulation drops each ring's repeated closing point: index the points as it does
+                var ids = new List<int>();
+                foreach (var r in new[] { ring }.Concat(holes))
+                {
+                    int cnt = r.Count; bool closed = cnt > 1 && r[0].x == r[cnt - 1].x && r[0].z == r[cnt - 1].z;
+                    for (int i = 0; i < (closed ? cnt - 1 : cnt); i++) ids.Add(At(tops, r[i], y1));
+                }
+                var kind = block ? CollisionKind.Roof : CollisionKind.Wall;
+                for (int t = 0; t + 2 < tris.Count; t += 3) Tri(ids[tris[t]], ids[tris[t + 1]], ids[tris[t + 2]], Up, kind);
             }
         }
     }

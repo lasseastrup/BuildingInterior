@@ -135,12 +135,36 @@ namespace Triband.Storey.Generate
     {
         public double ax, az, bx, bz, r;
         /// <summary>
-        /// How high it stands above its storey's floor, where that is less than the storey (a terrace's parapet, the rails
-        /// round a stair opening or an atrium); 0 for the storey's whole height. The walk model takes every segment as a wall
-        /// all the way up; the collision mesh stops it here (<see cref="Play.CollisionMesh"/>). Storey's own.
+        /// How high it stands above its storey's floor. On a storey, where that is less than the storey (a terrace's parapet,
+        /// the rails round a stair opening or an atrium), 0 for the whole storey. On the roof, where no storey is over it,
+        /// however high it is (a flat roof's edge: its parapet, curb or raised cap, <see cref="Lod0.Shared.RoofEdgeH"/>; the
+        /// rails round a flight's opening), 0 for a parapet's height (a bulkhead). <see cref="Flush"/> for nothing above the
+        /// floor. The walk model takes every segment as a wall all the way up; the collision mesh stops it here
+        /// (<see cref="Play.CollisionMesh"/>). Storey's own.
         /// </summary>
         public double h;
+        /// <summary>
+        /// <see cref="h"/> for a segment that nothing stands on over its floor: a flat roof's edge round a cap set in, where the
+        /// walls' top is closed flush with the roof. A wall to the walk model alone; the collision mesh has none there.
+        /// </summary>
+        public const double Flush = -1;
         public Seg(double ax, double az, double bx, double bz, double r) { this.ax = ax; this.az = az; this.bx = bx; this.bz = bz; this.r = r; h = 0; }
         public Seg(double ax, double az, double bx, double bz, double r, double h) : this(ax, az, bx, bz, r) { this.h = h; }
+    }
+
+    /// <summary>
+    /// A solid the collision mesh has besides its walls (<see cref="Play.CollisionMesh"/>): a box along an edge's frame
+    /// between two cuts (mitred where the strip turns a corner), from <see cref="w0"/> to <see cref="w1"/> across and from
+    /// <see cref="y0"/> to <see cref="y1"/> up, as <see cref="MeshBuilder.MBox(Frame, Cut, Cut, double, double, double, double, Swatch, Swatch?, Skip)"/>
+    /// draws one: a roof cap's pieces, out past the walls as far as it stands out (<see cref="RoofCap"/>), and along a core
+    /// flush with a shell-only building's wall, which it doesn't build, the roof's edge, where the walk model's walls stop as
+    /// the prototype's do. Not the walk model's. Storey's own.
+    /// </summary>
+    public readonly struct Block
+    {
+        public readonly Frame F;
+        public readonly Cut S, E;
+        public readonly double w0, w1, y0, y1;
+        public Block(Frame f, Cut s, Cut e, double w0, double w1, double y0, double y1) { F = f; S = s; E = e; this.w0 = w0; this.w1 = w1; this.y0 = y0; this.y1 = y1; }
     }
 }

@@ -16,18 +16,18 @@ namespace Triband.Storey.Tests
     /// </summary>
     public class RoofCapTests
     {
-        static FacadeStyle Capped(double h, double depth, double? strip = null, bool parapet = false)
+        internal static FacadeStyle Capped(double h, double depth, double? strip = null, bool parapet = false)
         {
             var st = Styles.Preset("brick").Clone();
             st.capH = h; st.capDepth = depth; st.capStrip = strip; st.parapet = parapet; st.cap = "#C8B89A"; st.capRim = "#4A4A4A";
             return st;
         }
 
-        static readonly List<Vec2> Rect = new() { new Vec2(0, 0), new Vec2(14, 0), new Vec2(14, 10), new Vec2(0, 10) };
+        internal static readonly List<Vec2> Rect = new() { new Vec2(0, 0), new Vec2(14, 0), new Vec2(14, 10), new Vec2(0, 10) };
         // an L, concave at (8, 5), with a short edge an inset of 2.25 m swallows
-        static readonly List<Vec2> Ell = new() { new Vec2(0, 0), new Vec2(14, 0), new Vec2(14, 5), new Vec2(8, 5), new Vec2(8, 12), new Vec2(0, 12) };
+        internal static readonly List<Vec2> Ell = new() { new Vec2(0, 0), new Vec2(14, 0), new Vec2(14, 5), new Vec2(8, 5), new Vec2(8, 12), new Vec2(0, 12) };
 
-        static (StoreyDocument d, BuildingData b, Site site) Block(FacadeStyle st, List<Vec2>? outline = null, bool interior = true, bool core = false, bool neighbour = false)
+        internal static (StoreyDocument d, BuildingData b, Site site) Block(FacadeStyle st, List<Vec2>? outline = null, bool interior = true, bool core = false, bool neighbour = false)
         {
             var d = new StoreyDocument();
             var b = Buildings.Add(d, "rect", new Vec2(0, 0)); b.pos = new Vec2(0, 0);

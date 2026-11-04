@@ -117,15 +117,19 @@ For a project's own physics character, raycasts or props, every building gets on
 
 **The mesh.** `Play/CollisionMesh` builds it from the walk model's own data, so the collider and the walk model agree:
 - **Walls:** a thin box round every collision segment (LOD0's segments, at their radius), storey by storey, merged into one box where a segment repeats on the storeys above. Each is as tall as its storey, but a terrace's parapet (1.1 m, `Lod0.Shared.TerraceParapet`) and the rails round a stair opening or an atrium (1.02 m) are as high as they are (`Seg.h`): they were a storey high, the parapet merged with the wall under it into one box reaching a storey over the deck, walls nobody could see that stopped what the visible parapet and rails let over. The walk model still takes every segment as a wall all the way up, as the player can't climb a parapet anyway.
+  - **A flat roof's edge** is as high as what stands on its walls (`Lod0.Shared.RoofEdgeH`). With the top tier's style's *Parapet* on, it is a parapet's 1.2 m (`Lod0.Shared.RoofParapet`, 10 cm over its coping) over what the parapet stands on: the walls, or a raised cap, which lifts it. Without it, the edge is the 30 cm curb (`Lod0.Shared.RoofCurb`; a hanging cap leaves it), a raised cap's top however high (with the roof lifted to it, nothing stands over the roof), or, round a cap set in, where the walls' top is flush with the roof, no wall at all (`Seg.Flush`). A courtyard's edge on the roof is its parapet or curb the same way. On the roof a wall is as high as it says, where on a storey it stops at the storey's top; one that says nothing (a bulkhead, an atrium's skylight curb) is a parapet's height (`CollisionMesh.RoofWallHeight`). The edge was 1.2 m whatever stood on it: a parapet nobody could see over the visible curb, and a parapet on a raised cap lower than it is. The walk model still keeps the player on the roof.
 - **Floors and terraces:** the outlines at each slab, grown by the walk model's margin, with the stair holes cut. Interior slabs that only separate two storeys of a shell building are left out.
 - **Stairs:** a ramp per flight, at the walk model's heights, for both kinds of stairs.
 - **Pitched roofs.**
+- **A roof cap set in** (`RoofCap.inset`), where LOD0 stands it (`Lod0.Shared.InsetCapRegion`) and as high as it is. Its sides are walls. A ring's top is a wall's; a block's, over a whole roof, is the roof's (`CollisionKind.Roof`). The walk model has no cap: it walks the roof under it, which stays a floor.
+- **A roof cap standing out past the walls**, a slab on them or a fascia hanging from the roof's edge: out as far as its *Overhang* sets it. Its pieces are the boxes LOD0 draws it with, cut where it is cut (along party walls, at corners cut for a neighbour, at bulkheads) and mitred at the corners (`Lod0Shape.Blocks`, `Block`). It had only the wall's thickness, so the Overhang didn't change the collider. The walk model's walls stay the wall's.
+- **A shell-only building** keeps its stairs and lifts for when it is walk-in again, but builds none of them, and the collider has none of them: no ramps and no holes in its roof. Along a core flush with its wall, where a walk-in building's bulkhead takes the parapet's place, its roof's edge is the edge's height, as its parapet is drawn there. The walk model keeps them all, as the prototype's does; nobody gets into a shell to use them.
 
 Each triangle is tagged Floor, Stair, Wall or Roof (`CollisionMesh.Kind`). The demo street's buildings have 64 to 871 triangles each: 1 to 15% of their LOD0.
 
 **Tested** headlessly against the walk model (`CollisionMeshTests`). These tests run on both corpora:
 - A ray dropped at each of `play.json`'s surface points lands where `PlayWorld.SurfaceAt` does. There are more than 3,000 points.
-- Every collision segment stops a horizontal ray.
+- Every collision segment stops a horizontal ray, at a height it stands to (one that nothing stands on, `Seg.Flush`, is no wall).
 - The floors and stairs face up.
 
 **Performance.**
@@ -151,7 +155,9 @@ Each triangle is tagged Floor, Stair, Wall or Roof (`CollisionMesh.Kind`). The d
 - **A building showing its LOD0 has its collider.** One whose collider went past the cap while its LOD0 was kept has it made again from that LOD0 when it's shown. A LOD0 prefetched round the player and never shown is the first collider to go past the cap, and it was shown later without one.
 
 **Limits.**
-- Walls on the roof storey are 1.2 m high, a parapet's height, whatever the parapet.
+- A bulkhead and an atrium's skylight curb are walls a parapet's height, 1.2 m, on the roof.
+- A cornice, bands, a plinth and the facade's details are not in the collision mesh: a wall is its thickness.
+- The walk model keeps a roof at its own height under a cap over it: a raised cap's lid and a block set in are the collider's alone.
 - Lift shafts are solid floor: the walk model does not let the player fall down them either.
 - Gable ends above the top storey are not walls in the collision mesh. The pitched roof itself is.
 - Without Colliders At Load, a building out of view or far away has no collider until its LOD0 is built. Storey Props there stay held; any other rigid body falls through it.
