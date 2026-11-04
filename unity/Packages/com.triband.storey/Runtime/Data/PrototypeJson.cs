@@ -29,6 +29,11 @@ namespace Triband.Storey
             public StoreyDocument Document = new StoreyDocument();
             /// <summary>JSON paths of keys the model has no field for, e.g. <c>buildings[3].floors[1].foo</c>.</summary>
             public List<string> Unknown = new List<string>();
+            /// <summary>
+            /// Buildings whose id an earlier building of the layout has, each given one of its own as the layout was read
+            /// (<see cref="LayoutIds.Mend"/>): their index, the id the file gives them and the one they have now.
+            /// </summary>
+            public List<(int index, string was, string now)> Renamed = new List<(int, string, string)>();
         }
 
         public static ReadResult Read(string json)
@@ -64,6 +69,8 @@ namespace Triband.Storey
                 }
             }
             c.Check(root, w, Keys.Root);
+            // every building an id of its own, and the counter past them all: the next new building's id is no building's
+            r.Renamed = LayoutIds.Mend(d);
             return r;
         }
 

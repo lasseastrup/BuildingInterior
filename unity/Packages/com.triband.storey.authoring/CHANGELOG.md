@@ -28,6 +28,7 @@
 - `StoreyOpenings.Make` and `StoreyDetailBake.Make` make windows, doors and details from any prefabs (the Create menu's, and those dropped on the Library); `StoreyOpenings.Issues` and `StoreyDetails.Issues` are their inspectors' warnings, which the Library counts.
 
 ### Fixed
+- **Buildings that share an id are told apart on import** (docs/EDITOR.md §2). The importer warns about each building given an id of its own, and opening the layout for editing marks it unsaved, so its next save writes the new ids (`StoreyEdit.Begin`). The importer's version is raised, so Unity reads and bakes every layout again. Before, a duplicate in such a layout left a trail of its LOD0 when dragged.
 - Color Pipeline's colour field never makes what it is in wider: the palette colour's name is cut short (all of it in the tooltip), and the suggested colours take as many rows as they need. A field with many suggestions made a narrow inspector scroll sideways.
 
 ### Added

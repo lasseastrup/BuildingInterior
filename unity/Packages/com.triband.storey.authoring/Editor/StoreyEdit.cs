@@ -214,6 +214,9 @@ namespace Triband.Storey.Editor
             e.core = new EditSession(s.layout.Json);
             e.text = e.core.Text;
             e.file = CreateInstance<SavedText>(); e.file.hideFlags = HideFlags.DontSave; e.file.text = e.text;
+            // buildings the file gives another's id were each given one of their own as it was read (LayoutIds): the file
+            // is behind, and the next save writes them
+            if (e.core.Renamed.Count > 0) e.file.text = s.layout.Json;
             e.Attach(s.layout.Json);   // read from what the site shows: nothing is built again
             // a layout from the prototype, or one the palette changed under, may hold colours the palette lacks
             if (StoreyColorField.Conform != null) e.Apply("Match colours to the palette", _ => true);

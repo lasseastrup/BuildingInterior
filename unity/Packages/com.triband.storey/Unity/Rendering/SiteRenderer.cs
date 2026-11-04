@@ -997,6 +997,10 @@ namespace Triband.Storey.Unity
             // the table row is the site's block plus the building's index in the layout: party walls carry their
             // neighbour's layout index, moved into the block at upload (MeshUpload's mates), and the shader looks it up
             var bt = new Built { id = b.id, idx = blockStart + site!.IndexOf(b), collider = b.colliders };
+            // another building with its id (in a layout made in code: one read from a file has its ids mended, LayoutIds)
+            // has its row and its place here: the one built before is let go, so only this one is drawn. It was left
+            // drawing where nothing could reach it, one more with every rebuild, and a drag left a trail of its LOD0
+            if (built.TryGetValue(b.id, out var twin)) { Release(twin); Twin(b.id); }
             built[b.id] = bt; byIdx[bt.idx] = bt;
             if (hiddenIds.Count > 0 && hiddenIds.Contains(b.id)) table.SetHidden(bt.idx, true);   // hidden before it was built (again)
 
@@ -1038,6 +1042,15 @@ namespace Triband.Storey.Unity
             if (e.Visible(1)) { BuildDetail(bt, b, 1); lods.SetBuilt(bt.idx, 1, true); }
             if (e.Visible(0) || forced) { BuildDetail(bt, b, 0); lods.SetBuilt(bt.idx, 0, true); }
             table.SetLod(bt.idx, e.Shown, e.From, e.RowFade);
+        }
+
+        // the ids two buildings were found to share, each said once (every edit builds the whole layout again then)
+        readonly HashSet<string> twins = new HashSet<string>(StringComparer.Ordinal);
+
+        void Twin(string id)
+        {
+            if (twins.Add(id))
+                Debug.LogWarning($"Storey: two buildings of the layout have the id \"{id}\", and only one of them is drawn. Give each one an id of its own (a layout read from a .storey file has them given one as it is read).");
         }
 
         /// <summary>A massing's parameter rows written into the table: the table row of each of the massing's rows.</summary>
