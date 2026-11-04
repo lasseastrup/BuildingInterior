@@ -23,7 +23,25 @@ namespace Triband.Storey.Edit
             return "Building " + d.seq;
         }
 
-        public static string NewId(StoreyDocument d) => "b" + d.seq++;
+        /// <summary>
+        /// A new building's id: <c>b</c> and the document's counter (the prototype's <c>nid('b')</c>), past any id a building
+        /// has. A layout read from a file has its counter past them already (<see cref="LayoutIds"/>); one made in code may
+        /// not, and two buildings with one id are one building to the renderer and the editor (docs/EDITOR.md §2).
+        /// </summary>
+        public static string NewId(StoreyDocument d)
+        {
+            while (true)
+            {
+                string id = "b" + d.seq++;
+                if (!Taken(d, id)) return id;
+            }
+        }
+
+        static bool Taken(StoreyDocument d, string id)
+        {
+            foreach (var b in d.buildings) if (b.id == id) return true;
+            return false;
+        }
 
         /// <summary>A building from a footprint preset and a style preset: one floor, one entrance on the first edge, walk-in.</summary>
         public static BuildingData Make(StoreyDocument d, string shape, Vec2 pos, string styleKey = "brick", string? name = null) => new BuildingData

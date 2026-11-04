@@ -30,10 +30,17 @@ namespace Triband.Storey.Edit
 
         public EditSession(string text)
         {
-            Document = PrototypeJson.Read(text).Document;
+            var read = PrototypeJson.Read(text);
+            Document = read.Document; Renamed = read.Renamed;
             Text = PrototypeJson.Write(Document);
             shown = Snapshot(Document); shownMeta = Meta(Document);
         }
+
+        /// <summary>
+        /// Buildings whose id the text also gives an earlier building, each given an id of its own as it was read
+        /// (<see cref="LayoutIds.Mend"/>). <see cref="Text"/> has their new ids, so a file holding the text read is behind it.
+        /// </summary>
+        public IReadOnlyList<(int index, string was, string now)> Renamed { get; }
 
         static string Meta(StoreyDocument d) => PrototypeJson.Write(new StoreyDocument { v = d.v, seq = d.seq, spawn = d.spawn, palette = d.palette });
 

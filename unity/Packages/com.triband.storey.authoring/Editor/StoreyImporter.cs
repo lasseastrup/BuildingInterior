@@ -15,8 +15,18 @@ namespace Triband.Storey.Editor
     [ScriptedImporter(Version, Extension)]
     public sealed class StoreyImporter : ScriptedImporter
     {
-        /// <summary>Follows the baked format's version: a new format imports every layout again.</summary>
-        public const int Version = 1 + BakedLayout.Version;
+        /// <summary>
+        /// Follows the baked format's version and the reader's: a new format, or a layout read otherwise, imports every
+        /// layout again.
+        /// </summary>
+        public const int Version = 1 + BakedLayout.Version + Reading;
+
+        /// <summary>
+        /// Raised when <see cref="PrototypeJson.Read"/> reads a layout otherwise, so the bakes made before are made again.
+        /// 1: buildings that share an id are each given one of their own, and the counter goes past every id
+        /// (<see cref="LayoutIds"/>), where a bake held them as the file had them.
+        /// </summary>
+        const int Reading = 1;
         public const string Extension = "storey";
 
         public override void OnImportAsset(AssetImportContext ctx)
@@ -39,6 +49,10 @@ namespace Triband.Storey.Editor
                 asset.Set(text, summary, baked);
                 foreach (var key in summary.unknownKeys)
                     ctx.LogImportWarning($"{ctx.assetPath}: unknown key {key}: this version of Storey doesn't know it, and leaves it out.");
+                // read so every time; the file has the new ids once the layout is opened for editing and saved (StoreyEdit.Begin)
+                foreach (var (index, was, now) in read.Renamed)
+                    ctx.LogImportWarning($"{ctx.assetPath}: buildings[{index}] ({read.Document.buildings[index].name}) has the id \"{was}\", which a building before it has, " +
+                        $"so it is read as \"{now}\". Edit layout in a Storey Site inspector, and the next save writes the new id to the file.");
             }
             catch (System.FormatException e)
             {

@@ -13,8 +13,24 @@ namespace Triband.Storey.Edit
     /// </summary>
     public static class Shafts
     {
-        /// <summary>A new core's id, from the document's counter (the prototype's <c>nid('s')</c>).</summary>
-        public static string NewId(StoreyDocument d) => "s" + d.seq++;
+        /// <summary>
+        /// A new core's id, from the document's counter (the prototype's <c>nid('s')</c>), past any id a core of the layout
+        /// has (a layout read from a file has its counter past them already, <see cref="LayoutIds"/>).
+        /// </summary>
+        public static string NewId(StoreyDocument d)
+        {
+            while (true)
+            {
+                string id = "s" + d.seq++;
+                if (!Taken(d, id)) return id;
+            }
+        }
+
+        static bool Taken(StoreyDocument d, string id)
+        {
+            foreach (var b in d.buildings) foreach (var s in b.shafts) if (s.id == id) return true;
+            return false;
+        }
 
         /// <summary>The core serving storey k under a point (15 cm grace), if any.</summary>
         public static CoreData? At(BuildingData b, int k, Vec2 p) =>
