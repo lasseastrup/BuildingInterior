@@ -24,10 +24,17 @@ namespace Triband.Storey.Unity
         public static void SetCut(bool on, float stubHeight, float cutBase, float cutTop, float clipY)
         {
             Shader.SetGlobalVector(StoreyShaderIds.Cut, new Vector4(on ? 1 : 0, stubHeight, cutBase, cutTop));
-            Shader.SetGlobalVector(StoreyShaderIds.Active, new Vector4(activeIndex, clipY, 0, 0));
+            Shader.SetGlobalVector(StoreyShaderIds.Active, ActiveRow(clipY));
         }
 
         static float activeIndex = -1;
+        static float? terraceY;
+
+        /// <summary>
+        /// _StoreyActive: x the active building's row (-1: none), y its ceiling clip, z the floor of the terrace over which it is in
+        /// the way and w 1 while it is (<see cref="SetActive"/>; 0 and 0 otherwise).
+        /// </summary>
+        static Vector4 ActiveRow(float clipY) => new Vector4(activeIndex, clipY, terraceY ?? 0, terraceY != null ? 1 : 0);
 
         /// <summary>The active building's row (-1: none), as last set: what the steady variant can't be given (SiteRenderer).</summary>
         public static int ActiveIndex => (int)activeIndex;
@@ -35,11 +42,16 @@ namespace Triband.Storey.Unity
         public static float IsolateAmount { get; private set; }
         public static int IsolatedIndex { get; private set; } = -1;
 
-        /// <summary>The building the player is in (or the one being edited); -1 = none.</summary>
-        public static void SetActive(int buildingIndex, float clipY)
+        /// <summary>
+        /// The building the player is in (or the one being edited); -1 = none. <paramref name="inWayAbove"/>: out on a terrace of it
+        /// with what stands over the terrace in the way, the terrace's floor (world height): everything of it above that is
+        /// drawn as a building in the way, by the occluder slot in its row, but the walls the wall table marks -1 (the
+        /// terrace's own); null for none (Occlusion.OcclusionView.terraceY).
+        /// </summary>
+        public static void SetActive(int buildingIndex, float clipY, float? inWayAbove = null)
         {
-            activeIndex = buildingIndex;
-            Shader.SetGlobalVector(StoreyShaderIds.Active, new Vector4(buildingIndex, clipY, 0, 0));
+            activeIndex = buildingIndex; terraceY = buildingIndex >= 0 ? inWayAbove : null;
+            Shader.SetGlobalVector(StoreyShaderIds.Active, ActiveRow(clipY));
         }
 
         /// <summary>Colour of the section cap drawn where a cut exposes a wall's inside.</summary>

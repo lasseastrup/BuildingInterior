@@ -65,7 +65,8 @@ bool StoreyPropGone(int ib, float pivotY)
     return false;
 #else
     int slot = (int)(_StoreyState[StoreyRow(ib)].w + 0.5) - 1, row = StoreySlotRow(slot);
-    if (slot < 0 || abs((float)ib - _StoreyActive.x) < 0.5) return false;
+    // the player's building is never in the way, but for what of it stands over the terrace they are out on
+    if (slot < 0 || (abs((float)ib - _StoreyActive.x) < 0.5 && !StoreyOverTerrace(pivotY))) return false;
     int n = (int)(_StoreyOcc[row].x + 0.5);
     for (int i = 0; i < STOREY_OCC_W - 1; i++)
     {
@@ -104,7 +105,7 @@ void StoreyPropVertex_float(float3 PositionOS, out float3 Out)
     float3 pivot = GetObjectToWorldMatrix()._m03_m13_m23;
     if (!StoreyPropShown(ib) || StoreyPropGone(ib, pivot.y)) { Out = TransformWorldToObject(pivot); return; }
     float origY;
-    float3 ws = StoreySink(TransformObjectToWorld(PositionOS), (float)ib, 0.0, origY);
+    float3 ws = StoreySink(TransformObjectToWorld(PositionOS), (float)ib, 0.0, 0.0, origY);
     Out = TransformWorldToObject(ws);
 #endif
 }

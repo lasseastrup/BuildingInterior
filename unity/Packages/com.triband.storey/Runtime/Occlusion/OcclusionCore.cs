@@ -67,6 +67,13 @@ namespace Triband.Storey.Occlusion
         public double fx, fy, fz, cx, cy, cz;
         /// <summary>The camera's direction from the focus, in the XZ plane.</summary>
         public double dirX, dirZ;
+        /// <summary>
+        /// Out on a terrace of the active building with what stands over it between the camera and the player: the terrace's
+        /// floor. Everything of the active building above it is drawn as a building in the way, by its row in
+        /// <see cref="OcclusionCore.Active"/>, but the terrace's own walls (<see cref="OcclusionCore.TerraceWalls"/>); the storeys
+        /// under the terrace, which the player stands on, are drawn as before. 1e9 when not. Storey's own.
+        /// </summary>
+        public double terraceY;
     }
 
     /// <summary>A building in the way: how far it has faded or sunk, and the slot its row is in.</summary>
@@ -136,6 +143,12 @@ namespace Triband.Storey.Occlusion
         double hiddenFor;
         // the building the view is on: the one the player is in, or the one just left while it is still in the way
         BuildingData? held; int heldFloor;
+        // out on a terrace of the building the view is on (LookAtTerrace): that building and the terrace's storey, whether what
+        // stands over the terrace is between the camera and the player, and whether they are at a walk-in setback's door
+        BuildingData? terrace; int terraceK; bool terraceInWay, terraceAtDoor;
+        // the terrace's own walls (TerraceWalls), found once for the shape and the storey they were found in
+        readonly List<int> terraceWalls = new List<int>();
+        Lod0Shape? terraceWallsOf; int terraceWallsK = -1;
 
         // reused every frame, so a frame makes no garbage (FrameAllocTests)
         readonly (double x, double y, double z)[] targets = new (double, double, double)[3];
@@ -182,8 +195,19 @@ namespace Triband.Storey.Occlusion
 
         public OcclusionCore(PlayWorld world, OcclusionSettings settings) { World = world; Settings = settings; }
 
-        /// <summary>The buildings in the way now, each with its slot.</summary>
+        /// <summary>
+        /// The buildings in the way now, each with its slot. Out on a terrace with what stands over it in the way, the building
+        /// the player is in is one of them, from the terrace's storey up (<see cref="OcclusionView.terraceY"/>).
+        /// </summary>
         public IReadOnlyList<Occluder> Active => active;
+
+        /// <summary>
+        /// The terrace's own walls while what stands over it is in the way (<see cref="OcclusionView.terraceY"/>), by index in
+        /// the active building's LOD0 wall list: its parapet, and the rails round a stair coming up onto it. They stand on the
+        /// terrace's floor, as the setback's walls do, but off its outline, and they stay while the setback goes: the caller
+        /// marks them -1 in the wall table, which the shaders read as a wall left standing. Empty otherwise.
+        /// </summary>
+        public IReadOnlyList<int> TerraceWalls => View.active != null && View.terraceY < 1e8 ? terraceWalls : (IReadOnlyList<int>)Array.Empty<int>();
 
         /// <summary>
         /// One frame, in the prototype's order: buildings in the way (from the camera this frame), then the view, then
@@ -199,6 +223,7 @@ namespace Triband.Storey.Occlusion
         public void FrameView(PlayerState p, (double x, double y, double z) cam, (double x, double y, double z) target, double dt)
         {
             HoldView(p, cam);
+            LookAtTerrace(p, cam);
             UpdateOccluders(p, cam, dt);
             ApplyView(p, cam, target);
         }
@@ -211,7 +236,8 @@ namespace Triband.Storey.Occlusion
         {
             foreach (var r in active) { r.a = 0; r.t = 0; if (r.slot >= 0) slots[r.slot] = null; r.slot = -1; }
             active.Clear(); Walls.Clear(); wallStates.Clear(); down.Clear(); hiddenFor = 0; Assist = 0; held = null;
-            View = new OcclusionView { clipY = 1e9 };
+            terrace = null; terraceInWay = terraceAtDoor = false;
+            View = new OcclusionView { clipY = 1e9, terraceY = 1e9 };
         }
 
         // ---- props drawn whole (docs/PROPS.md §2.5) ----
@@ -223,7 +249,15 @@ namespace Triband.Storey.Occlusion
         /// </summary>
         public bool HidesPoint(BuildingData b, double y)
         {
-            if (View.active != null && View.active.id == b.id) return y > View.clipY;
+            // the building the player is in: above its ceiling clip, but out on its terrace with what stands over it in the way,
+            // from the terrace's floor up as a building in the way, by its row below (a prop on the deck goes with the setback,
+            // as the shaders draw one). The row keeps its heights as floats, the deck's a hair over the deck: a point on it is
+            // taken a millimetre up, in the storey over it
+            if (View.active != null && View.active.id == b.id)
+            {
+                if (y < View.terraceY) return y > View.clipY;
+                y = Math.Max(y, View.terraceY + 0.001);
+            }
             for (int i = 0; i < active.Count; i++)
             {
                 var r = active[i];
@@ -271,20 +305,81 @@ namespace Triband.Storey.Occlusion
             v.stub = Settings.stub;
             double dx = v.cx - v.fx, dz = v.cz - v.fz, len = Math.Sqrt(dx * dx + dz * dz); if (len == 0) len = 1;
             v.dirX = dx / len; v.dirZ = dz / len;
+            v.terraceY = 1e9;
             if (loc != null)
             {
                 var (b, floor) = loc.Value; int N = b.floors.Count;
                 v.active = b; v.floor = floor;
                 v.clipY = floor < N ? Derived.FloorBase(b, floor) + Derived.FloorH(b, floor) - Dim.SLAB - 0.01 : 1e9;
                 v.cutOn = Settings.cutaway; v.cutBase = Derived.FloorBase(b, floor); v.cutTop = Derived.FloorBase(b, floor) + (floor < N ? Derived.FloorH(b, floor) : 3.3) + 0.02;
-                // out on a terrace the player is outdoors: the building is shown whole, every storey and the roof, unless what
-                // stands above the terrace is between the camera and the player, when the view is as indoors (its storey's
-                // ceiling clipped and walls cut away) and the player is seen through it. Storey's own: the prototype clips
-                if (OnTerrace(b, floor, p) && !AnyHits(b, cam, Targets(p, cam), floor)) { v.clipY = 1e9; v.cutOn = false; }
+                // out on a terrace the player is outdoors: the building is shown whole, every storey and the roof, and what
+                // stands above the terrace, when it is between the camera and the player, is a building in the way like any
+                // other, from the terrace's storey up (its row in Active, LookAtTerrace): nothing clipped, no wall cut away, and
+                // the storeys under the terrace as they are. Only where it can't be in the way, at a walk-in setback's door or
+                // with the buildings in the way left alone, is the view as indoors (its storey's ceiling clipped and walls cut
+                // away). Storey's own: the prototype clips
+                if (b == terrace)
+                {
+                    if (InTheWay(b)) { v.clipY = 1e9; v.cutOn = false; v.terraceY = Derived.FloorBase(b, floor); FindTerraceWalls(b, floor); }
+                    else if (!terraceInWay) { v.clipY = 1e9; v.cutOn = false; }
+                }
             }
             else { v.active = null; v.clipY = 1e9; v.cutOn = false; }
             View = v;
         }
+
+        /// <summary>b's occluder record is in the way now (has a slot), going down, down or coming back up.</summary>
+        bool InTheWay(BuildingData b) => records.TryGetValue(b.id, out var r) && r.slot >= 0 && ReferenceEquals(slots[r.slot], r);
+
+        /// <summary>
+        /// Out on a terrace of the building the view is on (<see cref="OnTerrace"/>): whether what stands above it is between
+        /// the camera and the player, by the three rays of the buildings in the way from the terrace's storey up
+        /// (<see cref="SegmentHits"/>' <c>from</c>: the storeys under the deck can't hide the player), and whether they are at
+        /// the setback's door. A walk-in setback is never in the way at its door, as no building is (<see cref="AtDoorOf"/>):
+        /// the player is going in or coming out, and the view is as indoors. A shell's door is shut, so its setback has none.
+        /// </summary>
+        void LookAtTerrace(PlayerState p, (double x, double y, double z) cam)
+        {
+            terrace = null; terraceInWay = terraceAtDoor = false;
+            if (held == null || !OnTerrace(held, heldFloor, p)) return;
+            terrace = held; terraceK = heldFloor;
+            terraceInWay = AnyHits(held, cam, Targets(p, cam), heldFloor);
+            terraceAtDoor = !Derived.ShellAt(held, heldFloor) && AtDoorOf(held, p);
+        }
+
+        /// <summary>
+        /// What stands over the terrace the player is out on can be drawn as a building in the way: they are out on b's terrace,
+        /// and not at a walk-in setback's door with it in the way, where the view is as indoors instead.
+        /// </summary>
+        bool OutOn(BuildingData b) => b == terrace && !(terraceAtDoor && terraceInWay);
+
+        /// <summary>
+        /// The terrace's own walls on storey k (<see cref="TerraceWalls"/>): the walls of b's LOD0 made on the terrace's storey
+        /// whose middle is off the setback's outline, outside it. The setback's own walls, its rooms' and its cores' stand on
+        /// or inside its outline, as do the details on its walls (their wall's line); the terrace's parapet runs along the
+        /// outline below, where it is the terrace's edge, and a stair's rails come up out on the deck. Found once for a shape
+        /// and a storey.
+        /// </summary>
+        void FindTerraceWalls(BuildingData b, int k)
+        {
+            var shape = World.ShapeOf(b);
+            if (ReferenceEquals(shape, terraceWallsOf) && terraceWallsK == k) return;
+            terraceWalls.Clear(); terraceWallsOf = shape; terraceWallsK = k;
+            double y = Derived.FloorBase(b, k); var fp = Derived.OutlineAt(b, k);
+            for (int i = 0; i < shape.Walls.Count; i++)
+            {
+                if (shape.WallBase[i] != y) continue;
+                var W = shape.Walls[i].W; double nl = Tiers.Hypot(W[2], W[3]);
+                if (nl < 1) continue;   // no data: no wall
+                // its line runs from (W[0], W[1]) along its normal turned a right angle, 1 + its length being the normal's
+                double L = nl - 1, nx = W[2] / nl, nz = W[3] / nl;
+                double mx = W[0] + nz * L / 2 - b.pos.x, mz = W[1] - nx * L / 2 - b.pos.z;
+                if (!Geo.Pip(fp, mx, mz) && DistToEdges(fp, mx, mz) > TerraceWallClear) terraceWalls.Add(i);
+            }
+        }
+
+        /// <summary>How far off the setback's outline a wall's middle must be to be the terrace's (metres): a wall on it is its own.</summary>
+        const double TerraceWallClear = 0.05;
 
         /// <summary>
         /// The player is out on a terrace of b: on the storey a setback starts at (<paramref name="floor"/>, as
@@ -578,6 +673,13 @@ namespace Triband.Storey.Occlusion
                         int k = OccStorey(b, p); if (k != r.k && !(r.t > 0) && !(m == OccluderMode.Dissolve && r.a > 0)) r.k = k;
                     }
                 }
+                // out on a terrace, what stands over it is in the way as any building is (LookAtTerrace), from the terrace's
+                // storey up: the storeys under it, the player's floor, stay
+                if (terrace != null && terraceInWay && !terraceAtDoor && !(Hidden != null && Hidden.Count > 0 && Hidden.Contains(terrace.id)))
+                {
+                    var r = Record(terrace); hits.Add(r);
+                    r.sliceY = SliceHeight(terrace, p); r.top = Derived.RoofY(terrace) + RoofRise(terrace) + 0.5; r.k = terraceK;
+                }
             }
             foreach (var r in hits)
             {
@@ -585,7 +687,10 @@ namespace Triband.Storey.Occlusion
                 if (!active.Contains(r))
                 {
                     int i = Array.IndexOf(slots, null); if (i < 0) continue;
-                    slots[i] = r; r.slot = i; r.t = 0; r.k = OccStorey(r.b, p); active.Add(r);
+                    slots[i] = r; r.slot = i; r.t = 0; r.k = r.b == terrace ? terraceK : OccStorey(r.b, p); active.Add(r);
+                    // stepping out of a setback onto its terrace, the view was as indoors (the storeys over the player's clipped):
+                    // what stands over the terrace starts gone, as it ends, where it would have stood whole a moment first
+                    if (r.b == terrace && View.active == terrace && View.clipY < 1e8) { r.a = 1; r.t = double.MaxValue; }
                 }
             }
             activeCopy.Clear(); activeCopy.AddRange(active);
@@ -600,7 +705,8 @@ namespace Triband.Storey.Occlusion
                     r.t = m == OccluderMode.Sink ? Math.Max(0, Math.Min(r.plan.total, r.t + (want ? dt : -dt * 1.25))) : 0;
                 }
                 bool done = !want && r.a <= 0 && !(r.t > 0);
-                if (done || b == null || b == held)
+                // the building the view is on is never in the way, but for what stands over the terrace the player is out on
+                if (done || b == null || (b == held && !OutOn(b)))
                 {
                     r.a = 0; r.t = 0; active.Remove(r);
                     if (r.slot >= 0) { slots[r.slot] = null; r.slot = -1; }
