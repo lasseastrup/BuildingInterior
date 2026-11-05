@@ -158,7 +158,7 @@ namespace Triband.Storey.Unity
             {
                 w.site = s; w.world = null; w.occ = null; w.occluding.Clear(); w.wallsSet.Clear();
                 ClearFootprints(w);
-                w.making = BuildThreads.Shared.Run(() => new PlayWorld(s), lane);
+                w.making = MakeWorld(s, lane);
             }
             if (w.world != null) return true;
             if (w.making == null) return false;
@@ -173,11 +173,15 @@ namespace Triband.Storey.Unity
             w.making = null;
             // each building's shape from the renderer's LOD0 when it has one (built on a worker as the camera nears, long
             // before the player is close enough to touch), or made ahead round the player (Prepare)
-            var shown = s;
-            w.world.Source = b => ReferenceEquals(r.Site, shown) ? r.ShapeOf(b.id) : null;
+            w.world.Source = ShapesFrom(r, s);
             w.occ = new OcclusionCore(w.world, core) { Hidden = r.Hidden };   // a hidden building is never in the way (docs/PLAY.md §6)
             return true;
         }
+
+        // in methods of their own: lambdas capturing Ready's parameters had their closure made as Ready began, on every
+        // call, the walk model made or not (40 bytes a frame for every district loaded: Update asks after the others', Apply the player's)
+        static System.Threading.Tasks.Task<PlayWorld> MakeWorld(Site s, BuildLane lane) => BuildThreads.Shared.Run(() => new PlayWorld(s), lane);
+        static Func<BuildingData, Lod0Shape?> ShapesFrom(SiteRenderer r, Site shown) => b => ReferenceEquals(r.Site, shown) ? r.ShapeOf(b.id) : null;
 
         /// <summary>Called by the site's renderer each frame, after the cameras have moved, in place of its own view globals.</summary>
         internal void Apply(SiteRenderer r)
