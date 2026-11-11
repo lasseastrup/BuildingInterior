@@ -66,11 +66,32 @@ namespace Triband.Storey.Edit
             while (b.floors.Count > n) Delete(b, b.floors.Count - 1);
         }
 
-        /// <summary>Give every floor above k floor k's rooms.</summary>
+        /// <summary>Give every floor above k floor k's rooms. The prototype's copy up; the editor copies and pastes (<see cref="CopyRooms"/>).</summary>
         public static void CopyLayoutUp(BuildingData b, int k)
         {
             for (int j = k + 1; j < b.floors.Count; j++) b.floors[j].walls = Tiers.Copy(b.floors[k].walls);
         }
+
+        /// <summary>
+        /// Storey k's rooms as text, for the Interior tab's Copy: its walls and their doors (<see cref="PrototypeJson.WriteRooms"/>).
+        /// <see cref="PasteRooms"/> puts them on any floor of any building. Storey's own, in place of the prototype's copy up.
+        /// </summary>
+        public static string CopyRooms(BuildingData b, int k) => PrototypeJson.WriteRooms(b.floors[k]);
+
+        /// <summary>
+        /// Paste: rooms <see cref="CopyRooms"/> copied, in place of storey k's, as copy up put a floor's in place of those above.
+        /// Walls that fall outside the storey are kept and not built, as any are (the problem list says so). False, with
+        /// nothing changed, when the text isn't rooms or there is no storey k.
+        /// </summary>
+        public static bool PasteRooms(BuildingData b, int k, string rooms)
+        {
+            if (k < 0 || k >= b.floors.Count || !(PrototypeJson.ReadRooms(rooms) is FloorData f)) return false;
+            b.floors[k].walls = f.walls;
+            return true;
+        }
+
+        /// <summary>How many walls copied rooms have, or -1 when the text isn't rooms: what Paste would put in.</summary>
+        public static int RoomsWalls(string rooms) => PrototypeJson.ReadRooms(rooms)?.walls.Count ?? -1;
 
         /// <summary>Storey k's own height, or null to use the building's default (ground or upper).</summary>
         public static void SetHeight(BuildingData b, int k, double? h) => b.floors[k].h = h;

@@ -1094,8 +1094,11 @@ namespace Triband.Storey.Editor
                 if (c.Open) Tools(e, b, k);
         }
 
+        /// <summary>The rooms Copy took (<see cref="Floors.CopyRooms"/>) and where from: kept for the editor session, script reloads included.</summary>
+        const string RoomsClip = "Storey.CopiedRooms", RoomsClipFrom = "Storey.CopiedRoomsFrom";
+
         /// <summary>
-        /// The storey being edited, its rooms copied to the floors above, duplicated or deleted; how its walls show, rooms or
+        /// The storey being edited, its rooms copied and pasted, the storey duplicated or deleted; how its walls show, rooms or
         /// filled, its height; on the roof, which stairs and lifts reach it. Returns the storey picked.
         /// </summary>
         int FloorSettings(StoreyEdit e, BuildingData b, int k)
@@ -1113,11 +1116,19 @@ namespace Triband.Storey.Editor
                     // the floor list's actions, on the floor being edited (the floor count is in the Shape tab); after one the
                     // floors are others, so nothing more is drawn this time round
                     EditorGUILayout.PrefixLabel(" ");
-                    int kk = k; string label = Floor(b, k), above = N - 1 - k == 1 ? "the floor above" : $"the {N - 1 - k} floors above";
-                    using (new EditorGUI.DisabledScope(k >= N - 1))
-                        if (GUILayout.Button(new GUIContent("Copy up", "Its rooms (walls and doors) to every floor above it, in place of theirs"), EditorStyles.miniButtonLeft))
+                    int kk = k; string label = Floor(b, k);
+                    // its rooms copied as text for the session (Floors.CopyRooms), to paste on any floor, of any building or site
+                    if (GUILayout.Button(new GUIContent("Copy", "Copy its rooms (walls and doors), to paste on another floor, of this building or another"), EditorStyles.miniButtonLeft))
+                    {
+                        SessionState.SetString(RoomsClip, Floors.CopyRooms(b, k)); SessionState.SetString(RoomsClipFrom, $"{label} of {b.name}");
+                        message = $"{label}'s rooms are copied: pick another floor and Paste.";
+                    }
+                    string clip = SessionState.GetString(RoomsClip, ""); int walls = clip.Length > 0 ? Floors.RoomsWalls(clip) : -1;
+                    using (new EditorGUI.DisabledScope(walls < 0))
+                        if (GUILayout.Button(new GUIContent("Paste", walls < 0 ? "Copy a floor's rooms first"
+                            : $"The rooms copied from {SessionState.GetString(RoomsClipFrom, "a floor")} ({walls} wall{(walls == 1 ? "" : "s")}), in place of this floor's"), EditorStyles.miniButtonMid))
                         {
-                            e.ApplyTo($"{label} copied to {above}", bb => { Floors.CopyLayoutUp(bb, kk); return true; });
+                            e.ApplyTo($"Rooms pasted on {label}", bb => Floors.PasteRooms(bb, kk, clip));
                             return k;
                         }
                     using (new EditorGUI.DisabledScope(N >= Floors.MaxFloors))

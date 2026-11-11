@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Copy and Paste in place of Copy up** (docs/EDITOR.md §6.6): the Interior tab's *Floor* card copies the floor's rooms (walls and doors), and *Paste* puts them in place of another floor's. That floor can be in this building, another one, or another site, until the editor closes (script reloads included: the copy is kept in `SessionState`). *Paste* says where its rooms came from and how many walls they have, and each paste is one undo step.
 - **The floors are set in the inspector** (docs/EDITOR.md §6.6): the Shape tab's *Storey heights* card is *Floors*, first after *Placement*, with how many floors the building has: typed, or − and + (a new floor copies the top floor's rooms; − takes the top floor off), each one undo step, up to 40. The Interior tab's *Floor* card has *Copy up* (the floor's rooms to every floor above), *Duplicate* and *Delete* for the floor being edited.
 
 ### Removed

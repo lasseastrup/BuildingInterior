@@ -235,6 +235,8 @@ namespace UnityEditor
     {
         public static bool GetBool(string key, bool defaultValue) => defaultValue;
         public static void SetBool(string key, bool value) { }
+        public static string GetString(string key, string defaultValue) => defaultValue;
+        public static void SetString(string key, string value) { }
     }
 
     public class SerializedProperty

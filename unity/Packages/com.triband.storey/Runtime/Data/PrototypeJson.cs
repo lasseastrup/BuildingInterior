@@ -91,6 +91,24 @@ namespace Triband.Storey
             return Building(new Ctx(unknown ?? new List<string>()), root, new Where());
         }
 
+        /// <summary>
+        /// A floor's rooms as text, for the Interior tab's Copy and Paste (<see cref="Edit.Floors.CopyRooms"/>, Storey's own): its
+        /// walls and their doors, as a layout writes a floor's, and nothing else of the floor. <see cref="ReadRooms"/> reads it.
+        /// </summary>
+        public static string WriteRooms(FloorData f) => Json.Write(Floor(new FloorData { walls = f.walls }));
+
+        /// <summary>The rooms <see cref="WriteRooms"/> wrote, on a floor with nothing else; null when the text isn't rooms.</summary>
+        public static FloorData? ReadRooms(string text)
+        {
+            try
+            {
+                if (!(Json.Parse(text) is Dictionary<string, object?> o) || !o.ContainsKey("walls")) return null;
+                var f = Floor(new Ctx(new List<string>()), o, new Where());
+                return new FloorData { walls = f.walls };
+            }
+            catch (FormatException) { return null; }
+        }
+
         // the model's own lists and default style are filled where they are, not replaced (docs/PERFORMANCE.md §6.1): a
         // replaced one was garbage the moment it was made
         static BuildingData Building(Ctx c, Dictionary<string, object?> o, Where w)
