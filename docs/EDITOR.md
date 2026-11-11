@@ -641,7 +641,7 @@ The details in Facade ▸ *Details* ▸ *Place by hand* are **Facade Detail** as
    - *Per bay* (`per`, in a row; 1): how many to each bay, 1 to 16.
    - *Storeys* (`floors`, scattered or up the corners): *All*, *Upper* (not the ground floor) or *Ground* alone.
    - *Corners* (`corners`, up the corners): *Outward* (standing out), *Inward* (set in) or *All*.
-   - *Colour* (`color`, any rule): the colour the detail's main colour (the one most of its triangles have) takes in this style, as the old generator's per-theme detail colours did. So one detail serves many styles. Unset, it keeps its own.
+   - *Colour* (`color`, any rule): the colour the detail's main colour (the one most of its triangles have) takes in this style, as the old generator's per-theme detail colours did. So one detail serves many styles. Unset, it keeps its own. *Recolour* off keeps the colour picked for when it's on again, saved with the style too (`colorOff`, Storey's own; `Recolour` is the colour in use).
 
    A style writes a detail's chance alone as before (`"details": {"<id>": 50}`), and an object in its place when it has settings: `"<id>": {"p": 50, "density": 1.2, "spacing": 0.12, "floors": "upper", "color": "#9A4B38"}`.
 5. In the Facade tab, pick it under *Details › Place by hand* and click a wall. Click a placed one to remove it. Placing one refuses where it doesn't fit, and says why.

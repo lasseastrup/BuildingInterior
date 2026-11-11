@@ -307,6 +307,36 @@ namespace Triband.Storey.Tests
             Assert.Equal(DetailKindTests.Slot(plain, ColorSlot.Grille).Count, DetailKindTests.Slot(op, ColorSlot.Grille).Count);   // the rest keep theirs
         }
 
+        /// <summary>
+        /// The Facade tab's *Recolour* off keeps the colour picked (<see cref="KindRule.colorOff"/>): the kind keeps its own
+        /// colour, and the one picked comes back when *Recolour* is on again, after a save too. Storey's own.
+        /// </summary>
+        [Fact]
+        public void AColourKeptOffLeavesTheKindItsOwnAndComesBack()
+        {
+            var k = Kind(Details.Rule.Scatter);
+            var (b, s) = DetailKindTests.Block(bb => Set(bb, k.id, 100));
+            var plain = Lod0.Build(s, b).Op;
+            var slot = KindColors.SlotOf("#654321")!.Value;
+            var rule = new KindRule { color = "#654321", colorOff = true };
+            b.style.details!.rules = new SortedDictionary<string, KindRule>(StringComparer.Ordinal) { [k.id] = rule };
+            Assert.Null(rule.Recolour);
+            Assert.False(rule.IsEmpty);   // kept with the style
+            var off = Lod0.Build(s, b).Op;
+            Assert.Empty(DetailKindTests.Slot(off, slot));
+            Assert.Equal(DetailKindTests.Slot(plain, ColorSlot.DetailMetal).Count, DetailKindTests.Slot(off, ColorSlot.DetailMetal).Count);
+            // saved and read back, it is kept, still off
+            string json = PrototypeJson.WriteStyle(b.style);
+            Assert.Contains("\"colorOff\":true", json.Replace(" ", ""));
+            var back = PrototypeJson.ReadStyle(json, new List<string>()).details!.rules![k.id];
+            Assert.Equal(("#654321", true), (back.color, back.colorOff));
+            // on again: that colour
+            rule.colorOff = false;
+            Assert.Equal("#654321", rule.Recolour);
+            Assert.NotEmpty(DetailKindTests.Slot(Lod0.Build(s, b).Op, slot));
+            Assert.DoesNotContain("colorOff", PrototypeJson.WriteStyle(b.style));
+        }
+
         [Fact]
         public void AKindLeftOutOfLodOneCostsLodOneNothing()
         {

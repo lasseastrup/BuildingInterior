@@ -673,6 +673,14 @@ namespace Triband.Storey
         /// null keeps the kind's own. One detail then serves many styles.
         /// </summary>
         public string? color;
+        /// <summary>
+        /// <see cref="color"/> kept but not used (the Facade tab's *Recolour* off; Storey's own): the kind keeps its own colour,
+        /// and turning *Recolour* on again brings this one back.
+        /// </summary>
+        public bool colorOff;
+
+        /// <summary>The colour its main colour takes in this style: <see cref="color"/>, unless that is kept off (<see cref="colorOff"/>).</summary>
+        public string? Recolour => colorOff ? null : color;
 
         /// <summary>Nothing set: the kind's chance alone says it all.</summary>
         public bool IsEmpty => density == null && spacing == null && per == null && floors == DetailFloors.All && corners == DetailCorners.Outward && color == null;

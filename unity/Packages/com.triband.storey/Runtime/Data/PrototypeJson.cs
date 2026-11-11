@@ -379,7 +379,7 @@ namespace Triband.Storey
                         {
                             density = c.Opt(ro, "density", rp), spacing = c.Opt(ro, "spacing", rp),
                             per = ro.TryGetValue("per", out var pv) && pv != null ? c.Int(ro, "per", 1, rp) : (int?)null,
-                            floors = c.Enum(ro, "floors", DetailFloors.All, rp), corners = c.Enum(ro, "corners", DetailCorners.Outward, rp), color = c.OptColor(ro, "color", rp),
+                            floors = c.Enum(ro, "floors", DetailFloors.All, rp), corners = c.Enum(ro, "corners", DetailCorners.Outward, rp), color = c.OptColor(ro, "color", rp), colorOff = c.Bool(ro, "colorOff", false, rp),
                         };
                         c.Check(ro, rp, Keys.KindRule);
                         if (!kr.IsEmpty) (s.details.rules ??= new SortedDictionary<string, KindRule>(StringComparer.Ordinal))[key] = kr;
@@ -656,6 +656,7 @@ namespace Triband.Storey
                         if (r.floors != DetailFloors.All) ro["floors"] = Lower(r.floors);
                         if (r.corners != DetailCorners.Outward) ro["corners"] = Lower(r.corners);
                         if (r.color != null) ro["color"] = r.color;
+                        if (r.color != null && r.colorOff) ro["colorOff"] = true;   // Storey's own: kept, for Recolour on again
                         d[kv.Key] = ro;
                     }
                 o["details"] = d;
@@ -738,7 +739,7 @@ namespace Triband.Storey
             public static readonly string[] RoofSurface = { "pattern", "w", "h", "relief", "variation" };
             public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof" };
             public static readonly string[] DetailRules = { "ac", "vents" };
-            public static readonly string[] KindRule = { "p", "density", "spacing", "per", "floors", "corners", "color" };
+            public static readonly string[] KindRule = { "p", "density", "spacing", "per", "floors", "corners", "color", "colorOff" };
             public static readonly string[] OpeningEntry = { "kind", "none", "weight", "recess" };
             public static readonly string[] Point = { "x", "z" };
             public static readonly string[] Style =

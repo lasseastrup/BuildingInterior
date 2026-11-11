@@ -525,7 +525,7 @@ namespace Triband.Storey.Generate
                         F = new Frame(new Vec2(ox - bx * T, oz - bz * T), new Vec2(bz, -bx), new Vec2(bx, bz)); um = 0;
                     }
                     // the style's colour for its main colour, where the style gives one (Storey's own)
-                    ColorSlot? to = RuleOf(st, d.kind.id)?.color is string cr ? KindColors.SlotOf(cr) : null;
+                    ColorSlot? to = RuleOf(st, d.kind.id)?.Recolour is string cr ? KindColors.SlotOf(cr) : null;
                     DetailKinds.Place(op, F, lod == 0 || d.kind.lod1 == null ? full : d.kind.lod1, um, y0, sx, sy, C, to.HasValue ? d.kind.main : null, to, d.bend, d.bendOut);
                     continue;
                 }

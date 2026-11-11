@@ -760,10 +760,11 @@ namespace Triband.Storey.Editor
                 int f = EditorGUILayout.Popup(new GUIContent("Storeys", "Which storeys it goes on"), (int)(r?.floors ?? DetailFloors.All), FloorNames);
                 if (f != (int)(r?.floors ?? DetailFloors.All)) Set("Storeys", kr => kr.floors = (DetailFloors)f);
             }
-            bool own = r?.color != null;
-            bool on = EditorGUILayout.Toggle(new GUIContent("Recolour", "Give its main colour (the one most of its triangles have) another in this style; off, it keeps its own"), own);
-            if (on != own) Set(on ? "Detail colour" : "Detail's own colour", kr => kr.color = on ? MainColour(st, id) : null);
-            if (r?.color is string colour)
+            // off keeps the colour picked (KindRule.colorOff), so on again brings it back; the first time on, the detail's own
+            bool own = r?.Recolour != null;
+            bool on = EditorGUILayout.Toggle(new GUIContent("Recolour", "Give its main colour (the one most of its triangles have) another in this style; off, it keeps its own, and the colour picked is kept for when it's on again"), own);
+            if (on != own) Set(on ? "Detail colour" : "Detail's own colour", kr => { if (on) kr.color ??= MainColour(st, id); kr.colorOff = !on; });
+            if (r?.Recolour is string colour)
                 using (new EditorGUI.IndentLevelScope())
                 {
                     string? picked = StoreyColorField.Picker.Draw($"{t.Key}/detail/{id}", "Main colour", colour, "detail", t.Lookup);

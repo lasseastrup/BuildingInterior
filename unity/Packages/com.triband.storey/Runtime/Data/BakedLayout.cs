@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 15;
+        public const int Version = 16;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -273,7 +273,7 @@ namespace Triband.Storey
                 {
                     dr.rules = new SortedDictionary<string, KindRule>(StringComparer.Ordinal);
                     for (int n = r.Count(); n > 0; n--)
-                        dr.rules[Str(ref r)!] = new KindRule { density = r.Opt(), spacing = r.Opt(), per = r.OptInt(), floors = E<DetailFloors>(ref r), corners = E<DetailCorners>(ref r), color = Str(ref r) };
+                        dr.rules[Str(ref r)!] = new KindRule { density = r.Opt(), spacing = r.Opt(), per = r.OptInt(), floors = E<DetailFloors>(ref r), corners = E<DetailCorners>(ref r), color = Str(ref r), colorOff = r.Bool() };
                 }
             }
             else s.details = null;
@@ -465,7 +465,7 @@ namespace Triband.Storey
                 if (rules != null)
                 {
                     w.Count(rules.Count);
-                    foreach (var kv in rules) { var x = kv.Value; w.Count(S(kv.Key)); w.Opt(x.density); w.Opt(x.spacing); w.OptInt(x.per); w.E(x.floors); w.E(x.corners); w.Count(S(x.color)); }
+                    foreach (var kv in rules) { var x = kv.Value; w.Count(S(kv.Key)); w.Opt(x.density); w.Opt(x.spacing); w.OptInt(x.per); w.E(x.floors); w.E(x.corners); w.Count(S(x.color)); w.Bool(x.colorOff); }
                 }
             }
         }

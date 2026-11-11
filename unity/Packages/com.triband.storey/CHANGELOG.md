@@ -5,6 +5,8 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- **A detail's colour kept while Recolour is off** (`KindRule.colorOff`, layout key `colorOff` on a kind's settings, written only when set; `KindRule.Recolour`, the colour in use; docs/EDITOR.md §6.12, `DetailRuleTests`): the kind keeps its own colour, and its `color` stays for when it's on again. A rule with no `colorOff` builds as before.
+- **The baked layout format is 16** (`BakedLayout.Version`): a kind's settings carry `colorOff`.
 - **Doors set in room walls** (`DoorData.door` and `DoorData.flip`, layout keys `door` and `flip` on a doorway, written only when set; docs/EDITOR.md §5, `InteriorDoorTests`): a doorway can hold one of the project's doors (a Storey Opening door's id), facing its wall's left, or its right with `flip`.
   - At LOD0 it takes the place of the doorway's casing, made as a street door is: its Z 0 on the face it faces, and its leaf left out, so it is walked through (`Lod0.Shared.RoomWalls`). One that keeps its size makes the doorway its own size, as far as the wall has room; one stretched fills the standard doorway. A door the project doesn't have, or a window, is a doorway, as before.
   - `Walls.ToggleDoor` takes the door to put in. A click on a doorway or a door of another kind makes it this kind, facing the side clicked (`Walls.RightOf`); on one of the same kind, it takes it out (`Walls.TakesOut`). Without a door, it puts in a doorway, as the prototype's does. Splitting, joining, clipping and copying walls keep a doorway's door and which way it faces (`DoorData.At`).
