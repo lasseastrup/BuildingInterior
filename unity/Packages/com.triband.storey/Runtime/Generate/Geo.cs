@@ -281,7 +281,7 @@ namespace Triband.Storey.Generate
             {
                 double t0 = ts[j], t1 = ts[j + 1]; if (!Keep(t0, t1)) continue;
                 var w = new WallData { a = new Vec2(ax + dx * t0, az + dz * t0), b = new Vec2(ax + dx * t1, az + dz * t1) };
-                foreach (var d in wl.doors) if (d.t > t0 && d.t < t1) w.doors.Add(new DoorData { t = (d.t - t0) / (t1 - t0) });
+                foreach (var d in wl.doors) if (d.t > t0 && d.t < t1) w.doors.Add(d.At((d.t - t0) / (t1 - t0)));
                 out_.Add(w);
             }
             return out_;

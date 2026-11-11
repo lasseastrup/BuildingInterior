@@ -64,6 +64,9 @@ namespace Triband.Storey.Unity
             public int[]? rowMap;
             public bool inCell;
             public (int x, int z) cell;
+            // its LOD0's doors the player walks through, their Open prefabs live (SpawnDoors), each with whether it is in the
+            // rooms (an interior door: shown with them); null with none
+            public List<(GameObject go, bool inside)>? doors;
         }
 
         /// <summary>A building's meshes and the objects drawing them, per LOD (index 2: the fixed LOD's massing).</summary>
@@ -308,6 +311,7 @@ namespace Triband.Storey.Unity
             {
                 p.roomsOn = on; RoomsSwitched++;
                 foreach (var r in p.rooms) if (r != null) r.enabled = on && p.drawn[0];
+                ShowDoors(bt);   // its interior doors go with them
             }
             if (cast != p.roomsCast)
             {
@@ -1183,6 +1187,55 @@ namespace Triband.Storey.Unity
             // automatic: a building's collider comes with its first LOD0 and stays when the LOD0 is dropped
             if (d.collision != null && bt.collision == null) bt.collisionMade = d.collision;
             if (lods != null && colliders && bt.collider && bt.collision == null) colliderPending.Add(bt.id);
+            SpawnDoors(bt);
+        }
+
+        /// <summary>
+        /// Its LOD0's doors the player walks through (<see cref="Lod0Shape.Doors"/>) as their door's Open prefab, live (docs/EDITOR.md
+        /// §6.9): one object each under the site, in the doorway LOD0 leaves the door out of, fitted to it as the door is. They are
+        /// switched with the LOD0, an interior door with its rooms too (<see cref="RoomsDraw"/>), and go with it; further away the
+        /// closed door is drawn. Each is a Storey Prop, so it is clipped and cut away with the building where its shaders take the
+        /// Storey Prop nodes.
+        /// </summary>
+        void SpawnDoors(Built bt)
+        {
+            KillDoors(bt);
+            var shape = bt.shape; if (shape == null || shape.Doors.Count == 0) return;
+            foreach (var d in shape.Doors)
+            {
+                var asset = StoreyOpening.WithOpen(d.kind); if (asset == null) continue;
+                var go = UnityEngine.Object.Instantiate(asset.openPrefab!, parent);
+                go.hideFlags = flags; go.layer = layer;
+                Vector3 across = new Vector3((float)d.across.x, 0, (float)d.across.z), outward = new Vector3((float)d.outward.x, 0, (float)d.outward.z);
+                // the root where the door's own space puts it: across, up and out by its offset, scaled as the doorway is to its hole
+                Vector2 hole = asset.OpenSize; Vector3 off = asset.OpenOffset;
+                float fx = (float)d.width / Mathf.Max(1e-3f, hole.x), fy = (float)d.height / Mathf.Max(1e-3f, hole.y);
+                var t = go.transform; var s0 = t.localScale;
+                t.localPosition = new Vector3((float)d.origin.x, (float)d.origin.y, (float)d.origin.z) + across * (off.x * fx) + Vector3.up * (off.y * fy) + outward * off.z;
+                // +Z out of the wall (into it for a door made facing back), +X across as the door's mesh runs
+                t.localRotation = Quaternion.LookRotation(asset.facesBack ? -outward : outward, Vector3.up);
+                t.localScale = new Vector3(s0.x * fx, s0.y * fy, s0.z);
+                if (go.GetComponent<StoreyProp>() == null) go.AddComponent<StoreyProp>().motion = StoreyProp.Motion.Still;
+                go.SetActive(DoorShown(bt.parts, d.inside));
+                (bt.doors ??= new List<(GameObject, bool)>()).Add((go, d.inside));
+            }
+        }
+
+        /// <summary>Whether a live door is shown: with its LOD0, and an interior door with its rooms too.</summary>
+        static bool DoorShown(Parts? p, bool inside) => p == null || p.drawn[0] && (!inside || p.roomsOn);
+
+        /// <summary>Its live doors shown or hidden as its LOD0 and its rooms are (<see cref="DoorShown"/>).</summary>
+        static void ShowDoors(Built bt)
+        {
+            if (bt.doors == null) return;
+            foreach (var (g, inside) in bt.doors) if (g != null) g.SetActive(DoorShown(bt.parts, inside));
+        }
+
+        void KillDoors(Built bt)
+        {
+            if (bt.doors == null) return;
+            foreach (var (g, _) in bt.doors) if (g != null) Kill(g);
+            bt.doors = null;
         }
 
         /// <summary>
@@ -1463,6 +1516,7 @@ namespace Triband.Storey.Unity
                 if (p.Empty) bt.parts = null;   // the next one starts afresh: looked at again as its renderers are made
             }
             if (which != 0) return;
+            KillDoors(bt);
             bt.roomsVerts = 0;
             if (StoreyDiagnostics.Recording) StoreyDiagnostics.Note($"LOD0 dropped: {site?.ById(bt.id)?.name ?? bt.id}");
             bt.mates = Array.Empty<int>();
@@ -1892,11 +1946,13 @@ namespace Triband.Storey.Unity
                 p.drawn[w] = on;
                 foreach (var r in p.rends[w]) if (r != null) r.enabled = on;
                 if (w == 0) foreach (var r in p.rooms) if (r != null) r.enabled = on && p.roomsOn;
+                if (w == 0) ShowDoors(bt);
             }
         }
 
         void Release(Built b)
         {
+            KillDoors(b);
             FinishBake(true);   // its collider may be cooking: no mesh is destroyed while a bake reads it
             table.SetState(b.idx, new Vector4(3, 3, 1, 0));
             if (b.wallBase >= 0) table.ReleaseWalls(b.wallBase, b.wallCount);

@@ -54,7 +54,7 @@ namespace Triband.Storey.Editor
             }
         }
 
-        static bool MadeFrom(StoreyOpening o, ISet<string> imported) => MadeFrom(imported, o.prefab, o.lod1Prefab, o.mesh, o.lod1Mesh);
+        static bool MadeFrom(StoreyOpening o, ISet<string> imported) => MadeFrom(imported, o.prefab, o.lod1Prefab, o.mesh, o.lod1Mesh, o.openPrefab);
 
         /// <summary>Whether any of <paramref name="sources"/> was just imported: a model or a prefab, or anything a prefab uses (a facade detail's too).</summary>
         internal static bool MadeFrom(ISet<string> imported, params UnityEngine.Object?[] sources)
@@ -107,6 +107,8 @@ namespace Triband.Storey.Editor
                 foreach (var en in b.entrances) if (en.door != null && en.door != EntranceData.Plain) used.Add(en.door);
                 // and the windows put in by name (the Windows card)
                 foreach (var w in b.windows) if (w.window != null && w.window != WindowData.Plain) used.Add(w.window);
+                // and the doors set in the rooms' doorways (the Door tool)
+                foreach (var f in b.floors) foreach (var w in f.walls) foreach (var d in w.doors) if (d.door != null) used.Add(d.door);
             }
             var want = All().Where(o => used.Contains(o.Id)).ToList();
             if (want.Count == site.openings.Count && want.All(site.openings.Contains)) return;
@@ -218,6 +220,7 @@ namespace Triband.Storey.Editor
             Field("prefab");
             if (o.prefab == null) Field("mesh");
             Field(o.prefab != null ? "lod1Prefab" : "lod1Mesh");
+            if (o.door) Field("openPrefab");   // live where the doorway is walked through, at LOD0 (docs/EDITOR.md §6.9)
             Field("facesBack");
             serializedObject.ApplyModifiedProperties();
             bool changed = EditorGUI.EndChangeCheck();

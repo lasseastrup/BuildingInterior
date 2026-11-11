@@ -233,7 +233,7 @@ namespace Triband.Storey
                 foreach (var d in c.Array(wo, "doors", wp))
                 {
                     var dp = wp.In("doors", j++); var dobj = c.Obj(d, dp);
-                    wall.doors.Add(new DoorData { t = c.Num(dobj, "t", 0.5, dp) });
+                    wall.doors.Add(new DoorData { t = c.Num(dobj, "t", 0.5, dp), door = dobj.TryGetValue("door", out var dk) && dk is string ds && ds.Length > 0 ? ds : null, flip = c.Bool(dobj, "flip", false, dp) });
                     c.Check(dobj, dp, Keys.Door);
                 }
                 c.Check(wo, wp, Keys.Wall);
@@ -527,7 +527,13 @@ namespace Triband.Storey
             foreach (var w in f.walls)
             {
                 var doors = new List<object?>();
-                foreach (var d in w.doors) doors.Add(new Dictionary<string, object?> { ["t"] = d.t });
+                foreach (var d in w.doors)
+                {
+                    var dd = new Dictionary<string, object?> { ["t"] = d.t };
+                    if (d.door != null) dd["door"] = d.door;   // Storey's own: the door in it and its side, written only when it has one
+                    if (d.flip) dd["flip"] = true;
+                    doors.Add(dd);
+                }
                 walls.Add(new Dictionary<string, object?> { ["a"] = Pt(w.a), ["b"] = Pt(w.b), ["doors"] = doors });
             }
             o["walls"] = walls;
@@ -728,7 +734,7 @@ namespace Triband.Storey
             public static readonly string[] Corner = { "at", "shape", "size", "door", "pts" };
             public static readonly string[] Floor = { "walls", "blocked", "h", "shape", "blank", "quiet", "bare", "style", "terraceRoof", "terrace", "props", "filled", "corners" };
             public static readonly string[] Wall = { "a", "b", "doors" };
-            public static readonly string[] Door = { "t" };
+            public static readonly string[] Door = { "t", "door", "flip" };
             public static readonly string[] Terrace = { "pitch", "type" };
             public static readonly string[] TerraceEdge = { "parapet", "capH", "capDepth", "capStrip" };
             public static readonly string[] RoofSurface = { "pattern", "w", "h", "relief", "variation" };

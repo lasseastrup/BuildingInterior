@@ -192,7 +192,7 @@ On the block above, a two-triangle sill in front of the wall makes LOD1 1,448 tr
 ## 7. What stays out
 
 - **Textures.** The package is untextured by design (UNITY-PACKAGE-PLAN §6.5): its vertices carry no UVs, and its materials draw palette colours. A textured window would need a UV stream in LOD0's vertex and textures in `Storey/Opaque`, for every building. That's a decision of its own (§9).
-- **Live parts**: a light by a door, a door that opens, a collider. These aren't baked. If they're wanted, a prefab's other objects could be instanced beside the building as Storey Props (docs/PROPS.md), which already fade, clip and Sink with their building.
+- **Live parts**: a light by a door, a collider. These aren't baked. If they're wanted, a prefab's other objects could be instanced beside the building as Storey Props (docs/PROPS.md), which already fade, clip and Sink with their building. ~~A door that opens~~: built that way, §7.2.
 - **Holes that aren't rectangles** (arched or round). `WallPanel` already cuts holes as polygons, but the reveals, the merging of neighbouring openings, LOD1's flat pane and LOD2's painted windows are all rectangles. Meanwhile, an arched surround in front of a rectangular hole looks the same from the street.
 - **Doors of their own size**, after §4.1: the entrance tools, courtyards and walls would take the width from the door kind instead of `Dim.DOOR_EXT`.
 - ~~**Several windows a style**~~: built, §7.1.
@@ -224,6 +224,13 @@ The old generator's themes have a weighted list of one to three window prefabs (
 | `WallFillerPrefab` (no window list) | `windowKind` |
 | per-entry inset depth (`_overrideInsetSettings`, `_insetDepth`) | doors: the entry's `recess`; windows: not yet (the style's `recess`) |
 | per-entry inset offset | not yet |
+
+### 7.2 A door that opens (built)
+
+A door's *Open prefab* (`StoreyOpening.openPrefab`) is the door as it stands where the player walks through it: the whole door, open or one the game opens. It isn't baked; it ships, and it is instanced live (docs/EDITOR.md §6.9):
+- **Where:** every door LOD0 makes that the player walks through: a walk-in storey's street, terrace and courtyard doors, and a door set in a room wall (`DoorData.door`). The kind says it has one (`OpeningKind.live`); there LOD0 draws none of it, and records where its own space lies (`LiveDoor`: the hole's bottom middle on the wall's face, +X across as `KindPlace` puts the mesh, +Z out, the width and height it fills, and whether it is in the rooms) in `Lod0Shape.Doors`. Shut doors (shell and filled storeys, a blocked room's) are drawn as before, and LOD1 and LOD2 draw the closed door.
+- **Placed:** `SiteRenderer` instantiates the prefab for each when the LOD0 is up, as a Storey Prop under the site, and destroys them with it. Its root goes where the door's own space puts it: the bake keeps the root's place in that space (`openOffset`, from its own Storey Cutout or the door's hole) and its hole's size (`openSize`), and the instance is scaled across and up as the doorway is to that hole.
+- **Shown:** with the LOD0; an interior door also with the rooms (`RoomsDraw`), which are left out when LOD0's far windows paint over them.
 
 ## 8. Order of work
 

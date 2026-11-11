@@ -86,7 +86,12 @@ namespace Triband.Storey.Editor
                     if (p == null) break;
                     {
                         var d = Walls.DoorAt(site, b, k, p.Value);
-                        if (d != null) Box(DoorBox(b, k, d), d.door >= 0 || d.entrance >= 0 ? Bad : Accent);
+                        if (d == null) break;
+                        string? door = d.exterior ? null : StoreySiteEditor.InteriorDoorToPlace(v)?.Id;
+                        bool takes = Walls.TakesOut(b, d, door);
+                        Box(DoorBox(b, k, d), takes ? Bad : Accent);
+                        // a door set in a doorway faces the side of the wall clicked: an arrow out of it that way
+                        if (door != null && !takes && ev.type == EventType.Repaint) Facing(b, k, d, p.Value, yy);
                     }
                     break;
                 case InteriorTool.Erase:
@@ -273,9 +278,15 @@ namespace Triband.Storey.Editor
                     return true;
                 }
                 case InteriorTool.Door:
-                    if (Walls.DoorAt(site, b, k, p) == null) return false;
-                    e.ApplyTo("Doorway", bb => Walls.ToggleDoor(new Site(e.Document.buildings), bb, k, p));
+                {
+                    var d = Walls.DoorAt(site, b, k, p); if (d == null) return false;
+                    // with Door picked, a room wall's doorway gets the door picked (Storey's own); the outline's, a street door as ever
+                    var asset = d.exterior ? null : StoreySiteEditor.InteriorDoorToPlace(v);
+                    bool takes = Walls.TakesOut(b, d, asset?.Id);
+                    e.ApplyTo(takes ? "Removed" : asset != null ? "Door" : "Doorway", bb => Walls.ToggleDoor(new Site(e.Document.buildings), bb, k, p, asset?.Id));
+                    if (asset != null && !takes) StoreyOpenings.Keep(e.Site, asset);   // the site keeps what it uses, for the build
                     return true;
+                }
                 case InteriorTool.Erase:
                 {
                     var t = Walls.HoverTarget(b, k, p); if (t == null) return false;
@@ -376,6 +387,18 @@ namespace Triband.Storey.Editor
             }
             var fp = Derived.OutlineAt(b, d.k); var a = fp[d.edge]; var c = fp[(d.edge + 1) % fp.Count]; double ex = c.x - a.x, ez = c.z - a.z;
             return new GhostBox { cx = a.x + ex * d.t + b.pos.x, cy = Derived.FloorBase(b, d.k) + 1.27, cz = a.z + ez * d.t + b.pos.z, sx = Dim.DOOR_EXT - 0.05, sy = 2.5, sz = Dim.T_EXT * 2.2, u = new Vec2(ex / d.L, ez / d.L) };
+        }
+
+        /// <summary>The way a door set in the doorway at <paramref name="d"/> would face, clicked from p: an arrow on the floor out of it.</summary>
+        static void Facing(BuildingData b, int k, DoorSpot d, Vec2 p, double y)
+        {
+            var w = b.floors[k].walls[d.wall]; double ux = (w.b.x - w.a.x) / d.L, uz = (w.b.z - w.a.z) / d.L;
+            double s = Walls.RightOf(w, p) ? -1 : 1, nx = -uz * s, nz = ux * s;   // the wall's left, or its right
+            var c = new Vec2(w.a.x + ux * d.t * d.L, w.a.z + uz * d.t * d.L);
+            Vec2 At(double along, double out_) => new Vec2(c.x + ux * along + nx * out_, c.z + uz * along + nz * out_);
+            Handles.color = Accent;
+            Handles.DrawAAPolyLine(4f, W(b, At(0, Dim.T_INT / 2 + 0.1), y), W(b, At(0, 0.8), y));
+            Handles.DrawAAPolyLine(4f, W(b, At(-0.18, 0.62), y), W(b, At(0, 0.8), y), W(b, At(0.18, 0.62), y));
         }
 
         static void Highlight(BuildingData b, int k, Target t, Color c)

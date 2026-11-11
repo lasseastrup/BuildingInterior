@@ -26,7 +26,7 @@ namespace Triband.Storey.Editor
         {
             ("Select", "Pick a wall, stairs or a lift to edit or move it", StoreyInspectorUI.SelectIcon),
             ("Wall", "Draw walls: click a chain of points, or drag one wall", StoreyInspectorUI.WallIcon),
-            ("Door", "Click a wall to put a doorway in it, or take one out", StoreyInspectorUI.DoorIcon),
+            ("Door", "Click a wall to put a doorway or a door in it, or take one out", StoreyInspectorUI.DoorIcon),
             ("Erase", "Click a wall, doorway, stairs or lift to remove it", StoreyInspectorUI.EraseIcon),
             ("Stairs", "Place stairs: switchback or straight flights", StoreyInspectorUI.StairsIcon),
             ("Lift", "Place a lift shaft", StoreyInspectorUI.LiftIcon),
@@ -1250,6 +1250,7 @@ namespace Triband.Storey.Editor
             int tool = StoreyInspectorUI.ToolBar((int)v.interiorTool, InteriorTools);
             if (tool != (int)v.interiorTool) { v.interiorTool = (InteriorTool)tool; SceneView.RepaintAll(); }
             StoreyInspectorUI.Note(ToolHint(v.interiorTool));
+            if (v.interiorTool == InteriorTool.Door) DoorKind(v);
             if (v.interiorTool == InteriorTool.Stairs)
             {
                 int kind = GUILayout.Toolbar(v.stairKind == CoreType.Flight ? 1 : 0, new[] { new GUIContent("Switchback", "Two flights and a landing per storey, in a walled stairwell"), new GUIContent("Straight flights", "One straight flight per storey with no walls, and a walkway beside it back to the next flight") });
@@ -1277,6 +1278,48 @@ namespace Triband.Storey.Editor
                     if (GUILayout.Button("Remove", EditorStyles.miniButton)) { e.ApplyTo("Removed", bb => { bb.floors[k].walls.RemoveAt(wi); return true; }); v.selectedWall = -1; }
                 }
             }
+        }
+
+        static readonly GUIContent[] DoorKinds =
+        {
+            new GUIContent("Doorway", "An open doorway: a hole through the wall, with a casing round it"),
+            new GUIContent("Door", "A door set in the doorway: one of the project's doors, and its Open prefab where it has one"),
+        };
+        static readonly GUIContent InteriorDoorLabel = new GUIContent("Door to place", "Which of the project's doors a click sets in a doorway");
+
+        /// <summary>
+        /// The Door tool's settings (docs/EDITOR.md §5, Interior): what a click makes a room wall's doorway, a hole or one with a door set in
+        /// it, and which of the project's doors that is.
+        /// </summary>
+        void DoorKind(StoreyEditView v)
+        {
+            int kind = GUILayout.Toolbar(v.interiorDoor ? 1 : 0, DoorKinds);
+            if ((kind == 1) != v.interiorDoor) { v.interiorDoor = kind == 1; SceneView.RepaintAll(); }
+            if (!v.interiorDoor) return;
+            var doors = StoreyOpenings.All().Where(o => o.door).ToList();
+            if (doors.Count == 0)
+            {
+                StoreyInspectorUI.Note("There are no doors in the project yet, so a click makes a doorway. Make one from a door's prefab: Assets > Create > Storey > Window or Door from Prefab.");
+                return;
+            }
+            var names = StoreyInspectorUI.ShortNames(doors.Select(o => o.name).ToList());
+            int cur = Math.Max(0, doors.FindIndex(o => o.Id == v.interiorDoorKind));
+            int pick = EditorGUILayout.Popup(InteriorDoorLabel, cur, doors.Select(o => new GUIContent(names.TryGetValue(o.name, out var sn) ? sn : o.name)).ToArray());
+            if (pick != cur || v.interiorDoorKind != doors[pick].Id) { v.interiorDoorKind = doors[pick].Id; SceneView.RepaintAll(); }
+            StoreyInspectorUI.Note(doors[pick].openPrefab != null
+                ? "Its front faces the side of the wall you click on. Up close its Open prefab stands in the doorway in its place, for your game to open."
+                : "Its front faces the side of the wall you click on. It has no Open prefab, so its leaf is left out and the doorway stands open, as a walk-in storey's street door does. Set one on the door for a leaf your game can open.");
+        }
+
+        /// <summary>
+        /// The door the Door tool sets in a room wall's doorway (<see cref="DoorData.door"/>): none for a doorway, or where the
+        /// project has no doors; otherwise the one picked, or the project's first.
+        /// </summary>
+        internal static StoreyOpening? InteriorDoorToPlace(StoreyEditView v)
+        {
+            if (!v.interiorDoor) return null;
+            var doors = StoreyOpenings.All().Where(o => o.door).ToList();
+            return doors.FirstOrDefault(o => o.Id == v.interiorDoorKind) ?? doors.FirstOrDefault();
         }
 
         void CoreInspector(StoreyEdit e, BuildingData b, CoreData s)
@@ -1326,7 +1369,7 @@ namespace Triband.Storey.Editor
         {
             InteriorTool.Select => "Drag wall points to reshape rooms · drag + to split a wall · double-click a point to join or remove · drag stairs and lifts · Alt: no snap",
             InteriorTool.Wall => "Click to chain walls, or drag one · snaps to points (ring) and walls (diamond) · Alt: no snap · Enter, Finish wall or the last point clicked again ends the chain · Enter again: back to Select",
-            InteriorTool.Door => "Click a wall to add or remove a doorway · Enter: back to Select",
+            InteriorTool.Door => "Click a wall to put a doorway in it, or a door with Door below · click one of the other kind to swap it, and one of the same kind to take it out · Enter: back to Select",
             InteriorTool.Erase => "Click anything on this floor to remove it · Enter: back to Select",
             InteriorTool.Stairs => "Click to place · lines up with the nearest wall · runs to the top floor · straight flights: the arrow points up them, the walkway back is beside it · Enter: back to Select",
             InteriorTool.Lift => "Click to place · lines up with the nearest wall · serves every floor above · Enter: back to Select",

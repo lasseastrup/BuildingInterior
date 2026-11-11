@@ -200,7 +200,7 @@ namespace Triband.Storey.Edit
         internal static WallData Copy(WallData w)
         {
             var c = new WallData { a = w.a, b = w.b };
-            foreach (var d in w.doors) c.doors.Add(new DoorData { t = d.t });
+            foreach (var d in w.doors) c.doors.Add(d.At(d.t));
             return c;
         }
 

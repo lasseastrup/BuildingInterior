@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 13;
+        public const int Version = 14;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -207,7 +207,7 @@ namespace Triband.Storey
                 for (int w = r.Count(); w > 0; w--)
                 {
                     var wall = new WallData { a = r.Vec(), b = r.Vec() };
-                    for (int k = r.Count(); k > 0; k--) wall.doors.Add(new DoorData { t = r.F64() });
+                    for (int k = r.Count(); k > 0; k--) wall.doors.Add(new DoorData { t = r.F64(), door = Str(ref r), flip = r.Bool() });
                     f.walls.Add(wall);
                 }
                 f.h = r.Opt();
@@ -405,7 +405,7 @@ namespace Triband.Storey
                 foreach (var wall in f.walls)
                 {
                     w.Vec(wall.a); w.Vec(wall.b);
-                    w.Count(wall.doors.Count); foreach (var dr in wall.doors) w.F64(dr.t);
+                    w.Count(wall.doors.Count); foreach (var dr in wall.doors) { w.F64(dr.t); w.Count(S(dr.door)); w.Bool(dr.flip); }
                 }
                 w.Opt(f.h);
                 w.Points(f.shape);

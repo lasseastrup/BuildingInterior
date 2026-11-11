@@ -137,6 +137,34 @@ namespace Triband.Storey.Generate
         }
     }
 
+    /// <summary>
+    /// A door the player walks through at LOD0, its asset's Open prefab placed there live (the Unity side's: a street or
+    /// terrace door on a walk-in storey, an interior door; Storey's own): the door kind, and where the kind's own space lies in
+    /// the site, as <see cref="KindPlace"/> puts its baked mesh: its origin (the hole's bottom middle on the wall's face, Z 0),
+    /// across (+X, the frame's handedness taken in) and out of the wall (+Z), the opening's width and height it fills, and
+    /// whether it is in the rooms (an interior door: shown with them, <see cref="MeshBuilder.Inside"/>) or in the shell.
+    /// </summary>
+    public readonly struct LiveDoor
+    {
+        public readonly string kind;
+        public readonly P3 origin;
+        public readonly Vec2 across, outward;
+        public readonly double width, height;
+        public readonly bool inside;
+        public LiveDoor(string kind, P3 origin, Vec2 across, Vec2 outward, double width, double height, bool inside = false) { this.kind = kind; this.origin = origin; this.across = across; this.outward = outward; this.width = width; this.height = height; this.inside = inside; }
+
+        /// <summary>
+        /// The door kind <paramref name="k"/> placed in an opening from <paramref name="u0"/> to <paramref name="u1"/> along
+        /// <paramref name="F"/> and from <paramref name="y0"/> to <paramref name="y1"/> up, as <see cref="OpeningKinds.Place"/> places
+        /// its mesh there: Z 0 on the wall's outer face, <see cref="Dim.T_EXT"/> out along the frame.
+        /// </summary>
+        public static LiveDoor Of(OpeningKind k, Frame F, double u0, double u1, double y0, double y1, bool inside = false)
+        {
+            double flip = F.u.x * F.w.z - F.u.z * F.w.x < 0 ? -1 : 1;
+            return new LiveDoor(k.id, F.At((u0 + u1) / 2, y0, Dim.T_EXT), new Vec2(F.u.x * flip, F.u.z * flip), F.w, u1 - u0, y1 - y0, inside);
+        }
+    }
+
     /// <summary>A collision segment (world XZ) with a radius.</summary>
     public struct Seg
     {

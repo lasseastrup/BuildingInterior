@@ -105,6 +105,14 @@ namespace Triband.Storey.Editor
             }
             Rows(o, keys, labels, owns);
             o.Store(made, lod1Made, new Vector2((float)hole.w, (float)hole.h));
+            // a door's Open prefab, placed live (SiteRenderer.SpawnDoors): its root's place in the door's own space, as KindBake
+            // maps a point there, by its own Storey Cutout or the door's hole, and that hole's size
+            if (o.door && o.openPrefab != null)
+            {
+                var oh = HoleOf(o.openPrefab)?.hole ?? hole; double turn = o.facesBack ? -1 : 1;
+                o.openOffset = new Vector3((float)(-oh.cx * turn), (float)-(oh.cy - oh.h / 2), (float)(-oh.wallZ * turn));
+                o.openSize = new Vector2((float)oh.w, (float)oh.h);
+            }
             o.holeFrom = from; o.objects = g.objects; o.hiddenFaces = made.hidden; o.wallFaces = made.onWall;
             o.notes = string.Join("\n", g.notes.Concat(g1?.notes ?? Enumerable.Empty<string>()).Distinct());
         }

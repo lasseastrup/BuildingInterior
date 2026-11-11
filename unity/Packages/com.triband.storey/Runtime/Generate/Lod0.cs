@@ -18,6 +18,8 @@ namespace Triband.Storey.Generate
         /// roof edge along a core it doesn't build.
         /// </summary>
         public List<Block> Blocks = new List<Block>();
+        /// <summary>The doors walked through whose Open prefab goes live at LOD0 (<see cref="LiveDoor"/>), in the order made.</summary>
+        public List<LiveDoor> Doors = new List<LiveDoor>();
         /// <summary>What is kept of it once the meshes are uploaded (made with the result: its lists, not copies).</summary>
         public Lod0Shape Shape = null!;
     }
@@ -45,14 +47,16 @@ namespace Triband.Storey.Generate
         public readonly List<double> WallBase;
         /// <summary>The walls that face both ways, by index, in order: room walls, a stair's middle wall (<see cref="MeshBuilder.Partitions"/>).</summary>
         public readonly List<int> Partitions;
+        /// <summary>The doors walked through whose asset's Open prefab goes live at LOD0 (<see cref="LiveDoor"/>); none in a shape alone.</summary>
+        public readonly List<LiveDoor> Doors;
 
-        /// <summary>The lists themselves, trimmed to their length: nothing is added to a built building's. No partitions: none.</summary>
-        public Lod0Shape(List<List<Seg>> segs, List<(Seg s, double y0, double y1)> extra, List<Block> blocks, List<(double[] W, int K)> walls, List<double> wallBase, List<int>? partitions = null)
+        /// <summary>The lists themselves, trimmed to their length: nothing is added to a built building's. No partitions or doors: none.</summary>
+        public Lod0Shape(List<List<Seg>> segs, List<(Seg s, double y0, double y1)> extra, List<Block> blocks, List<(double[] W, int K)> walls, List<double> wallBase, List<int>? partitions = null, List<LiveDoor>? doors = null)
         {
-            partitions ??= new List<int>();
+            partitions ??= new List<int>(); doors ??= new List<LiveDoor>();
             foreach (var l in segs) l.TrimExcess();
-            segs.TrimExcess(); extra.TrimExcess(); blocks.TrimExcess(); walls.TrimExcess(); wallBase.TrimExcess(); partitions.TrimExcess();
-            Segs = segs; Extra = extra; Blocks = blocks; Walls = walls; WallBase = wallBase; Partitions = partitions;
+            segs.TrimExcess(); extra.TrimExcess(); blocks.TrimExcess(); walls.TrimExcess(); wallBase.TrimExcess(); partitions.TrimExcess(); doors.TrimExcess();
+            Segs = segs; Extra = extra; Blocks = blocks; Walls = walls; WallBase = wallBase; Partitions = partitions; Doors = doors;
         }
     }
 
@@ -89,7 +93,7 @@ namespace Triband.Storey.Generate
             if (solids) r.Op.Solids = new List<Solid>();
             foreach (var _ in self.Steps(r))
                 if (stop != null && stop()) { r.Op.Recycle(); r.Glass.Recycle(); return null; }
-            r.Shape = new Lod0Shape(r.Segs, r.Extra, r.Blocks, r.Op.Walls, r.Op.WallBase, r.Op.Partitions);
+            r.Shape = new Lod0Shape(r.Segs, r.Extra, r.Blocks, r.Op.Walls, r.Op.WallBase, r.Op.Partitions, r.Doors);
             return r;
         }
 
@@ -134,9 +138,12 @@ namespace Triband.Storey.Generate
             return g;
         }
 
+        /// <summary>The doors the player walks through whose Open prefab goes live at LOD0, of the build in hand (<see cref="Lod0Result.Doors"/>).</summary>
+        internal List<LiveDoor>? Live;
+
         public IEnumerable<int> Steps(Lod0Result r)
         {
-            var op = r.Op; var gl = r.Glass;
+            var op = r.Op; var gl = r.Glass; Live = r.Doors;
             // the rooms (MeshBuilder.Inside): what a storey shows only through its windows, which LOD0's far windows paint over:
             // the walls' inner faces, the partitions and the cores. The floors and ceilings stay with the shell, which casts
             // shadows (the rooms only for the building the player is in): without them the sun would light every storey
@@ -172,7 +179,7 @@ namespace Triband.Storey.Generate
                 {
                     FacadeStorey(op, gl, sg, k, g, apart, walls); Details.Build(op, site, b, k, g.C, 0);
                     foreach (var br in b.bridges) if (br.k == k && Bridges.Span(site, b, br) is BridgeSpan bs) Bridges.Build(op, gl, r.Extra, bs, g.C);
-                    foreach (var v in b.voids) if (Courtyards.WallsAt(b, v, k)) Courtyards.Walls(op, gl, sg, b, v, k, g.C, apart, IntoWalls(op, k));
+                    foreach (var v in b.voids) if (Courtyards.WallsAt(b, v, k)) Courtyards.Walls(op, gl, sg, b, v, k, g.C, apart, IntoWalls(op, k), Live);
                     if (!sh) { op.Inside = apart; Interior(op, sg, k, g.C); foreach (var v in b.voids) if (Courtyards.RailsAt(b, v, k)) Courtyards.Rails(op, sg, b, v, k, g.C); op.Inside = false; }
                 }
                 else
@@ -520,7 +527,7 @@ namespace Triband.Storey.Generate
                     var stk = Derived.StyleAt(b, k);
                     Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : Wall(stk, C, k == 0), C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? Facade.ShellRevealFrom(stk, false, OpeningSets.Representative(stk, k == 0, out var rk) ? rk : null) : 0, rooms: rooms,
                         doorRevealFrom: shell ? Facade.ShellRevealFrom(stk, true, OpeningKinds.Of(stk, true)) : (double?)null, thresholdC: k == 0 ? C.foundation : (Swatch?)null, doorsRecessed: stk.doorRecess.HasValue, buried: into));
-                    Facade.Dress(op, gl, F, ops, y, C, shell, stk, Wall(stk, C, k == 0), Panel, pm, h);
+                    Facade.Dress(op, gl, F, ops, y, C, shell, stk, Wall(stk, C, k == 0), Panel, pm, h, Live);
                     if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
                     if (!party && stk.bricks is double density && density > 0)
                     {
@@ -727,10 +734,31 @@ namespace Triband.Storey.Generate
                 // where it runs into another (and that one into it), its faces lie inside the other: buried (PanelOpt.buried)
                 Facade.WallPanel(op, F, new Miter(new Cut(-E, 0), new Cut(L + E, 0)), -Dim.T_INT / 2, Dim.T_INT / 2, y, hh, ops, C.inner, C.inner,
                     new Facade.PanelOpt { ends = true, buried = !op.ShapeOnly && !op.Lean && (walls.Count > 1 || r.stubA || r.stubB) ? (p, q) => RoomWall.Inside(walls, p, q, self) : null });
-                foreach (var o in Facade.MergeOps(ops)) Casing(op, F, o, y, t, C.doorTrim, walls, self);
+                foreach (var o in Facade.MergeOps(ops.Exists(x => x.kind != null) ? ops.FindAll(x => x.kind == null) : ops)) Casing(op, F, o, y, t, C.doorTrim, walls, self);
+                foreach (var o in ops) if (o.kind != null) InteriorDoor(op, r, o, y, C);
                 foreach (var (s0, e0) in Facade.SolidRanges(-E, L + E, ops)) Facade.PushSeg(sg, F, s0, e0, 0, Dim.T_INT / 2);
             }
             Blocked(op, sg, k, C);
+        }
+
+        /// <summary>
+        /// An artist's door in a room wall (<see cref="DoorData.door"/>, Storey's own) in place of a doorway's casing, its Z 0 on the
+        /// face of the wall it faces (its left, or its right flipped): as on a walk-in storey's street door, its frame in the
+        /// doorway and its leaf left out, or, with an Open prefab (<see cref="OpeningKind.live"/>), none of it, the prefab placed
+        /// there live at LOD0 in its place (<see cref="LiveDoor"/>, with the rooms). Made as a street door is for a wall
+        /// <see cref="Dim.T_EXT"/> thick, it is as deep as it was made: one for a room wall is <see cref="Dim.T_INT"/>.
+        /// </summary>
+        void InteriorDoor(MeshBuilder op, RoomWall r, Opening o, double y, Palette C)
+        {
+            if (op.ShapeOnly) return;   // faces only: no doors
+            var k = o.kind!;
+            double off = Dim.T_INT / 2 - Dim.T_EXT;   // the frame's line, so its outer face (T_EXT out) is the wall's face
+            bool flip = r.flipped != null && r.flipped.Contains(o);
+            var F = flip ? new Frame(new Vec2(r.a.x - r.w.x * off, r.a.z - r.w.z * off), new Vec2(-r.u.x, -r.u.z), new Vec2(-r.w.x, -r.w.z))
+                         : new Frame(new Vec2(r.a.x + r.w.x * off, r.a.z + r.w.z * off), r.u, r.w);
+            double u0 = flip ? -o.u1 : o.u0, u1 = flip ? -o.u0 : o.u1;
+            if (k.live && Live != null) Live.Add(LiveDoor.Of(k, F, u0, u1, y, y + o.y1, inside: true));
+            else OpeningKinds.Place(op, null, F, k, k.lod0, u0, u1, y, y + o.y1, C, false);
         }
 
         /// <summary>
@@ -836,8 +864,10 @@ namespace Triband.Storey.Generate
             public const double E = Dim.T_INT / 2 - 0.02;
             /// <summary>Its line's start, the way along it and across it, and its length.</summary>
             public Vec2 a, u, w; public double L;
-            /// <summary>Its doors, in order along it.</summary>
+            /// <summary>Its doors, in order along it: an artist's door with its kind (<see cref="DoorData.door"/>).</summary>
             public List<Opening> ops = null!;
+            /// <summary>Its artist's doors that face the other side (<see cref="DoorData.flip"/>), or null for none.</summary>
+            public HashSet<Opening>? flipped;
             /// <summary>
             /// Its start (stubA) or its end (stubB) is against the storey's outside wall where that is solid (no opening across
             /// it): what runs on past it (<see cref="E"/>) lies inside that wall.
@@ -948,22 +978,29 @@ namespace Triband.Storey.Generate
         {
             if (roomWalls.TryGetValue(k, out var l)) return l;
             l = new List<RoomWall>(); double ox = b.pos.x, oz = b.pos.z;
-            var fp = Derived.OutlineAt(b, k); var blocked = BlockedRooms(k);
+            var fp = Derived.OutlineAt(b, k); var blocked = BlockedRooms(k); double hh = Derived.FloorH(b, k) - Dim.SLAB;
             foreach (var w0 in b.floors[k].walls)
                 foreach (var wl in Courtyards.ClipOut(b, k, Geo.ClipWall(fp, w0)))
                 {
                     var a = new Vec2(wl.a.x + ox, wl.a.z + oz); var c = new Vec2(wl.b.x + ox, wl.b.z + oz);
                     double dx = c.x - a.x, dz = c.z - a.z, L = Geo.Hypot(dx, dz); if (L < 0.05) continue;
                     var u = new Vec2(dx / L, dz / L);
-                    var ops = new List<Opening>();
+                    var ops = new List<Opening>(); HashSet<Opening>? flipped = null;
                     foreach (var d in wl.doors)
                     {
-                        double mm = Math.Max(Dim.DOOR_INT / 2 + 0.1, Math.Min(L - Dim.DOOR_INT / 2 - 0.1, d.t * L));
+                        // an artist's door (Storey's own): the doorway its size where it keeps its size (as a street door's is), as far
+                        // as the wall and the storey have room; one stretched fills the doorway as ever
+                        var kk = d.door != null && OpeningKinds.Get(d.door) is OpeningKind dk && dk.door ? dk : null;
+                        bool own = kk != null && !kk.stretch;
+                        double half = own ? Math.Max(0.2, Math.Min(kk!.w, L - 0.2) / 2) : Dim.DOOR_INT / 2;
+                        double mm = Math.Max(half + 0.1, Math.Min(L - half - 0.1, d.t * L));
                         if (blocked.Count > 0 && IntoBlocked(blocked, a, u, mm)) continue;   // into a room blocked out: the wall goes on across it
-                        ops.Add(new Opening { u0 = mm - Dim.DOOR_INT / 2, u1 = mm + Dim.DOOR_INT / 2, y0 = 0, y1 = 2.2, door = true });
+                        var o = new Opening { u0 = mm - half, u1 = mm + half, y0 = 0, y1 = own ? Math.Min(kk!.h, hh - 0.05) : 2.2, door = true, kind = kk };
+                        ops.Add(o);
+                        if (kk != null && d.flip) (flipped ??= new HashSet<Opening>()).Add(o);
                     }
                     ops.Sort((p, q) => p.u0.CompareTo(q.u0));
-                    l.Add(new RoomWall { a = a, u = u, w = new Vec2(-u.z, u.x), L = L, ops = ops });
+                    l.Add(new RoomWall { a = a, u = u, w = new Vec2(-u.z, u.x), L = L, ops = ops, flipped = flipped });
                 }
             roomWalls[k] = l;
             return l;

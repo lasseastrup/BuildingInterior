@@ -202,6 +202,21 @@ namespace Triband.Storey
     {
         /// <summary>Position along the wall, 0..1 from a to b.</summary>
         public double t;
+        /// <summary>
+        /// The door in it: null, a doorway (a hole with a casing, as always); otherwise a Storey Opening door's id. At LOD0 its
+        /// frame stands in the doorway with its leaf left out, the player walking through; or, where it has an Open prefab, none
+        /// of it, the prefab placed there live (<see cref="Generate.LiveDoor"/>). One the project no longer has is a doorway.
+        /// Storey's own.
+        /// </summary>
+        public string? door;
+        /// <summary>
+        /// The door faces the other side of the wall: its front (the face a street door shows the street, Z 0 on the wall's face)
+        /// on the right of the wall's line from a to b, not its left. Only with <see cref="door"/>. Storey's own.
+        /// </summary>
+        public bool flip;
+
+        /// <summary>This doorway, the door in it and its side, at another place along a wall (one cut, split or joined).</summary>
+        public DoorData At(double t) => new DoorData { t = t, door = door, flip = flip };
     }
 
     /// <summary>

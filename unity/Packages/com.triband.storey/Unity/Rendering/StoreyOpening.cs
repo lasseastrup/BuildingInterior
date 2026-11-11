@@ -51,6 +51,12 @@ namespace Triband.Storey.Unity
         [SerializeField, HideInInspector] string id = "";
         [Tooltip("A street door; otherwise a window.")]
         public bool door;
+        [Tooltip("A door's: the whole door, frame and all, as it stands where the player walks through it (a walk-in storey's street or terrace door, an interior door): open, or one your game opens. Placed live in the doorway while its building is at LOD0, in place of the door, none of which is drawn there; further away the closed door is drawn. Its Storey Cutout (or, without one, the Prefab's) says where the hole is. It ships in a build.")]
+        public GameObject? openPrefab;
+        // the Open prefab's root in the door's own space (the hole's bottom middle, Z 0 on the wall's face, turned round when it
+        // faces back) and its hole's size, both its root's scale applied: baked with the rest (Bake)
+        [SerializeField, HideInInspector] internal Vector3 openOffset;
+        [SerializeField, HideInInspector] internal Vector2 openSize = new Vector2(1.2f, 1.6f);
 #if UNITY_EDITOR
         // the editor's alone: baked in when set (Bake), they don't ship in a build (docs/PERFORMANCE.md §11.2)
         [Tooltip("The window or door as a prefab: every object under it with a mesh, where it is in the prefab. Its Storey Cutout says where the hole is. It wins over Mesh.")]
@@ -182,7 +188,7 @@ namespace Triband.Storey.Unity
         /// <summary>The engine-free kind the generator places.</summary>
         public OpeningKind ToKind() => new OpeningKind
         {
-            id = id, name = name, door = door, w = Mathf.Max(0.05f, size.x), h = Mathf.Max(0.05f, size.y), stretch = stretch, slice = slice,
+            id = id, name = name, door = door, live = door && openPrefab != null, w = Mathf.Max(0.05f, size.x), h = Mathf.Max(0.05f, size.y), stretch = stretch, slice = slice,
             borderL = Mathf.Max(0, borders.x), borderR = Mathf.Max(0, borders.y), borderB = Mathf.Max(0, borders.z), borderT = Mathf.Max(0, borders.w),
             lod0 = ToMesh(lod0), lod1 = hasLod1 ? ToMesh(lod1) : null,
         };
@@ -219,7 +225,21 @@ namespace Triband.Storey.Unity
         }
 
         /// <summary>Make the kind available to the generator (sites do it for the openings they use).</summary>
-        public void Register() { if (!string.IsNullOrEmpty(id)) OpeningKinds.Register(ToKind()); }
+        public void Register()
+        {
+            if (string.IsNullOrEmpty(id)) return;
+            OpeningKinds.Register(ToKind());
+            if (door && openPrefab != null) withOpen[id] = this; else withOpen.Remove(id);
+        }
+
+        static readonly Dictionary<string, StoreyOpening> withOpen = new Dictionary<string, StoreyOpening>(StringComparer.Ordinal);
+
+        /// <summary>The door registered under <paramref name="id"/> when it has an Open prefab (<see cref="openPrefab"/>), or null. Main thread.</summary>
+        public static StoreyOpening? WithOpen(string id) => withOpen.TryGetValue(id, out var o) && o != null && o.openPrefab != null ? o : null;
+
+        /// <summary>The Open prefab's root's place in the door's own space, and its hole's size (both baked).</summary>
+        public Vector3 OpenOffset => openOffset;
+        public Vector2 OpenSize => openSize;
 
         void OnEnable() => Register();
     }

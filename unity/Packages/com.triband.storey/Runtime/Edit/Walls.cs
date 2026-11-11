@@ -145,7 +145,7 @@ namespace Triband.Storey.Edit
         {
             var w = f.walls[wi]; double L = Len(w), t = Tiers.Clamp(Tiers.SegDist(p.x, p.z, w.a.x, w.a.z, w.b.x, w.b.z).t, 0.01, 0.99);
             var w1 = new WallData { a = w.a, b = p }; var w2 = new WallData { a = p, b = w.b };
-            foreach (var d in w.doors) { if (d.t < t) w1.doors.Add(new DoorData { t = d.t / t }); else w2.doors.Add(new DoorData { t = (d.t - t) / (1 - t) }); }
+            foreach (var d in w.doors) { if (d.t < t) w1.doors.Add(d.At(d.t / t)); else w2.doors.Add(d.At((d.t - t) / (1 - t))); }
             f.walls.RemoveAt(wi); f.walls.Insert(wi, w2); f.walls.Insert(wi, w1);
             return L;
         }
@@ -223,7 +223,10 @@ namespace Triband.Storey.Edit
                         foreach (var d in w.doors)
                         {
                             double px = w.a.x + (w.b.x - w.a.x) * d.t, pz = w.a.z + (w.b.z - w.a.z) * d.t;
-                            nw.doors.Add(new DoorData { t = Tiers.SegDist(px, pz, A.x, A.z, B.x, B.z).t });
+                            var nd = d.At(Tiers.SegDist(px, pz, A.x, A.z, B.x, B.z).t);
+                            // a wall drawn the other way round has its left on the joined wall's right: its door keeps its side
+                            if ((w.b.x - w.a.x) * (B.x - A.x) + (w.b.z - w.a.z) * (B.z - A.z) < 0) nd.flip = !nd.flip;
+                            nw.doors.Add(nd);
                         }
                     f.walls = f.walls.Where((w, i) => i != i1 && i != i2).ToList(); f.walls.Add(nw);
                     return "Walls joined";
@@ -349,20 +352,38 @@ namespace Triband.Storey.Edit
             return null;
         }
 
-        /// <summary>The Door tool's click: add the door at p, or remove the one there. False where no door fits.</summary>
-        public static bool ToggleDoor(Site site, BuildingData b, int k, Vec2 p)
+        /// <summary>
+        /// The Door tool's click: add the door at p, or remove the one there. False where no door fits. On a room wall, with
+        /// <paramref name="door"/> (a Storey Opening door's id; Storey's own) it is that door, facing the side of the wall p is on
+        /// (<see cref="DoorData.flip"/>); a click on one of another kind (a doorway, or another door) makes it this kind, and on one
+        /// of this kind takes it out. Without, a doorway, as the prototype's. On the building's outline, a street or terrace door.
+        /// </summary>
+        public static bool ToggleDoor(Site site, BuildingData b, int k, Vec2 p, string? door = null)
         {
             var d = DoorAt(site, b, k, p);
             if (d == null) return false;
             if (!d.exterior)
             {
                 var w = b.floors[k].walls[d.wall];
-                if (d.door >= 0) w.doors.RemoveAt(d.door); else w.doors.Add(new DoorData { t = d.t });
+                bool flip = door != null && RightOf(w, p);   // the door faces the side clicked
+                if (d.door < 0) w.doors.Add(new DoorData { t = d.t, door = door, flip = flip });
+                else if (w.doors[d.door].door == door) w.doors.RemoveAt(d.door);
+                else { w.doors[d.door].door = door; w.doors[d.door].flip = flip; }
             }
             else if (d.entrance >= 0) b.entrances.RemoveAt(d.entrance);
             else b.entrances.Add(new EntranceData { edge = d.edge, t = d.t, k = d.k });
             return true;
         }
+
+        /// <summary>
+        /// Whether the Door tool's click at <paramref name="d"/> takes a door out (<see cref="ToggleDoor"/>, with the same
+        /// <paramref name="door"/>): one is there of the kind it puts in. Otherwise it adds one, or makes the one there this kind.
+        /// </summary>
+        public static bool TakesOut(BuildingData b, DoorSpot d, string? door = null) =>
+            d.exterior ? d.entrance >= 0 : d.door >= 0 && b.floors[d.k].walls[d.wall].doors[d.door].door == door;
+
+        /// <summary>Whether p is on the right of the wall's line from a to b (a door set in it from there faces that way: <see cref="DoorData.flip"/>).</summary>
+        public static bool RightOf(WallData w, Vec2 p) => (w.b.x - w.a.x) * (p.z - w.a.z) - (w.b.z - w.a.z) * (p.x - w.a.x) < 0;
 
         /// <summary>
         /// The Block tool's click (Storey's own): the room under p blocked out (<see cref="FloorData.blocked"/>, a mark at p), or

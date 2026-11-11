@@ -43,6 +43,12 @@ namespace Triband.Storey.Generate
         public string id = "", name = "";
         /// <summary>A street door; otherwise a window.</summary>
         public bool door;
+        /// <summary>
+        /// A door with an Open prefab (the Unity side's <c>StoreyOpening.openPrefab</c>; Storey's own): where the player walks
+        /// through it at LOD0, none of it is drawn and the prefab stands in the doorway in its place (<see cref="LiveDoor"/>);
+        /// further away, and shut, it is drawn as ever.
+        /// </summary>
+        public bool live;
         /// <summary>The hole in the wall the mesh fills: width and height, in metres.</summary>
         public double w = 1, h = 1.5;
         /// <summary>

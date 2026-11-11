@@ -746,6 +746,7 @@ namespace UnityEngine
         public Vector3 up => default;
         public Vector3 localPosition { get => default; set { } }
         public Vector3 localScale { get => default; set { } }
+        public Quaternion localRotation { get => default; set { } }
         public void LookAt(Vector3 worldPosition) { }
         public void SetPositionAndRotation(Vector3 position, Quaternion rotation) { }
         public Vector3 lossyScale => default;

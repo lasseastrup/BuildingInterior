@@ -40,6 +40,13 @@ namespace Triband.Storey.Editor
         [SerializeField] internal int placeRot;
         /// <summary>What the Stairs tool places: switchback stairs or straight flights (both over the same floors).</summary>
         [SerializeField] internal CoreType stairKind = CoreType.Stairs;
+        /// <summary>What the Door tool makes a room wall's doorway: a hole (false) or one with a door set in it (true).</summary>
+        [SerializeField] internal bool interiorDoor;
+        /// <summary>
+        /// The door the Door tool sets in a doorway (<see cref="DoorData.door"/>), a Storey Opening door's id; empty, or one
+        /// no longer in the project, the project's first door.
+        /// </summary>
+        [SerializeField] internal string interiorDoorKind = "";
         [SerializeField] internal bool isolate;
         /// <summary>The Scene view camera follows the active floor up and down (the Interior tab).</summary>
         [SerializeField] internal bool followFloor;
