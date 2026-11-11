@@ -12,10 +12,11 @@ namespace Triband.Storey.Editor
 {
     /// <summary>
     /// The Interior tool (docs/EDITOR.md slice 6.6) on the active storey, with the floors above clipped and the walls in
-    /// the way cut away as in play. The mode is picked in the Interior tab (no shortcuts). Select: drag stairs and lifts,
-    /// wall points and the "+" on a wall, and the walls follow; click a wall or a core to select it, then remove or turn
-    /// it in the inspector. Wall: click to chain walls, or drag one; snaps to points (ring) and walls (diamond), Alt for
-    /// free; click the last point again, or Finish wall, to end the chain. Door, Erase, Stairs and Lift.
+    /// the way cut away as in play. The mode is picked in the Interior tab, and Enter goes back to Select (<see cref="Finish"/>).
+    /// Select: drag stairs and lifts, wall points and the "+" on a wall, and the walls follow; click a wall or a core to
+    /// select it, then remove or turn it in the inspector. Wall: click to chain walls, or drag one; snaps to points (ring)
+    /// and walls (diamond), Alt for free; click the last point again, Finish wall or Enter to end the chain. Door, Erase,
+    /// Stairs and Lift.
     /// </summary>
     [EditorTool("Storey Interior", typeof(StoreySite), typeof(StoreyToolContext))]
     internal sealed class StoreyInteriorTool : StoreyTool
@@ -211,6 +212,15 @@ namespace Triband.Storey.Editor
         // ---- clicks ----
 
         protected override string DeleteHint => "Select a wall, stairs or a lift first";
+
+        /// <summary>Enter: a wall chain ends where it is (as Finish wall), and otherwise the tool placing things is put down (Select).</summary>
+        protected override bool Finish(StoreyEdit e, BuildingData b, SceneView sv)
+        {
+            if (chain) { chain = false; return true; }
+            if (e.View.interiorTool == InteriorTool.Select) return false;
+            e.View.PutDown(StoreyTab.Interior);
+            return true;
+        }
 
         protected override bool DeleteSelected(StoreyEdit e, BuildingData b, SceneView sv)
         {

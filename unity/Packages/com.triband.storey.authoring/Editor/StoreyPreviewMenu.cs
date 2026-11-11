@@ -12,7 +12,7 @@ namespace Triband.Storey.Editor
     /// Scene view. A click picks it. A click outside the list closes it with nothing picked, and <c>show</c> is handed null:
     /// things as they are. The current choice is ticked and is things as they are too, so the list opens on it, and
     /// pointing at it shows the building as it was. Unity's own drop-down (<c>EditorGUI.Popup</c>) says nothing until a
-    /// choice is picked. Like the rest of the editor, it reads no keys (§2).
+    /// choice is picked. It reads no keys (§2: the editor's one, Enter, ends a Scene view tool's action).
     /// </summary>
     internal sealed class StoreyPreviewMenu : PopupWindowContent
     {

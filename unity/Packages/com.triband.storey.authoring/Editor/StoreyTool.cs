@@ -14,8 +14,8 @@ namespace Triband.Storey.Editor
     /// time (SPEC §9), a click that hits nothing of the tool's selects the building under the pointer (another site's too,
     /// which is then the one edited), and the site is
     /// drawn with the view the tab wants (the active storey clipped and cut away as in play in the Interior tab). They
-    /// belong to <see cref="StoreyToolContext"/>. No keyboard shortcuts: everything is a button in the inspector or in the
-    /// Scene view.
+    /// belong to <see cref="StoreyToolContext"/>. Everything is a button in the inspector or in the Scene view; the one key,
+    /// Enter, ends what a tool is doing (<see cref="Finish"/>).
     /// </summary>
     internal abstract class StoreyTool : EditorTool
     {
@@ -38,6 +38,22 @@ namespace Triband.Storey.Editor
 
         /// <summary>What the hint says Delete works on in this tool.</summary>
         protected virtual string DeleteHint => "Nothing selected to delete";
+
+        /// <summary>
+        /// Enter (or the keypad's) in the Scene view: end what the tool is doing (a wall chain, a tool placing things put down).
+        /// True when it ended something. The editor's one key (docs/EDITOR.md §2).
+        /// </summary>
+        protected virtual bool Finish(StoreyEdit e, BuildingData b, SceneView sv) => false;
+
+        /// <summary>Enter in the Scene view: <see cref="Finish"/>, the event used only when it ended something.</summary>
+        void EnterKey(StoreyEdit e, BuildingData? b, SceneView sv)
+        {
+            var ev = Event.current;
+            if (ev.type != EventType.KeyDown || (ev.keyCode != KeyCode.Return && ev.keyCode != KeyCode.KeypadEnter)) return;
+            if (b == null || !Finish(e, b, sv)) return;
+            ev.Use();
+            Inspectors();
+        }
 
         /// <summary>Take the Scene view's Delete before Unity does: it would delete the whole site.</summary>
         void DeleteKey(StoreyEdit e, BuildingData? b, SceneView sv)
@@ -64,6 +80,7 @@ namespace Triband.Storey.Editor
             // the layout lives in the site's local space: the meshes are the site's children, so the handles and rays are too
             toLocal = site.transform.worldToLocalMatrix;
             DeleteKey(e, b, sv);
+            EnterKey(e, b, sv);
             using (new Handles.DrawingScope(site.transform.localToWorldMatrix))
             {
                 Hover(e, sv);

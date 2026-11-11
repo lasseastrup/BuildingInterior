@@ -116,6 +116,14 @@ namespace Triband.Storey.Editor
             return new Vector3((float)(a.x + (c.x - a.x) * h.t + b.pos.x), (float)h.y, (float)(a.z + (c.z - a.z) * h.t + b.pos.z));
         }
 
+        /// <summary>Enter: the tool picked (Place doors, Place windows, Blank wall, a detail or Bridge) is put down.</summary>
+        protected override bool Finish(StoreyEdit e, BuildingData b, SceneView sv)
+        {
+            if (e.View.facadeTool.Length == 0) return false;
+            e.View.PutDown(StoreyTab.Facade);
+            return true;
+        }
+
         protected override bool Click(StoreyEdit e, BuildingData b, Vec3d origin, Vec3d dir, SceneView sv)
         {
             string tool = e.View.facadeTool;

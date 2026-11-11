@@ -563,18 +563,23 @@ namespace Triband.Storey.Tests
         }
 
         /// <summary>
-        /// The editor has no keyboard shortcuts of its own (every action is a button), and its Scene view tools are the
-        /// Storey tool context's, so they show only in that context and the built-in transform tools stay off there.
+        /// The editor's one key is Enter, read in one place, which ends what a Scene view tool is doing (StoreyTool's
+        /// EnterKey, docs/EDITOR.md §2); it has no other keyboard shortcuts (every action is a button). Its Scene view tools
+        /// are the Storey tool context's, so they show only in that context and the built-in transform tools stay off there.
         /// </summary>
         [Fact]
-        public void TheEditorToolsUseTheContextAndNoShortcuts()
+        public void TheEditorToolsUseTheContextAndOnlyEnter()
         {
             var dir = Path.Combine(Layout.UnityRoot, "Packages", "com.triband.storey.authoring", "Editor");
             int tools = 0;
+            var enter = new HashSet<string> { "Return", "KeypadEnter" };
             foreach (var f in Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories))
             {
-                string src = Code(File.ReadAllText(f));
-                Assert.False(Regex.IsMatch(src, @"\bKeyCode\.|EventType\.Key(Down|Up)\b|\bShortcut(Attribute)?\b"), $"{Path.GetFileName(f)} handles keys");
+                string src = Code(File.ReadAllText(f)), name = Path.GetFileName(f);
+                Assert.False(Regex.IsMatch(src, @"EventType\.KeyUp\b|\bShortcut(Attribute)?\b"), $"{name} has a shortcut");
+                var keys = Regex.Matches(src, @"\bKeyCode\.(\w+)").Select(m => m.Groups[1].Value).ToHashSet();
+                if (name == "StoreyTool.cs") Assert.Subset(enter, keys);
+                else Assert.False(keys.Count > 0 || Regex.IsMatch(src, @"EventType\.KeyDown\b"), $"{name} handles keys");
                 foreach (Match m in Regex.Matches(src, @"\[EditorTool\(([^\]]*)\)\]"))
                 {
                     tools++;

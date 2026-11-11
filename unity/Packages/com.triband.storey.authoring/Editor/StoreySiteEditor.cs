@@ -692,7 +692,7 @@ namespace Triband.Storey.Editor
                 int pick = EditorGUILayout.Popup(WindowToPlaceLabel, cur, choices.Select(x => new GUIContent(x.label)).ToArray());
                 if (pick != cur) { v.placeWindow = choices[pick].value; SceneView.RepaintAll(); }
             }
-            if (on) StoreyInspectorUI.Note("Click a window to take it out, and a bay without one to put one in, on any floor: a blank wall's too. A door keeps its bay.");
+            if (on) StoreyInspectorUI.Note("Click a window to take it out, and a bay without one to put one in, on any floor: a blank wall's too. A door keeps its bay. Press Enter when you're done.");
             int n = b.windows.Count(w => Derived.TierStart(b, w.k) == k0);
             if (n > 0 && GUILayout.Button(new GUIContent($"The style's windows back ({n} by hand)", "Every window put in or taken out by hand on these floors goes: their walls are as the style lays them out"), EditorStyles.miniButton))
                 e.ApplyTo("The style's windows back", bb => bb.windows.RemoveAll(w => Derived.TierStart(bb, w.k) == k0) > 0);
@@ -746,7 +746,7 @@ namespace Triband.Storey.Editor
                 int pick = EditorGUILayout.Popup(DoorToPlaceLabel, cur, choices.Select(x => new GUIContent(x.label)).ToArray());
                 if (pick != cur) { v.placeDoor = choices[pick].value; SceneView.RepaintAll(); }
             }
-            if (on) StoreyInspectorUI.Note("Click a wall to put a door in it, and a door to take it out. Above the street, where a terrace or a neighbour's roof is in front of the wall.");
+            if (on) StoreyInspectorUI.Note("Click a wall to put a door in it, and a door to take it out. Above the street, where a terrace or a neighbour's roof is in front of the wall. Press Enter when you're done.");
         }
 
         /// <summary>The doors Place doors can put in: the style's, by name (the built-in one as <see cref="EntranceData.Plain"/>), and with more than one, any of them by weight ("*").</summary>
@@ -878,8 +878,8 @@ namespace Triband.Storey.Editor
                 }
             }
             if (v.facadeTool == "blank") WallStates(e, b, k0);
-            else if (v.facadeTool == "bridge") StoreyInspectorUI.Note("Click an upper floor's wall: a bridge goes straight out to the building facing it, to its floor nearest this one. Click a bridge's door to remove it.");
-            else if (v.facadeTool.Length > 0) StoreyInspectorUI.Note("Click a wall to place it; click a placed one to remove it.");
+            else if (v.facadeTool == "bridge") StoreyInspectorUI.Note("Click an upper floor's wall: a bridge goes straight out to the building facing it, to its floor nearest this one. Click a bridge's door to remove it. Press Enter when you're done.");
+            else if (v.facadeTool.Length > 0) StoreyInspectorUI.Note("Click a wall to place it; click a placed one to remove it. Press Enter when you're done.");
         }
 
         /// <summary>What the Blank wall tool makes a wall, as its toolbar names them (<see cref="EdgeState"/> from Blank).</summary>
@@ -912,7 +912,7 @@ namespace Triband.Storey.Editor
                         if (n == 0) message = $"Every {side.ToString().ToLowerInvariant()} wall already has that, or more.";
                     }
             }
-            StoreyInspectorUI.Note("Click a wall to make it so; click it again for its windows back.");
+            StoreyInspectorUI.Note("Click a wall to make it so; click it again for its windows back. Press Enter when you're done.");
         }
 
         /// <summary>The bridges from and to this building: enclosed or open, their width, and removing them.</summary>
@@ -1255,11 +1255,11 @@ namespace Triband.Storey.Editor
         static string ToolHint(InteriorTool t) => t switch
         {
             InteriorTool.Select => "Drag wall points to reshape rooms · drag + to split a wall · double-click a point to join or remove · drag stairs and lifts · Alt: no snap",
-            InteriorTool.Wall => "Click to chain walls, or drag one · snaps to points (ring) and walls (diamond) · Alt: no snap · click the last point again, or Finish wall, to end",
-            InteriorTool.Door => "Click a wall to add or remove a doorway",
-            InteriorTool.Erase => "Click anything on this floor to remove it",
-            InteriorTool.Stairs => "Click to place · lines up with the nearest wall · runs to the top floor · straight flights: the arrow points up them, the walkway back is beside it",
-            _ => "Click to place · lines up with the nearest wall · serves every floor above",
+            InteriorTool.Wall => "Click to chain walls, or drag one · snaps to points (ring) and walls (diamond) · Alt: no snap · Enter, Finish wall or the last point clicked again ends the chain · Enter again: back to Select",
+            InteriorTool.Door => "Click a wall to add or remove a doorway · Enter: back to Select",
+            InteriorTool.Erase => "Click anything on this floor to remove it · Enter: back to Select",
+            InteriorTool.Stairs => "Click to place · lines up with the nearest wall · runs to the top floor · straight flights: the arrow points up them, the walkway back is beside it · Enter: back to Select",
+            _ => "Click to place · lines up with the nearest wall · serves every floor above · Enter: back to Select",
         };
 
         // ---- fields ----
