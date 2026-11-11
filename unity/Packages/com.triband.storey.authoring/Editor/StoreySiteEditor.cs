@@ -830,7 +830,9 @@ namespace Triband.Storey.Editor
             int k1 = TerraceAbove(b, k0); if (k1 < 0) return;
             var tr = b.floors[k1].terraceRoof;
             int cur = tr == null ? 0 : tr.type == RoofType.Gable ? 2 : 1;
-            string summary = tr == null ? "Terrace" : $"{TerraceRoofChoices[cur].text}, {tr.pitch:0}°" + (st?.roofSurface != null ? " · " + StoreyStyleCards.SurfaceName(st) : "");
+            var te = b.floors[k1].terrace; var tcap = RoofCap.Of(te);
+            string summary = tr == null ? "Terrace" + (te != null && !te.parapet ? " · no parapet" : "") + (tcap is RoofCap tc ? tc.fascia ? " · hanging edge" : " · slab edge" : "")
+                : $"{TerraceRoofChoices[cur].text}, {tr.pitch:0}°" + (st?.roofSurface != null ? " · " + StoreyStyleCards.SurfaceName(st) : "");
             using var c = StoreyInspectorUI.Card("terraceRoof", "Terrace roof", StoreyInspectorUI.RoofIcon, StoreyInspectorUI.Tint.Roof, summary,
                 tip: $"Where the setback above ({Floor(b, k1)} and up) leaves these floors uncovered: a terrace, or a roof");
             if (!c.Open) return;
@@ -841,10 +843,66 @@ namespace Triband.Storey.Editor
                 if (pick > 0) bb.floors[k1].terraceRoof!.type = TerraceRoofTypes[pick - 1];
                 return true;
             });
-            if (tr == null) { StoreyInspectorUI.Note("A terrace with a parapet round it. Put a door onto it from the setback with Doors ▸ Place doors."); return; }
+            if (tr == null)
+            {
+                TerraceEdge(e, b, k0, k1, st);
+                StoreyInspectorUI.Note("Put a door onto it from the setback with Doors ▸ Place doors.");
+                return;
+            }
             Slider(e, "Pitch", tr.pitch, 10, 50, 1, (bb, x) => bb.floors[k1].terraceRoof!.pitch = x);
             if (st != null) StoreyStyleCards.RoofSurfaceFields(new SiteStyle(this, e, b, k0), st);
             else StoreyInspectorUI.Note("Its colour and surface are these floors' style's, which is the floors below's: give them their own style to choose them.");
+        }
+
+        static readonly GUIContent[] TerraceEdgeKinds =
+        {
+            new GUIContent("Slab", "A slab on top of the walls, standing out over them: it takes the curb's place, and a parapet stands on it"),
+            new GUIContent("Hanging", "A fascia hanging down from the terrace's edge, out past the walls, under the curb or parapet"),
+        };
+
+        /// <summary>
+        /// A terrace's edge (<see cref="TerraceData"/>, docs/EDITOR.md §6.2), as the Roof card sets a flat roof's: its parapet,
+        /// and a cap on the edge, a slab or a hanging one (one set in is a roof's alone), by the same numbers. Its colours are
+        /// these floors' style's, set here when they have one.
+        /// </summary>
+        void TerraceEdge(StoreyEdit e, BuildingData b, int k0, int k1, FacadeStyle? st)
+        {
+            var td = b.floors[k1].terrace ?? new TerraceData();
+            TerraceData Of(BuildingData bb) => bb.floors[k1].terrace ??= new TerraceData();
+            bool pp = StoreyInspectorUI.Feature("Parapet", "A low wall round the terrace's edge; without one, a curb", td.parapet);
+            if (pp != td.parapet) e.ApplyTo(pp ? "Terrace parapet" : "No terrace parapet", bb => { Of(bb).parapet = pp; return true; });
+            bool on = StoreyInspectorUI.Feature("Edge", "A cap along the terrace's edge: a slab standing out over the walls, or a fascia hanging from it", td.capH.HasValue);
+            if (on != td.capH.HasValue) e.ApplyTo(on ? "Terrace edge" : "No terrace edge", bb => { var t = Of(bb); t.capH = on ? 0.4 : (double?)null; if (on && !t.capDepth.HasValue) t.capDepth = -0.25; return true; });
+            if (!(td.capH is double h)) return;
+            double d = td.capDepth ?? 0; int kind = h >= 0 ? 0 : 1;
+            using var _ = new EditorGUI.IndentLevelScope();
+            int pick = StoreyInspectorUI.Segmented(new GUIContent("Kind", "What the terrace's edge is"), kind, TerraceEdgeKinds);
+            if (pick != kind) e.ApplyTo("Terrace edge: " + TerraceEdgeKinds[pick].text, bb =>
+            {
+                var t = Of(bb); double size = Math.Abs(t.capH ?? 0.4) < 0.02 ? 0.4 : Math.Abs(t.capH ?? 0.4), dd = t.capDepth ?? 0;
+                t.capH = pick == 1 ? -size : size;
+                t.capDepth = pick == 1 ? (dd < -0.01 ? dd : -0.25) : Math.Min(dd, 0);
+                return true;
+            });
+            if (kind == 0)
+            {
+                Slider(e, "Height", h, 0, 4, 0.01, (bb, x) => Of(bb).capH = x);
+                Slider(e, "Overhang", -d, 0, 1, 0.01, (bb, x) => Of(bb).capDepth = x > 0 ? -x : 0);
+            }
+            else
+            {
+                Slider(e, "Hangs down", -h, 0.02, 1.5, 0.01, (bb, x) => Of(bb).capH = -x);
+                Slider(e, "Overhang", -d, 0.02, 1, 0.01, (bb, x) => Of(bb).capDepth = -x);
+            }
+            Slider(e, "Top strip", td.capStrip ?? 0, 0, 2, 0.01, (bb, x) => Of(bb).capStrip = x > 0 ? x : (double?)null);
+            if (st != null)
+            {
+                var t = new SiteStyle(this, e, b, k0);
+                StoreyStyleCards.Colour(t, "Colour", "cap", optional: true);
+                if (d < 0) StoreyStyleCards.Colour(t, "Underside", "capRim", optional: true);
+            }
+            else StoreyInspectorUI.Note("Its colours are these floors' style's, which is the floors below's: give them their own style to choose them.");
+            if (RoofCap.Of(td) == null) StoreyInspectorUI.Note("A hanging edge needs an overhang.");
         }
 
         /// <summary>

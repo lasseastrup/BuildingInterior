@@ -39,7 +39,7 @@ namespace Triband.Storey.Edit
             b.details.RemoveAll(d => Derived.TierStart(b, d.k) == k0);
             b.windows.RemoveAll(w => Derived.TierStart(b, w.k) == k0);
             b.entrances.RemoveAll(e => Tiers.DoorOn(b, e, k0));
-            var f = b.floors[k0]; f.shape = new List<Vec2>(); f.blank = new List<int>(); f.quiet = null; f.bare = null; f.corners = new List<CornerData>(); f.terraceRoof = null;
+            var f = b.floors[k0]; f.shape = new List<Vec2>(); f.blank = new List<int>(); f.quiet = null; f.bare = null; f.corners = new List<CornerData>(); f.terraceRoof = null; f.terrace = null;
         }
 
         /// <summary>
@@ -55,6 +55,7 @@ namespace Triband.Storey.Edit
             var f = b.floors[k0]; var g = b.floors[k];
             g.shape = f.shape; g.corners = f.corners; f.shape = new List<Vec2>(); f.corners = new List<CornerData>(); Tiers.MoveEdges(f, g);
             if (f.terraceRoof != null) { g.terraceRoof = f.terraceRoof; f.terraceRoof = null; }
+            if (f.terrace != null) { g.terrace = f.terrace; f.terrace = null; }
             foreach (var e in b.entrances) if (e.k == k0) e.k = k;
             b.details = b.details.Where((d, j) => Derived.TierStart(b, d.k) == tb[j]).ToList();
             b.windows = b.windows.Where((w, j) => Derived.TierStart(b, w.k) == tw[j]).ToList();

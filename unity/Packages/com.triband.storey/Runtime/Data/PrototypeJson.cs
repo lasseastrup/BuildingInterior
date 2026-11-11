@@ -246,6 +246,13 @@ namespace Triband.Storey
                 f.terraceRoof = new TerraceRoofData { pitch = c.Num(to, "pitch", 30, tp), type = trType };
                 c.Check(to, tp, Keys.Terrace);
             }
+            // Storey's own: the terrace's edge (TerraceData), a parapet or not and a cap, as a flat roof's
+            if (o.TryGetValue("terrace", out var te) && te != null)
+            {
+                var ep = w.In("terrace"); var eo = c.Obj(te, ep);
+                f.terrace = new TerraceData { parapet = c.Bool(eo, "parapet", true, ep), capH = c.Opt(eo, "capH", ep), capDepth = c.Opt(eo, "capDepth", ep), capStrip = c.Opt(eo, "capStrip", ep) };
+                c.Check(eo, ep, Keys.TerraceEdge);
+            }
             // "props" is a leftover key some test layouts carry; the prototype never reads it.
             Corners(c, o, w, f.corners);
             c.Check(o, w, Keys.Floor);
@@ -537,6 +544,16 @@ namespace Triband.Storey
                 if (f.terraceRoof.type != RoofType.Hip) tr["type"] = Lower(f.terraceRoof.type);   // Storey's own: the prototype's is a hip
                 o["terraceRoof"] = tr;
             }
+            if (f.terrace is TerraceData td && (!td.parapet || td.capH.HasValue || td.capDepth.HasValue || td.capStrip.HasValue))
+            {
+                // Storey's own, written only when it isn't the parapet a terrace always had
+                var te = new Dictionary<string, object?>();
+                if (!td.parapet) te["parapet"] = false;
+                if (td.capH.HasValue) te["capH"] = td.capH.Value;
+                if (td.capDepth.HasValue) te["capDepth"] = td.capDepth.Value;
+                if (td.capStrip.HasValue) te["capStrip"] = td.capStrip.Value;
+                o["terrace"] = te;
+            }
             return o;
         }
 
@@ -706,10 +723,11 @@ namespace Triband.Storey
             public static readonly string[] Void = { "id", "kind", "shape", "bottom" };
             public static readonly string[] Bridge = { "id", "to", "k", "at", "toK", "width", "open" };
             public static readonly string[] Corner = { "at", "shape", "size", "door", "pts" };
-            public static readonly string[] Floor = { "walls", "h", "shape", "blank", "quiet", "bare", "style", "terraceRoof", "props", "filled", "corners" };
+            public static readonly string[] Floor = { "walls", "h", "shape", "blank", "quiet", "bare", "style", "terraceRoof", "terrace", "props", "filled", "corners" };
             public static readonly string[] Wall = { "a", "b", "doors" };
             public static readonly string[] Door = { "t" };
             public static readonly string[] Terrace = { "pitch", "type" };
+            public static readonly string[] TerraceEdge = { "parapet", "capH", "capDepth", "capStrip" };
             public static readonly string[] RoofSurface = { "pattern", "w", "h", "relief", "variation" };
             public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof" };
             public static readonly string[] DetailRules = { "ac", "vents" };

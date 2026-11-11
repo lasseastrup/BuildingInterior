@@ -321,7 +321,12 @@ namespace Triband.Storey.Generate
 
         // ---- terraces and overhangs ------------------------------------------------------
 
-        public sealed class Run { public Vec2 a, u, w; public double L; public Cut S, E; }
+        public sealed class Run
+        {
+            public Vec2 a, u, w; public double L; public Cut S, E;
+            /// <summary>Its start or end is at an open corner, mitred onto the next run; otherwise it stops against a wall (the setback's, a neighbour's).</summary>
+            public bool openS, openE;
+        }
 
         /// <summary>Where a parapet run ends against the setback's wall: the outer face of that wall.</summary>
         static Cut? ParapetEnd(List<Vec2> up, bool uccw, Vec2 V, Vec2 U, Vec2 Wn, double uV, int dir)
@@ -359,7 +364,7 @@ namespace Triband.Storey.Generate
                     Vec2 V(double t) => new Vec2(lo[i].x + g.u.x * t, lo[i].z + g.u.z * t);
                     var S = open0 ? m.S : (ParapetEnd(up, uccw, V(s0), g.u, g.w, s0, 1) ?? new Cut(s0, 0));
                     var E = open1 ? m.E : (ParapetEnd(up, uccw, V(e0), g.u, g.w, e0, -1) ?? new Cut(e0, 0));
-                    out_.Add(new Run { a = g.a, u = g.u, w = g.w, L = g.L, S = S, E = E });
+                    out_.Add(new Run { a = g.a, u = g.u, w = g.w, L = g.L, S = S, E = E, openS = open0, openE = open1 });
                 }
             }
             return out_;
@@ -404,18 +409,61 @@ namespace Triband.Storey.Generate
         public static double RoofEdgeH(bool parapet, RoofCap? cap) =>
             parapet ? (cap?.Lift ?? 0) + RoofParapet : cap is RoofCap c && !c.fascia ? (c.inset ? Seg.Flush : c.h) : RoofCurb;
 
+        /// <summary>
+        /// A terrace's edge along its runs: its parapet, as a terrace always had, or as its settings make it (<see
+        /// cref="FloorData.terrace"/>, Storey's own): without one a curb, as round a flat roof without one, and a cap on the edge,
+        /// a slab (lifting the parapet, or in the curb's place) or one hanging from it, in the colours of the style of the floors
+        /// below (<paramref name="C"/>'s). Where a run stops against a wall, what stands out past the wall below is closed.
+        /// </summary>
         public void Terrace(MeshBuilder op, List<Seg>? sg, int k, Palette C)
         {
             double y = Derived.FloorBase(b, k), T = Dim.T_EXT;
+            var td = b.floors[k].terrace; bool parapet = td?.parapet ?? true; var cap = RoofCap.Of(td);
+            double yp = y + (cap?.Lift ?? 0), edgeH = TerraceEdgeH(parapet, cap);
             foreach (var r in TerraceRuns(k))
             {
                 var F = new Frame(r.a, r.u, r.w);
                 op.Ctx(Geo.WallCtx(new Vec2(r.a.x + r.u.x * r.S.s, r.a.z + r.u.z * r.S.s), r.u, r.w, Math.Max(r.E.s - r.S.s, 0.05)), 1);
-                op.MBox(F, r.S, r.E, y, y + 1.0, 0, T, C.wall, C.inner, Skip.Top | Skip.Bot | Skip.UStart | Skip.UEnd);
-                op.MBox(F, r.S, r.E, y + 1.0, y + TerraceParapet, -0.04, T, C.trim, C.trim, Skip.UStart | Skip.UEnd);
-                if (sg != null) Facade.PushSeg(sg, F, r.S.s + r.S.k * T / 2, r.E.s + r.E.k * T / 2, T / 2, T / 2, TerraceParapet);
+                if (cap is RoofCap c) TerraceCap(op, F, r, c, y, C, Derived.StyleAt(b, k - 1), parapet);
+                if (parapet)
+                {
+                    op.MBox(F, r.S, r.E, yp, yp + 1.0, 0, T, C.wall, C.inner, Skip.Top | Skip.Bot | Skip.UStart | Skip.UEnd);
+                    op.MBox(F, r.S, r.E, yp + 1.0, yp + TerraceParapet, -0.04, T, C.trim, C.trim, Skip.UStart | Skip.UEnd);
+                }
+                else if (cap == null || cap.Value.fascia) op.MBox(F, r.S, r.E, y, y + RoofCurb, 0, T, C.trim, C.trim, Skip.Bot | Skip.UStart | Skip.UEnd);
+                if (sg != null) Facade.PushSeg(sg, F, r.S.s + r.S.k * T / 2, r.E.s + r.E.k * T / 2, T / 2, T / 2, edgeH);
             }
         }
+
+        /// <summary>
+        /// A terrace's cap along one run (<see cref="Cap"/>, as along a flat roof's edge): mitred onto the next where the corner
+        /// is open; where the run stops against a wall the setback's or a neighbour's wall closes it, but past the wall below (an
+        /// overhang, a hanging cap) it is open, so its end is closed there.
+        /// </summary>
+        static void TerraceCap(MeshBuilder op, Frame F, Run r, RoofCap c, double y, Palette C, FacadeStyle st, bool parapet)
+        {
+            var m = new Miter(r.S, r.E); double T = Dim.T_EXT;
+            Cap(op, F, m, s => new List<(double, double)> { s }, c, y, C.roof, C.CapOf(st), C.CapRimOf(st), parapet, false);
+            double wa = Math.Max(c.wIn, T), wb = c.wOut, y0 = c.raised ? y : y - c.h, y1 = c.raised ? y + c.h : y;
+            if (wb - wa < 1e-4 || op.ShapeOnly) return;
+            void End(Cut x, double dir)
+            {
+                // out of the strip's end: along the run back from its start, on from its end, square to the cut's line
+                double nu = -dir, nw = dir * x.k, L = Math.Sqrt(nu * nu + nw * nw);
+                var n = new P3((F.u.x * nu + F.w.x * nw) / L, 0, (F.u.z * nu + F.w.z * nw) / L);
+                op.Quad(F.At(x.At(wa), y0, wa), F.At(x.At(wb), y0, wb), F.At(x.At(wb), y1, wb), F.At(x.At(wa), y1, wa), n, C.CapOf(st));
+            }
+            if (!r.openS) End(r.S, 1);
+            if (!r.openE) End(r.E, -1);
+        }
+
+        /// <summary>
+        /// How high a terrace's edge stands over its deck, as its collision segments say (<see cref="Seg.h"/>): its parapet's coping
+        /// (<see cref="TerraceParapet"/>, which a raised cap lifts), or without one the curb (<see cref="RoofCurb"/>, which a hanging
+        /// cap leaves) or a raised cap in its place. <paramref name="cap"/> is the terrace's (<see cref="RoofCap.Of(TerraceData)"/>).
+        /// </summary>
+        public static double TerraceEdgeH(bool parapet, RoofCap? cap) =>
+            parapet ? (cap?.Lift ?? 0) + TerraceParapet : cap is RoofCap c && c.raised ? c.h : RoofCurb;
 
         /// <summary>
         /// Under a terrace's pitched roof, the tops of the walls it sits on, by Unity only (<see cref="MeshBuilder.Backing"/>):

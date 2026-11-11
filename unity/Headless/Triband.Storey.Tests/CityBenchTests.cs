@@ -74,7 +74,9 @@ namespace Triband.Storey.Tests
 
         /// <summary>
         /// The same layout baked at import, as the runtime reads it (docs/PERFORMANCE.md §6.4): no JSON tree, each distinct
-        /// string once. 3.9–4.5 ms and 7.8 MB, the model alone (headless).
+        /// string once. 3.9–4.5 ms (headless). 9.1 MB, the model alone, which grows as the model does: 7.8 MB when this was
+        /// written, 9.0 MB before the floors had their terrace's edge, a reference on each of the city's floors. The cap is
+        /// for garbage beyond the model, so it follows the model, with room for a few more fields.
         /// </summary>
         [Fact]
         public void ReadingTheCitysBakedLayoutFitsItsBudget()
@@ -86,7 +88,7 @@ namespace Triband.Storey.Tests
             double best = double.MaxValue;
             for (int i = 0; i < 3; i++) { var sw = Stopwatch.StartNew(); BakedLayout.Of(bytes)!.Document(); best = Math.Min(best, sw.Elapsed.TotalMilliseconds); }
             log.WriteLine($"{d.buildings.Count} buildings baked in {bytes.Length / 1048576.0:0.00} MB: read in {best:0.0} ms, {made / 1048576.0:0.0} MB allocated");
-            Assert.True(made < 9L << 20, $"{made / 1048576.0:0.0} MB: the model and nothing more");
+            Assert.True(made < 10L << 20, $"{made / 1048576.0:0.0} MB: the model and nothing more");
             Assert.True(best < 60, $"{best:0.0} ms");
             Assert.True(bytes.Length < 1L << 20, $"{bytes.Length / 1048576.0:0.00} MB");
         }

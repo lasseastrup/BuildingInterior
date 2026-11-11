@@ -35,10 +35,17 @@ namespace Triband.Storey.Generate
         /// <summary>The building's cap: its top tier's style's, on a flat roof; null with none.</summary>
         public static RoofCap? Of(BuildingData b) => Roofs.IsPitched(b) ? (RoofCap?)null : Of(Derived.StyleAt(b, b.floors.Count));
 
-        public static RoofCap? Of(FacadeStyle st)
+        public static RoofCap? Of(FacadeStyle st) => st.capH is double h && st.roofType == RoofType.Flat ? Make(h, st.capDepth, st.capStrip) : null;
+
+        /// <summary>
+        /// A terrace's cap (<see cref="TerraceData"/>), by the numbers a flat roof's takes: a slab or a hanging one. None set in:
+        /// a terrace is walked on out to its edge, and a ring set in on its deck would stand in the way. Null with none.
+        /// </summary>
+        public static RoofCap? Of(TerraceData? t) => t?.capH is double h && Make(h, t.capDepth, t.capStrip) is RoofCap c && !c.inset ? c : (RoofCap?)null;
+
+        static RoofCap? Make(double h0, double? capDepth, double? capStrip)
         {
-            if (!(st.capH is double h0) || st.roofType != RoofType.Flat) return null;
-            double T = Dim.T_EXT, d = Math.Max(-2, Math.Min(10, st.capDepth ?? 0)), W = Math.Max(0, Math.Min(5, st.capStrip ?? 0)), h = Math.Max(-3, Math.Min(5, h0));
+            double T = Dim.T_EXT, d = Math.Max(-2, Math.Min(10, capDepth ?? 0)), W = Math.Max(0, Math.Min(5, capStrip ?? 0)), h = Math.Max(-3, Math.Min(5, h0));
             if (d > 1e-3)
             {
                 double outer = Math.Min(T - d, 0), thick = W > 0 ? Math.Max(0.02, W) : T;

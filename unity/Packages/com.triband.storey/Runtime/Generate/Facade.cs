@@ -125,7 +125,7 @@ namespace Triband.Storey.Generate
         /// <summary>
         /// How far under storey k's top its cornice's top is: 0, or under a pitched roof (the building's, or a terrace's over
         /// the storey) its eave's soffit, which hangs below the wall's top (<see cref="Roofs.SoffitDrop"/>), or under a flat
-        /// roof's fascia (<see cref="RoofCap.fascia"/>) the fascia's foot.
+        /// roof's fascia (<see cref="RoofCap.fascia"/>), or a terrace's (<see cref="TerraceData"/>), the fascia's foot.
         /// </summary>
         public static double CorniceDrop(BuildingData b, int k)
         {
@@ -135,7 +135,8 @@ namespace Triband.Storey.Generate
                 var st = Derived.StyleAt(b, N);
                 return st.roofType != RoofType.Flat ? Roofs.SoffitDrop(st.roofType, st.pitch, st.eave) : RoofCap.Of(st) is RoofCap c && c.fascia ? c.h : 0;
             }
-            return k + 1 < N && b.floors[k + 1].terraceRoof is TerraceRoofData tr ? Roofs.SoffitDrop(RoofType.Hip, tr.pitch, Roofs.TerraceEave) : 0;
+            if (k + 1 < N && b.floors[k + 1].terraceRoof is TerraceRoofData tr) return Roofs.SoffitDrop(RoofType.Hip, tr.pitch, Roofs.TerraceEave);
+            return k + 1 < N && Derived.HasTerrace(b, k + 1) && RoofCap.Of(b.floors[k + 1].terrace) is RoofCap tc && tc.fascia ? tc.h : 0;
         }
 
         /// <summary>How far under storey k's top its cornice's foot is (<see cref="CorniceDrop"/> and its height), or null with no cornice.</summary>

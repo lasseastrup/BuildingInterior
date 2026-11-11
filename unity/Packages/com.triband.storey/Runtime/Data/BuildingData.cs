@@ -168,6 +168,11 @@ namespace Triband.Storey
         public FacadeStyle? style;
         /// <summary>Roof over the uncovered part of the tier below instead of a terrace; null = terrace.</summary>
         public TerraceRoofData? terraceRoof;
+        /// <summary>
+        /// The terrace's edge, where this floor sets back and leaves one (no <see cref="terraceRoof"/>): its parapet and the cap on
+        /// it, as a flat roof's. Null: a parapet, as a terrace always had. Kept while a roof covers the terrace. Storey's own.
+        /// </summary>
+        public TerraceData? terrace;
 
         /// <summary>
         /// A filled storey: nothing inside, as a shell-only building's storeys (opaque windows, closed doors, no rooms
@@ -284,6 +289,23 @@ namespace Triband.Storey
         /// which is the terrace.
         /// </summary>
         public RoofType type = RoofType.Hip;
+    }
+
+    /// <summary>
+    /// A terrace's edge (<see cref="FloorData.terrace"/>), set as a flat roof's is on the Roof card: a parapet or not, and a cap
+    /// on the edge, by the numbers a style gives a flat roof's (<see cref="FacadeStyle.capH"/>, <see cref="FacadeStyle.capDepth"/>,
+    /// <see cref="FacadeStyle.capStrip"/>; <see cref="Generate.RoofCap"/>): a slab, which lifts the parapet or takes the curb's
+    /// place, or one hanging from the edge. Not one set in, which would stand on the deck the terrace is walked on. Set with the
+    /// floors below the setback, on their Terrace roof card; its colours are their style's (cap, capRim). Storey's own.
+    /// </summary>
+    public sealed class TerraceData
+    {
+        /// <summary>A parapet round the terrace; without one, a curb, as round a flat roof without one.</summary>
+        public bool parapet = true;
+        /// <summary>The cap on the edge, as a flat roof's (null <see cref="capH"/>: none).</summary>
+        public double? capH, capDepth, capStrip;
+
+        public TerraceData Clone() => (TerraceData)MemberwiseClone();
     }
 
     public enum WindowType { Punched, Tall, Ribbon, Curtain, None }

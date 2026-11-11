@@ -558,13 +558,26 @@ namespace Triband.Storey.Generate
                     {
                         double y1 = Derived.FloorBase(b, t.k1);
                         foreach (var poly in Geo.TerracePolys(fp, Derived.OutlineAt(b, t.k1))) Flat(poly, y1, 2, false);
+                        // its edge as LOD0's (FloorData.terrace): a parapet over a raised cap, which shows in the trim's colour; without
+                        // one, the curb or the raised cap in its place. A hanging cap's few decimetres don't show at this distance
+                        var td = b.floors[t.k1].terrace; bool parapet = td?.parapet ?? true; var tc = RoofCap.Of(td);
+                        double yc = y1 + (tc?.Lift ?? 0), yp = parapet ? yc + 1.1 : y1 + Lod0.Shared.TerraceEdgeH(false, tc);
                         foreach (var r in L0.TerraceRuns(t.k1))
                         {
-                            var F = new Frame(r.a, r.u, r.w); double s0 = r.S.s, e0 = r.E.s, s1 = r.S.At(T), e1 = r.E.At(T), yp = y1 + 1.1;
-                            Quad(F.At(s1, y1, T), F.At(e1, y1, T), F.At(e1, yp, T), F.At(s1, yp, T), new P3(r.w.x, 0, r.w.z), 0, 4);
-                            Quad(F.At(s0, y1, 0), F.At(e0, y1, 0), F.At(e0, yp, 0), F.At(s0, yp, 0), new P3(-r.w.x, 0, -r.w.z), 0, 4);
+                            var F = new Frame(r.a, r.u, r.w); double s0 = r.S.s, e0 = r.E.s, s1 = r.S.At(T), e1 = r.E.At(T);
+                            // the cap's band under a parapet, then the parapet (or the curb or cap alone): in the order the
+                            // parapet alone was always made, its faces, its top, its corners' clips
+                            bool band = parapet && yc > y1; double ya = parapet ? yc : y1, kind = parapet ? 4 : 3;
+                            void Faces(double y0, double y2, double kd)
+                            {
+                                Quad(F.At(s1, y0, T), F.At(e1, y0, T), F.At(e1, y2, T), F.At(s1, y2, T), new P3(r.w.x, 0, r.w.z), 0, kd);
+                                Quad(F.At(s0, y0, 0), F.At(e0, y0, 0), F.At(e0, y2, 0), F.At(s0, y2, 0), new P3(-r.w.x, 0, -r.w.z), 0, kd);
+                            }
+                            if (band) Faces(y1, yc, 3);
+                            Faces(ya, yp, kind);
                             Quad(F.At(s0, yp, 0), F.At(e0, yp, 0), F.At(e1, yp, T), F.At(s1, yp, T), new P3(0, 1, 0), 0, 3);
-                            ClipWall(F, r.S, T, y1, yp, 4, 0); ClipWall(F, r.E, T, y1, yp, 4, 0);
+                            if (band) { ClipWall(F, r.S, T, y1, yc, 3, 0); ClipWall(F, r.E, T, y1, yc, 3, 0); }
+                            ClipWall(F, r.S, T, ya, yp, kind, 0); ClipWall(F, r.E, T, ya, yp, kind, 0);
                             ClipFlat(F, r.S, 0, T, yp, 3); ClipFlat(F, r.E, 0, T, yp, 3);
                         }
                     }
