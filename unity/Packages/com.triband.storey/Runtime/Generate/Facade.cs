@@ -860,21 +860,40 @@ namespace Triband.Storey.Generate
             /// the building the player is in, where a cut opens that wall and they showed inside it. LOD0's alone.
             /// </summary>
             public Func<Vec2, Vec2, List<(double, double)>?>? buried;
+            /// <summary>
+            /// Where a face of the panel faces into a room built one solid with its walls (a room blocked out; Storey's own:
+            /// <see cref="Lod0.Shared.MergedRooms"/>): given the face's two ends in plan (site space), moved <see cref="GoneProbe"/> out
+            /// along its normal, the parts of it in such a room, as fractions from the first, in order and apart; null or none
+            /// for none. Those parts aren't built, a wall's end facing in there neither: the wall and the room are one solid.
+            /// </summary>
+            public Func<Vec2, Vec2, List<(double, double)>?>? gone;
+            /// <summary>
+            /// Where a shut opening's reveal starts (<see cref="Opening.closed"/>: one into a room blocked out), as a shell storey's
+            /// does, so no pocket is left open into the room behind it (Storey's own); <see cref="shutDoorFrom"/> a door's. Null:
+            /// as the others'.
+            /// </summary>
+            public double? shutFrom, shutDoorFrom;
 
             /// <summary>Where opening <paramref name="o"/>'s reveal starts, out from the wall's inner face (the panel's <paramref name="w0"/>), as <see cref="WallPanel"/> makes it.</summary>
-            public double RevealFrom(Opening o, double w0) => o.door && doorRevealFrom is double dr ? o.recess is double or ? ShellRevealFrom(or, true, o.kind) : dr : revealFrom ?? w0;
+            public double RevealFrom(Opening o, double w0) =>
+                o.closed && shutFrom is double sw ? o.door ? o.recess is double sr ? ShellRevealFrom(sr, true, o.kind) : shutDoorFrom ?? sw : sw
+                : o.door && doorRevealFrom is double dr ? o.recess is double or ? ShellRevealFrom(or, true, o.kind) : dr : revealFrom ?? w0;
 
             /// <summary>Every option set, as a new one with these would be (for options used again panel after panel).</summary>
             public PanelOpt Set(bool outer = true, bool inner = true, bool ends = false, bool threshold = false, double? revealFrom = null, Swatch? revealC = null, bool rooms = false, double? doorRevealFrom = null, Swatch? thresholdC = null,
-                bool doorsRecessed = false, Func<Vec2, Vec2, List<(double, double)>?>? buried = null)
+                bool doorsRecessed = false, Func<Vec2, Vec2, List<(double, double)>?>? buried = null, Func<Vec2, Vec2, List<(double, double)>?>? gone = null, double? shutFrom = null, double? shutDoorFrom = null)
             {
                 this.outer = outer; this.inner = inner; this.ends = ends; this.threshold = threshold; this.revealFrom = revealFrom; this.revealC = revealC; this.rooms = rooms;
                 this.doorRevealFrom = doorRevealFrom; this.thresholdC = thresholdC; this.doorsRecessed = doorsRecessed; this.buried = buried;
+                this.gone = gone; this.shutFrom = shutFrom; this.shutDoorFrom = shutDoorFrom;
                 return this;
             }
         }
 
         static readonly PanelOpt DefaultPanel = new PanelOpt();   // read only: WallPanel never changes its options
+
+        /// <summary>How far out from a face what it faces is looked at (<see cref="PanelOpt.gone"/>): past the face, short of the next.</summary>
+        public const double GoneProbe = 0.02;
 
         /// <summary>What <see cref="WallPanel"/> works in, kept by a builder for its next panel (<see cref="MeshBuilder.Panel"/>).</summary>
         internal sealed class PanelScratch
@@ -916,6 +935,13 @@ namespace Triband.Storey.Generate
             void Face(double wv, int sign, Swatch c)
             {
                 double s = m.S.At(wv), e = m.E.At(wv);
+                // what of it faces into a room built one solid with its walls (PanelOpt.gone): not built, the rest in pieces
+                if (opt.gone?.Invoke(F.At2(s, wv + sign * GoneProbe), F.At2(e, wv + sign * GoneProbe)) is { Count: > 0 } gone)
+                {
+                    var nk = new P3(F.w.x * sign, 0, F.w.z * sign);
+                    Pieces(gone, Buried(s, wv, e, wv), (t0, t1) => FacePart(gb, F, y0, h, wv, s + (e - s) * t0, s + (e - s) * t1, os, nk, c));
+                    return;
+                }
                 if (Buried(s, wv, e, wv) is { Count: > 0 } bur)
                 {
                     // in pieces: those inside another wall made as buried
@@ -965,13 +991,23 @@ namespace Triband.Storey.Generate
                 double s0 = m.S.At(w0), s1 = m.S.At(w1), e0 = m.E.At(w0), e1 = m.E.At(w1);
                 End(s0, s1, Geo.EndNormal(F, s0, s1, w0, w1, -1)); End(e0, e1, Geo.EndNormal(F, e0, e1, w0, w1, 1));
             }
-            // an end, across from w0 to w1: in pieces where it lies inside another wall, those made as buried
+            // an end, across from w0 to w1: in pieces where it lies inside another wall, those made as buried; none of it where it
+            // faces into a room built one solid with its walls (PanelOpt.gone)
             void End(double a0, double a1, P3 nr)
             {
                 void Q(double ta, double tb)
                 {
                     double ua = a0 + (a1 - a0) * ta, ub = a0 + (a1 - a0) * tb, wa = w0 + (w1 - w0) * ta, wb = w0 + (w1 - w0) * tb;
                     gb.Quad(X(ua, 0, wa), X(ub, 0, wb), X(ub, h, wb), X(ua, h, wa), nr, cOut);
+                }
+                if (opt.gone != null)
+                {
+                    Vec2 pa = F.At2(a0, w0), pz = F.At2(a1, w1);
+                    if (opt.gone(new Vec2(pa.x + nr.x * GoneProbe, pa.z + nr.z * GoneProbe), new Vec2(pz.x + nr.x * GoneProbe, pz.z + nr.z * GoneProbe)) is { Count: > 0 } gone)
+                    {
+                        Pieces(gone, Buried(a0, w0, a1, w1), Q);
+                        return;
+                    }
                 }
                 if (!(Buried(a0, w0, a1, w1) is { Count: > 0 } bur)) { Q(0, 1); return; }
                 double at = 0;
@@ -982,6 +1018,27 @@ namespace Triband.Storey.Generate
                     at = Math.Max(at, t1);
                 }
                 if (at < 1 - 1e-6) Q(at, 1);
+            }
+            // [0, 1] less what is gone, each piece made by put, those inside another wall (buried) as buried
+            void Pieces(List<(double, double)> gone, List<(double, double)>? bur, Action<double, double> put)
+            {
+                double at = 0;
+                foreach (var (g0, g1) in gone) { Kept(at, g0); at = Math.Max(at, g1); }
+                Kept(at, 1);
+                void Kept(double t0, double t1)
+                {
+                    if (t1 - t0 < 1e-6) return;
+                    double cur = t0;
+                    if (bur != null)
+                        foreach (var (b0, b1) in bur)
+                        {
+                            double a = Math.Max(b0, t0), z = Math.Min(b1, t1); if (z - Math.Max(a, cur) < 1e-9) continue;
+                            if (a > cur + 1e-9) put(cur, a);
+                            bool was = gb.Buried; gb.Buried = true; put(Math.Max(a, cur), z); gb.Buried = was;
+                            cur = z;
+                        }
+                    if (t1 > cur + 1e-9) put(cur, t1);
+                }
             }
             // its foot, closed from below (Storey's own; only Unity draws it, MeshBuilder.Backing). A wall the cutaway takes
             // down, or the ceiling clip cuts, is seen into from above: the backs of its faces show as the section cap
