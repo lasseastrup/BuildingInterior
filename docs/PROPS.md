@@ -4,7 +4,7 @@
 
 The game puts objects on each floor of a house: furniture, clutter, rigidbodies that can be knocked down the stairs or out of a window. They disappear with the building around them:
 
-- **The player's own building:** the floors above the player are clipped.
+- **The player's own building:** the floors above the player are clipped. Out on a terrace, what stands over the terrace is a building in the way when it's between the camera and the player (docs/PLAY.md §3), and the props on the deck go with it.
 - **Buildings in the way:** Sink, Slice, Cutout, Fade or Dissolve.
 - **The building's LOD0:** they fade with it, and are switched off once it settles at LOD1.
 
@@ -114,6 +114,7 @@ The inspector says which building and storey it's in.
 
 A Storey Prop with **Hide Whole** is switched off while its point is in a storey the occlusion hides (`OcclusionCore.HidesPoint`):
 - above the ceiling clip of the player's building;
+- out on its terrace, with what stands over the terrace in the way: from the terrace's floor up, the deck too, as in a building in the way;
 - a Sink storey gone or squashed past half;
 - above Slice's plane;
 - above Cutout's, Fade's or Dissolve's base once half faded;

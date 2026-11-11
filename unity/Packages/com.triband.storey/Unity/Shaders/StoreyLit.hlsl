@@ -135,7 +135,7 @@ Varyings StoreyVert(Attributes IN)
 #endif
 #endif
     float origY;
-    worldPos = StoreySink(worldPos, IN.tag, kind, origY);
+    worldPos = StoreySink(worldPos, IN.tag, kind, wid, origY);
     StoreyVarying v;
     bool shown = StoreyVertex(IN.tag, wall, kind, wid, worldPos, origY, v);
 #ifdef STOREY_SELECTION

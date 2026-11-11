@@ -28,13 +28,15 @@
 StructuredBuffer<float4> _StoreyState;
 // per occluder slot, STOREY_OCC_W texels: (segments, dark, clip height, base height), then (floor line, scale, gone, slab gone) per storey
 StructuredBuffer<float4> _StoreyOcc;
-// how far each wall has slid down, by global wall id
+// how far each wall has slid down, by global wall id; -1 for a terrace's own wall standing while what stands over the
+// terrace is in the way (StoreyTerraceWall)
 StructuredBuffer<float> _StoreyWall;
 // each wall's cutaway data, by global wall id: its start (xy) and its normal scaled by 1 + its length (zw)
 StructuredBuffer<float4> _StoreyWallData;
 
 #define STOREY_OCC_W 64
 #define STOREY_SLAB 0.25
+#define STOREY_DECK 0.005      // a terrace's deck lies at its floor: what stands over it starts this far up
 #define STOREY_ROWS 8192       // _StoreyState's rows (BuildingTable.MaxBuildings)
 #define STOREY_OCC_SLOTS 16    // _StoreyOcc's slots of STOREY_OCC_W texels (BuildingTable.OccSlots)
 #define STOREY_HIDDEN 4        // added to a hidden building's displayed LOD (Lod.StateRow.Hidden)
@@ -62,7 +64,7 @@ float3 _StoreyCam;      // camera position for the cutaway (focus + camera offse
 float3 _StoreyFocus;    // the player
 float2 _StoreyCamDir;   // camera forward in the XZ plane
 float4 _StoreyCut;      // x: cutaway on, y: stub height, z: cut base, w: cut top
-float4 _StoreyActive;   // x: active building index (-1 none), y: ceiling clip height
+float4 _StoreyActive;   // x: active building index (-1 none), y: ceiling clip height, z: the floor of the terrace over which it is in the way, w: 1 while it is
 float4 _StoreyCap;      // section cap colour
 float4 _StoreyIso;      // x: isolate amount, y: isolated building index
 float _StoreyOccMode;   // 0 off, 1 Sink/Slice, 2 Cutout, 3 Fade, 4 Dissolve
@@ -94,8 +96,24 @@ float StoreyBayer(float2 p)
 
 float3 StoreyLodTint(float l) { return l < 0.5 ? float3(0.16, 0.62, 0.30) : l < 1.5 ? float3(0.95, 0.72, 0.12) : float3(0.90, 0.30, 0.10); }
 
+// Out on a terrace of the active building with what stands over the terrace between the camera and the player
+// (OcclusionCore's View.terraceY), that is a building in the way like any other, by the occluder slot in the active
+// building's row, and the storeys under the terrace, the player's floor, are drawn as they are. A height of the active
+// building over the terrace's floor (_StoreyActive.z, while _StoreyActive.w is 1): its points are drawn as in the way, but
+// the terrace's own walls' (StoreyTerraceWall).
+bool StoreyOverTerrace(float y) { return _StoreyActive.w > 0.5 && y > _StoreyActive.z + STOREY_DECK; }
+
+// One of the terrace's own walls (its parapet, a stair's rails out on its deck) while what stands over the terrace is in the
+// way: the wall table marks them -1 (OcclusionCore.TerraceWalls), and they stand. Read for the active building's walls only.
+bool StoreyTerraceWall(bool act, float wid)
+{
+    bool kept = false;
+    [branch] if (act && _StoreyActive.w > 0.5 && wid > 0.5) kept = _StoreyWall[StoreyWallId(wid)] < -0.5;
+    return kept;
+}
+
 // Sink: squash each storey of a building in the way between its floor lines. World space, before projection.
-float3 StoreySink(float3 worldPos, float tag, float kind, out float origY)
+float3 StoreySink(float3 worldPos, float tag, float kind, float wid, out float origY)
 {
     origY = worldPos.y;
 #if !defined(STOREY_DEPTH) && !defined(STOREY_STEADY)
@@ -103,7 +121,10 @@ float3 StoreySink(float3 worldPos, float tag, float kind, out float origY)
     int slot = (int)(_StoreyState[StoreyRow(ib)].w + 0.5) - 1, row = StoreySlotRow(slot);
     int im = (int)floor(kind / 8.0) - 1;   // a party wall also belongs to the neighbour: it stays unless the neighbour is sinking too
     bool mateUp = im >= 0 && _StoreyState[StoreyRow(im)].w < 0.5;
-    if (slot >= 0 && abs((float)ib - _StoreyActive.x) > 0.5 && !mateUp)
+    // the player's building is never in the way, but for what of it stands over the terrace they are out on
+    bool act = abs((float)ib - _StoreyActive.x) < 0.5;
+    bool own = act && (!StoreyOverTerrace(origY) || StoreyTerraceWall(act, wid));
+    if (slot >= 0 && !own && !mateUp)
     {
         int n = (int)(_StoreyOcc[row].x + 0.5);
         if (n > 0)
@@ -148,6 +169,8 @@ bool StoreyVertex(float tag, float4 wall, float kind, float wid, float3 worldPos
 #endif
     v.fade = st.z >= 1.0 || (isDisp && isFrom) ? 3.0 : (isDisp ? st.z : -1.0 - st.z);
     v.occ = st.w - 1.0;
+    // the terrace's own walls stand while what stands over it is in the way: out of the way (StoreyOcclude's 3., the depth's)
+    if (StoreyTerraceWall(abs(v.bid - _StoreyActive.x) < 0.5, wid)) v.occ = -1.0;
     // a LOD0 that came late keeps LOD1's painted windows a moment (LodManager.Entry.Hold): the glass reads it
     v.hold = st.z < 1.0 ? 1.0 : saturate(st.z - 1.0);
     // one way out, through a float: with an early `return false` in the branch below, the translation to Metal cast a
@@ -191,6 +214,9 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
         if (StoreyBayer(screenPos + float2(1.0, 2.0)) < _StoreyIso.x) clip(-1);
     }
     bool act = abs(v.bid - _StoreyActive.x) < 0.5;
+    // out on a terrace with what stands over it in the way, the active building over the terrace's floor is in the way as any
+    // building is (3.), by its slot in v.occ, which the vertex stage took from the terrace's own walls: they stand
+    if (StoreyOverTerrace(v.origY)) act = false;
     float kind = fmod(v.kind, 8.0), mate = floor(v.kind / 8.0) - 1.0;
     bool actCut = act || (mate >= 0.0 && abs(mate - _StoreyActive.x) < 0.5);
 #ifndef STOREY_DEPTH

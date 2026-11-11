@@ -253,7 +253,8 @@ namespace Triband.Storey.Unity
             var table = r.Table; var v = o.View; float lift = origin.y;
             // the view: heights in world space, the cutaway's x and z in the site's (the wall data in the vertices is)
             int active = v.active != null ? r.TableIndexOf(v.active.id) : -1;
-            StoreyGlobals.SetActive(active, active >= 0 ? (float)v.clipY + lift : 1e9f);
+            // out on a terrace with what stands over it in the way, the active building is drawn as in the way above its floor
+            StoreyGlobals.SetActive(active, active >= 0 ? (float)v.clipY + lift : 1e9f, v.terraceY < 1e8 ? (float)v.terraceY + lift : (float?)null);
             if (active >= 0 && v.cutOn)
             {
                 StoreyGlobals.SetCamera(new Vector3((float)v.cx, (float)v.cy + lift, (float)v.cz), new Vector3((float)v.fx, (float)v.fy + lift, (float)v.fz), new Vector2((float)v.dirX, (float)v.dirZ));
@@ -268,6 +269,13 @@ namespace Triband.Storey.Unity
             {
                 int wb = r.WallBaseOf(kv.Key.id); if (wb < 0) continue;
                 int id = wb + kv.Key.wall; table.SetWall(id, (float)kv.Value); wallsNow.Add(id);
+            }
+            // a terrace's own walls (its parapet) stand while what stands over it is in the way: -1, which the shaders leave be
+            var tw = o.TerraceWalls;
+            if (tw.Count > 0 && v.active != null)
+            {
+                int wb = r.WallBaseOf(v.active.id);
+                if (wb >= 0) for (int i = 0; i < tw.Count; i++) { int id = wb + tw[i]; table.SetWall(id, -1); wallsNow.Add(id); }
             }
             foreach (int id in w.wallsSet) if (!wallsNow.Contains(id)) table.SetWall(id, 0);
             (w.wallsSet, w.wallsNow) = (wallsNow, w.wallsSet);

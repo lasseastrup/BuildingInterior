@@ -45,38 +45,44 @@ namespace Triband.Storey.Tests
 
         /// <summary>
         /// Out on Linden Court's terrace (the roof of its lower six storeys, east of the setback that starts on storey 6), the
-        /// player is outdoors: the building is shown whole, unless the setback stands between the camera and the player, when
-        /// the view is as indoors and the player is seen through it. In the setback's own rooms it is as indoors either way.
+        /// player is outdoors: the building is shown whole, and when the setback stands between the camera and the player it is
+        /// a building in the way from storey 6 up, sunk as any other, with nothing clipped or cut away and the six storeys under
+        /// the terrace as they are (TerraceOcclusionTests). In the setback's own rooms it is as indoors either way.
         /// </summary>
         [Fact]
-        public void OnATerraceTheBuildingIsWholeUnlessItIsInTheWay()
+        public void OnATerraceTheBuildingIsWholeAndTheSetbackIsInTheWay()
         {
             var (doc, _) = PlayWorldTests.World("demo");
             var world = new PlayWorld(new Site(doc.buildings));
             var b = world.Site.Buildings.First(x => x.name == "Linden Court");
             const int K = 6; double y = Derived.FloorBase(b, K), ceiling = y + Derived.FloorH(b, K) - Dim.SLAB - 0.01;
             Assert.True(Derived.HasTerrace(b, K));
-            (OcclusionView view, bool hidesAbove) Seen(double lx, double lz, double camDx)
+            (OcclusionView view, Occluder? way, bool cut, bool hidesAbove, bool hidesBelow) Seen(double lx, double lz, double camDx)
             {
                 var core = new OcclusionCore(world, new OcclusionSettings());
                 var p = new PlayerState(); double px = b.pos.x + lx, pz = b.pos.z + lz;
                 p.Spawn(px, y, pz);
                 var cam = (px + camDx, y + 6.0, pz);
-                for (int i = 0; i < 3; i++) core.Frame(p, cam, (px, y + FollowCamera.Chest, pz), Dt);
-                return (core.View, core.HidesPoint(b, y + 6));
+                for (int i = 0; i < 30; i++) core.Frame(p, cam, (px, y + FollowCamera.Chest, pz), Dt);
+                return (core.View, core.Active.FirstOrDefault(r => r.b == b), core.Walls.Any(kv => kv.Key.id == b.id && kv.Value > 0), core.HidesPoint(b, y + 6), core.HidesPoint(b, y - 2));
             }
             // on the terrace (local x 8..16, z 0..8), the camera east of the player, over the street: nothing in the way
             Assert.True(OcclusionCore.OnTerrace(b, K, Spot(b, 12, 4, y)));
-            var (open, hid) = Seen(12, 4, 10);
-            Assert.Same(b, open.active); Assert.Equal(K, open.floor);   // still on its storey 6, for the HUD and the lifts
-            Assert.Equal(1e9, open.clipY); Assert.False(open.cutOn); Assert.False(hid);
-            // the camera west of the player, looking down through the setback: as indoors, the storeys over the terrace clipped
-            var (behind, hidB) = Seen(12, 4, -14);
-            Assert.Equal(ceiling, behind.clipY, 9); Assert.True(behind.cutOn); Assert.True(hidB);
+            var open = Seen(12, 4, 10);
+            Assert.Same(b, open.view.active); Assert.Equal(K, open.view.floor);   // still on its storey 6, for the HUD and the lifts
+            Assert.Equal(1e9, open.view.clipY); Assert.False(open.view.cutOn); Assert.Equal(1e9, open.view.terraceY);
+            Assert.Null(open.way); Assert.False(open.hidesAbove);
+            // the camera west of the player, looking down through the setback: it is in the way from storey 6 up and sinks;
+            // nothing is clipped or cut away, and the storeys under the terrace stand
+            var behind = Seen(12, 4, -14);
+            Assert.Same(b, behind.view.active); Assert.Equal(1e9, behind.view.clipY); Assert.False(behind.view.cutOn); Assert.False(behind.cut);
+            Assert.Equal(y, behind.view.terraceY);
+            Assert.True(behind.way != null && behind.way.k == K, "the setback isn't in the way from the terrace's storey");
+            Assert.True(behind.hidesAbove); Assert.False(behind.hidesBelow);
             // in the setback's rooms behind the terrace (local x 0..8), with the same clear camera: indoors
             Assert.False(OcclusionCore.OnTerrace(b, K, Spot(b, 4, 4, y)));
-            var (inside, hidI) = Seen(4, 4, 10);
-            Assert.Equal(ceiling, inside.clipY, 9); Assert.True(hidI);
+            var inside = Seen(4, 4, 10);
+            Assert.Equal(ceiling, inside.view.clipY, 9); Assert.True(inside.hidesAbove); Assert.Null(inside.way);
         }
 
         static PlayerState Spot(BuildingData b, double lx, double lz, double y) { var p = new PlayerState(); p.Spawn(b.pos.x + lx, y, b.pos.z + lz); return p; }
