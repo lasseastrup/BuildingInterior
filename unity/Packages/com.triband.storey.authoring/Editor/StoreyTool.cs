@@ -84,6 +84,7 @@ namespace Triband.Storey.Editor
             using (new Handles.DrawingScope(site.transform.localToWorldMatrix))
             {
                 Hover(e, sv);
+                if (b != null && Tab != StoreyTab.Shape && Event.current.type == EventType.Repaint) TabOutline(e, b);
                 if (b != null) ToolGUI(e, b, sv);
                 else Hint("Click a building to select it.");
                 DefaultClick(e, e.Selected, sv);
@@ -189,6 +190,17 @@ namespace Triband.Storey.Editor
             var hb = e.Document.buildings.Find(x => x.id == hoverId); if (hb == null) return;
             var c = Color.white; c.a = 0.45f; Handles.color = c;
             foreach (var l in BuildingOutline(hb)) Handles.DrawAAPolyLine(2f, l);
+        }
+
+        /// <summary>
+        /// The building being edited outlined on the Facade and Interior tabs as the Shape tool outlines it, without its handles
+        /// (docs/EDITOR.md §2): the Facade tab's at the outline it styles (<see cref="StoreyEditView.tier"/>, the Shape tab's),
+        /// the Interior tab's round the storey it edits, at its floor.
+        /// </summary>
+        void TabOutline(StoreyEdit e, BuildingData b)
+        {
+            int k = Tab == StoreyTab.Interior ? Math.Min(e.View.floor, b.floors.Count) : e.View.tier;
+            Outline(b, Derived.OutlineAt(b, k), Derived.FloorBase(b, k) + 0.02, Accent);
         }
 
         /// <summary>A building's footprint at the ground and its top outline at the roof.</summary>
