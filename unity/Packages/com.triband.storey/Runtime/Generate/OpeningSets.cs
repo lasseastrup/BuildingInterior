@@ -13,11 +13,15 @@ namespace Triband.Storey.Generate
     /// </summary>
     public static class OpeningSets
     {
-        /// <summary>The window entries of a style's ground floor (<paramref name="ground"/>) or the floors above; null when it has no set.</summary>
+        /// <summary>
+        /// The window entries of a style's ground floor (<paramref name="ground"/>) or the floors above; null when it has no set.
+        /// A ground floor without windows (<see cref="GroundType.Solid"/>) has none of its own: those put in by hand there are
+        /// the floors above's, as the Windows card lists them (a list it kept from before is hidden, and not used).
+        /// </summary>
         public static List<OpeningEntry>? Windows(FacadeStyle? st, bool ground)
         {
             if (st == null) return null;
-            if (ground && st.groundSet is { Count: > 0 } g) return g;
+            if (ground && st.ground != GroundType.Solid && st.groundSet is { Count: > 0 } g) return g;
             return st.windowSet is { Count: > 0 } w ? w : null;
         }
 

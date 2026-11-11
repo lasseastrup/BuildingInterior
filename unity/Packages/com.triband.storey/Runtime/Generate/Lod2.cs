@@ -388,11 +388,14 @@ namespace Triband.Storey.Generate
                         && !Facade.HandOn(b, k) && !Facade.HandOn(b, k - 1)) { var r = runs[runs.Count - 1]; r.k1 = k + 1; runs[runs.Count - 1] = r; }
                     else runs.Add((k, k + 1, h, gnd, 0, false));
                 }
+                // a ground floor without windows with some put in by hand (WindowData): its run is painted with them, as Facade.Ops
+                // lays them out, and no others (without any, its row has no window to paint, as ever)
+                bool groundByHand = t.k0 == 0 && st.ground == GroundType.Solid && Facade.PutInOn(b, 0);
                 for (int ri = 0; ri < runs.Count; ri++)
                 {
                     var r = runs[ri]; double H = Derived.FloorBase(b, r.k1) - Derived.FloorBase(b, r.k0); bool topRun = last && ri == runs.Count - 1;
                     double? under = Facade.CorniceUnder(b, r.k1 - 1); bool cn = under.HasValue;
-                    var ws = r.g ? Facade.GroundSpec(st, r.h, under) : Facade.WindowSpec(st.windows, r.h, st, cornice: under);
+                    var ws = r.g ? Facade.GroundSpec(st, r.h, under, groundByHand) : Facade.WindowSpec(st.windows, r.h, st, cornice: under);
                     // the storeys with a band, from the run's first (Facade.BandAt: all but the building's top, or the ground's
                     // alone); a cornice's storey has none
                     int banded = 0; for (int k = r.k0; k < r.k1 && Facade.BandAt(b, k) && !(cn && k == r.k1 - 1); k++) banded++;
@@ -422,10 +425,11 @@ namespace Triband.Storey.Generate
                         // (fixed bays: the whole bays on the wall's outer face, as Facade.Ops works it out from the outline)
                         var (uS, uE) = Facade.WindowSpan(st, r.g, sS, sE);
                         var es = Derived.EdgeStateAt(b, t.k0, i);
+                        bool laid = es == EdgeState.Open && !(r.g && groundByHand);   // the style lays its windows on the wall
                         // windows by hand on the run's storey (a run of its own): its wall painted bay by bay, a blank one too
                         bool hand = r.k1 == r.k0 + 1 && Facade.HandOn(b, r.k0, i);
                         double bay = 0; int nbays = 0;
-                        if (es == EdgeState.Open || hand)
+                        if (laid || hand)
                         {
                             var (oS, oE) = st.bayFit == BayFit.Fixed ? Facade.OuterFace(fp, g.ccw, i) : (uS, uE);
                             var (nb, wb, bS) = Facade.Bays(st, uS, uE, oS, oE);
@@ -449,7 +453,7 @@ namespace Triband.Storey.Generate
                             bool Painted(int j)
                             {
                                 var hw = hand ? Facade.HandAt(b.windows, r.k0, i, e.L, uS, bay, nbays, j) : null;
-                                if (hw != null ? hw.none : es != EdgeState.Open) return false;
+                                if (hw != null ? hw.none : !laid) return false;
                                 return !(r.k0 < alone && UnderTerraceRoof(site, b, r.k0, i, uS, bay, ww, j, foot));
                             }
                             bool prev = Painted(0);
@@ -462,7 +466,7 @@ namespace Triband.Storey.Generate
                                 ua = ub; prev = cur;
                             }
                         }
-                        else Quad(F.At(s1, y0, T), F.At(e1, y0, T), F.At(e1, y1, T), F.At(s1, y1, T), outN, es == EdgeState.Open ? bay : 0, 1, s1, e1, H, uS, uE);
+                        else Quad(F.At(s1, y0, T), F.At(e1, y0, T), F.At(e1, y1, T), F.At(s1, y1, T), outN, laid ? bay : 0, 1, s1, e1, H, uS, uE);
                         ClipWall(F, m.S, T, y0, y1, 1, H); ClipWall(F, m.E, T, y0, y1, 1, H);   // a neighbour's corner cut has no clip
                         // the tier's corner is cut for a neighbour lower than the run's top: above the neighbour the cut leaves a slit
                         // to the corner, closed by Unity only (the prototype's massing has it too)

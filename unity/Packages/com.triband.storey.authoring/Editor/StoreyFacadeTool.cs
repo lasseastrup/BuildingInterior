@@ -65,7 +65,7 @@ namespace Triband.Storey.Editor
                 else
                 {
                     double fh = Derived.FloorH(b, w.k); var cu = Facade.CorniceUnder(b, w.k);
-                    var ws = w.k == 0 ? Facade.GroundSpec(st, fh, cu) : Facade.WindowSpec(st.windows, fh, st, cornice: cu);
+                    var ws = w.k == 0 ? Facade.GroundSpec(st, fh, cu, byHand: true) : Facade.WindowSpec(st.windows, fh, st, cornice: cu);   // one put in by hand: a ground floor without windows has one too
                     double c = w.bS + (w.j + 0.5) * w.bay, ww = ws == null ? 1.2 : ws.full != null ? w.bay - ws.full.Value : Math.Min(ws.w, w.bay - 0.5);
                     u0 = c - ww / 2; u1 = c + ww / 2; y0 = ws?.y0 ?? 0.9; y1 = ws?.y1 ?? 2.3;
                 }
