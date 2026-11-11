@@ -142,7 +142,7 @@ namespace Triband.Storey.Editor
         {
             new GUIContent("Shopfront", "Wide shop windows along the street"),
             new GUIContent("Like the floors above", "The same openings as the floors above"),
-            new GUIContent("No windows", "A solid ground floor; doors you place stay"),
+            new GUIContent("No windows", "A solid ground floor; doors and windows you place stay, the windows as the floors above have theirs"),
         };
 
         static readonly GUIContent VarietyLabel = new GUIContent("Variety",

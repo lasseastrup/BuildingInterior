@@ -226,6 +226,94 @@ namespace Triband.Storey.Tests
             finally { OpeningKinds.Remove("wb-own"); OpeningKinds.Remove("wb-other"); }
         }
 
+        // the row LOD2 paints the massing's facade quad over point p of a wall facing n with: its window spec (gap, width, sill, head)
+        static double[]? PaintedSpec(Lod2Mesh m, P3 p, P3 n)
+        {
+            for (int t = 0; t < m.I.Count; t += 3)
+            {
+                int a = m.I[t], c = m.I[t + 1], d = m.I[t + 2];
+                if (m.Fac2[2 * a + 1] != 1 || P3.Dot(m.N[a] * (1.0 / 127), n) < 0.99) continue;
+                P3 A = m.P[a], B = m.P[c], C = m.P[d]; var nr = P3.Cross(B - A, C - A); double area = nr.Length;
+                if (area < 1e-9 || Math.Abs(P3.Dot(nr * (1 / area), p - A)) > 1e-4) continue;
+                double s0 = P3.Dot(P3.Cross(B - A, p - A), nr), s1 = P3.Dot(P3.Cross(C - B, p - B), nr), s2 = P3.Dot(P3.Cross(A - C, p - C), nr);
+                if (s0 >= 0 && s1 >= 0 && s2 >= 0) return m.Rows[m.Slot[a]].spec;
+            }
+            return null;
+        }
+
+        [Fact]
+        public void AGroundFloorWithoutWindowsTakesThemByHand()
+        {
+            // the Warehouse's ground floor: no windows, tall ones above, over a plinth
+            var (_, b, site) = Block();
+            b.style.windows = WindowType.Tall; b.style.ground = GroundType.Solid; b.style.plinthH = 0.45;
+            for (int i = 0; i < 4; i++) Assert.Empty(WindowsOn(site, b, 0, i));
+            var h = Bays(site, b, 0, 1)[1];
+            Assert.Null(Facades.WindowAt(site, b, h)!.window);
+            // a click puts one in (it was refused, as though a door or a lift were in the bay), as the floors above have theirs
+            // (as Like the floors above lays them out), over the plinth
+            Assert.Null(Click(site, b, h));
+            var put = WindowsOn(site, b, 0, 1).Single();
+            b.style.ground = GroundType.Match;
+            var like = Facade.GroundSpec(b.style, Derived.FloorH(b, 0))!;
+            b.style.ground = GroundType.Solid;
+            Assert.Equal(like.y0, put.y0, 6); Assert.Equal(like.y1, put.y1, 6);
+            Assert.Equal(0.45 + 0.15, put.y0, 6);
+            Assert.Equal(0.4, WindowsOn(site, b, 1, 1)[0].y0, 6);   // the floors above's, which have no plinth under them
+            Assert.Equal(Facades.WindowAt(site, b, h)!.bS + 1.5 * Facades.WindowAt(site, b, h)!.bay, (put.u0 + put.u1) / 2, 6);
+            // the rest of the ground floor keeps none; the floors above keep theirs
+            Assert.Empty(WindowsOn(site, b, 0, 3));
+            Assert.Equal(WindowsOn(site, b, 2, 1).Count, WindowsOn(site, b, 1, 1).Count);
+            // far off (LOD2) it is painted as it is laid out, and no other window on the ground floor
+            var m = Lod2.Build(site, b);
+            (double bay, double[]? spec) Painted(int k, int i, Opening o)
+            {
+                var f = Details.EdgeFrameAt(b, k, i); var nr = new P3(f.e.w.x, 0, f.e.w.z);
+                var p = f.e.F.At((o.u0 + o.u1) / 2, Derived.FloorBase(b, k) + (o.y0 + o.y1) / 2, Dim.T_EXT);
+                return (TerraceRoofWindowTests.BayAt(m, p, nr), PaintedSpec(m, p, nr));
+            }
+            var lod2 = Painted(0, 1, put);
+            Assert.True(lod2.bay > 0);
+            Assert.Equal(put.y0, lod2.spec![2], 6); Assert.Equal(put.y1, lod2.spec[3], 6);
+            var west = WindowsOn(site, b, 1, 3)[0];
+            Assert.Equal(0, Painted(0, 3, west).bay);                         // another wall's ground floor, under a window above
+            Assert.True(Painted(1, 3, west).bay > 0);
+            var neighbour = WindowsOn(site, b, 1, 1)[0];                      // the same wall's ground floor, in a bay without one
+            Assert.Equal(0, Painted(0, 1, neighbour).bay);
+            // the same bay again: taken out, nothing kept by hand
+            Assert.Null(Click(site, b, h));
+            Assert.Empty(b.windows);
+            Assert.Empty(WindowsOn(site, b, 0, 1));
+        }
+
+        [Fact]
+        public void AGroundFloorWithoutWindowsTakesTheFloorsAbovesByWeight()
+        {
+            OpeningKinds.Register(Window("wb-above", 0.8)); OpeningKinds.Register(Window("wb-above2", 0.9)); OpeningKinds.Register(Window("wb-kept", 1.0));
+            try
+            {
+                // a list of its own, kept from before it had no windows: hidden in the card, and not used
+                var (_, b, site) = Block();
+                b.style.windowSet = new() { new OpeningEntry { kind = "wb-above" }, new OpeningEntry { kind = "wb-above2" } };
+                b.style.groundSet = new() { new OpeningEntry { kind = "wb-kept" } };
+                b.style.ground = GroundType.Solid;
+                Assert.Equal(new[] { "wb-above", "wb-above2", Facades.AnyWindow }, Facades.WindowChoices(b.style, true));
+                // any of them, by weight: the floors above's, as Window to place lists them
+                var seen = new HashSet<string?>();
+                foreach (var h in Bays(site, b, 0, 1).Concat(Bays(site, b, 0, 3)))
+                {
+                    Assert.Null(Click(site, b, h, Facades.AnyWindow));
+                    var id = KindAt(site, b, h)?.id; seen.Add(id);
+                    Assert.Contains(id, new[] { "wb-above", "wb-above2" });
+                }
+                Assert.True(seen.Count == 2, string.Join(", ", seen));
+                // with windows again, the ground floor has its list back
+                b.style.ground = GroundType.Match; b.windows.Clear();
+                Assert.All(WindowsOn(site, b, 0, 1), o => Assert.Equal("wb-kept", o.kind?.id));
+            }
+            finally { OpeningKinds.Remove("wb-above"); OpeningKinds.Remove("wb-above2"); OpeningKinds.Remove("wb-kept"); }
+        }
+
         [Fact]
         public void ADoorKeepsItsBay()
         {

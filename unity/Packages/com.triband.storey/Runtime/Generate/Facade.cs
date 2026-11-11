@@ -40,13 +40,19 @@ namespace Triband.Storey.Generate
         /// <summary>How high a window type's windows start over the floor (metres): what an artist's window of its own size takes without <see cref="FacadeStyle.sillH"/>.</summary>
         public static double SillOf(WindowType kind) => kind switch { WindowType.Tall => 0.4, WindowType.Ribbon => 0.95, WindowType.Curtain => 0.1, _ => 0.9 };
 
-        /// <summary>The ground floor's window spec: the style's own, none, or a storefront; for the window that stands for its set, as <see cref="WindowSpec(WindowType, double, FacadeStyle, bool, double?, bool)"/>. <paramref name="cornice"/>: under a cornice.</summary>
-        public static WinSpec? GroundSpec(FacadeStyle st, double h, double? cornice = null) => OpeningSets.Representative(st, true, out var k) ? GroundSpec(st, h, k, cornice) : null;
+        /// <summary>
+        /// The ground floor's window spec: the style's own, none, or a storefront; for the window that stands for its set, as
+        /// <see cref="WindowSpec(WindowType, double, FacadeStyle, bool, double?, bool)"/>. <paramref name="cornice"/>: under a cornice.
+        /// <paramref name="byHand"/>: for a window put in by hand (<see cref="WindowData"/>), which a ground floor without windows
+        /// has as one like the floors above has them (<see cref="GroundType.Match"/>), over its plinth.
+        /// </summary>
+        public static WinSpec? GroundSpec(FacadeStyle st, double h, double? cornice = null, bool byHand = false) =>
+            OpeningSets.Representative(st, true, out var k) ? GroundSpec(st, h, k, cornice, byHand) : null;
 
-        /// <summary>The ground floor's window spec for window <paramref name="k"/> (null: the generator's), one of its set's; under a cornice as above.</summary>
-        public static WinSpec? GroundSpec(FacadeStyle st, double h, OpeningKind? k, double? cornice = null)
+        /// <summary>The ground floor's window spec for window <paramref name="k"/> (null: the generator's), one of its set's; under a cornice, and by hand, as above.</summary>
+        public static WinSpec? GroundSpec(FacadeStyle st, double h, OpeningKind? k, double? cornice = null, bool byHand = false)
         {
-            var ws = st.ground == GroundType.Match ? RawSpec(st.windows, h, st, false) : st.ground == GroundType.Solid ? null : RawSpec(st.windows, h, st, true);
+            var ws = st.ground == GroundType.Storefront ? RawSpec(st.windows, h, st, true) : st.ground == GroundType.Match || byHand ? RawSpec(st.windows, h, st, false) : null;
             // a plinth (or foundation) of the style's own height: the ground floor's windows start above it
             double? plinth = st.plinthH.HasValue || st.foundation.HasValue ? Math.Max(st.plinthH ?? 0.45, st.foundation.HasValue ? Math.Max(0.02, st.foundationH ?? 0.2) : 0) : (double?)null;
             return Fit(ws, h, st, plinth, k, cornice, true);
@@ -356,8 +362,9 @@ namespace Triband.Storey.Generate
                 if (s.type != CoreType.Lift || !Cores.Serves(b, s, k)) continue;
                 foreach (var f in Cores.CoreFlush(Derived.OutlineAt(b, k), s)) if (f != null && f.i == i) (shaftHere ??= new List<Cores.Flush>()).Add(f);
             }
-            // the style's windows on an open wall; on any wall, those put in or taken out by hand (WindowData)
-            bool laid = Derived.EdgeStateAt(b, k, i) == EdgeState.Open;
+            // the style's windows on an open wall; on any wall, those put in or taken out by hand (WindowData): a ground floor
+            // without windows is blank all round
+            bool laid = Derived.EdgeStateAt(b, k, i) == EdgeState.Open && !(k == 0 && st.ground == GroundType.Solid);
             if (laid || PutInOn(b, k, i))
             {
                 // fixed bays on the wall's outer face, from the outline (not the caller's span), so every caller has them alike
@@ -394,7 +401,8 @@ namespace Triband.Storey.Generate
         /// <param name="hand">The building's windows by hand (<see cref="BuildingData.windows"/>), or null: those on this storey's
         /// edge, in the bay their <see cref="WindowData.t"/> of <paramref name="L"/> falls in, take that bay's window out or put one
         /// in (a door or a lift against the wall still wins).</param>
-        /// <param name="laid">The style lays its windows on this wall (an open one): otherwise only those put in by hand.</param>
+        /// <param name="laid">The style lays its windows on this wall (an open one; not a ground floor without windows): otherwise
+        /// only those put in by hand, a ground floor's as <see cref="GroundSpec(FacadeStyle, double, OpeningKind, double?, bool)"/> has them by hand.</param>
         internal static void Windows(List<Opening> ops, OpeningPool? pool, FacadeStyle st, double h, bool ground, string id, int k, int k0, int edge, double uS, double uE,
             double oS, double oE, List<Cores.Flush>? shafts, double? cornice = null, bool shell = false, List<WindowData>? hand = null, double L = 0, bool laid = true)
         {
@@ -405,7 +413,7 @@ namespace Triband.Storey.Generate
             bool fix = st.bayFit == BayFit.Fixed; double last = double.MinValue;   // fixed: the last window's end
             // one window: its spec once; a set: each window's it picks, once each, in specs lent for the wall
             OpeningKind? one = set == null ? OpeningKinds.Of(st, false) : null;
-            WinSpec? oneSpec = set == null ? ground ? GroundSpec(st, h, one, cornice) : WindowSpec(st.windows, h, st, one, cornice, k == 0) : null;
+            WinSpec? oneSpec = set == null ? ground ? GroundSpec(st, h, one, cornice, !laid) : WindowSpec(st.windows, h, st, one, cornice, k == 0) : null;
             var specs = set != null ? SpecCache.Lent.Take() : null;
             uint wall = set != null ? OpeningSets.WallSeed(id, k, edge) : 0;
             for (int j = 0; j < n; j++)
@@ -422,7 +430,7 @@ namespace Triband.Storey.Generate
                     if (hw == null) continue;
                     if (!OpeningSets.Representative(st, ground, out wk)) wk = null;
                 }
-                var ws = specs != null ? specs.Of(wk, st, h, ground, cornice, k == 0) : ReferenceEquals(wk, one) ? oneSpec : ground ? GroundSpec(st, h, wk, cornice) : WindowSpec(st.windows, h, st, wk, cornice, k == 0);
+                var ws = specs != null ? specs.Of(wk, st, h, ground, cornice, k == 0, !laid) : ReferenceEquals(wk, one) ? oneSpec : ground ? GroundSpec(st, h, wk, cornice, !laid) : WindowSpec(st.windows, h, st, wk, cornice, k == 0);
                 if (ws == null || ws.y1 - ws.y0 <= 0.4) continue;
                 double c = bS + (j + 0.5) * bay, ww = ws.full != null ? bay - ws.full.Value : fix && wk != null && !wk.stretch ? ws.w : Math.Min(ws.w, bay - 0.5);
                 if (ww < 0.45) continue;
@@ -471,10 +479,10 @@ namespace Triband.Storey.Generate
             return false;
         }
 
-        /// <summary>A window put in by hand on storey k's edge i (<see cref="WindowData"/>): a wall the style lays none on still has it.</summary>
-        public static bool PutInOn(BuildingData b, int k, int i)
+        /// <summary>A window put in by hand on storey k's edge i (<see cref="WindowData"/>), or (<paramref name="i"/> −1) any of its walls: a wall the style lays none on still has it.</summary>
+        public static bool PutInOn(BuildingData b, int k, int i = -1)
         {
-            foreach (var w in b.windows) if (!w.none && w.k == k && w.edge == i) return true;
+            foreach (var w in b.windows) if (!w.none && w.k == k && (i < 0 || w.edge == i)) return true;
             return false;
         }
 
@@ -489,10 +497,10 @@ namespace Triband.Storey.Generate
             readonly List<OpeningKind?> kinds = new List<OpeningKind?>(4);
             readonly List<WinSpec?> specs = new List<WinSpec?>(4);
 
-            public WinSpec? Of(OpeningKind? k, FacadeStyle st, double h, bool ground, double? cornice, bool storey0)
+            public WinSpec? Of(OpeningKind? k, FacadeStyle st, double h, bool ground, double? cornice, bool storey0, bool byHand)
             {
                 for (int i = 0; i < kinds.Count; i++) if (ReferenceEquals(kinds[i], k)) return specs[i];
-                var ws = ground ? GroundSpec(st, h, k, cornice) : WindowSpec(st.windows, h, st, k, cornice, storey0);
+                var ws = ground ? GroundSpec(st, h, k, cornice, byHand) : WindowSpec(st.windows, h, st, k, cornice, storey0);
                 kinds.Add(k); specs.Add(ws);
                 return ws;
             }
