@@ -6,7 +6,7 @@ namespace Triband.Storey.Editor
 {
     public enum StoreyTab { Shape, Facade, Interior }
 
-    public enum InteriorTool { Select, Wall, Door, Erase, Stairs, Lift }
+    public enum InteriorTool { Select, Wall, Door, Erase, Stairs, Lift, Block }
 
     /// <summary>
     /// What the editor is looking at while a layout is edited: the building, tab, outline tier, active floor and tools.

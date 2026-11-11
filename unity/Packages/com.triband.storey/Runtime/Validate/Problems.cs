@@ -164,6 +164,18 @@ namespace Triband.Storey.Validate
             // a shell-only building keeps its walls, stairs and lifts for when it is walk-in again, but builds none of them:
             // nothing of them is a problem meanwhile (as its walls and its reach, above and in Reach)
             if (b.interior)
+                for (int k = 0; k < N; k++)
+                {
+                    if (b.floors[k].filled || b.floors[k].blocked.Count == 0) continue;
+                    var all = Rooms.All(b, k);
+                    foreach (var m in b.floors[k].blocked)
+                    {
+                        var room = all.Find(r => r.Contains(m.x, m.z));
+                        if (room == null) o.Add(P(b, k, Severity.Warning, "blocked-lost", $"A room blocked out on {Floor(b, k)} has lost its room: a wall stands on its mark. Block it again", m.x, m.z));
+                        else if (Walls.CoreIn(b, k, room) is CoreData c) o.Add(P(b, k, Severity.Warning, "blocked-core", $"{(c.type == CoreType.Lift ? "A lift" : "Stairs")} stand in a room blocked out on {Floor(b, k)}", m.x, m.z));
+                    }
+                }
+            if (b.interior)
                 foreach (var s in b.shafts)
                 {
                     if (!Tiers.ShaftFits(b, s)) o.Add(P(b, s.bottom, Severity.Error, "core-fit", $"{Kind(s)} from {Floor(b, s.bottom)} no longer fit every floor they serve", s.x, s.z));
@@ -307,6 +319,7 @@ namespace Triband.Storey.Validate
             var fp = Derived.OutlineAt(b, k); var bb = Tiers.Bbox(fp);
             var g = new Grid { b = b, k = k, x0 = bb.x0, z0 = bb.z0, nx = Math.Max(1, (int)Math.Ceiling((bb.x1 - bb.x0) / Cell)), nz = Math.Max(1, (int)Math.Ceiling((bb.z1 - bb.z0) / Cell)) };
             int n = g.nx * g.nz; g.free = new bool[n]; g.region = new int[n];
+            var blocked = Rooms.Blocked(b, k);   // rooms blocked out are no floor to walk on, nor to reach
             for (int j = 0; j < g.nz; j++)
                 for (int i = 0; i < g.nx; i++)
                 {
@@ -314,6 +327,7 @@ namespace Triband.Storey.Validate
                     bool f = Geo.Pip(fp, x, z);
                     if (f) foreach (var s in b.shafts) if (Cores.StairHoleAt(b, s, k) && InHole(s, x, z)) { f = false; break; }
                     if (f) foreach (var v in b.voids) if (Courtyards.HoleAt(b, v, k) && Geo.Pip(v.shape, x, z)) { f = false; break; }
+                    if (f && blocked.Count > 0 && Rooms.InBlocked(blocked, x, z)) f = false;
                     g.free[j * g.nx + i] = f;
                 }
             // the walls, as the walk model has them, each with a player's clearance

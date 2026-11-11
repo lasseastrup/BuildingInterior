@@ -13,7 +13,7 @@ namespace Triband.Storey.Edit
         public const int MaxFloors = 40;
 
         /// <summary>A floor with another floor's rooms. Never its setback outline or height: the copy inherits the outline below it.</summary>
-        public static FloorData LayoutCopy(FloorData f) => new FloorData { walls = Tiers.Copy(f.walls) };
+        public static FloorData LayoutCopy(FloorData f) => new FloorData { walls = Tiers.Copy(f.walls), blocked = new List<Vec2>(f.blocked) };
 
         /// <summary>A floor on top, with the top floor's rooms (or empty).</summary>
         public static void AddTop(BuildingData b, bool copyLayout = true) =>
@@ -86,7 +86,7 @@ namespace Triband.Storey.Edit
         public static bool PasteRooms(BuildingData b, int k, string rooms)
         {
             if (k < 0 || k >= b.floors.Count || !(PrototypeJson.ReadRooms(rooms) is FloorData f)) return false;
-            b.floors[k].walls = f.walls;
+            b.floors[k].walls = f.walls; b.floors[k].blocked = f.blocked;
             return true;
         }
 

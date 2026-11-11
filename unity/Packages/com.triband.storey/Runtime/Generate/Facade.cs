@@ -567,21 +567,23 @@ namespace Triband.Storey.Generate
             foreach (var o in ops)
             {
                 var kk = o.kind;
+                // shut, as a shell storey's: on one, or into a room blocked out (Opening.closed)
+                bool sh = shell || o.closed;
                 // what it buries in a wall known whole round it is left out (Whole); not in a hole bigger than the door (a style's
                 // offset, HoleOffset), where the wall its own hole is measured against isn't there
                 double deep = kk != null && panel != null && o.hl <= 1e-6 && o.hr <= 1e-6 && o.ht <= 1e-6 ? Whole(o, ops, piece, h, panel) : 0;
                 // a street door with its own recess (its set's entry's) goes that deep, in its own box in its hole
-                if (o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0 + o.hl, o.u1 - o.hr, y, y + o.y1 - o.ht, C, shell, o.recess.HasValue ? KindBack(st, o) : db, deep); if (!shell) op.SeeThrough++; else HoleBack(op, F, o, y, C, st, wc); continue; }   // its leaf is left out
-                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, shell, wb, deep); if (shell) HoleBack(op, F, o, y, C, st, wc); continue; }
+                if (o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0 + o.hl, o.u1 - o.hr, y, y + o.y1 - o.ht, C, sh, o.recess.HasValue ? KindBack(st, o) : db, deep); if (!sh) op.SeeThrough++; else HoleBack(op, F, o, y, C, st, wc); continue; }   // its leaf is left out
+                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, sh, wb, deep); if (sh) HoleBack(op, F, o, y, C, st, wc); continue; }
                 if (o.door)
                 {
                     // the generator's door: the wall's recess, with a flat panel at its back where the doorway is closed
-                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, o.recess.HasValue ? PaneW(st, o) : dw, C.door, false);
+                    if (sh) Facade.Pane(op, F, o.u0, o.u1, y, y + o.y1, o.recess.HasValue ? PaneW(st, o) : dw, C.door, false);
                     else op.SeeThrough++;
                 }
                 else
                 {
-                    if (shell) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, pw, C.glassDark, false);
+                    if (sh) Facade.Pane(op, F, o.u0, o.u1, y + o.y0, y + o.y1, pw, C.glassDark, false);
                     else Facade.Pane(gl, F, o.u0, o.u1, y + o.y0, y + o.y1, pw, C.glass, true);
                     double ex = o.full ? 0 : 0.06, eh = o.full ? 0 : 0.04;
                     if (sills) op.OBox(F, o.u0 - ex, o.u1 + ex, y + o.y0 - 0.07, y + o.y0, T, T + 0.07, trim, trim, Skip.In);

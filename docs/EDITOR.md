@@ -121,6 +121,8 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
      - *Up* (the default): every wall at full height.
    - Draw walls by clicking a chain, or by dragging one. Rings mark points, diamonds mark walls, and dotted guides show alignment.
    - Doors, Erase, Stairs and Lift (**Turn 90°** in the inspector turns the next one), with green or red ghosts.
+   - **Block** (Storey's own): click inside a room to block it out, and click it again to open it. A room is the storey's outline less its walls and its courtyards and atria; a doorway doesn't join two rooms. A blocked room is built solid to the ceiling, a centimetre in from the walls round it, its sides walls to the cutaway: a cut or the ceiling's clip shows its inside in the section's colour, as a cut wall does. The doorways into it are shut (the wall goes on across them), its windows and doors on the facade are opaque and closed as a filled storey's, and its outline is a wall to the walk model, so nobody walks in, by a street door either. The Scene view outlines the blocked rooms on the floor being edited, and the one under the pointer with the tool. Refused on a wall, for the whole floor (*Filled* is for that), and for a room with stairs or a lift in it (`Walls.ToggleBlock`, `Rooms`).
+     - It is a mark in the room, kept with the floor (`FloorData.blocked`, layout key `blocked`: its points), so the block follows the room when its walls move. A mark a wall moves onto blocks nothing, and *Problems* says so; so it does for stairs or a lift that come to stand in a blocked room. *Copy* and *Paste* and a new floor on top take the marks with the walls (`BlockedRoomTests`).
    - **Finish wall** in the Scene view ends a chain.
    - Stairs come in two kinds, chosen under the Stairs tool or on selected stairs. Both serve the same floors: from where they're placed up to the top floor and the roof, or whatever **From** and **To** say.
      - **Something to climb to:** the Stairs tool places none that would have no flight: on the top floor under a pitched roof, which has no roof access, or where filled storeys stop every flight (`Shafts.Climb`). Its ghost is red there, and the Scene view, the *Tools* card and a click say why. Placed anyway, as the prototype places them, switchback stairs were their walls alone, with no steps and no slab opened, and straight flights nothing at all. Stairs another edit leaves so are in *Problems* (§6.5). Stairs with a flight further up keep their railed dead end under a filled storey.
@@ -298,6 +300,7 @@ What it finds:
 - **No way in:** a walk-in building with no street door or bridge.
 - **Doors** on upper floors with nothing to open onto (they aren't built), and doors into filled storeys.
 - **Stairs and lifts** that no longer fit every floor they serve, that overlap, or a lift with one stop. Stairs with nothing to climb to: a pitched roof over top-floor stairs, *Continue to the roof* off, *From* and *To* on one floor, or filled storeys stopping every flight.
+- **Rooms blocked out** whose mark a wall now stands on, so they block nothing, or with stairs or a lift standing in them. A blocked room is never a part nobody reaches.
 - **Courtyards and atria** that no longer fit.
 - **Bridges** that no longer meet, or that lead into or out of a storey with nothing inside.
 - **Buildings that overlap.**

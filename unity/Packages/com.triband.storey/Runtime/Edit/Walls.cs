@@ -363,5 +363,37 @@ namespace Triband.Storey.Edit
             else b.entrances.Add(new EntranceData { edge = d.edge, t = d.t, k = d.k });
             return true;
         }
+
+        /// <summary>
+        /// The Block tool's click (Storey's own): the room under p blocked out (<see cref="FloorData.blocked"/>, a mark at p), or
+        /// a room blocked out already opened again (its marks taken away). The error says why nothing happened: p is in no room
+        /// (on a wall), the room is the whole storey (Filled is for that), or stairs or a lift stand in it.
+        /// </summary>
+        public static string? ToggleBlock(BuildingData b, int k, Vec2 p)
+        {
+            if (k < 0 || k >= b.floors.Count) return "There are no rooms up there";
+            var all = Rooms.All(b, k);
+            var room = all.FirstOrDefault(r => r.Contains(p.x, p.z));
+            if (room == null) return "Click inside a room, not on a wall";
+            var marks = b.floors[k].blocked;
+            if (marks.RemoveAll(m => room.Contains(m.x, m.z)) > 0) return null;
+            if (all.Count == 1) return "That's the whole floor: make it Filled instead";
+            if (CoreIn(b, k, room) != null) return "Stairs or a lift stand in this room";
+            marks.Add(new Vec2(Tiers.Cm(p.x), Tiers.Cm(p.z)));
+            return null;
+        }
+
+        /// <summary>A core on storey k standing in a room (its middle or a corner in it), or null.</summary>
+        public static CoreData? CoreIn(BuildingData b, int k, Rooms.Room room)
+        {
+            foreach (var s in b.shafts)
+            {
+                if (!Cores.Serves(b, s, k)) continue;
+                var r = Cores.RectOf(s, b: b);
+                foreach (var (a, c) in new[] { (0, 0), (-1, -1), (1, -1), (1, 1), (-1, 1) })
+                    if (room.Contains(r.c.x + r.u.x * a * r.hx + r.w.x * c * r.hz, r.c.z + r.u.z * a * r.hx + r.w.z * c * r.hz)) return s;
+            }
+            return null;
+        }
     }
 }

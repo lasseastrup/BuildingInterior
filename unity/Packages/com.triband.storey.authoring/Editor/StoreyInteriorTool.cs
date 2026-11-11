@@ -58,6 +58,9 @@ namespace Triband.Storey.Editor
                 }
             }
             foreach (var s in b.shafts.Where(s => Cores.Levels(b, s).Contains(k))) CoreRect(b, s, yy, s.id == v.selectedCore ? Ok : Color.white);
+            // the rooms blocked out on this storey, whatever the tool
+            if (ev.type == EventType.Repaint && b.floors[k].blocked.Count > 0)
+                foreach (var r in Generate.Rooms.Blocked(b, k)) RoomOutline(b, r, yy, Faint, 4f, "Blocked");
 
             var (o, dr) = MouseRay();
             var p = Picking.OnPlane(b, o, dr, y);
@@ -91,6 +94,14 @@ namespace Triband.Storey.Editor
                     {
                         var t = Walls.HoverTarget(b, k, p.Value);
                         if (t != null) Highlight(b, k, t.Value, Bad);
+                    }
+                    break;
+                case InteriorTool.Block:
+                    if (p == null || ev.type != EventType.Repaint) break;
+                    {
+                        // the room a click would block out, or open again
+                        var room = Generate.Rooms.At(b, k, p.Value);
+                        if (room != null) { bool on = b.floors[k].blocked.Any(m => room.Contains(m.x, m.z)); RoomOutline(b, room, yy + 0.01, on ? Bad : Accent, 5f, on ? "Open it again" : "Block it out"); }
                     }
                     break;
                 case InteriorTool.Stairs:
@@ -272,6 +283,14 @@ namespace Triband.Storey.Editor
                     v.selectedCore = ""; v.selectedWall = -1;
                     return true;
                 }
+                case InteriorTool.Block:
+                {
+                    var room = Generate.Rooms.At(b, k, p);
+                    bool on = room != null && b.floors[k].blocked.Any(m => room.Contains(m.x, m.z)); string? err = null;
+                    e.ApplyTo(on ? "Room opened" : "Room blocked out", bb => (err = Walls.ToggleBlock(bb, k, p)) == null);
+                    if (err != null) Notify(sv, err);
+                    return true;
+                }
                 case InteriorTool.Stairs:
                 case InteriorTool.Lift:
                 {
@@ -317,6 +336,19 @@ namespace Triband.Storey.Editor
         }
 
         // ---- drawing ----
+
+        /// <summary>A room's outline (its ring and holes) at height y, and a word at its middle.</summary>
+        static void RoomOutline(BuildingData b, Generate.Rooms.Room r, double y, Color c, float width, string label)
+        {
+            Handles.color = c;
+            foreach (var ring in new[] { r.ring }.Concat(r.holes))
+            {
+                var pts = ring.Select(q => W(b, q, y)).ToList(); pts.Add(pts[0]);
+                Handles.DrawAAPolyLine(width, pts.ToArray());
+            }
+            double cx = r.ring.Average(q => q.x), cz = r.ring.Average(q => q.z);
+            Label(W(b, new Vec2(cx, cz), y), label);
+        }
 
         /// <summary>The snap marker: a ring on a point, a diamond on a wall, and dotted alignment guides.</summary>
         static string markerKey = "";

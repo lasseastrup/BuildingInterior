@@ -448,6 +448,13 @@ namespace Triband.Storey.Editor
             Lines(r, c, 2.5f, (0.08f, 0.9f), (0.08f, 0.72f), (0.3f, 0.72f), (0.3f, 0.52f), (0.52f, 0.52f), (0.52f, 0.32f), (0.74f, 0.32f), (0.74f, 0.12f), (0.95f, 0.12f));
         }
 
+        /// <summary>Block: a room outlined and hatched, solid.</summary>
+        public static void BlockIcon(Rect r, Color c)
+        {
+            Lines(r, c, 2f, (0.12f, 0.12f), (0.88f, 0.12f), (0.88f, 0.88f), (0.12f, 0.88f), (0.12f, 0.12f));
+            Lines(r, c, 2f, (0.12f, 0.5f), (0.5f, 0.12f)); Lines(r, c, 2f, (0.12f, 0.88f), (0.88f, 0.12f)); Lines(r, c, 2f, (0.5f, 0.88f), (0.88f, 0.5f));
+        }
+
         /// <summary>Lift: a shaft with up and down arrows.</summary>
         public static void LiftIcon(Rect r, Color c)
         {

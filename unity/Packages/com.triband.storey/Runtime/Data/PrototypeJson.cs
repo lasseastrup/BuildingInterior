@@ -93,9 +93,10 @@ namespace Triband.Storey
 
         /// <summary>
         /// A floor's rooms as text, for the Interior tab's Copy and Paste (<see cref="Edit.Floors.CopyRooms"/>, Storey's own): its
-        /// walls and their doors, as a layout writes a floor's, and nothing else of the floor. <see cref="ReadRooms"/> reads it.
+        /// walls and their doors, and the rooms blocked out, as a layout writes a floor's, and nothing else of the floor.
+        /// <see cref="ReadRooms"/> reads it.
         /// </summary>
-        public static string WriteRooms(FloorData f) => Json.Write(Floor(new FloorData { walls = f.walls }));
+        public static string WriteRooms(FloorData f) => Json.Write(Floor(new FloorData { walls = f.walls, blocked = f.blocked }));
 
         /// <summary>The rooms <see cref="WriteRooms"/> wrote, on a floor with nothing else; null when the text isn't rooms.</summary>
         public static FloorData? ReadRooms(string text)
@@ -104,7 +105,7 @@ namespace Triband.Storey
             {
                 if (!(Json.Parse(text) is Dictionary<string, object?> o) || !o.ContainsKey("walls")) return null;
                 var f = Floor(new Ctx(new List<string>()), o, new Where());
-                return new FloorData { walls = f.walls };
+                return new FloorData { walls = f.walls, blocked = f.blocked };
             }
             catch (FormatException) { return null; }
         }
@@ -220,6 +221,7 @@ namespace Triband.Storey
                 filled = c.Bool(o, "filled", false, w),
             };
             c.Points(o, "shape", w, f.shape);
+            c.Points(o, "blocked", w, f.blocked);   // Storey's own: the marks of the rooms blocked out
             c.Ints(o, "blank", w, f.blank);
             f.quiet = OptInts(c, o, "quiet", w); f.bare = OptInts(c, o, "bare", w);
             int i = 0;
@@ -529,6 +531,7 @@ namespace Triband.Storey
                 walls.Add(new Dictionary<string, object?> { ["a"] = Pt(w.a), ["b"] = Pt(w.b), ["doors"] = doors });
             }
             o["walls"] = walls;
+            if (f.blocked.Count > 0) o["blocked"] = Pts(f.blocked);
             if (f.h.HasValue) o["h"] = f.h.Value;
             if (f.filled) o["filled"] = true;
             if (f.HasShape)
@@ -723,7 +726,7 @@ namespace Triband.Storey
             public static readonly string[] Void = { "id", "kind", "shape", "bottom" };
             public static readonly string[] Bridge = { "id", "to", "k", "at", "toK", "width", "open" };
             public static readonly string[] Corner = { "at", "shape", "size", "door", "pts" };
-            public static readonly string[] Floor = { "walls", "h", "shape", "blank", "quiet", "bare", "style", "terraceRoof", "terrace", "props", "filled", "corners" };
+            public static readonly string[] Floor = { "walls", "blocked", "h", "shape", "blank", "quiet", "bare", "style", "terraceRoof", "terrace", "props", "filled", "corners" };
             public static readonly string[] Wall = { "a", "b", "doors" };
             public static readonly string[] Door = { "t" };
             public static readonly string[] Terrace = { "pitch", "type" };

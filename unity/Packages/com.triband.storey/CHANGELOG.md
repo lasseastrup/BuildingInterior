@@ -5,6 +5,12 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- **Rooms blocked out** (`FloorData.blocked`, layout key `blocked` on a floor: a point in each room; docs/EDITOR.md §6.6, `BlockedRoomTests`): the room holding a mark (`Rooms`: a storey's outline less its walls and its courtyards and atria) is built solid to the ceiling, a centimetre in from the walls round it, its faces out and its sides walls to the cutaway. A cut or the ceiling's clip shows its inside in the section's colour, as a cut wall does.
+  - The doorways into it are shut (`Lod0.Shared.RoomWalls`), and its windows and doors on the facade are opaque and closed as a filled storey's (`Opening.closed`, a parameter of `Opening.Set` as every field is).
+  - Its outline is a wall to the walk model and the collision mesh, so nobody walks in, by a street door either. The problem list leaves it out of the floor to reach (`Problems`). It also says when a mark has lost its room (`blocked-lost`) or stairs or a lift stand in one (`blocked-core`).
+  - `Walls.ToggleBlock` blocks a room or opens it again, refused on a wall, for the whole storey and for a room with a core (`Walls.CoreIn`). Copy and Paste and a new floor on top take the marks with the walls.
+  - Walk-in, open storeys only: on a filled storey or a shell-only building it blocks nothing. A floor without marks builds as before.
+- **The baked layout format is 13** (`BakedLayout.Version`): floors carry their blocked rooms' marks.
 - **A terrace's edge, set as a flat roof's** (`TerraceData`, `FloorData.terrace`; layout key `terrace` on the setback's floor with `parapet`, `capH`, `capDepth` and `capStrip`, written only when it isn't the parapet a terrace always had; docs/EDITOR.md §6.2, `TerraceEdgeTests`):
   - **Parapet:** without one, a 30 cm curb, as round a flat roof without one.
   - **Edge:** a cap on it by the numbers a flat roof's takes (`RoofCap.Of(TerraceData)`). A slab lifts the parapet or takes the curb's place; a hanging one goes under the parapet or curb, and the cornice below drops under it (`Facade.CorniceDrop`). Not one set in, which on a terrace would stand on the deck. Where a run stops against the setback's or a neighbour's wall, what stands out past the wall below is closed (`Lod0.Shared.Run.openS`, `openE`).

@@ -180,6 +180,14 @@ namespace Triband.Storey
         /// </summary>
         public bool filled;
 
+        /// <summary>
+        /// Rooms blocked out (the Interior tab's Block tool): a mark in each, building-local. The room holding a mark
+        /// (<see cref="Generate.Rooms"/>) is built solid to the ceiling, the doorways into it closed and the windows and doors
+        /// on the facade over it opaque and shut as a filled storey's, and nobody walks into it. A mark no room holds (a wall
+        /// moved onto it) blocks nothing, and the problem list says so. Storey's own; walk-in buildings only.
+        /// </summary>
+        public List<Vec2> blocked = new List<Vec2>();
+
         public bool HasShape => shape.Count > 0;
         public bool HasHeight => h.HasValue;
     }

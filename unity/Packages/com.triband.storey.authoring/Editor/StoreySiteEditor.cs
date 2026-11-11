@@ -30,6 +30,7 @@ namespace Triband.Storey.Editor
             ("Erase", "Click a wall, doorway, stairs or lift to remove it", StoreyInspectorUI.EraseIcon),
             ("Stairs", "Place stairs: switchback or straight flights", StoreyInspectorUI.StairsIcon),
             ("Lift", "Place a lift shaft", StoreyInspectorUI.LiftIcon),
+            ("Block", "Click a room to block it out: solid, shut and not walked in. Click it again to open it", StoreyInspectorUI.BlockIcon),
         };
         string? message;
 
@@ -1328,7 +1329,8 @@ namespace Triband.Storey.Editor
             InteriorTool.Door => "Click a wall to add or remove a doorway · Enter: back to Select",
             InteriorTool.Erase => "Click anything on this floor to remove it · Enter: back to Select",
             InteriorTool.Stairs => "Click to place · lines up with the nearest wall · runs to the top floor · straight flights: the arrow points up them, the walkway back is beside it · Enter: back to Select",
-            _ => "Click to place · lines up with the nearest wall · serves every floor above · Enter: back to Select",
+            InteriorTool.Lift => "Click to place · lines up with the nearest wall · serves every floor above · Enter: back to Select",
+            _ => "Click a room to block it out: solid to the ceiling, its doorways shut and its windows opaque, and nobody walks in · click a blocked room to open it · Enter: back to Select",
         };
 
         // ---- fields ----

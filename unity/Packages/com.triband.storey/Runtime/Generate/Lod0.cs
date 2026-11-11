@@ -109,6 +109,7 @@ namespace Triband.Storey.Generate
         List<BridgeSpan>? bridges;   // the bridges that meet this building, looked up when a band first asks
         static readonly List<BridgeSpan> NoBridges = new List<BridgeSpan>();
         static readonly List<(double, double)> NoRanges = new List<(double, double)>();   // read only
+        static readonly List<Rooms.Room> NoRooms = new List<Rooms.Room>();                // read only
 
         /// <summary>The openings of a piece of wall: those of <paramref name="all"/> between lo and hi, in order (none on a party wall).</summary>
         internal List<Opening> Piece(List<Opening> all, bool party, double lo, double hi)
@@ -495,6 +496,7 @@ namespace Triband.Storey.Generate
         {
             var Wp = g.Wp; var C = g.C; int n = Wp.Count; bool shell = Derived.ShellAt(b, k); double h = Derived.FloorH(b, k), y = Derived.FloorBase(b, k), T = Dim.T_EXT;   // shell: this storey (a filled one is closed as a shell building is)
             var into = IntoWalls(op, k);   // where the rooms' walls run into the inner faces
+            var blocked = shell ? NoRooms : BlockedRooms(k);
             if (into != null) { openK = k; openAt = new List<(double, double)>[n]; }
             for (int i = 0; i < n; i++)
             {
@@ -502,6 +504,9 @@ namespace Triband.Storey.Generate
                 var m = Geo.MiterOf(g.cor, i, e.L); var (uS, uE) = Facade.Span(m, e.L);
                 WallPool.Reset();
                 var all = Facade.Ops(site, b, k, i, e.L, uS, uE, WallOps, WallPool);
+                // a window or door into a room blocked out is shut, as a filled storey's (Opening.closed)
+                if (blocked.Count > 0)
+                    foreach (var o in all) { var p = F.At2((o.u0 + o.u1) / 2, -0.2); if (Rooms.InBlocked(blocked, p.x - b.pos.x, p.z - b.pos.z)) o.closed = true; }
                 if (into != null) { var oa = openAt![i] = new List<(double, double)>(all.Count); foreach (var o in all) oa.Add((o.u0, o.u1)); }
                 foreach (var pc in Party.WallPieces(site, b, k, i, e.L, m))
                 {
@@ -725,6 +730,57 @@ namespace Triband.Storey.Generate
                 foreach (var o in Facade.MergeOps(ops)) Casing(op, F, o, y, t, C.doorTrim, walls, self);
                 foreach (var (s0, e0) in Facade.SolidRanges(-E, L + E, ops)) Facade.PushSeg(sg, F, s0, e0, 0, Dim.T_INT / 2);
             }
+            Blocked(op, sg, k, C);
+        }
+
+        /// <summary>
+        /// Storey k's rooms blocked out (<see cref="FloorData.blocked"/>, Storey's own): each a closed solid a centimetre in from
+        /// the walls round it, from a centimetre over the floor to just inside the slab above, its faces turned out. Its sides
+        /// are walls to the cutaway, which takes them down with the others, and the ceiling's clip takes its top on the storey
+        /// being looked into: either way what shows is its inside, in the section's colour, as a cut wall shows (the doorways
+        /// into it are closed, <see cref="RoomWalls"/>, and the windows over it opaque, <see cref="FacadeStorey"/>). Its outline is a
+        /// wall to the walk model, the whole storey high: a street door into it is shut too.
+        /// </summary>
+        void Blocked(MeshBuilder op, List<Seg> sg, int k, Palette C)
+        {
+            var rooms = BlockedRooms(k); if (rooms.Count == 0) return;
+            double y = Derived.FloorBase(b, k), y0 = y + 0.01, y1 = y + Derived.FloorH(b, k) - Dim.SLAB + 0.005, ox = b.pos.x, oz = b.pos.z;
+            foreach (var room in rooms)
+            {
+                var rings = new List<List<Vec2>> { room.ring }; rings.AddRange(room.holes);
+                var paths = new Clipper2Lib.PathsD();
+                foreach (var ring in rings)
+                {
+                    for (int i = 0; i < ring.Count; i++)
+                    {
+                        var p = ring[i]; var q = ring[(i + 1) % ring.Count];
+                        if (Geo.Hypot(q.x - p.x, q.z - p.z) > 1e-4) sg.Add(new Seg(p.x + ox, p.z + oz, q.x + ox, q.z + oz, 0.02));
+                    }
+                    var w = new List<Vec2>(ring.Count); foreach (var p in ring) w.Add(new Vec2(p.x + ox, p.z + oz));
+                    paths.Add(Path(w));
+                }
+                if (op.ShapeOnly) continue;
+                var tree = new Clipper2Lib.PolyTreeD();
+                Clipper2Lib.Clipper.BooleanOp(Clipper2Lib.ClipType.Union, Clipper2Lib.Clipper.InflatePaths(paths, -0.01, Clipper2Lib.JoinType.Miter, Clipper2Lib.EndType.Polygon, 4, 6),
+                    new Clipper2Lib.PathsD(), tree, Clipper2Lib.FillRule.NonZero, 6);
+                foreach (var (ring, holes) in Rings(tree))
+                {
+                    op.Ctx(null, 0);
+                    var tris = Triangulate.Shape(ring, holes);
+                    foreach (var (yy, n) in new[] { (y1, new P3(0, 1, 0)), (y0, new P3(0, -1, 0)) })
+                    {
+                        var pts = new List<P3>(); foreach (var p in ring) pts.Add(new P3(p.x, yy, p.z)); foreach (var hl in holes) foreach (var p in hl) pts.Add(new P3(p.x, yy, p.z));
+                        op.PolyTris(pts, tris, n, C.inner);
+                    }
+                    foreach (var (a, e, nx, nz) in InsetCapSides(ring, holes))
+                    {
+                        double L = Geo.Hypot(e.x - a.x, e.z - a.z);
+                        op.Ctx(Geo.WallCtx(a, new Vec2((e.x - a.x) / L, (e.z - a.z) / L), new Vec2(nx, nz), L), 1);
+                        op.Quad(new P3(a.x, y0, a.z), new P3(e.x, y0, e.z), new P3(e.x, y1, e.z), new P3(a.x, y1, a.z), new P3(nx, 0, nz), C.inner);
+                    }
+                }
+            }
+            op.Ctx(null, 0);
         }
 
         /// <summary>
@@ -848,6 +904,21 @@ namespace Triband.Storey.Generate
         }
 
         readonly Dictionary<int, List<RoomWall>> roomWalls = new Dictionary<int, List<RoomWall>>();
+        readonly Dictionary<int, List<Rooms.Room>> blockedRooms = new Dictionary<int, List<Rooms.Room>>();
+
+        /// <summary>Storey k's rooms blocked out (<see cref="Rooms.Blocked"/>), building-local. Made once a build.</summary>
+        public List<Rooms.Room> BlockedRooms(int k)
+        {
+            if (!blockedRooms.TryGetValue(k, out var l)) blockedRooms[k] = l = k >= 0 && k < N ? Rooms.Blocked(b, k) : new List<Rooms.Room>();
+            return l;
+        }
+
+        /// <summary>A doorway at <paramref name="mm"/> along a room wall from <paramref name="a"/> (site space) opens into a room blocked out.</summary>
+        bool IntoBlocked(List<Rooms.Room> blocked, Vec2 a, Vec2 u, double mm)
+        {
+            double cx = a.x + u.x * mm - b.pos.x, cz = a.z + u.z * mm - b.pos.z, d = Dim.T_INT / 2 + 0.1;
+            return Rooms.InBlocked(blocked, cx - u.z * d, cz + u.x * d) || Rooms.InBlocked(blocked, cx + u.z * d, cz - u.x * d);
+        }
         // the openings of each edge of storey openK's outside walls, as FacadeStorey placed them: where a room wall's end
         // against one is in its thickness (IntoSolid)
         int openK = -1; List<(double, double)>[]? openAt;
@@ -877,7 +948,7 @@ namespace Triband.Storey.Generate
         {
             if (roomWalls.TryGetValue(k, out var l)) return l;
             l = new List<RoomWall>(); double ox = b.pos.x, oz = b.pos.z;
-            var fp = Derived.OutlineAt(b, k);
+            var fp = Derived.OutlineAt(b, k); var blocked = BlockedRooms(k);
             foreach (var w0 in b.floors[k].walls)
                 foreach (var wl in Courtyards.ClipOut(b, k, Geo.ClipWall(fp, w0)))
                 {
@@ -888,6 +959,7 @@ namespace Triband.Storey.Generate
                     foreach (var d in wl.doors)
                     {
                         double mm = Math.Max(Dim.DOOR_INT / 2 + 0.1, Math.Min(L - Dim.DOOR_INT / 2 - 0.1, d.t * L));
+                        if (blocked.Count > 0 && IntoBlocked(blocked, a, u, mm)) continue;   // into a room blocked out: the wall goes on across it
                         ops.Add(new Opening { u0 = mm - Dim.DOOR_INT / 2, u1 = mm + Dim.DOOR_INT / 2, y0 = 0, y1 = 2.2, door = true });
                     }
                     ops.Sort((p, q) => p.u0.CompareTo(q.u0));

@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 12;
+        public const int Version = 13;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -219,6 +219,7 @@ namespace Triband.Storey
                 if (r.Bool()) f.terraceRoof = new TerraceRoofData { pitch = r.F64(), type = E<RoofType>(ref r) };
                 f.filled = r.Bool();
                 if (r.Bool()) f.terrace = new TerraceData { parapet = r.Bool(), capH = r.Opt(), capDepth = r.Opt(), capStrip = r.Opt() };
+                Points(ref r, f.blocked);
                 b.floors.Add(f);
             }
             for (n = r.Count(); n > 0; n--)
@@ -414,6 +415,7 @@ namespace Triband.Storey
                 w.Bool(f.terraceRoof != null); if (f.terraceRoof != null) { w.F64(f.terraceRoof.pitch); w.E(f.terraceRoof.type); }
                 w.Bool(f.filled);
                 w.Bool(f.terrace != null); if (f.terrace != null) { w.Bool(f.terrace.parapet); w.Opt(f.terrace.capH); w.Opt(f.terrace.capDepth); w.Opt(f.terrace.capStrip); }
+                w.Points(f.blocked);
             }
             w.Count(b.shafts.Count);
             foreach (var s in b.shafts) { w.Count(S(s.id)); w.E(s.type); w.F64(s.x); w.F64(s.z); w.F64(s.rot); w.Int(s.bottom); w.Int(s.top); w.Bool(s.roof); }
