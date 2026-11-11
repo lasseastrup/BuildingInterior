@@ -62,7 +62,6 @@ namespace Triband.Storey.Editor
         [SerializeField] internal bool cornerDoor;
         /// <summary>The courtyard or atrium the Shape tool's handles edit, by id; "" for none.</summary>
         [SerializeField] internal string selectedVoid = "";
-        [SerializeField] internal bool showProblems = true;
 
         internal void Select(string id)
         {

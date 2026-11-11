@@ -8,6 +8,7 @@
 - **The floors are set in the inspector** (docs/EDITOR.md §6.6): the Shape tab's *Storey heights* card is *Floors*, first after *Placement*, with how many floors the building has: typed, or − and + (a new floor copies the top floor's rooms; − takes the top floor off), each one undo step, up to 40. The Interior tab's *Floor* card has *Copy up* (the floor's rooms to every floor above), *Duplicate* and *Delete* for the floor being edited.
 
 ### Removed
+- **The Problems panel** under the building bar, its *Check* and *Auto*, the background check and its markers in the Scene view (`StoreyProblems`, `StoreyEditView.showProblems`; docs/EDITOR.md §6.5). It wasn't used.
 - **Brick patches** in the Facade tab's *Walls* card (docs/EDITOR.md §6.7): the built-in is gone. Add bricks as a facade detail of the project's own, *Scattered on the walls* (§6.12).
 - **The Storey Floors overlay** in the Scene view: what it did is in the inspector (above). `StoreyToolContext.Editing`, which only it read, went with it, and the overlay types from the stubs.
 

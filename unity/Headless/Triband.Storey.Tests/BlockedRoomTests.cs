@@ -113,15 +113,8 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
-        public void NobodyWalksIntoItAndItIsNoProblem()
+        public void NobodyWalksIntoIt()
         {
-            // without a doorway the east room is a room nobody reaches (the stairs come up in the west one); blocked out, it is
-            // nothing to reach
-            var (d, b) = Block(door: false);
-            Assert.NotNull(Shafts.Place(b, 0, new Vec2(3, 4.5), CoreType.Stairs, 0, Shafts.NewId(d)));
-            Assert.Contains(Problems.Check(new Site(d.buildings)), p => p.code == "unreached-part" && p.k == 1);
-            Walls.ToggleBlock(b, 1, East);
-            Assert.DoesNotContain(Problems.Check(new Site(d.buildings)), p => p.k == 1 && p.code.StartsWith("unreached"));
             // its outline is a wall to the walk model, across the doorway too
             var (d2, b2) = Block();
             Walls.ToggleBlock(b2, 1, East);
@@ -131,17 +124,16 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
-        public void TheProblemListSaysWhenAMarkHasLostItsRoom()
+        public void AMarkAWallLandsOnBlocksNothingUntilItMovesOff()
         {
-            var (d, b) = Block();
+            var (_, b) = Block();
             Walls.ToggleBlock(b, 1, East);
-            Assert.DoesNotContain(Problems.Check(new Site(d.buildings)), p => p.code.StartsWith("blocked"));
+            Assert.Single(Rooms.Blocked(b, 1));
             b.floors[1].walls.Add(new WallData { a = new Vec2(9, 0), b = new Vec2(9, 9) });        // a wall on its mark
-            Assert.Contains(Problems.Check(new Site(d.buildings)), p => p.code == "blocked-lost" && p.k == 1);
-            Assert.Empty(Rooms.Blocked(b, 1));                                                       // and it blocks nothing
+            Assert.Empty(Rooms.Blocked(b, 1));                                                       // it blocks nothing
+            Assert.Single(b.floors[1].blocked);                                                      // and is kept
             b.floors[1].walls.RemoveAt(1);
-            b.shafts.Add(new CoreData { id = "s", type = CoreType.Lift, x = 10, z = 6, bottom = 0 });
-            Assert.Contains(Problems.Check(new Site(d.buildings)), p => p.code == "blocked-core" && p.k == 1);
+            Assert.Single(Rooms.Blocked(b, 1));                                                      // the wall gone, the room is blocked again
         }
 
         [Fact]

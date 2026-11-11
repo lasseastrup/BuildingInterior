@@ -58,9 +58,6 @@ namespace Triband.Storey.Tests
         static Vec2 OverTheFlight(BuildingData b, CoreData s) =>
             s.type == CoreType.Flight ? Cores.FrameOf(b, s).At2(-Dim.FLIGHT_W / 2 + Dim.FLIGHT_LANE / 2, 0) : Cores.FrameOf(b, s).At2(-0.65, 0.5);
 
-        static string? NoFlight(StoreyDocument d, BuildingData b) =>
-            Problems.Check(new Site(d.buildings)).FirstOrDefault(p => p.code == "stairs-no-flight" && p.buildingId == b.id)?.message;
-
         [Fact]
         public void ThePrototypesStairsOnATopFloorUnderAPitchedRoofAreWallsAlone()
         {
@@ -72,7 +69,6 @@ namespace Triband.Storey.Tests
             Assert.Empty(Enumerable.Range(0, 4).Where(k => Cores.HasFlight(b, s, k) || Cores.StairHoleAt(b, s, k)));
             var op = Lod0.Build(new Site(d.buildings), b).Op;
             Assert.Equal(0, StepCorners(op, b, 2));
-            Assert.Contains(Problems.Check(new Site(d.buildings)), p => p.code == "stairs-no-flight" && p.k == 2);
         }
 
         [Theory]
@@ -106,7 +102,6 @@ namespace Triband.Storey.Tests
             Assert.NotNull(s);
             Assert.True(Cores.HasFlight(b, s, 2));
             Assert.True(Cores.StairHoleAt(b, s, 3));
-            Assert.Null(NoFlight(d, b));
         }
 
         [Fact]
@@ -158,35 +153,7 @@ namespace Triband.Storey.Tests
                             var op = Lod0.Build(new Site(d.buildings), b).Op;
                             Assert.True(StepCorners(op, b, k) > 0, what + ": no steps");
                             Assert.True(Covering(op, OverTheFlight(b, s), Derived.FloorBase(b, k + 1)) == 0, what + ": the slab over the flight is closed");
-                            Assert.Null(NoFlight(d, b));
                         }
-        }
-
-        [Fact]
-        public void StairsAnotherEditLeavesWithNothingToClimbToAreAProblem()
-        {
-            // on the top floor under a flat roof they climb to the roof
-            var (d, b) = Block();
-            var s = Place(d, b, 2)!;
-            Assert.Null(NoFlight(d, b));
-            // the roof made pitched: no roof access
-            b.style.roofType = RoofType.Gable;
-            Assert.Contains("pitched roof", NoFlight(d, b));
-            // flat again, but they stop at the top floor
-            b.style.roofType = RoofType.Flat; s.roof = false;
-            Assert.Contains("continue to the roof", NoFlight(d, b));
-            // From and To both floor 1
-            s.roof = true; Shafts.SetBottom(s, 1); Shafts.SetTop(s, 1);
-            Assert.Contains("From and To", NoFlight(d, b));
-            // from the ground floor to the roof: flights all the way
-            Shafts.SetBottom(s, 0); Shafts.SetTop(s, -1);
-            Assert.Null(NoFlight(d, b));
-            // every storey over the ground floor filled, the top floor's flight to the roof with them
-            b.floors[1].filled = true; b.floors[2].filled = true;
-            Assert.Contains("filled", NoFlight(d, b));
-            // a shell-only building builds no stairs: nothing of its inside is a problem
-            b.interior = false;
-            Assert.Null(NoFlight(d, b));
         }
     }
 }

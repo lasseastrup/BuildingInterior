@@ -354,23 +354,5 @@ namespace Triband.Storey.Tests
                 Assert.All(ops.Where(o => !o.door), o => Assert.True(o.u1 <= door.Left - 0.1 + 1e-9 || o.u0 >= door.Right + 0.1 - 1e-9, "a window in the door's dressing"));
             });
         }
-
-        [Fact]
-        public void BaysTooCloseForTheDressingAreAProblem()
-        {
-            // shutters 0.8 m each side of a 1.2 m window need bays of 2.9 m; the brick preset's are 2.6
-            With(Dressed("t-fit-wide", 1.2, 1.4, l: 0.8, r: 0.8, keep: true), () =>
-            {
-                var (b, s) = Block(st => st.windowKind = "t-fit-wide");
-                var p = Problems.Check(s).Where(x => x.code == "dressing").ToList();
-                Assert.Single(p);
-                Assert.Contains("t-fit-wide", p[0].message);
-            });
-            With(Dressed("t-fit-narrow", 1.2, 1.4, l: 0.3, r: 0.3, keep: true), () =>
-            {
-                var (b, s) = Block(st => st.windowKind = "t-fit-narrow");
-                Assert.DoesNotContain(Problems.Check(s), x => x.code == "dressing");
-            });
-        }
     }
 }

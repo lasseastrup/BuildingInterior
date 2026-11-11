@@ -26,7 +26,7 @@ namespace Triband.Storey.Generate
 
     /// <summary>
     /// What is read of a building's LOD0 after its meshes are uploaded (docs/CITY.md §7): the collision segments (the walk
-    /// model, colliders, the problem list), the collider's other solids, and the walls given ids (the cutaway). Tens of
+    /// model, colliders), the collider's other solids, and the walls given ids (the cutaway). Tens of
     /// kilobytes, about 1% of the LOD0's GPU meshes, where the generator's whole result is several megabytes.
     /// <see cref="Lod0.BuildShape"/> makes it without the meshes.
     /// </summary>
