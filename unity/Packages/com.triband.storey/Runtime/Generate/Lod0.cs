@@ -529,13 +529,6 @@ namespace Triband.Storey.Generate
                         doorRevealFrom: shell ? Facade.ShellRevealFrom(stk, true, OpeningKinds.Of(stk, true)) : (double?)null, thresholdC: k == 0 ? C.foundation : (Swatch?)null, doorsRecessed: stk.doorRecess.HasValue, buried: into));
                     Facade.Dress(op, gl, F, ops, y, C, shell, stk, Wall(stk, C, k == 0), Panel, pm, h, Live);
                     if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
-                    if (!party && stk.bricks is double density && density > 0)
-                    {
-                        var (bs0, be0) = pm.Span(T, T);
-                        Facade.Bricks(op, F, Math.Max(bs0, pc.lo), Math.Min(be0, pc.hi), y, h, k == 0 ? Math.Max(stk.plinthH ?? 0.45, stk.foundation.HasValue ? FoundationH(stk) : 0) : 0,
-                            Math.Max(Facade.BandAt(b, k) ? Band(stk, C).h : 0, Facade.CorniceUnder(b, k) ?? 0), ops, density, Facade.Seed(b.id, k, i, pc.lo),
-                            k == 0 && stk.groundWall != null ? C.groundWall.Shade(0.8) : C.brick);
-                    }
                     if (!party) { op.Ctx(wc, 1); PieceStrips(op, k, F, m, pc, ops, y, h, C, rooms && !shell); }
                     var (cs, ce) = pm.Span(T / 2, T / 2);
                     var ranges = shell || party ? new List<(double, double)> { (cs, ce) } : Facade.SolidRanges(cs, ce, ops);
@@ -707,7 +700,7 @@ namespace Triband.Storey.Generate
 
         /// <summary>
         /// A storey's wall colour: the walls', or on the <paramref name="ground"/> storey the style's own ground-floor colour
-        /// (<see cref="FacadeStyle.groundWall"/>) when it has one. Its plinth, band and brick patches are shades of it.
+        /// (<see cref="FacadeStyle.groundWall"/>) when it has one. Its plinth and band are shades of it.
         /// </summary>
         public static Swatch Wall(FacadeStyle st, Palette C, bool ground) => ground && st.groundWall != null ? C.groundWall : C.wall;
 

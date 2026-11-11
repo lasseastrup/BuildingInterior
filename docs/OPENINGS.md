@@ -142,8 +142,7 @@ When it's registered, the kind measures how far it reaches past its hole: left, 
 - the 14 cm windows keep from a neighbouring wall (`Facade.Span`), so shutters don't go through a corner;
 - the wall between neighbours: where two windows' dressing would meet, a Problem (docs/EDITOR.md §6.5) names the style and the bay spacing it needs;
 - a band, which `WindowSpec` keeps windows under, and a plinth, which ground-floor windows start above;
-- facade details: AC units under windows, vents between them, awnings over openings, and hand placement's refusal (`Details`, `Edit.Facades`);
-- brick patches (`Facade.Bricks`).
+- facade details: AC units under windows, vents between them, awnings over openings, details scattered on the walls, and hand placement's refusal (`Details`, `Edit.Facades`).
 
 ### 4.3 Slice: one prefab for every size of opening (step 3)
 

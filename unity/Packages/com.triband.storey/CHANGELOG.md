@@ -207,6 +207,8 @@ All notable changes to this package are documented here. The format follows [Kee
 - A building's row in the building table is its index in the layout, so party walls find their neighbour in the shader.
 
 ### Removed
+- **The built-in brick patches** (`FacadeStyle.bricks`, `Facade.Bricks`, the palette's `brick` shade; docs/EDITOR.md §6.7): a project scatters bricks of its own, as a facade detail (*Scattered on the walls*, §6.12). A layout or style that has them reads without a word and builds none; its `bricks` is read and dropped, as street doors' `doorType` is (`FacadeDetailTests.TheBuiltInBrickPatchesAreGone`).
+- **The baked layout format is 15** (`BakedLayout.Version`): styles no longer carry brick patches.
 - Street doors' styles, *Canopy* and *Glazed* (`DoorType`, `FacadeStyle.doorType`, `Facade.GlazedDoor`). A layout's `doorType` key is read and dropped, without the unknown-key warning. The baked layout format is version 3 (`BakedLayout.Version`), so Unity bakes every layout again.
 - `StoreyQualitySettings.gpuOcclusionCulling` and `targetFrameRate`. Nothing read them: Unity has no per-renderer switch for GPU occlusion culling (it is each quality level's Universal Renderer setting), the frame rate is the project's (`Application.targetFrameRate`), and Storey's own budget is `buildBudgetMs`. docs/SPEC.md §6.7 lists the project settings Storey needs, Depth Priming off among them.
 

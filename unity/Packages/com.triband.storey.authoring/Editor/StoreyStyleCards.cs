@@ -389,10 +389,9 @@ namespace Triband.Storey.Editor
             if (st.bands) on.Add("bands");
             if (t.Base && (st.plinthH ?? 0.45) > 0) on.Add("plinth");
             if (t.Base && st.foundation.HasValue) on.Add("foundation");
-            if (st.bricks > 0) on.Add("bricks");
             string summary = on.Count == 0 ? "Plain" : char.ToUpperInvariant(on[0][0]) + string.Join(" · ", on).Substring(1);
             using var c = StoreyInspectorUI.Card(t.Cards + "walls", "Walls", StoreyInspectorUI.BricksIcon, StoreyInspectorUI.Tint.Walls, summary,
-                tip: "The strips along the walls, top to bottom, and brick patches");
+                tip: "The strips along the walls, top to bottom");
             if (!c.Open) return;
             WallDetails(t, st);
         }
@@ -401,7 +400,7 @@ namespace Triband.Storey.Editor
 
         /// <summary>
         /// The style's wall strips (docs/EDITOR.md §6.7), top to bottom as they stand on the wall: the cornice, bands, and on
-        /// the base the plinth and foundation; brick patches on any. Each one's settings and colour are under it while it's on.
+        /// the base the plinth and foundation. Each one's settings and colour are under it while it's on.
         /// </summary>
         static void WallDetails(StyleTarget t, FacadeStyle st)
         {
@@ -448,10 +447,6 @@ namespace Triband.Storey.Editor
                         Colour(t, "Colour", "foundationColor", optional: true);
                     }
             }
-            bool br = StoreyInspectorUI.Feature("Brick patches", "Patches of brick scattered over the walls", (st.bricks ?? 0) > 0);
-            if (br != (st.bricks ?? 0) > 0) t.Edit(br ? "Brick patches" : "No brick patches", s => s.bricks = br ? 0.3 : (double?)null);
-            if (st.bricks is double bk && bk > 0)
-                using (new EditorGUI.IndentLevelScope()) StyleSlider(t, "Amount", bk, 0.05, 1, 0.05, (s, x) => s.bricks = x);
         }
 
         // ---- Colours ----

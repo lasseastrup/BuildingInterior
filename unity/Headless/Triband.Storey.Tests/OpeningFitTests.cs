@@ -10,8 +10,8 @@ namespace Triband.Storey.Tests
 {
     /// <summary>
     /// An artist's window that decides its hole, and the dressing round it kept clear (docs/OPENINGS.md §4.1, §4.2):
-    /// Keep size makes the hole the window's own size in every LOD, and corners, doors, bands, plinths, facade details,
-    /// brick patches and the next window keep clear of its shutters, sill and pediment. Storey's own.
+    /// Keep size makes the hole the window's own size in every LOD, and corners, doors, bands, plinths, facade details
+    /// and the next window keep clear of its shutters, sill and pediment. Storey's own.
     /// </summary>
     [Collection("OpeningKinds")]   // the registry is shared
     public class OpeningFitTests
@@ -340,21 +340,6 @@ namespace Triband.Storey.Tests
                 Assert.True(acs > 0, "AC units go under windows with a sill, lower down");
                 Assert.True(vents > 0, "vents go between the windows' shutters");
             });
-        }
-
-        [Fact]
-        public void BrickPatchesKeepClearOfTheShutters()
-        {
-            var ops = new List<Opening> { new Opening().Set(3, 4.2, 0.9, 2.3, rl: 0.45, rr: 0.45, rb: 0.1) };
-            var op = new MeshBuilder();
-            var F = new Frame(new Vec2(0, 0), new Vec2(1, 0), new Vec2(0, -1));
-            Facade.Bricks(op, F, 0, 8, 0, 3, 0.45, 0, ops, 1, 12345, new Swatch(new StyleRef(0, 0), ColorSlot.Wall, 0.9));
-            Assert.True(op.Verts > 0);
-            for (int i = 0; i < op.Verts; i++)
-            {
-                var p = op.P[i];
-                Assert.False(p.x > ops[0].Left - 0.12 + 1e-6 && p.x < ops[0].Right + 0.12 - 1e-6 && p.y > ops[0].Bottom - 0.15 + 1e-6 && p.y < ops[0].Top + 0.45 - 1e-6, $"a brick at {p} on the shutters");
-            }
         }
 
         [Fact]

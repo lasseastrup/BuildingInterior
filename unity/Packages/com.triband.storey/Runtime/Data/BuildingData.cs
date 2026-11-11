@@ -386,7 +386,7 @@ namespace Triband.Storey
         /// <summary>The plinth's own colour; null = a shade of the wall, as the prototype has it.</summary>
         public string? plinth;
         /// <summary>
-        /// The ground storey's wall colour; null = the walls' (docs/EDITOR.md §6.7). Its plinth, band shade and brick patches
+        /// The ground storey's wall colour; null = the walls' (docs/EDITOR.md §6.7). Its plinth and band shade
         /// follow it. Storey's own (the old BuildingGenerator's ground-floor wall colour).
         /// </summary>
         public string? groundWall;
@@ -497,8 +497,6 @@ namespace Triband.Storey
         public double? foundation, foundationH;
         /// <summary>How far the foundation stands out from the wall, in metres; null = 0.08 m.</summary>
         public double? foundationOut;
-        /// <summary>Brick patches scattered on the walls, 0 to 1 (null = none).</summary>
-        public double? bricks;
 
         /// <summary>A mansard's break: how high its steep lower slope rises, in metres; null = 2.4 m. Storey's own.</summary>
         public double? mansard;

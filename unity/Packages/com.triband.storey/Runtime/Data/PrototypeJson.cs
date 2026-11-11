@@ -335,7 +335,6 @@ namespace Triband.Storey
             s.foundation = c.Opt(o, "foundation", path);
             s.foundationH = c.Opt(o, "foundationH", path);
             s.foundationOut = c.Opt(o, "foundationOut", path);
-            s.bricks = c.Opt(o, "bricks", path);
             s.windowKind = c.OptStr(o, "windowKind", path);
             s.doorKind = c.OptStr(o, "doorKind", path);
             s.windowSet = Entries(c, o, "windowSet", path);
@@ -598,7 +597,6 @@ namespace Triband.Storey
             if (s.foundation.HasValue) o["foundation"] = s.foundation.Value;
             if (s.foundationH.HasValue) o["foundationH"] = s.foundationH.Value;
             if (s.foundationOut.HasValue) o["foundationOut"] = s.foundationOut.Value;
-            if (s.bricks.HasValue) o["bricks"] = s.bricks.Value;
             if (!string.IsNullOrEmpty(s.windowKind)) o["windowKind"] = s.windowKind;
             if (!string.IsNullOrEmpty(s.doorKind)) o["doorKind"] = s.doorKind;
             if (s.windowSet is { Count: > 0 }) o["windowSet"] = Entries(s.windowSet);
@@ -746,10 +744,11 @@ namespace Triband.Storey
             public static readonly string[] Style =
             {
                 "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "capH", "capDepth", "capStrip", "details",
-                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "bandGround", "corniceH", "corniceDepth", "plinthH", "plinthDepth", "foundation", "foundationH", "foundationOut", "bricks", "windowKind", "doorKind", "sillH", "winCentre", "recess", "doorRecess", "doorRecessOffset", "recessBack",
+                "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "bandGround", "corniceH", "corniceDepth", "plinthH", "plinthDepth", "foundation", "foundationH", "foundationOut", "windowKind", "doorKind", "sillH", "winCentre", "recess", "doorRecess", "doorRecessOffset", "recessBack",
                 "windowSet", "groundSet", "doorSet", "windowPick", "bayFit", "roofSurface",
                 "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth", "groundWall", "band", "cornice", "cap", "capRim",
                 "doorType",   // street doors' Canopy or Glazed, gone (every generated door is plain): read and dropped, not reported
+                "bricks",     // the built-in brick patches, gone (a project scatters its own, as a facade detail): read and dropped, not reported
             };
         }
 

@@ -642,58 +642,13 @@ namespace Triband.Storey.Generate
         /// <summary>Half LOD0's centre bar's width, metres.</summary>
         public const double BarHalf = 0.03;
 
-        /// <summary>A seed for a wall piece's brick patches, the same on every build.</summary>
+        /// <summary>A seed for a wall piece's scattered details (<see cref="Details"/>), the same on every build.</summary>
         public static uint Seed(string id, int k, int edge, double lo)
         {
             uint h = 2166136261;
             foreach (char ch in id) h = (h ^ ch) * 16777619;
             h = (h ^ (uint)k) * 16777619; h = (h ^ (uint)edge) * 16777619; h = (h ^ (uint)(int)Math.Round(lo * 100)) * 16777619;
             return h == 0 ? 1 : h;
-        }
-
-        /// <summary>A brick's size, and the mortar between bricks.</summary>
-        public const double BrickW = 0.24, BrickH = 0.075, Mortar = 0.03;
-
-        /// <summary>
-        /// Brick patches on a wall piece (u from <paramref name="ua"/> to <paramref name="ub"/>, storey from y, h high): small
-        /// groups of one to three courses of bricks, laid on the wall's face, about one group per 2.5 m² at density 1. They
-        /// keep clear of the openings (and the heads above them), the band and the plinth. Placed by a seeded random, so a
-        /// rebuild puts them back where they were.
-        /// </summary>
-        public static void Bricks(MeshBuilder op, Frame F, double ua, double ub, double y, double h, double bottom, double band, List<Opening> ops, double density, uint seed, Swatch c)
-        {
-            double y0 = y + Math.Max(0.2, bottom + 0.15), y1 = y + h - (band > 0 ? band + 0.12 : 0.25), u0 = ua + 0.25, u1 = ub - 0.25;
-            if (u1 - u0 < 0.6 || y1 - y0 < 0.4) return;
-            uint s = seed;
-            double R() { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return (s & 0xFFFFFF) / (double)0x1000000; }
-            double want = Math.Min(1, density) * (u1 - u0) * (y1 - y0) / 2.5;
-            int n = (int)Math.Floor(want) + (R() < want - Math.Floor(want) ? 1 : 0);
-            double wv = Dim.T_EXT + 0.004; var nr = new P3(F.w.x, 0, F.w.z);
-            var placed = new List<(double u0, double v0, double u1, double v1)>();
-            for (int p = 0; p < n; p++)
-                for (int tries = 0; tries < 4; tries++)
-                {
-                    int rows = 1 + (int)(R() * 3), cols = 1 + (int)(R() * 3);
-                    double pw = cols * BrickW + (cols - 1) * Mortar + BrickW / 2, ph = rows * BrickH + (rows - 1) * Mortar;
-                    double pu = u0 + R() * Math.Max(0, u1 - u0 - pw), pv = y0 + R() * Math.Max(0, y1 - y0 - ph);
-                    bool clear = true;
-                    foreach (var o in ops)
-                        if (pu < o.Right + 0.12 && pu + pw > o.Left - 0.12 && pv < y + o.Top + 0.45 && pv + ph > y + o.Bottom - 0.15) { clear = false; break; }
-                    foreach (var q0 in placed) if (pu < q0.u1 + 0.1 && pu + pw > q0.u0 - 0.1 && pv < q0.v1 + 0.1 && pv + ph > q0.v0 - 0.1) { clear = false; break; }
-                    if (!clear) continue;
-                    placed.Add((pu, pv, pu + pw, pv + ph));
-                    for (int r = 0; r < rows; r++)
-                    {
-                        double off = (r & 1) == 1 ? BrickW / 2 : 0, bv = pv + r * (BrickH + Mortar);
-                        int nb = cols - ((r & 1) == 1 && cols > 1 && R() < 0.5 ? 1 : 0);
-                        for (int q = 0; q < nb; q++)
-                        {
-                            double bu = pu + off + q * (BrickW + Mortar);
-                            op.Quad(F.At(bu, bv, wv), F.At(bu + BrickW, bv, wv), F.At(bu + BrickW, bv + BrickH, wv), F.At(bu, bv + BrickH, wv), nr, c);
-                        }
-                    }
-                    break;
-                }
         }
 
         /// <summary>

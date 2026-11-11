@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Triband.Storey.Edit;
 using Triband.Storey.Generate;
@@ -8,8 +9,9 @@ using Xunit;
 namespace Triband.Storey.Tests
 {
     /// <summary>
-    /// The facade details from the artist's brick building: arched heads, pane grids, frames, bands, plinth, foundation
-    /// and brick patches (<see cref="FacadeStyle"/>). Storey's own; a style without them builds as the prototype's.
+    /// The facade details from the artist's brick building: arched heads, pane grids, frames, bands, plinth and foundation
+    /// (<see cref="FacadeStyle"/>). Storey's own; a style without them builds as the prototype's. Its brick patches, once
+    /// built in, are a project's own facade detail now, scattered on the walls (docs/EDITOR.md §6.12).
     /// </summary>
     public class FacadeDetailTests
     {
@@ -17,7 +19,7 @@ namespace Triband.Storey.Tests
         {
             var st = Styles.Preset("brick").Clone();
             st.head = HeadType.Arch; st.paneCols = 2; st.paneRows = 3; st.frames = true; st.bandH = 0.65; st.bandDepth = 0.02; st.bandWall = true;
-            st.plinthH = 0.8; st.foundation = 0.5; st.foundationH = 0.2; st.bricks = 0.6; st.ground = GroundType.Match;
+            st.plinthH = 0.8; st.foundation = 0.5; st.foundationH = 0.2; st.ground = GroundType.Match;
             return st;
         }
 
@@ -49,7 +51,7 @@ namespace Triband.Storey.Tests
         {
             var plain = Styles.Preset("brick").Clone(); plain.ground = GroundType.Match;
             var (_, b0, s0) = Block(plain); int t0 = Lod0.Build(s0, b0).Op.Tris;
-            foreach (Action<FacadeStyle> f in new Action<FacadeStyle>[] { s => s.head = HeadType.Arch, s => { s.paneCols = 2; s.paneRows = 3; }, s => s.frames = true, s => s.foundation = 0.5, s => s.bricks = 0.5 })
+            foreach (Action<FacadeStyle> f in new Action<FacadeStyle>[] { s => s.head = HeadType.Arch, s => { s.paneCols = 2; s.paneRows = 3; }, s => s.frames = true, s => s.foundation = 0.5 })
             {
                 var st = plain.Clone(); f(st);
                 var (_, b, s) = Block(st);
@@ -99,17 +101,24 @@ namespace Triband.Storey.Tests
             Assert.Equal(-1.2, ys.Min(), 6); Assert.Equal(0.3, ys.Max(), 6);
         }
 
+        /// <summary>
+        /// The built-in brick patches are gone: a project scatters bricks of its own, as a facade detail. A style that has them
+        /// (layout key <c>bricks</c>) reads without a word, builds none, and writes them no more.
+        /// </summary>
         [Fact]
-        public void BricksKeepClearOfOpeningsAndComeBackTheSame()
+        public void TheBuiltInBrickPatchesAreGone()
         {
-            var st = Artist();
+            string json = PrototypeJson.WriteStyle(Artist()).TrimEnd();
+            json = json.Substring(0, json.Length - 1) + ",\"bricks\":0.6}";
+            var unknown = new List<string>();
+            var st = PrototypeJson.ReadStyle(json, unknown);
+            Assert.Empty(unknown);
+            Assert.DoesNotContain("\"bricks\"", PrototypeJson.WriteStyle(st));
+            Assert.Equal(PrototypeJson.WriteStyle(Artist()), PrototypeJson.WriteStyle(st));
+            // no bricks on its walls: nothing in the wall's colour 80 % as light, as they were
             var (_, b, s) = Block(st);
-            var a = Lod0.Build(s, b).Op; var again = Lod0.Build(new Site(new() { b }), b).Op;
-            var bricks = Enumerable.Range(0, a.P.Count).Where(i => a.C[i].slot == ColorSlot.Wall && Math.Abs(a.C[i].tone - 0.8) < 1e-9).ToList();
-            Assert.True(bricks.Count > 40, $"{bricks.Count} brick corners");
-            Assert.Equal(bricks.Select(i => a.P[i]), Enumerable.Range(0, again.P.Count).Where(i => again.C[i].slot == ColorSlot.Wall && Math.Abs(again.C[i].tone - 0.8) < 1e-9).Select(i => again.P[i]));
-            // none on the front wall's door (x 6.2..7.8, up to 2.6 m)
-            Assert.DoesNotContain(bricks, i => Math.Abs(a.P[i].z + Dim.T_EXT + 0.004) < 1e-6 && a.P[i].x > 6.1 && a.P[i].x < 7.9 && a.P[i].y < 2.7);
+            var op = Lod0.Build(s, b).Op;
+            Assert.DoesNotContain(Enumerable.Range(0, op.P.Count), i => op.C[i].slot == ColorSlot.Wall && Math.Abs(op.C[i].tone - 0.8) < 1e-9);
         }
 
         [Fact]
