@@ -108,6 +108,124 @@ namespace Triband.Storey.Tests
             finally { OpeningKinds.Remove("wb-narrow"); }
         }
 
+        // a click as the Windows card's Place windows makes it: the window its Window to place says, nothing picked (the first)
+        // or <paramref name="picked"/>, from the style of the hit wall's tier
+        static string? Click(Site site, BuildingData b, FacadeHit h, string picked = "") =>
+            Facades.ToggleWindow(site, b, h, Facades.WindowToPlace(Derived.StyleAt(b, h.k0), h.k0 == 0, picked));
+
+        // a click in the middle of each of the bays of storey k's wall i
+        static List<FacadeHit> Bays(Site site, BuildingData b, int k, int i)
+        {
+            var s = Facades.WindowAt(site, b, Hit(b, k, i, 0.5))!;
+            return Enumerable.Range(0, s.n).Select(j => Hit(b, k, i, (s.bS + (j + 0.5) * s.bay) / s.L)).ToList();
+        }
+
+        static OpeningKind? KindAt(Site site, BuildingData b, FacadeHit h) => Facades.WindowAt(site, b, h)!.window?.kind;
+
+        [Fact]
+        public void TheStylesOneWindowIsTheOnePutInOnEveryStorey()
+        {
+            OpeningKinds.Register(Window("wb-one", 0.8)); OpeningKinds.Register(Window("wb-shop", 1.0)); OpeningKinds.Register(Window("wb-shop2", 0.9));
+            try
+            {
+                // one window, and the ground floor's own two, picked bay by bay; the east wall blank, so a click puts one in
+                var (_, b, site) = Block();
+                b.style.windowKind = "wb-one";
+                b.style.groundSet = new() { new OpeningEntry { kind = "wb-shop" }, new OpeningEntry { kind = "wb-shop2" } };
+                Facades.ToggleState(b, 0, 1, EdgeState.Blank);
+                // on the base, the ground floor's own are windows to place too; on a setback, the style's alone; a ground floor
+                // without windows lists none
+                Assert.Equal(new[] { "wb-one", "wb-shop", "wb-shop2", Facades.AnyWindow }, Facades.WindowChoices(b.style, true));
+                Assert.Equal(new[] { "wb-one" }, Facades.WindowChoices(b.style, false));
+                b.style.ground = GroundType.Solid;
+                Assert.Equal(new[] { "wb-one" }, Facades.WindowChoices(b.style, true));
+                b.style.ground = GroundType.Storefront;
+                // nothing picked: the style's one window, by name, in every bay of every storey, the ground floor's too, as the
+                // Scene view names it. The style's pick for a ground-floor bay is one of the ground floor's own, which a click
+                // put in while the style had one window.
+                var one = OpeningKinds.Get("wb-one"); int put = 0;
+                for (int k = 0; k < 3; k++)
+                    foreach (var h in Bays(site, b, k, 1))
+                    {
+                        Assert.Null(Facades.WindowAt(site, b, h)!.window);
+                        Assert.Null(Click(site, b, h));
+                        Assert.Same(one, KindAt(site, b, h)); put++;
+                    }
+                Assert.Equal(put, b.windows.Count(w => w.window == "wb-one"));
+                // taken out, then put in again: any of them, by weight, the ground floor's own; one of them picked by name, above too
+                var ground = Bays(site, b, 0, 1);
+                foreach (var h in ground) Assert.Null(Click(site, b, h));
+                Assert.DoesNotContain(b.windows, w => w.k == 0);
+                foreach (var h in ground)
+                {
+                    Assert.Null(Click(site, b, h, Facades.AnyWindow));
+                    Assert.Contains(KindAt(site, b, h)?.id, new[] { "wb-shop", "wb-shop2" });
+                    Assert.Null(b.windows.Last().window);
+                }
+                var up = Bays(site, b, 2, 1)[0];
+                Assert.Null(Click(site, b, up));
+                Assert.Null(Click(site, b, up, "wb-shop"));
+                Assert.Same(OpeningKinds.Get("wb-shop"), KindAt(site, b, up));
+            }
+            finally { OpeningKinds.Remove("wb-one"); OpeningKinds.Remove("wb-shop"); OpeningKinds.Remove("wb-shop2"); }
+        }
+
+        [Fact]
+        public void TheStylesOneWindowGoesInThoughItIsNeverPicked()
+        {
+            OpeningKinds.Register(Window("wb-rare", 0.8));
+            try
+            {
+                // its one window weighs 0 beside none: the style lays no window, and its pick for a bay put in by hand is the
+                // built-in window, none of its own weighing anything
+                var (_, b, site) = Block();
+                b.style.windowSet = new() { new OpeningEntry { kind = "wb-rare", weight = 0 }, new OpeningEntry { none = true, weight = 1 } };
+                Assert.Empty(WindowsOn(site, b, 1, 1));
+                Assert.Equal(new[] { "wb-rare" }, Facades.WindowChoices(b.style, true));
+                var h = Hit(b, 1, 1, 0.4);
+                Assert.Null(Click(site, b, h));
+                Assert.Same(OpeningKinds.Get("wb-rare"), KindAt(site, b, h));
+                Assert.Equal("wb-rare", b.windows.Single().window);
+                // a style listing no window puts in the built-in one, by name
+                b.style.windowSet = new() { new OpeningEntry { none = true } };
+                Assert.Equal(new[] { WindowData.Plain }, Facades.WindowChoices(b.style, true));
+                Assert.Equal(WindowData.Plain, Facades.WindowToPlace(b.style, true, "wb-rare"));
+            }
+            finally { OpeningKinds.Remove("wb-rare"); }
+        }
+
+        [Fact]
+        public void TheStylesOwnWindowByNamePutsTheBayBack()
+        {
+            OpeningKinds.Register(Window("wb-own", 0.8)); OpeningKinds.Register(Window("wb-other", 0.9));
+            try
+            {
+                var (_, b, site) = Block();
+                b.style.windowKind = "wb-own";
+                var own = OpeningKinds.Get("wb-own"); var w = WindowsOn(site, b, 1, 1)[1]; var h = Hit(b, 1, 1, T(b, 1, 1, w));
+                Assert.Same(own, w.kind);
+                Assert.Null(Click(site, b, h));
+                Assert.True(b.windows.Single().none);
+                // the second click names the style's one window, which the style has there: the bay as the style has it, nothing by hand
+                Assert.Equal("wb-own", Facades.WindowToPlace(b.style, true, ""));
+                Assert.Null(Click(site, b, h));
+                Assert.Empty(b.windows);
+                Assert.Same(own, KindAt(site, b, h));
+                // another, named, is kept by hand; taken out and the style's own named, the bay is back as the style has it
+                Assert.Null(Click(site, b, h));
+                Assert.Null(Facades.ToggleWindow(site, b, h, "wb-other"));
+                Assert.Equal("wb-other", b.windows.Single().window);
+                Assert.Null(Click(site, b, h));
+                Assert.Null(Facades.ToggleWindow(site, b, h, "wb-own"));
+                Assert.Empty(b.windows);
+                // one the project doesn't have would be the style's pick: the style's own back
+                Assert.Null(Click(site, b, h));
+                Assert.Null(Facades.ToggleWindow(site, b, h, "not-in-the-project"));
+                Assert.Empty(b.windows);
+            }
+            finally { OpeningKinds.Remove("wb-own"); OpeningKinds.Remove("wb-other"); }
+        }
+
         [Fact]
         public void ADoorKeepsItsBay()
         {

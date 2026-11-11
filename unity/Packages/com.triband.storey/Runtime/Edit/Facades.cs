@@ -160,11 +160,54 @@ namespace Triband.Storey.Edit
             return w;
         }
 
+        /// <summary>Window to place's "Any of them, by weight" (<see cref="WindowChoices"/>): a click puts in the style's pick for the bay.</summary>
+        public const string AnyWindow = "*";
+
+        /// <summary>
+        /// The windows the Windows card's Place windows can put in on the walls of a tier styled <paramref name="st"/> (docs/EDITOR.md
+        /// §6.7), each once, as a window by hand names it (<see cref="WindowData.window"/>: a Storey Opening window's id, or
+        /// <see cref="WindowData.Plain"/> for the built-in one): the style's list, then, on the base tier (<paramref name="ground"/>),
+        /// its ground floor's own where it has some, as the card lists them; the built-in window where they list none. With more
+        /// than one, the last choice is <see cref="AnyWindow"/>. Storey's own.
+        /// </summary>
+        public static List<string> WindowChoices(FacadeStyle st, bool ground)
+        {
+            var o = new List<string>();
+            void Add(List<OpeningEntry>? set)
+            {
+                if (set == null) return;
+                foreach (var en in set)
+                {
+                    string value = en.kind ?? WindowData.Plain;
+                    if (!en.none && !o.Contains(value)) o.Add(value);
+                }
+            }
+            Add(WindowSets.Shown(st, SetOf.Windows));
+            if (ground && st.ground != GroundType.Solid) Add(WindowSets.Shown(st, SetOf.Ground));   // a ground floor without windows lists none
+            if (o.Count == 0) o.Add(WindowData.Plain);
+            if (o.Count > 1) o.Add(AnyWindow);
+            return o;
+        }
+
+        /// <summary>
+        /// What a Place windows click puts in (<see cref="WindowData.window"/>), the Windows card's Window to place having
+        /// <paramref name="picked"/>: that window, where it is one of <see cref="WindowChoices"/>, or their first, by name, so the
+        /// window put in is the one the card and the Scene view name, on any storey; null, the style's pick for the bay, for
+        /// <see cref="AnyWindow"/>. A style with one window puts in that one: its pick could be another (the ground floor's own,
+        /// or the built-in window where its window's weight is 0).
+        /// </summary>
+        public static string? WindowToPlace(FacadeStyle st, bool ground, string? picked)
+        {
+            var choices = WindowChoices(st, ground);
+            string value = picked != null && choices.Contains(picked) ? picked : choices[0];
+            return value == AnyWindow ? null : value;
+        }
+
         /// <summary>
         /// The Windows card's Place windows click (docs/EDITOR.md §6.7): on a bay with a window, take it out; on one without,
         /// put one in, <paramref name="window"/> (<see cref="WindowData.window"/>; null, the style's pick for the bay, or its
-        /// first where it picks none). The bay keeps one window by hand at most, and none where it is as the style has it. The
-        /// error says why nothing happened.
+        /// first where it picks none). The bay keeps one window by hand at most, and none where it is as the style has it: a
+        /// window named that the style has in the bay already is the style's. The error says why nothing happened.
         /// </summary>
         public static string? ToggleWindow(Site site, BuildingData b, FacadeHit h, string? window = null)
         {
@@ -178,7 +221,9 @@ namespace Triband.Storey.Edit
                 if (style.window != null) b.windows.Add(new WindowData { k = w.k, edge = w.edge, t = w.t, none = true });
                 return null;
             }
-            if (style.window != null && window == null) return null;   // the style's own back
+            // the style's own back: its pick, or the window named where it is the style's there (one the project doesn't have
+            // would be the style's pick)
+            if (style.window != null && (window == null || !OpeningSets.PlacedWindow(window, out var named) || ReferenceEquals(named, style.window.kind))) return null;
             b.windows.Add(new WindowData { k = w.k, edge = w.edge, t = w.t, window = window });
             if (WindowAt(site, b, h)!.window == null)
             {

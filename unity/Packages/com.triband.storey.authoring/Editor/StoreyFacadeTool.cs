@@ -71,9 +71,9 @@ namespace Triband.Storey.Editor
                 }
                 var p = f.e.F.At((u0 + u1) / 2, y + (y0 + y1) / 2, Dim.T_EXT / 2);
                 Box(new GhostBox { cx = p.x, cy = p.y, cz = p.z, sx = u1 - u0 + 0.06, sy = y1 - y0 + 0.06, sz = Dim.T_EXT * 2.2, u = f.e.u }, w.window != null ? Bad : Accent);
-                // which window a click takes out, or puts in (the Windows card's Window to place)
+                // which window a click takes out, or puts in (the Windows card's Window to place), as Click puts it in
                 Label(new Vector3((float)p.x, (float)(y + y1 + 0.35), (float)p.z),
-                    w.window != null ? "Take out " + (w.window.kind == null ? "the built-in window" : StoreySiteEditor.WindowName(w.window.kind.id)) : "Put in " + StoreySiteEditor.PlaceWindowName(e.View, st));
+                    w.window != null ? "Take out " + (w.window.kind == null ? "the built-in window" : StoreySiteEditor.WindowName(w.window.kind.id)) : "Put in " + StoreySiteEditor.PlaceWindowName(e.View, st, h.k0 == 0));
             }
             else if (tool == "bridge")
             {
@@ -136,8 +136,10 @@ namespace Triband.Storey.Editor
             }
             else if (tool == "window")
             {
-                // the window the Windows card says, its asset kept in the site's list so builds include it
-                string? win = StoreySiteEditor.WindowToPlace(e.View, Derived.StyleAt(b, h.k));
+                // the window the Windows card says, by name on any storey (the style's one window too: its pick for the bay could be
+                // another), its asset kept in the site's list so builds include it; from the style of the hit wall's tier, whose
+                // bays Facades.WindowAt lays out (h.k can be the storey over it, within a centimetre of its top)
+                string? win = StoreySiteEditor.WindowToPlace(e.View, Derived.StyleAt(b, h.k0), h.k0 == 0);
                 e.ApplyTo("Window", bb => (err = Facades.ToggleWindow(new Site(e.Document.buildings), bb, h, win)) == null);
                 if (err == null && win != null && StoreyOpenings.All().FirstOrDefault(o => o.Id == win) is { } asset) StoreyOpenings.Keep(e.Site, asset);
             }

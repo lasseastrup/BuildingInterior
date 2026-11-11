@@ -673,7 +673,7 @@ namespace Triband.Storey.Editor
         static readonly GUIContent PlaceDoorsLabel = new GUIContent("Place doors", "Click a wall in the Scene view to put a door in it, and a door to take it out");
         static readonly GUIContent PlaceWindowsLabel = new GUIContent("Place windows", "Click a window in the Scene view to take it out, and a bay without one to put one in");
         static readonly GUIContent WindowToPlaceLabel = new GUIContent("Window to place",
-            "Which of the style's windows a click puts in: one of its list by name, or any of them, by weight: the style's pick for the bay");
+            "Which of the style's windows a click puts in, on any floor: one of its windows by name (the ground floor's own too), or any of them, by weight: the style's pick for the bay");
 
         /// <summary>
         /// Place windows (docs/EDITOR.md §6.7): the Facade tool that takes out the window clicked, or puts one in the bay clicked
@@ -685,7 +685,7 @@ namespace Triband.Storey.Editor
             var v = e.View; bool was = v.facadeTool == "window";
             bool on = GUILayout.Toggle(was, PlaceWindowsLabel, GUI.skin.button, GUILayout.Height(22));
             if (on != was) { v.facadeTool = on ? "window" : ""; if (on) StoreyToolContext.Show(StoreyTab.Facade); SceneView.RepaintAll(); }
-            var choices = WindowChoices(st);
+            var choices = WindowChoices(st, k0 == 0);
             if (choices.Count > 1)
             {
                 int cur = Math.Max(0, choices.FindIndex(x => x.value == v.placeWindow));
@@ -698,30 +698,20 @@ namespace Triband.Storey.Editor
                 e.ApplyTo("The style's windows back", bb => bb.windows.RemoveAll(w => Derived.TierStart(bb, w.k) == k0) > 0);
         }
 
-        /// <summary>The windows Place windows can put in: the style's, by name (the built-in one as <see cref="WindowData.Plain"/>), and with more than one, any of them by weight ("*").</summary>
-        static List<(string value, string label)> WindowChoices(FacadeStyle st)
-        {
-            var o = new List<(string value, string label)>();
-            foreach (var en in WindowSets.Shown(st, SetOf.Windows)!)
-            {
-                string value = en.kind ?? WindowData.Plain;
-                if (!en.none && !o.Exists(x => x.value == value)) o.Add((value, WindowName(value)));
-            }
-            if (o.Count > 1) o.Add(("*", "Any of them, by weight"));
-            return o;
-        }
+        /// <summary>
+        /// The windows Place windows can put in on a tier styled <paramref name="st"/> (<see cref="Facades.WindowChoices"/>), with
+        /// their names: the style's (the built-in one as <see cref="WindowData.Plain"/>), on the base (<paramref name="ground"/>)
+        /// the ground floor's own too, and with more than one, any of them by weight (<see cref="Facades.AnyWindow"/>).
+        /// </summary>
+        static List<(string value, string label)> WindowChoices(FacadeStyle st, bool ground) =>
+            Facades.WindowChoices(st, ground).Select(x => (x, x == Facades.AnyWindow ? "Any of them, by weight" : WindowName(x))).ToList();
 
         /// <summary>
-        /// The window Place windows puts in, as a window by hand names it (<see cref="WindowData.window"/>): the one picked in the
-        /// Windows card, or the list's first; none (the style's pick for the bay) for "Any of them", or where the style has one window.
+        /// The window Place windows puts in on a tier styled <paramref name="st"/> (<paramref name="ground"/>: the base), as a
+        /// window by hand names it (<see cref="Facades.WindowToPlace"/>): the one picked in the Windows card, or the list's first,
+        /// the style's one window where it has one, by name; none (the style's pick for the bay) for "Any of them".
         /// </summary>
-        internal static string? WindowToPlace(StoreyEditView v, FacadeStyle st)
-        {
-            var choices = WindowChoices(st);
-            if (choices.Count <= 1) return null;
-            string value = choices.Exists(x => x.value == v.placeWindow) ? v.placeWindow : choices[0].value;
-            return value == "*" ? null : value;
-        }
+        internal static string? WindowToPlace(StoreyEditView v, FacadeStyle st, bool ground) => Facades.WindowToPlace(st, ground, v.placeWindow);
 
         /// <summary>A window by the words that tell it from the project's other windows: none is the style's own pick.</summary>
         internal static string WindowName(string? window)
@@ -733,13 +723,9 @@ namespace Triband.Storey.Editor
             return StoreyInspectorUI.ShortNames(wins.Select(o => o.name).ToList()).TryGetValue(asset.name, out var sn) ? sn : asset.name;
         }
 
-        /// <summary>What Place windows puts in, by name, for the Scene view: the window picked, the style's one window, or the style's pick.</summary>
-        internal static string PlaceWindowName(StoreyEditView v, FacadeStyle st)
-        {
-            if (WindowToPlace(v, st) is string w) return WindowName(w);
-            var choices = WindowChoices(st);
-            return choices.Count == 1 ? choices[0].label : "one of the style's windows";
-        }
+        /// <summary>What Place windows puts in on a tier styled <paramref name="st"/>, by name, for the Scene view: the window picked, the style's one window, or the style's pick.</summary>
+        internal static string PlaceWindowName(StoreyEditView v, FacadeStyle st, bool ground) =>
+            WindowToPlace(v, st, ground) is string w ? WindowName(w) : "one of the style's windows";
         static readonly GUIContent DoorToPlaceLabel = new GUIContent("Door to place",
             "Which of the style's doors a click puts in. Any of them, by weight: one picked for its wall as the style picks, which changes when the list does");
 
