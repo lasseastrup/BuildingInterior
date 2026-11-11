@@ -123,6 +123,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Doors, Erase, Stairs and Lift (**Turn 90°** in the inspector turns the next one), with green or red ghosts.
    - **Finish wall** in the Scene view ends a chain.
    - Stairs come in two kinds, chosen under the Stairs tool or on selected stairs. Both serve the same floors: from where they're placed up to the top floor and the roof, or whatever **From** and **To** say.
+     - **Something to climb to:** the Stairs tool places none that would have no flight: on the top floor under a pitched roof, which has no roof access, or where filled storeys stop every flight (`Shafts.Climb`). Its ghost is red there, and the Scene view, the *Tools* card and a click say why. Placed anyway, as the prototype places them, switchback stairs were their walls alone, with no steps and no slab opened, and straight flights nothing at all. Stairs another edit leaves so are in *Problems* (§6.5). Stairs with a flight further up keep their railed dead end under a filled storey.
      - **Switchback:** two flights and a landing per storey, in a walled stairwell.
      - **Straight flights:** one flight per storey with no walls, stacked one above the other, and a walkway beside it back to the start of the next flight. They're 2.6 × 6.4 m: a 1.3 m flight lane and a 1.3 m walkway.
      - **One flight up** (*To* the floor above *From*, or the top floor to the roof, or the floor under a pitched roof's top floor) needs no walkway: the stairs take the flight lane alone, 1.3 × 6.4 m, and the floor beside it is free for walls and other cores (`Cores.OneFlight`). The steps stay where a longer stack's are, so changing *To* never moves them: only the walkway's half comes and goes, and a stack that grows back may then no longer fit (*Problems* says so). With nothing beside it, its lane's other side can stand against a wall too, which then stands in for that rail. The Stairs tool's ghost shows the size the stairs will have.
@@ -143,7 +144,7 @@ Headless, the session's bookkeeping is tested (`EditSessionTests`: which buildin
    - Placed stairs and lifts pulse and glow.
    - **Isolate** fades the other buildings out and back.
    - **Rooms / Filled** on a floor:
-     - A filled storey has nothing inside: opaque windows and closed doors, no rooms and no stairs. The *Floor* card says so (*· filled*).
+     - A filled storey has nothing inside: opaque windows and closed doors, no rooms and no stairs. The *Floor* card says so (*· filled*). The Interior tools do nothing on it, a tool still picked on another floor included.
      - A lift passes through it without stopping, so its panel lists only open floors.
      - Stairs stop at a filled storey, with rails across the dead end.
      - Example: an 11-storey block with floors 1 to 9 filled, and a lift from the ground straight to floor 10.
@@ -296,7 +297,7 @@ What it finds:
   - part of a floor nobody can reach ("a room with no door?").
 - **No way in:** a walk-in building with no street door or bridge.
 - **Doors** on upper floors with nothing to open onto (they aren't built), and doors into filled storeys.
-- **Stairs and lifts** that no longer fit every floor they serve, that overlap, or a lift with one stop.
+- **Stairs and lifts** that no longer fit every floor they serve, that overlap, or a lift with one stop. Stairs with nothing to climb to: a pitched roof over top-floor stairs, *Continue to the roof* off, *From* and *To* on one floor, or filled storeys stopping every flight.
 - **Courtyards and atria** that no longer fit.
 - **Bridges** that no longer meet, or that lead into or out of a storey with nothing inside.
 - **Buildings that overlap.**

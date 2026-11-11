@@ -7,12 +7,43 @@ using Triband.Storey.Generate;
 namespace Triband.Storey.Edit
 {
     /// <summary>
+    /// Why stairs placed on a storey would have no flight at all (<see cref="Shafts.Climb"/>): it is the top floor and the roof
+    /// is pitched, which has no roof access, or filled storeys, which stairs never go into or out of, stop every flight.
+    /// </summary>
+    public enum ClimbIssue { None, TopFloor, Filled }
+
+    /// <summary>
     /// Stairs and lifts (SPEC §2.2, §7): building-level cores with a floor range. Placed lined up with the nearest wall
     /// and pulled flush onto it, dragged, turned and aligned only where they fit every storey they serve and stay
     /// clear of the other cores. Ported from the prototype.
     /// </summary>
     public static class Shafts
     {
+        public static string Why(ClimbIssue i) => i switch
+        {
+            ClimbIssue.TopFloor => "Nothing above to climb to: stairs go up from here, and a pitched roof has no roof access",
+            ClimbIssue.Filled => "Nothing to climb to: stairs never go into or out of a filled storey",
+            _ => "",
+        };
+
+        /// <summary>
+        /// Whether stairs of either kind placed on storey k, which go from there up to the top floor and on to the roof where
+        /// it has roof access (<see cref="Place"/>), have a flight anywhere (<see cref="Cores.HasFlight"/>), and why not. They
+        /// would have none on the top floor under a pitched roof, nor where filled storeys stop every flight: switchback
+        /// stairs would be walls alone, a stairwell with no steps in it under a slab with no opening, and straight flights
+        /// nothing at all. Stairs with a flight further up keep a railed dead end under a filled storey, as they always have.
+        /// Never an issue for a lift. Storey's own: the prototype places them.
+        /// </summary>
+        public static ClimbIssue Climb(BuildingData b, int k, CoreType type)
+        {
+            int N = b.floors.Count;
+            if (type == CoreType.Lift || k < 0 || k >= N) return ClimbIssue.None;
+            var it = new CoreData { type = type, bottom = k, top = -1, roof = true };
+            for (int j = k; j < N; j++) if (Cores.HasFlight(b, it, j)) return ClimbIssue.None;
+            // with none, an open top floor has a pitched roof over it (a flat one would take its flight up to the roof)
+            return k == N - 1 && !Derived.Filled(b, k) ? ClimbIssue.TopFloor : ClimbIssue.Filled;
+        }
+
         /// <summary>
         /// A new core's id, from the document's counter (the prototype's <c>nid('s')</c>), past any id a core of the layout
         /// has (a layout read from a file has its counter past them already, <see cref="LayoutIds"/>).
@@ -101,9 +132,16 @@ namespace Triband.Storey.Edit
 
         /// <summary>
         /// Where the Stairs or Lift tool would put a new core at p on storey k: lined up with the nearest wall (plus the
-        /// tool's 90° turns), flush onto it when close, and whether it fits from k to the top floor clear of the other cores.
+        /// tool's 90° turns), flush onto it when close, and whether it fits from k to the top floor clear of the other cores,
+        /// and, for stairs, has something to climb to (<see cref="Climb"/>, Storey's own).
         /// </summary>
-        public static (CoreData it, bool ok) Placement(BuildingData b, int k, Vec2 p, CoreType type, double placeRot)
+        public static (CoreData it, bool ok) Placement(BuildingData b, int k, Vec2 p, CoreType type, double placeRot) => Placement(b, k, p, type, placeRot, climb: true);
+
+        /// <param name="climb">
+        /// Stairs must have something to climb to (<see cref="Climb"/>). False, as the prototype: they go wherever they fit,
+        /// with nothing to climb to or not (the parity tests replay its cases so).
+        /// </param>
+        internal static (CoreData it, bool ok) Placement(BuildingData b, int k, Vec2 p, CoreType type, double placeRot, bool climb)
         {
             double x = Tiers.Cm(p.x), z = Tiers.Cm(p.z);
             // the floors Place gives it (from k to the top floor, stairs on to the roof): a lone flight's ghost is its lane
@@ -116,16 +154,20 @@ namespace Triband.Storey.Edit
             }
             bool ok = k < N && FitsLevels(b, it, k, N - 1);
             if (ok) ok = !b.shafts.Any(s => Overlap(s, it, of: b));
+            if (ok && climb) ok = Climb(b, k, type) == ClimbIssue.None;
             return (it, ok);
         }
 
         /// <summary>
         /// The Stairs or Lift tool's click: the new core, from storey k to the top floor (stairs of either kind reach the
-        /// roof), or null where it does not fit.
+        /// roof), or null where it does not fit, or where stairs would have nothing to climb to (<see cref="Climb"/>).
         /// </summary>
-        public static CoreData? Place(BuildingData b, int k, Vec2 p, CoreType type, double placeRot, string id)
+        public static CoreData? Place(BuildingData b, int k, Vec2 p, CoreType type, double placeRot, string id) => Place(b, k, p, type, placeRot, id, climb: true);
+
+        /// <param name="climb">As <see cref="Placement(BuildingData, int, Vec2, CoreType, double, bool)"/>'s.</param>
+        internal static CoreData? Place(BuildingData b, int k, Vec2 p, CoreType type, double placeRot, string id, bool climb)
         {
-            var (it, ok) = Placement(b, k, p, type, placeRot);
+            var (it, ok) = Placement(b, k, p, type, placeRot, climb);
             if (!ok) return null;
             var s = new CoreData { id = id, type = it.type, x = it.x, z = it.z, rot = it.rot, bottom = k, top = -1, roof = Cores.IsStairs(it) };
             b.shafts.Add(s);

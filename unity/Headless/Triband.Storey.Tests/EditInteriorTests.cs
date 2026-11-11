@@ -37,14 +37,18 @@ namespace Triband.Storey.Tests
             return r;
         }
 
-        /// <summary>One step, its result in the shape the exporter records it.</summary>
+        /// <summary>
+        /// One step, its result in the shape the exporter records it. Storey's own: stairs with nothing to climb to are refused
+        /// (<see cref="Shafts.Climb"/>, StairsClimbTests); the prototype places them wherever they fit, on a top floor under a
+        /// pitched roof too, and its cases are replayed so (<c>climb: false</c>).
+        /// </summary>
         static object? Step(Site site, BuildingData b, string op, JsonElement[] a)
         {
             int I(int j) => a[j].GetInt32();
             switch (op)
             {
                 case "snapPoint": { var q = Walls.Snap(b, I(0), V(a[1]), Options(a[2])); return new Dictionary<string, object?> { ["x"] = q.x, ["z"] = q.z, ["kind"] = q.kind.ToString().ToLowerInvariant(), ["wi"] = q.wall, ["guides"] = q.guides.Select(g => new[] { g.x, g.z }).ToList() }; }
-                case "placementAt": { var (it, ok) = Shafts.Placement(b, I(0), V(a[1]), Type(a[2]), a[3].GetDouble()); return new Dictionary<string, object?> { ["x"] = it.x, ["z"] = it.z, ["rot"] = it.rot, ["ok"] = ok }; }
+                case "placementAt": { var (it, ok) = Shafts.Placement(b, I(0), V(a[1]), Type(a[2]), a[3].GetDouble(), climb: false); return new Dictionary<string, object?> { ["x"] = it.x, ["z"] = it.z, ["rot"] = it.rot, ["ok"] = ok }; }
                 case "doorAt": return Door(Walls.DoorAt(site, b, I(0), V(a[1]), a[2].GetBoolean()));
                 case "hoverTarget":
                 {
@@ -66,7 +70,7 @@ namespace Triband.Storey.Tests
                 case "splitDrag": Walls.SplitAndDrag(b, I(0), I(1), V(a[2]), a[3].GetBoolean()); return null;
                 case "toggleDoor": return Walls.ToggleDoor(site, b, I(0), V(a[1]));
                 case "erase": { var t = Walls.HoverTarget(b, I(0), V(a[1])); if (t == null) return false; Walls.Erase(b, I(0), t.Value); return true; }
-                case "placeCore": return Shafts.Place(b, I(0), V(a[1]), Type(a[2]), a[3].GetDouble(), a[4].GetString()!) != null;
+                case "placeCore": return Shafts.Place(b, I(0), V(a[1]), Type(a[2]), a[3].GetDouble(), a[4].GetString()!, climb: false) != null;
                 case "dragCore": return Shafts.Drag(b, b.shafts[I(0)], V(a[1]), V(a[2]));
                 case "setAngle": return Shafts.SetAngle(b, b.shafts[I(0)], a[1].GetDouble());
                 case "alignCore": return Shafts.Align(b, b.shafts[I(0)]);

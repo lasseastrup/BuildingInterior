@@ -94,8 +94,11 @@ namespace Triband.Storey.Editor
                     break;
                 case InteriorTool.Stairs:
                 case InteriorTool.Lift:
-                    if (p == null) break;
                     {
+                        // stairs go up from this floor: where they'd have nothing to climb to the ghost is red everywhere, so say why
+                        var climb = v.interiorTool == InteriorTool.Stairs ? Shafts.Climb(b, k, v.stairKind) : ClimbIssue.None;
+                        if (climb != ClimbIssue.None) Hint(Shafts.Why(climb));
+                        if (p == null) break;
                         var (it, ok) = Shafts.Placement(b, k, p.Value, v.interiorTool == InteriorTool.Stairs ? v.stairKind : CoreType.Lift, v.placeRot);
                         CoreRect(b, it, yy, ok ? Accent : Bad);
                     }
@@ -228,7 +231,8 @@ namespace Triband.Storey.Editor
         protected override bool Click(StoreyEdit e, BuildingData b, Vec3d origin, Vec3d dir, SceneView sv)
         {
             var v = e.View; int k = v.floor;
-            if (!b.interior || k >= b.floors.Count) return false;
+            // a filled storey has no tools (ToolGUI): a tool still picked from another floor places nothing here
+            if (!b.interior || k >= b.floors.Count || b.floors[k].filled) return false;
             var hit = Picking.OnPlane(b, origin, dir, Derived.FloorBase(b, k)); if (hit == null) return false;
             var p = hit.Value; var site = new Site(e.Document.buildings);
             switch (v.interiorTool)
@@ -267,7 +271,11 @@ namespace Triband.Storey.Editor
                         var bb = d.buildings.First(x => x.id == b.id);
                         return Shafts.Place(bb, k, p, type, v.placeRot, Shafts.NewId(d)) != null;
                     });
-                    if (!placed) Notify(sv, "Needs room inside the footprint, clear of other cores");
+                    if (!placed)
+                    {
+                        var climb = Shafts.Climb(b, k, type);
+                        Notify(sv, climb != ClimbIssue.None ? Shafts.Why(climb) : "Needs room inside the footprint, clear of other cores");
+                    }
                     else
                     {
                         // it settles in: a ring at its centre and its outline glowing

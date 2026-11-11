@@ -168,6 +168,7 @@ namespace Triband.Storey.Validate
                 {
                     if (!Tiers.ShaftFits(b, s)) o.Add(P(b, s.bottom, Severity.Error, "core-fit", $"{Kind(s)} from {Floor(b, s.bottom)} no longer fit every floor they serve", s.x, s.z));
                     if (s.type == CoreType.Lift && Cores.Stops(b, s).Count < 2) o.Add(P(b, s.bottom, Severity.Warning, "lift-one-stop", "This lift has only one stop", s.x, s.z));
+                    if (Cores.IsStairs(s) && NoFlight(b, s) is string why) o.Add(P(b, s.bottom, Severity.Warning, "stairs-no-flight", $"The stairs on {Floor(b, s.bottom)} have nothing to climb to: {why}", s.x, s.z));
                     foreach (var t in b.shafts) if (string.CompareOrdinal(s.id, t.id) < 0 && Cores.Levels(b, s).Intersect(Cores.Levels(b, t)).Any() && Shafts.Overlap(s, t, 0, of: b)) o.Add(P(b, s.bottom, Severity.Error, "core-overlap", $"{Kind(s)} and {Kind(t).ToLowerInvariant()} overlap", (s.x + t.x) / 2, (s.z + t.z) / 2));
                 }
             foreach (var v in b.voids)
@@ -230,6 +231,19 @@ namespace Triband.Storey.Validate
         }
 
         static string Kind(CoreData s) => s.type == CoreType.Lift ? "The lift" : "The stairs";
+
+        /// <summary>
+        /// Why stairs have no flight on any storey they serve (<see cref="Cores.HasFlight"/>), or null when they have one: built,
+        /// they are a stairwell with no steps in it and no opening in a slab, or for straight flights nothing. Storey's own.
+        /// </summary>
+        static string? NoFlight(BuildingData b, CoreData s)
+        {
+            int T = Derived.ShaftTop(b, s);
+            for (int k = s.bottom; k <= T; k++) if (Cores.HasFlight(b, s, k)) return null;
+            if (T > s.bottom || Cores.ShaftRoof(b, s)) return "a filled storey stops every flight";
+            if (T < b.floors.Count - 1) return "From and To are the same floor";
+            return Roofs.IsPitched(b) ? "a pitched roof has no roof access" : "they don't continue to the roof";
+        }
 
         static void Overlaps(Site site, List<Problem> o, Func<BuildingData, bool> In)
         {

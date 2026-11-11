@@ -1185,6 +1185,9 @@ namespace Triband.Storey.Editor
                 int kind = GUILayout.Toolbar(v.stairKind == CoreType.Flight ? 1 : 0, new[] { new GUIContent("Switchback", "Two flights and a landing per storey, in a walled stairwell"), new GUIContent("Straight flights", "One straight flight per storey with no walls, and a walkway beside it back to the next flight") });
                 var want = kind == 1 ? CoreType.Flight : CoreType.Stairs;
                 if (want != v.stairKind) { v.stairKind = want; SceneView.RepaintAll(); }
+                // stairs go up from the floor they're placed on: on one with nothing above to climb to, none are placed
+                var climb = Shafts.Climb(b, k, v.stairKind);
+                if (climb != ClimbIssue.None) StoreyInspectorUI.Note(Shafts.Why(climb) + ".");
             }
             if (v.interiorTool == InteriorTool.Stairs || v.interiorTool == InteriorTool.Lift)
                 using (new EditorGUILayout.HorizontalScope())
