@@ -5,6 +5,8 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- **More of a straight flight's look** (`StairLook`; `Railing`; docs/EDITOR.md §5, `StairLookTests`): a bottom rail the spindles stand on, parallel to the handrail (`bottomGap`, `bottomW`, `bottomT`, `bottomColor`); how high the newels stand over the handrails, flush at 0 (`newelAbove`); feet at the newels' bases (`footW`, `footH`); slim newels, each rail its own on its line, where a newel asked for is narrower than the two rails side by side (`Railing.Slim`); and a solid flight's steps' ends in a colour of their own over its sides' (`endColor`). Each left out builds as before.
+- **The baked layout format is 20** (`BakedLayout.Version`): a stair's look carries them.
 - **How a straight flight looks** (`CoreData.look`, `StairLook`, layout key `look` on a shaft, each key written only when set; `Railing`; docs/EDITOR.md §5, `StairLookTests`): the rails' height and the handrail's width and thickness, the spindles' spacing and thickness, a post after every so many spindles and its width, the newels' width, and colours of its own for the handrails, spindles, posts and newels, treads, risers and a solid flight's sides. Each setting it leaves out is the default, which builds exactly as before, and one out of range is held to its range.
   - The colours take a slot of their own as an artist's part's do (`KindColors`). The palette keeps them as a style's: `StairColorFields` are in the layout's palette block, conformed to the palette and mapped to it (`PaletteConform`, `ColorMapping`, `PaletteSnapshot`).
   - The walk model's and the collision mesh's rails are as high as the look makes them and as wide as their widest part.

@@ -79,7 +79,7 @@ namespace Triband.Storey.Tests
                 sb.Append('}');
             }
             string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())))[..16];
-            Assert.True(hash == "A29688DF4026ADA7", $"the model's shape is {hash}: see this test's summary ({sb})");
+            Assert.True(hash == "912B490F31854948", $"the model's shape is {hash}: see this test's summary ({sb})");
         }
 
         /// <summary>A number the enum doesn't name, which the JSON reader takes ("roofType": "7"), bakes and reads back as it was.</summary>
@@ -135,13 +135,24 @@ namespace Triband.Storey.Tests
 
         // ---- the model, by reflection --------------------------------------------------------
 
-        static readonly Type[] ModelTypes =
+        /// <summary>
+        /// Every type the model is made of: each its fields reach from the document, through lists, dictionaries and nullables
+        /// (a list written by hand missed the nested ones: a roof's or a wall's surface, a terrace's edge, a stair's look).
+        /// </summary>
+        static readonly Type[] ModelTypes = Reach(typeof(StoreyDocument));
+
+        static Type[] Reach(Type root)
         {
-            typeof(StoreyDocument), typeof(PaletteEntry), typeof(BuildingData), typeof(BridgeData), typeof(VoidData), typeof(CornerData),
-            typeof(FloorData), typeof(WallData), typeof(DoorData), typeof(CoreData), typeof(EntranceData), typeof(DetailData), typeof(WindowData),
-            typeof(TerraceRoofData), typeof(FacadeStyle), typeof(DetailRules), typeof(KindRule), typeof(OpeningEntry), typeof(Vec2),
-            typeof(VoidKind), typeof(WindowPick), typeof(BayFit), typeof(CornerShape), typeof(CoreType), typeof(WindowType), typeof(HeadType), typeof(GroundType), typeof(RoofType), typeof(DetailFloors), typeof(DetailCorners),
-        };
+            var seen = new HashSet<Type>(); var todo = new Stack<Type>(); todo.Push(root);
+            while (todo.Count > 0)
+            {
+                var t = Nullable.GetUnderlyingType(todo.Peek()) ?? todo.Peek(); todo.Pop();
+                if (t.IsGenericType) { foreach (var a in t.GetGenericArguments()) todo.Push(a); continue; }
+                if (t.Namespace != typeof(StoreyDocument).Namespace || !seen.Add(t)) continue;
+                if (!t.IsEnum) foreach (var f in Fields(t)) todo.Push(f.FieldType);
+            }
+            return seen.ToArray();
+        }
 
         static IEnumerable<FieldInfo> Fields(Type t) => t.GetFields(BindingFlags.Public | BindingFlags.Instance).OrderBy(f => f.MetadataToken);
 

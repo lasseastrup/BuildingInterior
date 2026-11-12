@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 19;
+        public const int Version = 20;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -229,7 +229,9 @@ namespace Triband.Storey
                     c.look = new StairLook
                     {
                         height = r.Opt(), railW = r.Opt(), railT = r.Opt(), gap = r.Opt(), spindle = r.Opt(), posts = r.OptInt(), post = r.Opt(), newel = r.Opt(),
+                        newelAbove = r.Opt(), footW = r.Opt(), footH = r.Opt(), bottomGap = r.Opt(), bottomW = r.Opt(), bottomT = r.Opt(),
                         railColor = Str(ref r), spindleColor = Str(ref r), postColor = Str(ref r), treadColor = Str(ref r), riserColor = Str(ref r), sideColor = Str(ref r),
+                        bottomColor = Str(ref r), endColor = Str(ref r),
                     };
                 b.shafts.Add(c);
             }
@@ -435,7 +437,9 @@ namespace Triband.Storey
                 if (s.look is StairLook l)
                 {
                     w.Opt(l.height); w.Opt(l.railW); w.Opt(l.railT); w.Opt(l.gap); w.Opt(l.spindle); w.OptInt(l.posts); w.Opt(l.post); w.Opt(l.newel);
+                    w.Opt(l.newelAbove); w.Opt(l.footW); w.Opt(l.footH); w.Opt(l.bottomGap); w.Opt(l.bottomW); w.Opt(l.bottomT);
                     w.Count(S(l.railColor)); w.Count(S(l.spindleColor)); w.Count(S(l.postColor)); w.Count(S(l.treadColor)); w.Count(S(l.riserColor)); w.Count(S(l.sideColor));
+                    w.Count(S(l.bottomColor)); w.Count(S(l.endColor));
                 }
             }
             w.Count(b.entrances.Count);

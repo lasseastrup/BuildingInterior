@@ -38,6 +38,7 @@ namespace Triband.Storey.Tests
             var rl = Railing.Of(null);
             Assert.Equal((Lod0.Shared.StairRail, 0.04, 0.07, 0.135, 0.025, 0, 0.05, 0.13, 0.04, 0.04), (rl.H, rl.W, rl.T, rl.Gap, rl.Spindle, rl.Posts, rl.Post, Math.Round(rl.Newel, 9), rl.Off, rl.R));
             Assert.Equal(0.9, rl.FlightH, 9); Assert.Equal(Lod0.Shared.StairNewel, rl.NewelH, 9);
+            Assert.Equal((Railing.Above, 0.0, false, false), (rl.NewelAbove, rl.FootW, rl.Bottom, rl.Slim));
             // a look with nothing set builds the same as none, and is written as none
             string Built(StairLook? look)
             {
@@ -180,17 +181,38 @@ namespace Triband.Storey.Tests
         {
             var big = Railing.Of(new StairLook { height = 10, railW = 1, railT = 5, gap = 0.001, spindle = 0.5, posts = 500, post = 9, newel = 0.01 });
             Assert.Equal((2.0, 0.2, 0.3, 0.1, 0.11, 100, 0.2), (big.H, big.W, big.T, big.Spindle, Math.Round(big.Gap, 9), big.Posts, big.Post));
-            Assert.Equal(0.12, big.Off, 9);
-            Assert.Equal(2 * (big.Off + big.W / 2) + 0.01, big.Newel, 9);   // as wide as both rails, past its own most
+            // a newel asked narrower than both rails is slim, a centimetre wider than its own rail, its rail's line off the edge for it
+            Assert.True(big.Slim); Assert.Equal(0.21, big.Newel, 9); Assert.Equal(0.125, big.Off, 9);
+            // left alone, it grows to take both rails, past its own most
+            var wide = Railing.Of(new StairLook { railW = 0.2, spindle = 0.1, posts = 2, post = 0.2 });
+            Assert.False(wide.Slim); Assert.Equal(0.12, wide.Off, 9); Assert.Equal(2 * (wide.Off + wide.W / 2) + 0.01, wide.Newel, 9);
             var small = Railing.Of(new StairLook { height = 0.1, railW = 0, railT = 0, gap = 0, spindle = 0, posts = -3, post = 0, newel = 0 });
             Assert.Equal((0.6, 0.02, 0.02, 0.01, 0.02, 0, 0.01), (small.H, small.W, small.T, small.Spindle, Math.Round(small.Gap, 9), small.Posts, small.Post));
+            Assert.True(small.Slim); Assert.Equal(0.03, small.Newel, 9);   // a slim newel at least a centimetre wider than its handrail
             Assert.Equal(0.04, small.Off, 9);
+            // a bottom rail at least 10 cm under the flights' handrail; feet wider than the newels; newels at most 60 cm over
+            var odd = Railing.Of(new StairLook { bottomGap = 5, footW = 0.01, newelAbove = 2 });
+            Assert.Equal(1.02 - Railing.Below - 0.07 - 0.04 - 0.1, odd.BottomGap, 9);
+            Assert.Equal(odd.Newel + 0.01, odd.FootW, 9);
+            Assert.Equal(0.6, odd.NewelAbove, 9);
         }
+
+        /// <summary>A look like the artist's (their image of a straight flight railed on one side): slim newels flush with the handrail, on feet, a bottom rail, a spindle a step with a post after every five, the steps' ends a grey over the white wall under them.</summary>
+        internal static StairLook Artist() => new StairLook
+        {
+            height = 1.0, railW = 0.06, railT = 0.05, gap = 0.28, spindle = 0.025, posts = 5, post = 0.045, newel = 0.07, newelAbove = 0, footW = 0.11, footH = 0.07,
+            bottomGap = 0.06, bottomW = 0.04, bottomT = 0.04, railColor = "#5A5E61", spindleColor = "#5A5E61", postColor = "#5A5E61", bottomColor = "#5A5E61",
+            treadColor = "#CFCFCC", riserColor = "#C4C4C1", endColor = "#BDBDBA", sideColor = "#E9E9E6",
+        };
 
         public static IEnumerable<object[]> Looks()
         {
             var looks = new (string name, StairLook look)[]
             {
+                ("the artist's", Artist()),
+                ("bottom rail and feet", new StairLook { bottomGap = 0.1, bottomW = 0.05, bottomT = 0.05, footW = 0.25, footH = 0.12 }),
+                ("slim and flush", new StairLook { newel = 0.05, newelAbove = 0, footW = 0.08, footH = 0.05, bottomGap = 0.05, posts = 3 }),
+                ("step ends", new StairLook { endColor = "#BDBDBA" }),
                 ("chunky", new StairLook { railW = 0.15, railT = 0.12, gap = 0.2, spindle = 0.06, posts = 3, post = 0.12, newel = 0.2 }),
                 ("posts as wide as the handrail", new StairLook { railW = 0.05, posts = 2, post = 0.05, spindle = 0.05, gap = 0.12 }),
                 ("tall and thin", new StairLook { height = 1.6, railW = 0.02, railT = 0.02, gap = 0.06, spindle = 0.01 }),
@@ -213,6 +235,122 @@ namespace Triband.Storey.Tests
         }
 
         [Fact]
+        public void ABottomRailCarriesTheSpindles()
+        {
+            var (d, b, s) = Stack(new StairLook { bottomGap = 0.08 });
+            var rl = Railing.Of(s.look);
+            Assert.Equal((true, 0.08, 0.04, 0.04), (rl.Bottom, rl.BottomGap, rl.BottomW, rl.BottomT));   // as wide as the handrail
+            var op = Lod0.Build(new Site(d.buildings), b, solids: true).Op; var f = Cores.FrameOf(b, s);
+            var boxes = Boxes(op, f);
+            // round the first floor's opening: 8 cm over the floor, the spindles on it, up to the handrail
+            double y1 = Derived.FloorBase(b, 1), xc = Xm + 0.04;
+            Assert.Contains(boxes, x => At(x.u0, xc - 0.02) && At(x.u1, xc + 0.02) && At(x.y0, y1 + 0.08) && At(x.y1, y1 + 0.12) && At(x.w0, Z0) && At(x.w1, Z1));
+            var level = boxes.Where(x => Square(x, 0.025) && At((x.u0 + x.u1) / 2, xc) && x.y0 > y1 - 1e-6 && x.y0 < y1 + 0.5).ToList();
+            Assert.NotEmpty(level);
+            Assert.All(level, x => { Assert.Equal(y1 + 0.12, x.y0, 6); Assert.Equal(y1 + 0.95, x.y1, 6); });
+            // up the ground floor's flight: the spindles' feet a centimetre into its top, 8 cm over the nosings' line
+            double fh = Derived.FloorH(b, 0), run = (Z1 - Z0) / Steps(fh), sl = fh / (Z1 - Z0);
+            var up = boxes.Where(x => Square(x, 0.025) && At((x.u0 + x.u1) / 2, Xm - 0.04) && x.y0 > -1 && x.y1 < y1 + 1).ToList();
+            Assert.NotEmpty(up);
+            Assert.All(up, x => { double zc = (x.w0 + x.w1) / 2; Assert.Equal((zc - Z0 + run) * sl + 0.12 - 0.0125 * sl - 0.01, x.y0, 6); });
+            // none without one
+            var (d2, b2, s2) = Stack(null);
+            Assert.DoesNotContain(Boxes(Lod0.Build(new Site(d2.buildings), b2, solids: true).Op, f), x => At(x.y0, y1 + 0.08));
+        }
+
+        [Fact]
+        public void NewelsStandAsHighAsSetOverTheHandrails()
+        {
+            // flush: as high as the highest handrail ending in them, a flight's 90 cm over its nosings' line, the openings' 1.02 m
+            var (d, b, s) = Stack(new StairLook { newelAbove = 0 });
+            var op = Lod0.Build(new Site(d.buildings), b, solids: true).Op; var f = Cores.FrameOf(b, s);
+            var newels = Boxes(op, f).Where(x => Square(x, 0.13)).ToList();
+            double Rise(int k) => Derived.FloorH(b, k) / Steps(Derived.FloorH(b, k));
+            double Top(double y0, double w) => newels.Single(x => At(x.y0, y0) && At((x.u0 + x.u1) / 2, Xm) && x.w0 < w && x.w1 > w).y1 - y0;
+            double y1 = Derived.FloorBase(b, 1), y3 = Derived.FloorBase(b, 3);
+            Assert.Equal(Rise(0) + 0.9, Top(0, Z0 - 0.06), 6);    // the ground floor's flight's foot
+            Assert.Equal(Rise(0) + 0.9, Top(y1, Z1 + 0.06), 6);   // its head, on the first floor
+            Assert.Equal(Rise(1) + 0.9, Top(y1, Z0 - 0.06), 6);   // the first floor's flight's foot
+            Assert.Equal(1.02, Top(y3, Z0 - 0.06), 6);            // the roof's front corner: no flight goes on up
+            // the default, 16 cm over the rails' height
+            var (d2, b2, s2) = Stack(null);
+            Assert.All(Boxes(Lod0.Build(new Site(d2.buildings), b2, solids: true).Op, f).Where(x => Square(x, 0.13)), x => Assert.Equal(1.18, x.y1 - x.y0, 6));
+        }
+
+        [Fact]
+        public void NewelsCanStandOnFeet()
+        {
+            var (d, b, s) = Stack(new StairLook { footW = 0.2, footH = 0.1 });
+            var r = Lod0.Build(new Site(d.buildings), b, solids: true); var f = Cores.FrameOf(b, s);
+            var boxes = Boxes(r.Op, f);
+            var newels = boxes.Where(x => Square(x, 0.13)).ToList();
+            Assert.NotEmpty(newels);
+            Assert.All(newels, nw => Assert.Contains(boxes, x => Square(x, 0.2) && At(x.y0, nw.y0) && At(x.y1, nw.y0 + 0.1) && At(x.u0 + x.u1, nw.u0 + nw.u1) && At(x.w0 + x.w1, nw.w0 + nw.w1)));
+            // the walk model goes round the foot
+            var c = f.At2(Xm, Z0 - 0.065);
+            Assert.Contains(r.Segs[0], g => At(g.ax, c.x) && At(g.az, c.z) && At(g.bx, c.x) && At(g.r, 0.115));
+        }
+
+        [Fact]
+        public void SlimNewelsGiveEachRailItsOwn()
+        {
+            // narrower than the two rails side by side: each rail's own, on its line, where the line across the front or the back
+            // crosses it, its handrail running on to them
+            var (d, b, s) = Stack(new StairLook { newel = 0.06 });
+            var rl = Railing.Of(s.look);
+            Assert.True(rl.Slim); Assert.Equal(0.06, rl.Newel, 9); Assert.Equal(0.05, rl.Off, 9);
+            var op = Lod0.Build(new Site(d.buildings), b, solids: true).Op; var f = Cores.FrameOf(b, s);
+            var boxes = Boxes(op, f);
+            Assert.DoesNotContain(boxes, x => Square(x, 0.13));
+            bool Post(double u, double w, double y0) => boxes.Any(x => Square(x, 0.06) && At((x.u0 + x.u1) / 2, u) && At((x.w0 + x.w1) / 2, w) && At(x.y0, y0));
+            double y1 = Derived.FloorBase(b, 1);
+            Assert.True(Post(Xm - 0.05, Z0 - 0.05, 0), "the ground floor's flight's foot");
+            Assert.True(Post(Xm + 0.05, Z0 - 0.05, y1) && Post(Xm + 0.05, Z1 + 0.05, y1), "the first floor's opening's own");
+            Assert.True(Post(Xm - 0.05, Z1 + 0.05, y1), "the ground floor's flight's head");
+            Assert.True(Post(Xm - 0.05, Z0 - 0.05, y1), "the first floor's flight's foot");
+            // the opening's handrail between its own
+            Assert.Contains(boxes, x => At((x.u0 + x.u1) / 2, Xm + 0.05) && At(x.y1, y1 + 1.02) && At(x.w0, Z0 - 0.02) && At(x.w1, Z1 + 0.02));
+            // a flight's handrail from its foot's to its head's
+            var tops = Enumerable.Range(0, op.Tris).Where(t => op.N[op.I[3 * t]].y > 0.5 && op.N[op.I[3 * t]].y < 0.99 && op.C[op.I[3 * t]].slot == ColorSlot.Rail)
+                .SelectMany(t => new[] { op.P[op.I[3 * t]], op.P[op.I[3 * t + 1]], op.P[op.I[3 * t + 2]] })
+                .Where(p => p.y < y1 + 1.2 && Math.Abs((p.x - f.O.x) * f.u.x + (p.z - f.O.z) * f.u.z - (Xm - 0.05)) < 0.021)
+                .Select(p => (p.x - f.O.x) * f.w.x + (p.z - f.O.z) * f.w.z).ToList();
+            Assert.Equal(Z0 - 0.02, tops.Min(), 6); Assert.Equal(Z1 + 0.02, tops.Max(), 6);
+        }
+
+        [Fact]
+        public void TheStepsEndsCanHaveAColourOfTheirOwn()
+        {
+            // 20 cm under each tread (the first's down to the floor), as steps in the air have them, over the side's own colour
+            var look = new StairLook { endColor = "#BDBDBA", sideColor = "#E9E9E6" };
+            var (d, b, s) = Stack(look, rails: false);
+            var op = Lod0.Build(new Site(d.buildings), b).Op; var f = Cores.FrameOf(b, s);
+            // the walkway's side's faces in a colour, of storey k's flight: between its nosings' line and its floor or underside
+            double Area(int k, string colour)
+            {
+                double y = Derived.FloorBase(b, k), h = Derived.FloorH(b, k), sl = h / (Z1 - Z0), rn = (Z1 - Z0) / Steps(h), a = 0;
+                for (int t = 0; t < op.Tris; t++)
+                {
+                    if (KindColors.RefOf(op.C[op.I[3 * t]].slot) != colour) continue;
+                    var nn = op.N[op.I[3 * t]]; if (nn.x * f.u.x + nn.z * f.u.z < 0.99) continue;
+                    P3 A = op.P[op.I[3 * t]], B = op.P[op.I[3 * t + 1]], C = op.P[op.I[3 * t + 2]];
+                    var m = (A + B + C) * (1.0 / 3); double w = (m.x - f.O.x) * f.w.x + (m.z - f.O.z) * f.w.z;
+                    if (m.y > y + (w - Z0 + rn) * sl + 1e-6 || m.y < (k == 0 ? y : y + (w - Z0) * sl - 0.2) - 1e-6) continue;
+                    var x = P3.Cross(B - A, C - A); a += Math.Sqrt(x.x * x.x + x.y * x.y + x.z * x.z) / 2;
+                }
+                return a;
+            }
+            // the ground floor's, on its floor
+            double fh = Derived.FloorH(b, 0); int n = Steps(fh); double run = (Z1 - Z0) / n, rise = fh / n;
+            Assert.Equal(run * (rise + 0.2 * (n - 1)), Area(0, look.endColor), 6);
+            Assert.Equal((Z1 - Z0) * fh * (n + 1) / (2.0 * n) - run * (rise + 0.2 * (n - 1)), Area(0, look.sideColor), 6);
+            // the first floor's, over the flight below: under each step a wedge down to its underside
+            double y1 = Derived.FloorBase(b, 1), fh1 = Derived.FloorH(b, 1); int n1 = Steps(fh1); double run1 = (Z1 - Z0) / n1, rise1 = fh1 / n1;
+            Assert.Equal(n1 * run1 * 0.2, Area(1, look.endColor), 6);
+            Assert.Equal(n1 * run1 * rise1 / 2, Area(1, look.sideColor), 6);
+        }
+
+        [Fact]
         public void ItIsKeptAsSetAndBaked()
         {
             var (d, b, s) = Stack(new StairLook { gap = 0.1, posts = 4, railColor = "#8B5A2B" });
@@ -222,7 +360,10 @@ namespace Triband.Storey.Tests
             Assert.Equal((0.1, 4, "#8B5A2B"), (back.gap!.Value, back.posts!.Value, back.railColor));
             Assert.Null(back.height); Assert.Null(back.sideColor);
             s.look = new StairLook { height = 1.1, railW = 0.05, railT = 0.06, gap = 0.12, spindle = 0.03, posts = 2, post = 0.06, newel = 0.15,
-                railColor = "#111111", spindleColor = "#222222", postColor = "#333333", treadColor = "#444444", riserColor = "#555555", sideColor = "#666666" };
+                newelAbove = 0.05, footW = 0.2, footH = 0.07, bottomGap = 0.07, bottomW = 0.03, bottomT = 0.035,
+                railColor = "#111111", spindleColor = "#222222", postColor = "#333333", treadColor = "#444444", riserColor = "#555555", sideColor = "#666666",
+                bottomColor = "#777777", endColor = "#888888" };
+            Assert.All(typeof(StairLook).GetFields(), x => Assert.NotNull(x.GetValue(s.look)));   // every one set
             var baked = BakedLayout.Of(BakedLayout.Bake(d))!.Document().buildings[0].shafts[0].look!;
             foreach (var f in typeof(StairLook).GetFields()) Assert.Equal(f.GetValue(s.look), f.GetValue(baked));
             // a key it doesn't know is reported, as any other's; posts are whole

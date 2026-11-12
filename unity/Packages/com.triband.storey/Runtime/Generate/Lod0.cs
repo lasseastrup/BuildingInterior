@@ -1549,48 +1549,63 @@ namespace Triband.Storey.Generate
                     // its look: the rails' top over the floor, the handrail's width and thickness, the spindles' half width
                     // and spacing, the newels' half width and top, each rail's line off the lane's edge, and the colours
                     var rl = Railing.Of(s.look); var lk = s.look;
-                    double H = rl.H, RW = rl.W / 2, RT = rl.T, BH = rl.Spindle / 2, Gap = rl.Gap, NH = rl.Newel / 2, NT = rl.NewelH, Off = rl.Off;
+                    double H = rl.H, RW = rl.W / 2, RT = rl.T, BH = rl.Spindle / 2, Gap = rl.Gap, NH = rl.Newel / 2, Off = rl.Off;
                     Swatch railC = Railing.Colour(C, lk?.railColor, C.rail), spindleC = Railing.Colour(C, lk?.spindleColor, C.rail), postC = Railing.Colour(C, lk?.postColor, C.rail);
                     Swatch treadC = Railing.Colour(C, lk?.treadColor, C.step), riserC = Railing.Colour(C, lk?.riserColor, C.step), sideC = Railing.Colour(C, lk?.sideColor, C.inner);
-                    // a newel on the lane's edge xe, from za to zb along it
-                    void Newel(double xe, double za, double zb)
+                    Swatch bottomC = Railing.Colour(C, lk?.bottomColor, railC);
+                    // a flight's handrail's top over the floor where it ends in a newel: its riser over its nosings' line's
+                    double Rise(int kk) { double h = Derived.FloorH(b, kk); return h / Math.Max(8, (int)Math.Round(h / 0.18)); }
+                    // a newel on the lane's edge xe, from za to zb along it, as high as the look sets it over the rails and over the
+                    // flight's handrail (flight, over the floor) that ends in it, and its foot
+                    void Newel(double xe, double za, double zb, double flight)
                     {
-                        Bx(xe - NH, xe + NH, y, y + NT, za, zb, postC, null, Skip.Bot);
-                        S(xe, (za + zb) / 2, xe, (za + zb) / 2, NH + 0.015, NT);
+                        double nt = rl.NewelTop(flight), zc = (za + zb) / 2;
+                        Bx(xe - NH, xe + NH, y, y + nt, za, zb, postC, null, Skip.Bot);
+                        if (rl.FootW > 0) Bx(xe - rl.FootW / 2, xe + rl.FootW / 2, y, y + rl.FootH, zc - rl.FootW / 2, zc + rl.FootW / 2, postC, null, Skip.Bot);
+                        S(xe, zc, xe, zc, Math.Max(NH, rl.FootW / 2) + 0.015, nt);
                     }
                     // an upright under a handrail (a spindle, or a post every so many), at c along the rail and at across it,
                     // from y0 to y1
                     void Upright(bool post, double at, double c, double y0, double y1, bool alongZ)
                     {
                         double h = post ? rl.Post / 2 : BH;
-                        // never quite as wide as the handrail, whose sides it would lie in where its top goes into it; wider, its
-                        // top shows beside it, so it has one
+                        // never quite as wide as the handrail or the bottom rail, whose sides it would lie in where it goes into
+                        // them; wider than the handrail, its top shows beside it, so it has one
+                        if (Math.Abs(h - RW) < 0.002) h = RW - 0.002;
+                        if (rl.Bottom && Math.Abs(h - rl.BottomW / 2) < 0.002) h = rl.BottomW / 2 - 0.002;
                         if (Math.Abs(h - RW) < 0.002) h = RW - 0.002;
                         var top = h > RW ? Skip.Bot : Skip.Top | Skip.Bot;
                         if (alongZ) Bx(at - h, at + h, y0, y1, c - h, c + h, post ? postC : spindleC, null, top);
                         else Bx(c - h, c + h, y0, y1, at - h, at + h, post ? postC : spindleC, null, top);
                     }
-                    // a level rail's handrail, its top H over the floor, and its uprights, between its ends (newels, or a post
-                    // against a wall): along z at x, or along x at z. Its spindles Gap apart; with posts, the rail in equal
-                    // stretches between them, each with that many spindles
+                    // a level rail's handrail, its top H over the floor, its bottom rail where the look has one, and its
+                    // uprights, between its ends (newels, or a post against a wall): along z at x, or along x at z. Its spindles
+                    // Gap apart, on the bottom rail or the floor; with posts, the rail in equal stretches between them, each with
+                    // that many spindles, the posts on the floor
                     void Level(double a, double e, double at, bool alongZ)
                     {
                         if (!draw) return;
-                        double h0 = y + H - RT;
+                        double h0 = y + H - RT, foot = y;
                         if (alongZ) Bx(at - RW, at + RW, h0, y + H, a, e, railC, null, Skip.In | Skip.Out);
                         else Bx(a, e, h0, y + H, at - RW, at + RW, railC, null, Skip.UStart | Skip.UEnd);
+                        if (rl.Bottom)
+                        {
+                            double bw = rl.BottomW / 2, b0 = y + rl.BottomGap; foot = b0 + rl.BottomT;
+                            if (alongZ) Bx(at - bw, at + bw, b0, foot, a, e, bottomC, null, Skip.In | Skip.Out);
+                            else Bx(a, e, b0, foot, at - bw, at + bw, bottomC, null, Skip.UStart | Skip.UEnd);
+                        }
                         int n = rl.Posts;
                         if (n == 0)
                         {
                             int m = Math.Max(1, (int)Math.Round((e - a) / Gap));
-                            for (int j = 0; j < m; j++) Upright(false, at, a + (j + 0.5) * (e - a) / m, y, h0, alongZ);
+                            for (int j = 0; j < m; j++) Upright(false, at, a + (j + 0.5) * (e - a) / m, foot, h0, alongZ);
                             return;
                         }
                         int parts = Math.Max(1, (int)Math.Round((e - a) / ((n + 1) * Gap))); double part = (e - a) / parts;
                         for (int i = 0; i < parts; i++)
                         {
                             if (i > 0) Upright(true, at, a + i * part, y, h0, alongZ);
-                            for (int j = 0; j < n; j++) Upright(false, at, a + i * part + (j + 1) * part / (n + 1), y, h0, alongZ);
+                            for (int j = 0; j < n; j++) Upright(false, at, a + i * part + (j + 1) * part / (n + 1), foot, h0, alongZ);
                         }
                     }
                     if (hole && !s.rails)
@@ -1625,8 +1640,20 @@ namespace Triband.Storey.Generate
                         {
                             if (wall) return;
                             double xc = xe + o * Off;
-                            Newel(xe, z0 - 2 * NH, z0); Newel(xe, z1, z1 + 2 * NH);
-                            Level(z0, z1, xc, true);
+                            if (!rl.Slim)
+                            {
+                                // the flight going on up from its front, and the one coming up to its back, end their handrails in them
+                                Newel(xe, z0 - 2 * NH, z0, up ? Rise(k) + rl.FlightH : 0); Newel(xe, z1, z1 + 2 * NH, Rise(k - 1) + rl.FlightH);
+                                Level(z0, z1, xc, true);
+                            }
+                            else
+                            {
+                                // slim: its own at its ends, where the line across the front crosses it (and across the back), and
+                                // the flight coming up's own at its head, on that flight's line, its handrail running on to it
+                                Newel(xc, z0 - Off - NH, z0 - Off + NH, 0); Newel(xc, z1 + Off - NH, z1 + Off + NH, 0);
+                                Newel(xe - o * Off, z1 + Off - NH, z1 + Off + NH, Rise(k - 1) + rl.FlightH);
+                                Level(z0 - Off + NH, z1 + Off - NH, xc, true);
+                            }
                             S(xc, z0, xc, z1, rl.R, H);
                         }
                         Side(-hw, -1, fL); Side(xm, 1, wR);
@@ -1637,7 +1664,9 @@ namespace Triband.Storey.Generate
                             double zr = z0 - Off, x0 = fL ? -hw + 0.02 : -hw - Off - RW, x1 = wR ? xm - 0.02 : xm + Off + RW;
                             if (fL) Bx(x0, x0 + 0.04, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
                             if (wR) Bx(x1 - 0.04, x1, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
-                            Level(fL ? x0 + 0.04 : -hw + NH, wR ? x1 - 0.04 : xm - NH, zr, false);
+                            // between the newels (slim, the sides' own, on their lines), or a wall's post
+                            double na = rl.Slim ? -hw - Off + NH : -hw + NH, nb = rl.Slim ? xm + Off - NH : xm - NH;
+                            Level(fL ? x0 + 0.04 : na, wR ? x1 - 0.04 : nb, zr, false);
                             S(x0, zr, x1, zr, rl.R, H);
                         }
                     }
@@ -1670,25 +1699,66 @@ namespace Triband.Storey.Generate
                                 op.Quad(f.At(-hw, t, za), f.At(xm, t, za), f.At(xm, t, zb), f.At(-hw, t, zb), upN, treadC);
                                 op.Quad(f.At(-hw, tb, za), f.At(xm, tb, za), f.At(xm, t, za), f.At(-hw, t, za), fore, riserC);
                             }
-                            // its side, in the frame's (w, y)
-                            var side = new List<Vec2>(2 * n + 2) { new Vec2(z0, onFloor ? y : y - Waist) };
-                            for (int i = 0; i < n; i++) { side.Add(new Vec2(Z(i), T(i))); side.Add(new Vec2(Z(i + 1), T(i))); }
-                            side.Add(new Vec2(z1, onFloor ? y : T(n - 1) - Waist));
-                            var tris = Triangulate.Shape(side, null);
                             // against a wall its side would flicker with the wall's inner face: a centimetre in, by Unity only,
-                            // for the wall's windows (as a core wall's end, End)
-                            void Face(double x, double o, bool wall)
+                            // for the wall's windows (as a core wall's end, End). A side's face, in the frame's (w, y)
+                            void Face(List<Vec2> poly, List<int> tris, double x, double o, bool wall, Swatch c)
                             {
-                                var pts = new List<P3>(side.Count);
-                                foreach (var p in side) pts.Add(f.At(wall ? x - o * 0.01 : x, p.z, p.x));
+                                var pts = new List<P3>(poly.Count);
+                                foreach (var p in poly) pts.Add(f.At(wall ? x - o * 0.01 : x, p.z, p.x));
                                 bool was = op.Backing; op.Backing = was || wall;
-                                op.PolyTris(pts, tris, new P3(f.u.x * o, 0, f.u.z * o), sideC);
+                                op.PolyTris(pts, tris, new P3(f.u.x * o, 0, f.u.z * o), c);
                                 op.Backing = was;
                             }
-                            Face(-hw, -1, fL); Face(xm, 1, wR);
-                            if (onFloor) op.Quad(f.At(-hw, y, z1), f.At(xm, y, z1), f.At(xm, T(n - 1), z1), f.At(-hw, T(n - 1), z1), new P3(f.w.x, 0, f.w.z), sideC);
-                            else op.Quad(f.At(-hw, y - Waist, z0), f.At(xm, y - Waist, z0), f.At(xm, T(n - 1) - Waist, z1), f.At(-hw, T(n - 1) - Waist, z1),
-                                new P3(f.w.x * sl * cs, -cs, f.w.z * sl * cs), sideC);
+                            void Faces(List<Vec2> poly, List<int> tris, Swatch c) { Face(poly, tris, -hw, -1, fL, c); Face(poly, tris, xm, 1, wR, c); }
+                            var back = new P3(f.w.x, 0, f.w.z); var under = new P3(f.w.x * sl * cs, -cs, f.w.z * sl * cs);
+                            if (lk?.endColor == null)
+                            {
+                                // its side one face, in the sides' colour
+                                var side = new List<Vec2>(2 * n + 2) { new Vec2(z0, onFloor ? y : y - Waist) };
+                                for (int i = 0; i < n; i++) { side.Add(new Vec2(Z(i), T(i))); side.Add(new Vec2(Z(i + 1), T(i))); }
+                                side.Add(new Vec2(z1, onFloor ? y : T(n - 1) - Waist));
+                                Faces(side, Triangulate.Shape(side, null), sideC);
+                                if (onFloor) op.Quad(f.At(-hw, y, z1), f.At(xm, y, z1), f.At(xm, T(n - 1), z1), f.At(-hw, T(n - 1), z1), back, sideC);
+                                else op.Quad(f.At(-hw, y - Waist, z0), f.At(xm, y - Waist, z0), f.At(xm, T(n - 1) - Waist, z1), f.At(-hw, T(n - 1) - Waist, z1), under, sideC);
+                            }
+                            else
+                            {
+                                // the steps' ends in a colour of their own: each step's 20 cm under its tread, as steps in the air
+                                // have them (on a floor, down to it at the first), and the rest of the side under them in the
+                                // sides' colour, sharing their corners
+                                var endC = Railing.Colour(C, lk.endColor, sideC);
+                                double B(int i) => onFloor ? Math.Max(T(i) - Waist, y) : T(i) - Waist;   // a step's underside
+                                var band = new List<Vec2>(4 * n + 2) { new Vec2(Z(0), B(0)) };
+                                for (int i = 0; i < n; i++) { band.Add(new Vec2(Z(i), T(i))); band.Add(new Vec2(Z(i + 1), T(i))); }
+                                band.Add(new Vec2(Z(n), B(n - 1)));
+                                for (int i = n - 1; i >= 1; i--) { band.Add(new Vec2(Z(i), B(i))); band.Add(new Vec2(Z(i), B(i - 1))); }
+                                Faces(band, Triangulate.Shape(band, null), endC);
+                                if (onFloor)
+                                {
+                                    // under the steps, from the second on (the first's end reaches the floor), to the floor
+                                    var below = new List<Vec2>(2 * n) { new Vec2(Z(1), y) };
+                                    for (int i = 1; i < n; i++) { below.Add(new Vec2(Z(i), B(i))); below.Add(new Vec2(Z(i + 1), B(i))); }
+                                    below.Add(new Vec2(Z(n), y));
+                                    Faces(below, Triangulate.Shape(below, null), sideC);
+                                    op.Quad(f.At(-hw, y, z1), f.At(xm, y, z1), f.At(xm, B(n - 1), z1), f.At(-hw, B(n - 1), z1), back, sideC);
+                                    op.Quad(f.At(-hw, B(n - 1), z1), f.At(xm, B(n - 1), z1), f.At(xm, T(n - 1), z1), f.At(-hw, T(n - 1), z1), back, endC);
+                                }
+                                else
+                                {
+                                    // over the flight below, under each step a triangle down to the sloped underside, which meets
+                                    // each step's underside at its back edge; that underside cut at each step, so they share corners
+                                    double U(int i) => i == 0 ? y - Waist : B(i - 1);   // the underside at Z(i)
+                                    var wedges = new List<Vec2>(3 * n); var idx = new List<int>(3 * n);
+                                    for (int i = 0; i < n; i++)
+                                    {
+                                        idx.Add(wedges.Count); wedges.Add(new Vec2(Z(i), U(i)));
+                                        idx.Add(wedges.Count); wedges.Add(new Vec2(Z(i), B(i)));
+                                        idx.Add(wedges.Count); wedges.Add(new Vec2(Z(i + 1), B(i)));
+                                        op.Quad(f.At(-hw, U(i), Z(i)), f.At(xm, U(i), Z(i)), f.At(xm, B(i), Z(i + 1)), f.At(-hw, B(i), Z(i + 1)), under, sideC);
+                                    }
+                                    Faces(wedges, idx, sideC);
+                                }
+                            }
                         }
                         if (s.rails)
                         {
@@ -1702,25 +1772,46 @@ namespace Triband.Storey.Generate
                             void Rail(double xe, double o, bool wall)
                             {
                                 if (wall) return;
-                                if (onFloor) Newel(xe, z0 - 2 * NH, z0);
+                                double xc = xe - o * Off;
+                                // its handrail from the newel at its foot to the one at its head: between the openings' corners' (its
+                                // own here on a floor), or, slim, its own on its line, each where the line across the front or back
+                                // crosses it, the handrail running on to them
+                                double z0r = z0, z1r = z1;
+                                if (rl.Slim) { Newel(xc, z0 - Off - NH, z0 - Off + NH, Rise(k) + rl.FlightH); z0r = z0 - Off + NH; z1r = z1 + Off - NH; }
+                                else if (onFloor) Newel(xe, z0 - 2 * NH, z0, Rise(k) + rl.FlightH);
                                 if (!draw) return;
-                                double xc = xe - o * Off, xa = xc - RW, xb = xc + RW, ya = Top(z0), ye = Top(z1);
+                                double xa = xc - RW, xb = xc + RW, ya = Top(z0r), ye = Top(z1r);
                                 P3 Q(double x, double yy, double z) => f.At(x, yy, z);
-                                op.Quad(Q(xa, ya, z0), Q(xb, ya, z0), Q(xb, ye, z1), Q(xa, ye, z1), top, railC);
-                                op.Quad(Q(xa, ya - RT, z0), Q(xb, ya - RT, z0), Q(xb, ye - RT, z1), Q(xa, ye - RT, z1), new P3(-top.x, -top.y, -top.z), railC);
-                                op.Quad(Q(xa, ya - RT, z0), Q(xa, ya, z0), Q(xa, ye, z1), Q(xa, ye - RT, z1), new P3(-f.u.x, 0, -f.u.z), railC);
-                                op.Quad(Q(xb, ya - RT, z0), Q(xb, ya, z0), Q(xb, ye, z1), Q(xb, ye - RT, z1), new P3(f.u.x, 0, f.u.z), railC);
+                                op.Quad(Q(xa, ya, z0r), Q(xb, ya, z0r), Q(xb, ye, z1r), Q(xa, ye, z1r), top, railC);
+                                op.Quad(Q(xa, ya - RT, z0r), Q(xb, ya - RT, z0r), Q(xb, ye - RT, z1r), Q(xa, ye - RT, z1r), new P3(-top.x, -top.y, -top.z), railC);
+                                op.Quad(Q(xa, ya - RT, z0r), Q(xa, ya, z0r), Q(xa, ye, z1r), Q(xa, ye - RT, z1r), new P3(-f.u.x, 0, -f.u.z), railC);
+                                op.Quad(Q(xb, ya - RT, z0r), Q(xb, ya, z0r), Q(xb, ye, z1r), Q(xb, ye - RT, z1r), new P3(f.u.x, 0, f.u.z), railC);
                                 // its ends, in the newels (the head's is the storey above's, which a setback there may leave out)
-                                op.Quad(Q(xa, ya - RT, z0), Q(xb, ya - RT, z0), Q(xb, ya, z0), Q(xa, ya, z0), new P3(-f.w.x, 0, -f.w.z), railC);
-                                op.Quad(Q(xa, ye - RT, z1), Q(xb, ye - RT, z1), Q(xb, ye, z1), Q(xa, ye, z1), new P3(f.w.x, 0, f.w.z), railC);
-                                // the uprights' tops a centimetre into the handrail's sloped underside, all across them; a post
-                                // after every so many spindles up the flight
+                                op.Quad(Q(xa, ya - RT, z0r), Q(xb, ya - RT, z0r), Q(xb, ya, z0r), Q(xa, ya, z0r), new P3(-f.w.x, 0, -f.w.z), railC);
+                                op.Quad(Q(xa, ye - RT, z1r), Q(xb, ye - RT, z1r), Q(xb, ye, z1r), Q(xa, ye, z1r), new P3(f.w.x, 0, f.w.z), railC);
+                                // a bottom rail the look's gap over the nosings' line, parallel to the handrail, its ends in the
+                                // newels as the handrail's
+                                double Foot(double z) => y + (z - z0 + run) * sl + rl.BottomGap + rl.BottomT;   // its top
+                                if (rl.Bottom)
+                                {
+                                    double ba = xc - rl.BottomW / 2, bb = xc + rl.BottomW / 2, fa = Foot(z0r), fe = Foot(z1r), t0 = rl.BottomT;
+                                    op.Quad(Q(ba, fa, z0r), Q(bb, fa, z0r), Q(bb, fe, z1r), Q(ba, fe, z1r), top, bottomC);
+                                    op.Quad(Q(ba, fa - t0, z0r), Q(bb, fa - t0, z0r), Q(bb, fe - t0, z1r), Q(ba, fe - t0, z1r), new P3(-top.x, -top.y, -top.z), bottomC);
+                                    op.Quad(Q(ba, fa - t0, z0r), Q(ba, fa, z0r), Q(ba, fe, z1r), Q(ba, fe - t0, z1r), new P3(-f.u.x, 0, -f.u.z), bottomC);
+                                    op.Quad(Q(bb, fa - t0, z0r), Q(bb, fa, z0r), Q(bb, fe, z1r), Q(bb, fe - t0, z1r), new P3(f.u.x, 0, f.u.z), bottomC);
+                                    op.Quad(Q(ba, fa - t0, z0r), Q(bb, fa - t0, z0r), Q(bb, fa, z0r), Q(ba, fa, z0r), new P3(-f.w.x, 0, -f.w.z), bottomC);
+                                    op.Quad(Q(ba, fe - t0, z1r), Q(bb, fe - t0, z1r), Q(bb, fe, z1r), Q(ba, fe, z1r), new P3(f.w.x, 0, f.w.z), bottomC);
+                                }
+                                // the uprights' tops a centimetre into the handrail's sloped underside, all across them, and the
+                                // spindles' feet as far into the bottom rail where there is one (the posts stand on the treads); a
+                                // post after every so many spindles up the flight
                                 for (int i = 0, q = 0; i < n; i++)
                                     for (int j = 0; j < m; j++, q++)
                                     {
                                         bool post = rl.Posts > 0 && q % (rl.Posts + 1) == rl.Posts;
                                         double zc = z0 + (i + (j + 0.5) / m) * run, hb = post ? rl.Post / 2 : BH;
-                                        Upright(post, xc, zc, y + (i + 1) * fh / n, Top(zc) - RT + hb * sl + 0.01, true);
+                                        double y0 = rl.Bottom && !post ? Foot(zc) - hb * sl - 0.01 : y + (i + 1) * fh / n;
+                                        Upright(post, xc, zc, y0, Top(zc) - RT + hb * sl + 0.01, true);
                                     }
                             }
                             Rail(-hw, -1, fL); Rail(xm, 1, wR);

@@ -57,6 +57,7 @@ namespace Triband.Storey
             ("railColor", l => l.railColor, (l, v) => l.railColor = v), ("spindleColor", l => l.spindleColor, (l, v) => l.spindleColor = v),
             ("postColor", l => l.postColor, (l, v) => l.postColor = v), ("treadColor", l => l.treadColor, (l, v) => l.treadColor = v),
             ("riserColor", l => l.riserColor, (l, v) => l.riserColor = v), ("sideColor", l => l.sideColor, (l, v) => l.sideColor = v),
+            ("bottomColor", l => l.bottomColor, (l, v) => l.bottomColor = v), ("endColor", l => l.endColor, (l, v) => l.endColor = v),
         };
 
         /// <summary>Every stair's look a layout has.</summary>

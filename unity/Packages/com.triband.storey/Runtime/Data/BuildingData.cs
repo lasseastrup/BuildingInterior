@@ -276,16 +276,28 @@ namespace Triband.Storey
         public int? posts;
         /// <summary>A post's width (metres; 0.05) and a newel's (0.13), each square.</summary>
         public double? post, newel;
+        /// <summary>How far the newels stand over the handrails that end in them (metres; 0.16 over the rails' height; 0: flush with the highest).</summary>
+        public double? newelAbove;
+        /// <summary>A foot at each newel's base, a square block wider than it: its width and height (metres; null: none).</summary>
+        public double? footW, footH;
+        /// <summary>
+        /// A bottom rail the spindles stand on, parallel to the handrail: the gap under it over the floor round the openings and
+        /// over the nosings' line up the flights (metres; null: none, the spindles on the floor and treads), its width and
+        /// thickness (the handrail's width, and 0.04).
+        /// </summary>
+        public double? bottomGap, bottomW, bottomT;
         /// <summary>
         /// Colours of its own (colour references, as a style's): the handrails, the spindles, the posts and newels, the treads,
         /// the risers, and a solid flight's sides and underside. Null: the style's (its rails' colour, its stairs' steps', its
-        /// rooms' walls').
+        /// rooms' walls'). The bottom rail's, null for the handrail's; a solid flight's steps' ends, the 20 cm under each tread
+        /// along its sides, null for the sides'.
         /// </summary>
-        public string? railColor, spindleColor, postColor, treadColor, riserColor, sideColor;
+        public string? railColor, spindleColor, postColor, treadColor, riserColor, sideColor, bottomColor, endColor;
 
         /// <summary>Every setting the default.</summary>
         public bool IsDefault => height == null && railW == null && railT == null && gap == null && spindle == null && posts == null && post == null && newel == null
-            && railColor == null && spindleColor == null && postColor == null && treadColor == null && riserColor == null && sideColor == null;
+            && newelAbove == null && footW == null && footH == null && bottomGap == null && bottomW == null && bottomT == null
+            && railColor == null && spindleColor == null && postColor == null && treadColor == null && riserColor == null && sideColor == null && bottomColor == null && endColor == null;
 
         public StairLook Clone() => (StairLook)MemberwiseClone();
     }

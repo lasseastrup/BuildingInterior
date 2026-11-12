@@ -1423,7 +1423,25 @@ namespace Triband.Storey.Editor
             int posts = EditorGUILayout.IntSlider(new GUIContent("Spindles between posts", "A post, thicker than a spindle, after every this many spindles; 0 for none, the newels at the ends alone"), rl.Posts, 0, 20);
             if (posts != rl.Posts) SetLook(e, id, "Stair posts", l => l.posts = posts == 0 ? (int?)null : posts);
             if (rl.Posts > 0) Look("Post width", "Each post's width, in metres (they're square)", rl.Post, 0.02, 0.2, 0.005, (l, v) => l.post = v);
-            Look("Newel width", "The posts at the rails' ends, which their handrails end in, in metres: at least as wide as the two rails beside each other", rl.Newel, 0.08, 0.4, 0.005, (l, v) => l.newel = v);
+            Look("Newel width", "The posts at the rails' ends, which their handrails end in, in metres. As wide as the two rails beside each other, where the opening's rail and the flight's meet, one newel takes both; narrower, each rail has its own, slim, on its line", rl.Newel, 0.04, 0.4, 0.005, (l, v) => l.newel = v);
+            Look("Newel height", "How far the newels stand over the handrails, in metres; 0 for flush with the highest handrail that ends in them", rl.NewelAbove, 0, 0.6, 0.01, (l, v) => l.newelAbove = v);
+            bool foot = EditorGUILayout.Toggle(new GUIContent("Newel feet", "A square block round each newel's foot, wider than it"), rl.FootW > 0);
+            if (foot != rl.FootW > 0) SetLook(e, id, foot ? "Newel feet" : "No newel feet", l => { l.footW = foot ? Math.Round(rl.Newel + 0.04, 3) : (double?)null; l.footH = foot ? 0.08 : (double?)null; });
+            if (rl.FootW > 0)
+                using (new EditorGUI.IndentLevelScope())
+                {
+                    Look("Foot width", "Its width, in metres (square), wider than the newel", rl.FootW, 0.05, 0.8, 0.005, (l, v) => l.footW = v);
+                    Look("Foot height", "Its height over the floor, in metres", rl.FootH, 0.02, 0.5, 0.005, (l, v) => l.footH = v);
+                }
+            bool bottom = EditorGUILayout.Toggle(new GUIContent("Bottom rail", "A rail near the floor and up the flights near the steps, parallel to the handrail, that the spindles stand on (the posts go down past it)"), rl.Bottom);
+            if (bottom != rl.Bottom) SetLook(e, id, bottom ? "Bottom rail" : "No bottom rail", l => { l.bottomGap = bottom ? 0.06 : (double?)null; if (!bottom) l.bottomW = l.bottomT = null; });
+            if (rl.Bottom)
+                using (new EditorGUI.IndentLevelScope())
+                {
+                    Look("Gap under it", "Over the floor round the openings, and over the steps' nosings up the flights, in metres", rl.BottomGap, 0, 0.6, 0.005, (l, v) => l.bottomGap = v);
+                    Look("Width", "Across it, in metres", rl.BottomW, 0.02, 0.2, 0.005, (l, v) => l.bottomW = v);
+                    Look("Thickness", "From its top to its underside, in metres", rl.BottomT, 0.02, 0.2, 0.005, (l, v) => l.bottomT = v);
+                }
         }
 
         static readonly (string label, string key, ColorSlot slot, Func<StairLook, string?> get, Action<StairLook, string?> set)[] StairColourRows =
@@ -1434,12 +1452,22 @@ namespace Triband.Storey.Editor
             ("Treads", "core", ColorSlot.Core, l => l.treadColor, (l, v) => l.treadColor = v),
             ("Risers", "core", ColorSlot.Core, l => l.riserColor, (l, v) => l.riserColor = v),
             ("Sides", "interior", ColorSlot.Interior, l => l.sideColor, (l, v) => l.sideColor = v),
+            ("Bottom rail", "rail", ColorSlot.Rail, l => l.bottomColor, (l, v) => l.bottomColor = v),
+            ("Step ends", "interior", ColorSlot.Interior, l => l.endColor, (l, v) => l.endColor = v),
+        };
+
+        /// <summary>What a stair colour left unset follows: the bottom rail the handrail's, the steps' ends the sides', the rest the style's.</summary>
+        static (string? colour, string name) Follows(string label, StairLook? l) => label switch
+        {
+            "Bottom rail" => (l?.railColor, "handrail's"),
+            "Step ends" => (l?.sideColor, "sides'"),
+            _ => (null, "style's"),
         };
 
         /// <summary>
         /// A straight flight's own colours (docs/EDITOR.md §5), with the project's colour picker: each shows the style's it
         /// follows (its rails', its stairs', its rooms' walls'; the steps are drawn a shade darker) until it has its own, and
-        /// Default takes that away.
+        /// Default takes that away. The bottom rail follows the handrail, and a solid flight's steps' ends its sides, until set.
         /// </summary>
         static void StairColours(StoreyEdit e, BuildingData b, CoreData s, string id)
         {
@@ -1447,10 +1475,11 @@ namespace Triband.Storey.Editor
             foreach (var (label, key, slot, get, set) in StairColourRows)
             {
                 string? value = s.look != null ? get(s.look) : null;
-                string shown = value ?? StyleColors.Of(st, slot, dflt) ?? "#FF00FF";
+                var (follows, whose) = Follows(label, s.look);
+                string shown = value ?? follows ?? StyleColors.Of(st, slot, dflt) ?? "#FF00FF";
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    string? picked = StoreyColorField.Picker.Draw($"{b.id}/{id}/{label}", value == null ? label + " (style's)" : label, shown, key,
+                    string? picked = StoreyColorField.Picker.Draw($"{b.id}/{id}/{label}", value == null ? $"{label} ({whose})" : label, shown, key,
                         pid => e.Document.palette.TryGetValue(pid, out var pe) ? pe : null);
                     if (picked != null && picked != value) SetLook(e, id, label + " colour", l => set(l, picked));
                     if (value != null && GUILayout.Button(new GUIContent("Default", "The style's colour"), EditorStyles.miniButton, GUILayout.Width(56)))

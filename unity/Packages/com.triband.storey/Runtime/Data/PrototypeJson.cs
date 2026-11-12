@@ -279,8 +279,11 @@ namespace Triband.Storey
                 {
                     height = c.Opt(lo, "height", lp), railW = c.Opt(lo, "railW", lp), railT = c.Opt(lo, "railT", lp), gap = c.Opt(lo, "gap", lp), spindle = c.Opt(lo, "spindle", lp),
                     posts = c.OptInt(lo, "posts", lp), post = c.Opt(lo, "post", lp), newel = c.Opt(lo, "newel", lp),
+                    newelAbove = c.Opt(lo, "newelAbove", lp), footW = c.Opt(lo, "footW", lp), footH = c.Opt(lo, "footH", lp),
+                    bottomGap = c.Opt(lo, "bottomGap", lp), bottomW = c.Opt(lo, "bottomW", lp), bottomT = c.Opt(lo, "bottomT", lp),
                     railColor = c.OptColor(lo, "railColor", lp), spindleColor = c.OptColor(lo, "spindleColor", lp), postColor = c.OptColor(lo, "postColor", lp),
                     treadColor = c.OptColor(lo, "treadColor", lp), riserColor = c.OptColor(lo, "riserColor", lp), sideColor = c.OptColor(lo, "sideColor", lp),
+                    bottomColor = c.OptColor(lo, "bottomColor", lp), endColor = c.OptColor(lo, "endColor", lp),
                 };
                 c.Check(lo, lp, Keys.StairLook);
             }
@@ -492,8 +495,10 @@ namespace Triband.Storey
                     void C(string key, string? v) { if (v != null) lo[key] = v; }
                     N("height", l.height); N("railW", l.railW); N("railT", l.railT); N("gap", l.gap); N("spindle", l.spindle);
                     if (l.posts.HasValue) lo["posts"] = l.posts.Value;
-                    N("post", l.post); N("newel", l.newel);
+                    N("post", l.post); N("newel", l.newel); N("newelAbove", l.newelAbove); N("footW", l.footW); N("footH", l.footH);
+                    N("bottomGap", l.bottomGap); N("bottomW", l.bottomW); N("bottomT", l.bottomT);
                     C("railColor", l.railColor); C("spindleColor", l.spindleColor); C("postColor", l.postColor); C("treadColor", l.treadColor); C("riserColor", l.riserColor); C("sideColor", l.sideColor);
+                    C("bottomColor", l.bottomColor); C("endColor", l.endColor);
                     so["look"] = lo;
                 }
                 shafts.Add(so);
@@ -785,7 +790,11 @@ namespace Triband.Storey
             public static readonly string[] RoofSurface = { "pattern", "w", "h", "relief", "variation" };
             public static readonly string[] WallSurface = { "pattern", "w", "horizontal", "relief", "variation" };
             public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof", "rails", "solid", "look" };
-            public static readonly string[] StairLook = { "height", "railW", "railT", "gap", "spindle", "posts", "post", "newel", "railColor", "spindleColor", "postColor", "treadColor", "riserColor", "sideColor" };
+            public static readonly string[] StairLook =
+            {
+                "height", "railW", "railT", "gap", "spindle", "posts", "post", "newel", "newelAbove", "footW", "footH", "bottomGap", "bottomW", "bottomT",
+                "railColor", "spindleColor", "postColor", "treadColor", "riserColor", "sideColor", "bottomColor", "endColor",
+            };
             public static readonly string[] DetailRules = { "ac", "vents" };
             public static readonly string[] KindRule = { "p", "density", "spacing", "per", "floors", "corners", "color", "colorOff" };
             public static readonly string[] OpeningEntry = { "kind", "none", "weight", "recess" };
