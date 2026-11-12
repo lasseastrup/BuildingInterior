@@ -99,6 +99,35 @@ namespace Triband.Storey.Tests
         }
 
         /// <summary>
+        /// Two districts, B's site 10 m east of A's, with a building of B's (the pillar) between the camera and the player, who
+        /// is in A. A's site holds a copy of it for the party walls along the edge (<see cref="Site.WithContext"/>), never
+        /// drawn there: A's core leaves it alone, and B's own core, in B's space, takes it. One slot, not two.
+        /// </summary>
+        [Fact]
+        public void ANeighbouringDistrictsBuildingIsItsOwnDistrictsToTake()
+        {
+            var a = new StoreyDocument(); var ab = Buildings.Add(a, "rect", new Vec2(0, 0));
+            ab.pos = new Vec2(0, 0); ab.entrances.Clear();
+            ab.footprint = new List<Vec2> { new Vec2(8, 2.5), new Vec2(12, 2.5), new Vec2(12, 6), new Vec2(8, 6) };   // beside the line, within reach of B's
+            var bWorld = Pillar(); var bb = bWorld.Site.Buildings[0];
+            var siteA = Site.WithContext(a.buildings, "A", new[] { (bWorld.Site.Buildings, "B", 10.0, 0.0) });
+            Assert.Equal(1, siteA.Own); Assert.Equal(2, siteA.Buildings.Count);   // B's pillar kept as context
+            var slots = new OccluderSlots();
+            var coreA = new OcclusionCore(new PlayWorld(siteA), Dissolve, slots);
+            var coreB = new OcclusionCore(bWorld, Dissolve, slots);
+            // the player 4 m east of the pillar, the camera 8 m west of it and 7 m up: in A's space, and in B's
+            for (int f = 0; f < 40; f++)
+            {
+                coreA.Frame(At(14, 0, 0), (2, 7, 0), (14, 1.2, 0), Dt);
+                coreB.FrameOccluders(At(4, 0, 0), (-8, 7, 0), Dt);
+            }
+            Assert.Null(coreA.View.active);
+            Assert.Empty(coreA.Active);
+            Assert.Same(bb, Assert.Single(coreB.Active).b);
+            Assert.Equal(1, slots.Taken);
+        }
+
+        /// <summary>
         /// The player inside the pillar, the camera outside it. Walked in (<see cref="OcclusionCore.Frame"/>), the pillar holds
         /// them: it is the view's, its walls between the camera and the player down, and never in the way. Looked at as another
         /// site's (<see cref="OcclusionCore.FrameOccluders"/>), it holds nobody: no view, the walls slide back up, and it is in

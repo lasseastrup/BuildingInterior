@@ -704,8 +704,12 @@ namespace Triband.Storey.Occlusion
                     World.NearInto(c.x + (p.x - c.x) * f, c.z + (p.z - c.z) * f, 17, near);
                     foreach (var b in near) if (candSeen.Add(b)) cand.Add(b);
                 }
+                var site = World.Site; bool context = site.Own < site.Buildings.Count;
                 foreach (var b in cand)
                 {
+                    // a neighbouring district's building, a copy here for the party walls (Site.WithContext): never drawn by this
+                    // site, so its own district's core takes it (docs/PLAY.md §7)
+                    if (context && site.IndexOf(b) >= site.Own) continue;
                     if (b == held || AtDoorOf(b, p) || (Hidden != null && Hidden.Count > 0 && Hidden.Contains(b.id))) continue;
                     if (AnyHits(b, c, tg))
                     {
