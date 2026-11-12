@@ -246,6 +246,13 @@ namespace Triband.Storey
         /// </summary>
         public bool rails = true;
         /// <summary>
+        /// Straight flights: the rails round the floor openings the flights come up through, along each open side on every
+        /// storey above and across the front where no flight carries on (on balusters with <see cref="rails"/>, plain
+        /// without). Off, the flights' own rails alone, with the newels they start and end in; the openings' edges still stop
+        /// the walk model and the collider (docs/EDITOR.md §5). Storey's own.
+        /// </summary>
+        public bool openingRails = true;
+        /// <summary>
         /// Straight flights: each flight built solid rather than as steps in the air. One on a floor (the stack's lowest, one
         /// flight up) is filled down to it; one over the flight below has a sloped underside, clear of that flight's headroom.
         /// Storey's own.

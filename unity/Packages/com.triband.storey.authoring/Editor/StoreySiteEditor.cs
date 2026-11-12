@@ -1378,6 +1378,8 @@ namespace Triband.Storey.Editor
                     : "Several flights: the walkway beside them leads back to the next one. One flight up takes half the width.");
                 bool rails = EditorGUILayout.Toggle(FlightRailsLabel, s.rails);
                 if (rails != s.rails) e.ApplyTo(rails ? "Stair rails on" : "Stair rails off", bb => { bb.shafts.First(x => x.id == id).rails = rails; return true; });
+                bool openingRails = EditorGUILayout.Toggle(FlightOpeningRailsLabel, s.openingRails);
+                if (openingRails != s.openingRails) e.ApplyTo(openingRails ? "Opening rails on" : "Opening rails off", bb => { bb.shafts.First(x => x.id == id).openingRails = openingRails; return true; });
                 bool solid = EditorGUILayout.Toggle(FlightSolidLabel, s.solid);
                 if (solid != s.solid) e.ApplyTo(solid ? "Solid flights" : "Steps in the air", bb => { bb.shafts.First(x => x.id == id).solid = solid; return true; });
                 // how its rails and steps look (CoreData.look): each setting as built until set
@@ -1498,6 +1500,8 @@ namespace Triband.Storey.Editor
 
         static readonly GUIContent FlightRailsLabel = new GUIContent("Rails",
             "A handrail on balusters up each side of every flight that no building wall stands against, from a newel at its foot to one at its head, and balusters on the rails round the floor openings to match. Nobody steps off a railed side. Off: the openings' rails are plain");
+        static readonly GUIContent FlightOpeningRailsLabel = new GUIContent("Opening rails",
+            "The rails round the floor openings the flights come up through: along each open side on every storey above, and across the front where no flight carries on, the roof's too. Off: the flights' own rails alone, with their newels. Nobody walks into an opening all the same");
         static readonly GUIContent FlightSolidLabel = new GUIContent("Solid",
             "Each flight built solid: on a floor, filled down to it, and nobody walks in under it; over the flight below, a sloped underside that keeps that flight's headroom. Off: steps in the air");
 

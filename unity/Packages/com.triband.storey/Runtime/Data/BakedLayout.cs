@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 21;
+        public const int Version = 22;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -226,7 +226,7 @@ namespace Triband.Storey
             }
             for (n = r.Count(); n > 0; n--)
             {
-                var c = new CoreData { id = Str(ref r)!, type = E<CoreType>(ref r), x = r.F64(), z = r.F64(), rot = r.F64(), bottom = r.Int(), top = r.Int(), roof = r.Bool(), rails = r.Bool(), solid = r.Bool() };
+                var c = new CoreData { id = Str(ref r)!, type = E<CoreType>(ref r), x = r.F64(), z = r.F64(), rot = r.F64(), bottom = r.Int(), top = r.Int(), roof = r.Bool(), rails = r.Bool(), openingRails = r.Bool(), solid = r.Bool() };
                 if (r.Bool())
                     c.look = new StairLook
                     {
@@ -434,7 +434,7 @@ namespace Triband.Storey
             w.Count(b.shafts.Count);
             foreach (var s in b.shafts)
             {
-                w.Count(S(s.id)); w.E(s.type); w.F64(s.x); w.F64(s.z); w.F64(s.rot); w.Int(s.bottom); w.Int(s.top); w.Bool(s.roof); w.Bool(s.rails); w.Bool(s.solid);
+                w.Count(S(s.id)); w.E(s.type); w.F64(s.x); w.F64(s.z); w.F64(s.rot); w.Int(s.bottom); w.Int(s.top); w.Bool(s.roof); w.Bool(s.rails); w.Bool(s.openingRails); w.Bool(s.solid);
                 w.Bool(s.look != null);
                 if (s.look is StairLook l)
                 {

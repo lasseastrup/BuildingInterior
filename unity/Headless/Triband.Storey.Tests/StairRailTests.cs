@@ -200,21 +200,22 @@ namespace Triband.Storey.Tests
         public static IEnumerable<object[]> Layouts()
         {
             foreach (var (rails, solid) in new[] { (true, true), (true, false), (false, true), (false, false) })
-            {
-                yield return new object[] { "middle", rails, solid };
-                yield return new object[] { "flight lane on a wall", rails, solid };
-                yield return new object[] { "one flight up, on a wall", rails, solid };
-            }
+                foreach (bool open in new[] { true, false })
+                {
+                    yield return new object[] { "middle", rails, solid, open };
+                    yield return new object[] { "flight lane on a wall", rails, solid, open };
+                    yield return new object[] { "one flight up, on a wall", rails, solid, open };
+                }
         }
 
-        static (StoreyDocument d, BuildingData b, CoreData s) Laid(string name, bool rails, bool solid)
+        static (StoreyDocument d, BuildingData b, CoreData s) Laid(string name, bool rails, bool solid, bool open = true)
         {
-            if (name == "middle") return Stack(rails: rails, solid: solid);
-            if (name == "flight lane on a wall") return Stack(x: Dim.FLIGHT_W / 2, rails: rails, solid: solid);
+            if (name == "middle") { var m = Stack(rails: rails, solid: solid); m.s.openingRails = open; return m; }
+            if (name == "flight lane on a wall") { var w = Stack(x: Dim.FLIGHT_W / 2, rails: rails, solid: solid); w.s.openingRails = open; return w; }
             // one flight up, the ground floor to the first, its lane's other side on the block's east wall
             var (d, b, s) = Stack(rails: rails, solid: solid);
             b.shafts.Clear();
-            s = new CoreData { id = "f", type = CoreType.Flight, x = 12 - Xm, z = 4.5, rot = 0, bottom = 0, top = 1, roof = false, rails = rails, solid = solid };
+            s = new CoreData { id = "f", type = CoreType.Flight, x = 12 - Xm, z = 4.5, rot = 0, bottom = 0, top = 1, roof = false, rails = rails, solid = solid, openingRails = open };
             b.shafts.Add(s);
             Assert.True(Cores.OneFlight(b, s));
             Assert.NotNull(Cores.CoreFlush(b.footprint, s, b: b)[1]);
@@ -222,11 +223,11 @@ namespace Triband.Storey.Tests
         }
 
         [Theory, MemberData(nameof(Layouts))]
-        public void TheGeometryIsCleanEitherWay(string name, bool rails, bool solid)
+        public void TheGeometryIsCleanEitherWay(string name, bool rails, bool solid, bool open)
         {
-            var (d, b, _) = Laid(name, rails, solid);
+            var (d, b, _) = Laid(name, rails, solid, open);
             var report = CoplanarCheck.Run(Lod0.Build(new Site(d.buildings), b, solids: true).Op);
-            Assert.True(report.Overlaps.Count == 0, $"{name}, rails {rails}, solid {solid}: {report.Overlaps.Count} visible coplanar overlaps:\n  " + string.Join("\n  ", report.Overlaps.Take(10)));
+            Assert.True(report.Overlaps.Count == 0, $"{name}, rails {rails}, solid {solid}, opening rails {open}: {report.Overlaps.Count} visible coplanar overlaps:\n  " + string.Join("\n  ", report.Overlaps.Take(10)));
         }
 
         /// <summary>
@@ -235,12 +236,12 @@ namespace Triband.Storey.Tests
         /// there is let go (it sees the clipped solids' section caps, as meant).
         /// </summary>
         [Theory, MemberData(nameof(Layouts))]
-        public void FromInsideNoRayMeetsTheBackOfAFace(string name, bool rails, bool solid)
+        public void FromInsideNoRayMeetsTheBackOfAFace(string name, bool rails, bool solid, bool open)
         {
-            var (d, b, s) = Laid(name, rails, solid);
+            var (d, b, s) = Laid(name, rails, solid, open);
             var (holes, rays, where) = Inside(d, b, s);
             Assert.True(rays > 2000, $"{rays} rays");   // a lone flight on the east wall has half the eyes round it
-            Assert.True(holes == 0, $"{name}, rails {rails}, solid {solid}: {holes} of {rays} rays meet a back face first:\n  " + string.Join("\n  ", where));
+            Assert.True(holes == 0, $"{name}, rails {rails}, solid {solid}, opening rails {open}: {holes} of {rays} rays meet a back face first:\n  " + string.Join("\n  ", where));
         }
 
         /// <summary>Rays from eyes on each storey round the stairs <paramref name="s"/> of a 12 × 9 m block: how many meet a back face first, of how many.</summary>
@@ -364,21 +365,133 @@ namespace Triband.Storey.Tests
             else Assert.True(back == null || back > 3, $"behind the flight: {back}");
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void WithoutTheOpeningsRailsOnlyTheFlightsHaveRails(bool slim)
+        {
+            // nothing round the openings but the newels the flights' handrails start and end in: no level handrail, no spindles
+            // on the floor, no rail across the top's front; the flights' own as they were
+            var (d, b, s) = Stack(); s.look = Classic(l => { if (slim) l.newel = 0.06; });
+            var rl = Railing.Of(s.look); Assert.Equal(slim, rl.Slim);
+            var f = Cores.FrameOf(b, s);
+            var with = Lod0.Build(new Site(d.buildings), b, solids: true).Op;
+            s.openingRails = false;
+            var without = Lod0.Build(new Site(d.buildings), b, solids: true).Op;
+            List<Solid> before = Boxes(with, f), boxes = Boxes(without, f);
+            double Uc(Solid x) => (x.u0 + x.u1) / 2;
+            double Wc(Solid x) => (x.w0 + x.w1) / 2;
+            bool Tall(Solid x, double y) => At(x.y0, y) && x.y1 - x.y0 > 1 && At(x.u1 - x.u0, rl.Newel) && At(x.w1 - x.w0, rl.Newel);
+            int N = b.floors.Count;   // the roof's opening is the top one, where no flight carries on
+            Assert.True(Cores.StairHoleAt(b, s, N) && !Cores.HasFlight(b, s, N));
+            for (int k = 1; k <= N; k++)
+            {
+                double y = Derived.FloorBase(b, k);
+                bool Rail(Solid x) => At(x.y1, y + rl.H) && At(x.y1 - x.y0, rl.T);
+                bool Spindle(Solid x) => Baluster(x) && At(x.y0, y) && (At(Uc(x), -Hw - rl.Off) || At(Uc(x), Xm + rl.Off) || At(Wc(x), Z0 - rl.Off));
+                Assert.Contains(before, Rail); Assert.Contains(before, Spindle);
+                Assert.DoesNotContain(boxes, Rail); Assert.DoesNotContain(boxes, Spindle);
+                foreach (var (xe, o) in new[] { (-Hw, -1.0), (Xm, 1.0) })
+                {
+                    if (!slim)
+                    {
+                        // across the lane's edge: the flight coming up ends in the one at the back; the one going on up starts in
+                        // the one at the front, which the top has none of
+                        Assert.Contains(boxes, x => Tall(x, y) && At(Uc(x), xe) && At(x.w0, Z1));
+                        Assert.Equal(k < N, boxes.Any(x => Tall(x, y) && At(Uc(x), xe) && At(x.w1, Z0)));
+                    }
+                    else
+                    {
+                        // the flight coming up's own, on its line; none on the opening's
+                        Assert.Contains(boxes, x => Tall(x, y) && At(Uc(x), xe - o * rl.Off) && At(Wc(x), Z1 + rl.Off));
+                        Assert.Contains(before, x => Tall(x, y) && At(Uc(x), xe + o * rl.Off));
+                        Assert.DoesNotContain(boxes, x => Tall(x, y) && At(Uc(x), xe + o * rl.Off));
+                    }
+                }
+            }
+            // the flights' handrails and spindles as they were
+            List<string> Sloped(MeshBuilder op) => Enumerable.Range(0, op.Tris).Where(t => op.N[op.I[3 * t]].y > 0.5 && op.N[op.I[3 * t]].y < 0.99)
+                .Select(t => $"{op.P[op.I[3 * t]]} {op.P[op.I[3 * t + 1]]} {op.P[op.I[3 * t + 2]]}").OrderBy(x => x).ToList();
+            Assert.NotEmpty(Sloped(without)); Assert.Equal(Sloped(with), Sloped(without));
+            List<string> Flights(List<Solid> bs) => bs.Where(x => Baluster(x) && (At(Uc(x), -Hw + rl.Off) || At(Uc(x), Xm - rl.Off)))
+                .Select(x => $"{x.u0:F6} {x.y0:F6} {x.y1:F6} {x.w0:F6}").OrderBy(x => x).ToList();
+            Assert.NotEmpty(Flights(boxes)); Assert.Equal(Flights(before), Flights(boxes));
+            // without the flights' rails too, no rail anywhere; with them off alone, the openings' plain ones
+            bool RailColour(Swatch c) => KindColors.RefOf(c.slot) is Railing.HandrailColour or Railing.UprightColour;
+            s.rails = false;
+            var none = Lod0.Build(new Site(d.buildings), b).Op;
+            Assert.DoesNotContain(Enumerable.Range(0, none.Verts), v => RailColour(none.C[v]));
+            s.openingRails = true;
+            var plain = Lod0.Build(new Site(d.buildings), b).Op;
+            Assert.Contains(Enumerable.Range(0, plain.Verts), v => RailColour(plain.C[v]));
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void WithoutTheOpeningsRailsNobodyWalksIntoAnOpening(bool rails)
+        {
+            // their edges are walls to the walk model as the rails were, as high, so the collider has them too: only the newels
+            // left out take their own with them
+            var (d, b, s) = Stack(rails: rails);
+            var with = Lod0.Build(new Site(d.buildings), b).Segs;
+            s.openingRails = false;
+            var site = new Site(d.buildings);
+            var without = Lod0.Build(site, b).Segs;
+            string Key(Seg g) => $"{g.ax:F6},{g.az:F6},{g.bx:F6},{g.bz:F6},{g.r:F6},{g.h:F6}";
+            for (int k = 0; k < with.Count; k++)
+            {
+                var kept = without[k].Select(Key).ToHashSet();
+                Assert.All(without[k], g => Assert.Contains(Key(g), with[k].Select(Key)));
+                Assert.All(with[k].Where(g => !kept.Contains(Key(g))), g => Assert.True(g.ax == g.bx && g.az == g.bz, $"storey {k}: {Key(g)} gone"));
+            }
+            // on the roof, where nothing else stops it: walking from the walkway toward the opening, and from its front
+            var world = new PlayWorld(site); var f = Cores.FrameOf(b, s); var rl = Railing.Of(s.look);
+            double yr = Derived.FloorBase(b, b.floors.Count) + 0.1;
+            (double u, double w) Local(double x, double z) { double dx = x - f.O.x, dz = z - f.O.z; return (dx * f.u.x + dz * f.u.z, dx * f.w.x + dz * f.w.z); }
+            (double u, double w) Walk(double u, double w, double du, double dw)
+            {
+                for (int i = 0; i < 40; i++) { var p = f.At2(u + du, w + dw); var q = world.Collide(p.x, p.z, yr); (u, w) = Local(q.x, q.z); }
+                return (u, w);
+            }
+            Assert.Equal(Xm + rl.Off + rl.R + PlayWorld.Radius, Walk(Xm + 0.6, 0, -0.05, 0).u, 6);
+            Assert.Equal(Z0 - rl.Off - rl.R - PlayWorld.Radius, Walk(-Hw / 2, Z0 - 0.6, 0, 0.05).w, 6);
+            // the collider's wall there, from the walkway: under the rails' height, none over it
+            var m = CollisionMesh.Build(site, b, Lod0.BuildShape(site, b));
+            var p0 = f.At2(Xm + 1, 0); var dir = new P3(-f.u.x, 0, -f.u.z);
+            double? low = WallHit(m, new P3(p0.x, yr - 0.1 + rl.H - 0.05, p0.z), dir), high = WallHit(m, new P3(p0.x, yr - 0.1 + rl.H + 0.05, p0.z), dir);
+            Assert.True(low is double l && Math.Abs(l - (1 - rl.Off - rl.R)) < 1e-6, $"under the rails' height: {low}");
+            Assert.True(high == null || high > 3, $"over it: {high}");
+        }
+
         [Fact]
         public void TheyAreKeptOnlyWhenOff()
         {
-            // a layout's stairs have both unless it says otherwise, and it says so only for one that's off
-            var (_, b, s) = Stack();
+            // a layout's stairs have them all unless it says otherwise, and it says so only for one that's off
+            var (d, b, s) = Stack();
             Assert.DoesNotContain("\"rails\"", PrototypeJson.Write(b));
+            Assert.DoesNotContain("\"openingRails\"", PrototypeJson.Write(b));
             Assert.DoesNotContain("\"solid\"", PrototypeJson.Write(b));
             s.rails = false;
             var back = PrototypeJson.ReadBuilding(PrototypeJson.Write(b)).shafts[0];
-            Assert.False(back.rails); Assert.True(back.solid);
+            Assert.False(back.rails); Assert.True(back.openingRails); Assert.True(back.solid);
             s.rails = true; s.solid = false;
             back = PrototypeJson.ReadBuilding(PrototypeJson.Write(b)).shafts[0];
-            Assert.True(back.rails); Assert.False(back.solid);
+            Assert.True(back.rails); Assert.True(back.openingRails); Assert.False(back.solid);
+            s.solid = true; s.openingRails = false;
+            Assert.Contains("\"openingRails\":false", PrototypeJson.Write(b).Replace(" ", ""));
+            back = PrototypeJson.ReadBuilding(PrototypeJson.Write(b)).shafts[0];
+            Assert.True(back.rails); Assert.False(back.openingRails); Assert.True(back.solid);
+            // and baked
+            foreach (var (r, o, so) in new[] { (false, true, true), (true, false, true), (true, true, false) })
+            {
+                s.rails = r; s.openingRails = o; s.solid = so;
+                var baked = BakedLayout.Of(BakedLayout.Bake(d))!.Document().buildings[0].shafts[0];
+                Assert.Equal((r, o, so), (baked.rails, baked.openingRails, baked.solid));
+            }
             var read = PrototypeJson.Read("{\"v\":2,\"buildings\":[{\"id\":\"a\",\"shafts\":[{\"id\":\"s\",\"type\":\"flight\"}]}]}");
-            Assert.True(read.Document.buildings[0].shafts[0].rails && read.Document.buildings[0].shafts[0].solid);
+            var rs = read.Document.buildings[0].shafts[0];
+            Assert.True(rs.rails && rs.openingRails && rs.solid);
             Assert.Empty(read.Unknown);
         }
     }

@@ -1538,8 +1538,8 @@ namespace Triband.Storey.Generate
                     // building's wall stands in on a side against it), and across the front where no flight carries on,
                     // the roof included: no bulkhead, the opening is railed like any other storey's. With the flights' own
                     // rails (CoreData.rails), a handrail on spindles between newels on the opening's corners, which those
-                    // start and end at: they, the solid flights (CoreData.solid) and how they look (CoreData.look, Railing)
-                    // are Storey's own
+                    // start and end at: they, the openings' rails left out (CoreData.openingRails), the solid flights
+                    // (CoreData.solid) and how they look (CoreData.look, Railing) are Storey's own
                     double hw = Dim.FLIGHT_W / 2, hd = Dim.FLIGHT_D / 2, xm = -hw + Dim.FLIGHT_LANE;
                     double z0 = -hd + Dim.FLIGHT_LANDING, z1 = hd - Dim.FLIGHT_LANDING;
                     // one flight alone (Cores.OneFlight) has no walkway: its lane's other side can stand against a wall too
@@ -1624,15 +1624,21 @@ namespace Triband.Storey.Generate
                             for (int j = 0; j < n; j++) Upright(false, at, a + i * part + (j + 1) * part / (n + 1), foot, h0, alongZ);
                         }
                     }
+                    // the openings' own rails (CoreData.openingRails). Without them, nobody walks into an opening all the same:
+                    // its edges stay walls to the walk model and the collider, as high as the rails would be
+                    bool open = s.openingRails;
                     if (hole && !s.rails)
                     {
                         // plain, the flights having no rails of their own to match: a handrail and a post at each end, 2 cm clear
                         // of the flight lane, so no rail face lies on a step's
                         void RailZ(double x)
                         {
-                            Bx(x - RW, x + RW, y + H - RT, y + H, z0 + 0.04, z1 - 0.04, railC);
-                            Bx(x - RW, x + RW, y, y + H, z0, z0 + 0.04, postC, null, Skip.Bot);
-                            Bx(x - RW, x + RW, y, y + H, z1 - 0.04, z1, postC, null, Skip.Bot);
+                            if (open)
+                            {
+                                Bx(x - RW, x + RW, y + H - RT, y + H, z0 + 0.04, z1 - 0.04, railC);
+                                Bx(x - RW, x + RW, y, y + H, z0, z0 + 0.04, postC, null, Skip.Bot);
+                                Bx(x - RW, x + RW, y, y + H, z1 - 0.04, z1, postC, null, Skip.Bot);
+                            }
                             S(x, z0, x, z1, rl.R, H);
                         }
                         if (!wR) RailZ(xm + Off);
@@ -1641,9 +1647,12 @@ namespace Triband.Storey.Generate
                         {
                             // the top: nothing carries on up, so the front of the opening is railed too
                             double zr = z0 - Off, x0 = fL ? -hw + 0.02 : -hw - Off - RW, x1 = wR ? xm - 0.02 : xm + Off + RW;
-                            Bx(x0 + 0.04, x1 - 0.04, y + H - RT, y + H, zr - RW, zr + RW, railC);
-                            Bx(x0, x0 + 0.04, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
-                            Bx(x1 - 0.04, x1, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
+                            if (open)
+                            {
+                                Bx(x0 + 0.04, x1 - 0.04, y + H - RT, y + H, zr - RW, zr + RW, railC);
+                                Bx(x0, x0 + 0.04, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
+                                Bx(x1 - 0.04, x1, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
+                            }
                             S(x0, zr, x1, zr, rl.R, H);
                         }
                     }
@@ -1651,7 +1660,7 @@ namespace Triband.Storey.Generate
                     {
                         // to match the flights' own: along the opening's sides, 2 cm clear of the flight lane so no rail face lies
                         // on a step's, from the newel at its front corner to the one at its back (the head of the flight that
-                        // comes up here)
+                        // comes up here). Without the opening's rails, the newels the flights' handrails end in alone
                         void Side(double xe, double o, bool wall)
                         {
                             if (wall) return;
@@ -1659,16 +1668,17 @@ namespace Triband.Storey.Generate
                             if (!rl.Slim)
                             {
                                 // the flight going on up from its front, and the one coming up to its back, end their handrails in them
-                                Newel(xe, z0 - 2 * NH, z0, up ? Rise(k) + rl.FlightH : 0); Newel(xe, z1, z1 + 2 * NH, Rise(k - 1) + rl.FlightH);
-                                Level(z0, z1, xc, true);
+                                if (open || up) Newel(xe, z0 - 2 * NH, z0, up ? Rise(k) + rl.FlightH : 0);
+                                Newel(xe, z1, z1 + 2 * NH, Rise(k - 1) + rl.FlightH);
+                                if (open) Level(z0, z1, xc, true);
                             }
                             else
                             {
                                 // slim: its own at its ends, where the line across the front crosses it (and across the back), and
                                 // the flight coming up's own at its head, on that flight's line, its handrail running on to it
-                                Newel(xc, z0 - Off - NH, z0 - Off + NH, 0); Newel(xc, z1 + Off - NH, z1 + Off + NH, 0);
+                                if (open) { Newel(xc, z0 - Off - NH, z0 - Off + NH, 0); Newel(xc, z1 + Off - NH, z1 + Off + NH, 0); }
                                 Newel(xe - o * Off, z1 + Off - NH, z1 + Off + NH, Rise(k - 1) + rl.FlightH);
-                                Level(z0 - Off + NH, z1 + Off - NH, xc, true);
+                                if (open) Level(z0 - Off + NH, z1 + Off - NH, xc, true);
                             }
                             S(xc, z0, xc, z1, rl.R, H);
                         }
@@ -1678,11 +1688,14 @@ namespace Triband.Storey.Generate
                             // the top: nothing carries on up, so the front of the opening is railed too, newel to newel (a post
                             // where it meets a wall)
                             double zr = z0 - Off, x0 = fL ? -hw + 0.02 : -hw - Off - RW, x1 = wR ? xm - 0.02 : xm + Off + RW;
-                            if (fL) Bx(x0, x0 + 0.04, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
-                            if (wR) Bx(x1 - 0.04, x1, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
-                            // between the newels (slim, the sides' own, on their lines), or a wall's post
-                            double na = rl.Slim ? -hw - Off + NH : -hw + NH, nb = rl.Slim ? xm + Off - NH : xm - NH;
-                            Level(fL ? x0 + 0.04 : na, wR ? x1 - 0.04 : nb, zr, false);
+                            if (open)
+                            {
+                                if (fL) Bx(x0, x0 + 0.04, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
+                                if (wR) Bx(x1 - 0.04, x1, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
+                                // between the newels (slim, the sides' own, on their lines), or a wall's post
+                                double na = rl.Slim ? -hw - Off + NH : -hw + NH, nb = rl.Slim ? xm + Off - NH : xm - NH;
+                                Level(fL ? x0 + 0.04 : na, wR ? x1 - 0.04 : nb, zr, false);
+                            }
                             S(x0, zr, x1, zr, rl.R, H);
                         }
                     }

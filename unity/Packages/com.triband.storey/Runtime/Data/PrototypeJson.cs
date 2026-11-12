@@ -270,7 +270,7 @@ namespace Triband.Storey
                 x = c.Num(o, "x", 0, w), z = c.Num(o, "z", 0, w), rot = c.Num(o, "rot", 0, w),
                 bottom = c.Int(o, "bottom", 0, w), top = c.Int(o, "top", -1, w),
                 roof = c.Bool(o, "roof", false, w),
-                rails = c.Bool(o, "rails", true, w), solid = c.Bool(o, "solid", true, w),
+                rails = c.Bool(o, "rails", true, w), openingRails = c.Bool(o, "openingRails", true, w), solid = c.Bool(o, "solid", true, w),
             };
             if (o.TryGetValue("look", out var lk) && lk != null)
             {
@@ -487,6 +487,7 @@ namespace Triband.Storey
                 };
                 // only when off: a layout whose stairs have both reads as before
                 if (!s.rails) so["rails"] = false;
+                if (!s.openingRails) so["openingRails"] = false;
                 if (!s.solid) so["solid"] = false;
                 if (s.look is StairLook l && !l.IsDefault)
                 {
@@ -792,7 +793,7 @@ namespace Triband.Storey
             public static readonly string[] TerraceEdge = { "parapet", "capH", "capDepth", "capStrip" };
             public static readonly string[] RoofSurface = { "pattern", "w", "h", "relief", "variation" };
             public static readonly string[] WallSurface = { "pattern", "w", "horizontal", "relief", "variation" };
-            public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof", "rails", "solid", "look" };
+            public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof", "rails", "openingRails", "solid", "look" };
             public static readonly string[] StairLook =
             {
                 "height", "railW", "railT", "gap", "spindle", "posts", "post", "newel", "newelAbove", "feet", "footW", "footH", "bottom", "bottomGap", "bottomW", "bottomT",
