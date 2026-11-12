@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
+using Triband.Storey.Edit;
 using Triband.Storey.Generate;
 using Triband.Storey.Play;
 using Xunit;
@@ -12,8 +13,9 @@ namespace Triband.Storey.Tests
 {
     /// <summary>
     /// The collision mesh (<see cref="CollisionMesh"/>) against the walk model it stands for: a ray dropped onto the floors
-    /// and stairs lands where <see cref="PlayWorld.SurfaceAt"/> says (at the prototype's sample points, <c>play.json</c>),
-    /// every collision segment is a wall a ray cannot pass, the floors face up, and it stays small.
+    /// lands where <see cref="PlayWorld.SurfaceAt"/> says (at the prototype's sample points, <c>play.json</c>), and onto the
+    /// stairs on their steps as LOD0 draws them, over the walk model's ramp by no more than a riser; every collision segment
+    /// is a wall a ray cannot pass, the floors face up, and it stays small.
     /// </summary>
     public class CollisionMeshTests
     {
@@ -69,7 +71,7 @@ namespace Triband.Storey.Tests
         {
             var (doc, world) = PlayWorldTests.World(corpus);
             var meshes = Meshes(corpus).Select(x => x.m).ToList();
-            var bad = new List<string>(); int n = 0, skipped = 0;
+            var bad = new List<string>(); int n = 0, skipped = 0, stairs = 0;
             foreach (var c in PlayWorldTests.Play.Value.RootElement.GetProperty("corpora").GetProperty(corpus).GetProperty("surface").EnumerateArray())
             {
                 var a = c.EnumerateArray().Select(e => e.GetDouble()).ToArray();
@@ -90,14 +92,128 @@ namespace Triband.Storey.Tests
                 }
                 if (skip) { skipped++; continue; }
                 n++;
+                // over a flight the collider has its steps, the walk model a ramp through their inner corners: the tread over the
+                // point is at or over the ramp, by no more than a riser (a ray dropped from a riser over what the walk model says)
+                if (OverAFlight(doc, x, z) is double riser)
+                {
+                    stairs++;
+                    double? tread = Down(meshes, x, want + riser + 1e-7, z, k => k == CollisionKind.Floor || k == CollisionKind.Stair);
+                    if (!(tread is double tr && tr >= want - 1e-6 && tr <= want + riser + 1e-6)) bad.Add($"({x}, {z}) from {y}: collider {tread}, walk model {want} (on stairs)");
+                    continue;
+                }
                 double? hit = Down(meshes, x, y + PlayWorld.StepUp + 1e-7, z, k => k == CollisionKind.Floor || k == CollisionKind.Stair);
                 double got = hit ?? (y + PlayWorld.StepUp >= 0 ? 0 : -1e9);
                 if (want > 0 && Math.Abs(got - want) > 1e-6) bad.Add($"({x}, {z}) from {y}: collider {got}, walk model {want}");
                 else if (want <= 0 && got > 1e-6) bad.Add($"({x}, {z}) from {y}: collider {got}, walk model the ground");
             }
-            output.WriteLine($"{n} compared, {skipped} skipped");
+            output.WriteLine($"{n} compared, {stairs} of them on stairs, {skipped} skipped");
             Assert.True(n > 500);
             Assert.True(bad.Count == 0, $"{bad.Count} of {n}:\n" + string.Join("\n", bad.Take(12)));
+        }
+
+        /// <summary>
+        /// Whether (x, z) is over a flight of a walk-in building's stairs (a straight flight's lane, or either of switchback
+        /// stairs' two), where the collider has the steps the walk model doesn't; if so, the highest riser they have.
+        /// </summary>
+        static double? OverAFlight(StoreyDocument doc, double x, double z)
+        {
+            foreach (var b in doc.buildings)
+            {
+                if (!b.interior) continue;
+                foreach (var s in b.shafts)
+                {
+                    if (!Cores.IsStairs(s)) continue;
+                    var f = Cores.FrameOf(b, s);
+                    double u = (x - f.O.x) * f.u.x + (z - f.O.z) * f.u.z, w = (x - f.O.x) * f.w.x + (z - f.O.z) * f.w.z;
+                    bool flight = s.type == CoreType.Flight;
+                    double hw = Dim.FLIGHT_W / 2, z0 = -Dim.FLIGHT_D / 2 + Dim.FLIGHT_LANDING, z1 = Dim.FLIGHT_D / 2 - Dim.FLIGHT_LANDING;
+                    bool over = flight ? u > -hw && u < -hw + Dim.FLIGHT_LANE && w > z0 && w < z1 : Math.Abs(u) < 1.3 && w > -1.6 && w < 1.6;
+                    if (!over) continue;
+                    double riser = 0;
+                    for (int k = 0; k <= b.floors.Count; k++)
+                    {
+                        double fh = Derived.FloorH(b, k);
+                        riser = Math.Max(riser, flight ? fh / Lod0.Shared.FlightSteps(fh) : fh / 2 / Lod0.Shared.StairSteps);
+                    }
+                    return riser;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The stairs are their steps as LOD0 draws them, a riser and a tread each, both kinds and on storeys of either height:
+        /// a ray dropped onto each of LOD0's treads meets the collider there, and one dropped onto each of the collider's treads
+        /// meets LOD0's there; a ray up a straight flight meets its first riser where LOD0 has it. Nothing slopes.
+        /// </summary>
+        [Theory]
+        [InlineData(CoreType.Flight, true)]
+        [InlineData(CoreType.Flight, false)]
+        [InlineData(CoreType.Stairs, true)]
+        public void TheStairsAreTheirStepsAsLod0DrawsThem(CoreType type, bool solid)
+        {
+            var d = new StoreyDocument();
+            var b = Buildings.Add(d, "rect", new Vec2(0, 0)); b.pos = new Vec2(0, 0);
+            b.footprint = new() { new Vec2(0, 0), new Vec2(12, 0), new Vec2(12, 9), new Vec2(0, 9) };
+            b.floors = Enumerable.Range(0, 3).Select(_ => new FloorData()).ToList(); b.interior = true; b.details.Clear(); b.shafts.Clear();
+            var s = Shafts.Place(b, 0, new Vec2(6, 4.5), type, 0, Shafts.NewId(d))!; s.solid = solid;
+            var site = new Site(d.buildings);
+            var op = Lod0.Build(site, b).Op; var m = CollisionMesh.Build(site, b, Lod0.BuildShape(site, b)); var f = Cores.FrameOf(b, s);
+            Assert.NotEqual(Derived.FloorH(b, 0), Derived.FloorH(b, 1));   // storeys of two heights, so two riser counts
+            (double u, double w) Local(P3 p) => ((p.x - f.O.x) * f.u.x + (p.z - f.O.z) * f.u.z, (p.x - f.O.x) * f.w.x + (p.z - f.O.z) * f.w.z);
+            bool flight = type == CoreType.Flight;
+            double hw = Dim.FLIGHT_W / 2, xm = -hw + Dim.FLIGHT_LANE, z0 = -Dim.FLIGHT_D / 2 + Dim.FLIGHT_LANDING, z1 = Dim.FLIGHT_D / 2 - Dim.FLIGHT_LANDING;
+            // within a flight's lane, clear of its rails and newels across it and of its ends along it
+            bool OnFlight(P3 p)
+            {
+                var (u, w) = Local(p);
+                return flight ? u > -hw + 0.2 && u < xm - 0.2 && w > z0 + 0.05 && w < z1 - 0.05
+                    : (u > -1.1 && u < -0.2 || u > 0.2 && u < 1.1) && w > -1.6 + 0.05 && w < 1.6 - 0.05;
+            }
+            P3 Centre(IReadOnlyList<P3> P, IReadOnlyList<int> I, int t) => (P[I[3 * t]] + P[I[3 * t + 1]] + P[I[3 * t + 2]]) * (1.0 / 3);
+            P3 Facing(IReadOnlyList<P3> P, IReadOnlyList<int> I, int t) => P3.Cross(P[I[3 * t + 1]] - P[I[3 * t]], P[I[3 * t + 2]] - P[I[3 * t]]).Normalized;
+            bool Stand(CollisionKind k) => k == CollisionKind.Floor || k == CollisionKind.Stair;
+            // up a storey a flight climbs (not the roof over switchback stairs' bulkhead, say)
+            bool Climbed(double y) => Enumerable.Range(0, b.floors.Count).Any(k => Cores.HasFlight(b, s, k) && y > Derived.FloorBase(b, k) + 1e-6 && y <= Derived.FloorBase(b, k + 1) + 1e-6);
+            // LOD0's treads, each where the collider has one
+            var treads = Enumerable.Range(0, op.Tris).Where(t => Facing(op.P, op.I, t).y > 0.99 && OnFlight(Centre(op.P, op.I, t)) && Climbed(Centre(op.P, op.I, t).y)).ToList();
+            var heights = new HashSet<double>();
+            foreach (int t in treads)
+            {
+                var c = Centre(op.P, op.I, t); heights.Add(Math.Round(c.y, 6));
+                double? got = Down(new[] { m }, c.x, c.y + 0.05, c.z, Stand);
+                Assert.True(got is double g && Math.Abs(g - c.y) < 1e-9, $"LOD0's tread at ({c.x:0.000}, {c.y:0.000}, {c.z:0.000}): the collider at {got}");
+            }
+            // as many as the flights have steps: up from each storey to the next (and switchbacks' two flights)
+            int want = 0;
+            for (int k = 0; k < b.floors.Count; k++)
+                if (Cores.HasFlight(b, s, k)) want += flight ? Lod0.Shared.FlightSteps(Derived.FloorH(b, k)) : 2 * Lod0.Shared.StairSteps;
+            Assert.Equal(want, heights.Count);   // each step's tread at a height of its own
+            // the collider's treads, each where LOD0 has one, and nothing of its stairs sloping
+            var sc = new RayScene(); sc.Add(op.P, op.I, t => 0);
+            int mine = 0;
+            for (int t = 0; t < m.Tris; t++)
+            {
+                if (m.Kind[t] != CollisionKind.Stair) continue;
+                var n = Facing(m.P, m.I, t);
+                Assert.True(n.y > 0.999 || Math.Abs(n.y) < 1e-9, $"a sloping stair face, its normal {n}");
+                var c = Centre(m.P, m.I, t);
+                if (n.y < 0.999 || !OnFlight(c)) continue;
+                mine++;
+                int h = sc.Hit(c.x, c.y + 0.05, c.z, 0, -1, 0, out double th);
+                Assert.True(h >= 0 && Math.Abs(c.y + 0.05 - th - c.y) < 1e-9, $"the collider's tread at ({c.x:0.000}, {c.y:0.000}, {c.z:0.000}): LOD0 at {(h >= 0 ? c.y + 0.05 - th : (double?)null)}");
+            }
+            Assert.True(mine >= 2 * want, $"{mine} tread triangles for {want} steps");
+            // a ray up a straight flight's lane, under its first tread, meets its first riser where LOD0 has it
+            if (flight)
+            {
+                double y0 = Derived.FloorBase(b, 0), rise = Derived.FloorH(b, 0) / Lod0.Shared.FlightSteps(Derived.FloorH(b, 0));
+                var p = f.At2((-hw + xm) / 2, z0 - 0.3); var o = new P3(p.x, y0 + rise / 2, p.z); var dir = new P3(f.w.x, 0, f.w.z);
+                double? best = null;
+                for (int t = 0; t < m.Tris; t++)
+                    if (m.Kind[t] == CollisionKind.Stair && Hit(o, dir, m.P[m.I[3 * t]], m.P[m.I[3 * t + 1]], m.P[m.I[3 * t + 2]]) is double hh && (best == null || hh < best)) best = hh;
+                Assert.True(best is double bb && Math.Abs(bb - 0.3) < 1e-9, $"the first riser at {best}");
+            }
         }
 
         [Theory, MemberData(nameof(Corpora))]
@@ -374,7 +490,8 @@ namespace Triband.Storey.Tests
                         {
                             var cr = P3.Cross(m.P[m.I[3 * t + 1]] - m.P[m.I[3 * t]], m.P[m.I[3 * t + 2]] - m.P[m.I[3 * t]]);
                             Assert.True(cr.Length > 1e-9, $"{what}: a degenerate {m.Kind[t]} triangle");
-                            if (m.Kind[t] != CollisionKind.Wall) Assert.True(cr.y > 0, $"{what}: a {m.Kind[t]} triangle faces down");
+                            // floors and treads face up; a step's riser stands upright
+                            if (m.Kind[t] != CollisionKind.Wall) Assert.True(cr.y > 0 || m.Kind[t] == CollisionKind.Stair && Math.Abs(cr.y) <= 1e-9 * cr.Length, $"{what}: a {m.Kind[t]} triangle faces down");
                         }
                         var cap = RoofCap.Of(b);
                         // a cap standing out: its pieces are the boxes LOD0 draws it with, every one of them (along party walls and
@@ -409,16 +526,21 @@ namespace Triband.Storey.Tests
             Assert.True(WallHit(m, new P3(10, roof + 0.6, 8), west) is null, "a wall over the curb");
         }
 
+        /// <summary>Floors and the stairs' treads face up, and the stairs' risers stand upright: nothing faces down.</summary>
         [Theory, MemberData(nameof(Corpora))]
         public void FloorsAndStairsFaceUp(string corpus)
         {
+            int risers = 0;
             foreach (var (b, m) in Meshes(corpus))
                 for (int t = 0; t < m.Tris; t++)
                 {
                     if (m.Kind[t] == CollisionKind.Wall) continue;
                     var cr = P3.Cross(m.P[m.I[3 * t + 1]] - m.P[m.I[3 * t]], m.P[m.I[3 * t + 2]] - m.P[m.I[3 * t]]);
-                    Assert.True(cr.y > 0, $"{b.name}: a {m.Kind[t]} triangle faces down");
+                    bool riser = m.Kind[t] == CollisionKind.Stair && Math.Abs(cr.y) <= 1e-9 * cr.Length;
+                    if (riser) risers++;
+                    Assert.True(cr.y > 0 || riser, $"{b.name}: a {m.Kind[t]} triangle faces down");
                 }
+            Assert.True(risers > 0, "no risers");
         }
 
         [Fact]

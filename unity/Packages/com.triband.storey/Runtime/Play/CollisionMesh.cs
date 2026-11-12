@@ -13,7 +13,8 @@ namespace Triband.Storey.Play
 
     /// <summary>
     /// A building's collision mesh for Unity physics (a <c>MeshCollider</c>): the walk model's world as triangles, so
-    /// characters, rigid bodies, raycasts and NavMesh baking meet what <see cref="PlayWorld"/> walks on and is stopped by.
+    /// characters, rigid bodies, raycasts and NavMesh baking meet what <see cref="PlayWorld"/> walks on and is stopped by,
+    /// but for the stairs, which are their steps as drawn where the walk model has a ramp.
     /// <list type="bullet">
     /// <item>Walls: LOD0's collision segments, each a thin box as thick as its radius says, as tall as its storey, or as the
     /// parapet or rail it is where that is lower (<see cref="Seg.h"/>). On the roof, as high as it says: a flat roof's edge
@@ -26,8 +27,10 @@ namespace Triband.Storey.Play
     /// parapet is.</item>
     /// <item>Floors: one polygon per level (the floor, terrace or roof), as far out as the walk model lets the player step,
     /// with the stair holes cut out; none inside storeys nobody can enter (shell-only buildings, filled storeys).</item>
-    /// <item>Stairs: a ramp up each flight, a flat mid landing; a straight flight's railed sides as high as their handrail,
-    /// and a solid one's sides and back on its floor, sloping with it.</item>
+    /// <item>Stairs: each flight's steps as LOD0 draws them, a riser and a tread each, across the flight's lane; a flat mid
+    /// landing; a straight flight's railed sides as high as their handrail, and a solid one's sides and back on its floor,
+    /// sloping with it. The walk model has a ramp up each flight instead, through the steps' inner corners (the prototype's,
+    /// which its recorded walks keep): a character on the collider stands on the treads, up to a riser over it.</item>
     /// <item>Pitched roofs: their planes.</item>
     /// <item>A roof cap set in (<see cref="RoofCap.inset"/>): where it stands, as high as it is, its sides walls and its top a
     /// wall's (a ring) or a roof's (a block over the whole roof, which the walk model walks under).</item>
@@ -35,7 +38,7 @@ namespace Triband.Storey.Play
     /// A shell-only building keeps its stairs for when it is walk-in again, but builds none: none here, nor a hole for them,
     /// though the walk model keeps them as the prototype's does (no one gets in to use them).
     /// Engine-free, from the building's LOD0 shape (kept from the LOD0 built for rendering), in the layout's coordinates. One-sided:
-    /// each triangle faces out of what it bounds (floors and ramps up). Vertices are shared within a piece; there are no
+    /// each triangle faces out of what it bounds (floors and treads up, risers down the flight). Vertices are shared within a piece; there are no
     /// normals or colours.
     /// </summary>
     public sealed class CollisionMesh
@@ -287,7 +290,7 @@ namespace Triband.Storey.Play
                     if (s.type == CoreType.Flight)
                     {
                         double hw = Dim.FLIGHT_W / 2, xm = -hw + Dim.FLIGHT_LANE, z0 = -Dim.FLIGHT_D / 2 + Dim.FLIGHT_LANDING, z1 = Dim.FLIGHT_D / 2 - Dim.FLIGHT_LANDING;
-                        Quad(Pt(-hw, z0, yb), Pt(xm, z0, yb), Pt(xm, z1, yb + fh), Pt(-hw, z1, yb + fh), Up, CollisionKind.Stair);
+                        Steps(f, -hw, xm, z0, z1, yb, fh, Lod0.Shared.FlightSteps(fh));
                         // its railed sides as high as their handrail, 90 cm over the nosings (a riser over the ramp); a solid
                         // flight on its floor, its sides and its back as high as it is. Where the walk model has a wall all the
                         // way up (Seg.Flush), as LOD0 builds them
@@ -297,19 +300,43 @@ namespace Triband.Storey.Play
                             var flush = Cores.CoreFlush(Derived.OutlineAt(b, k), s, b: b);
                             bool fL = flush[0] != null, wR = flush[1] != null && Cores.OneFlight(b, s);
                             var rl = Railing.Of(s.look);
-                            double over = s.rails ? fh / Math.Max(8, (int)Math.Round(fh / 0.18)) + rl.FlightH : 0;
+                            double over = s.rails ? fh / Lod0.Shared.FlightSteps(fh) + rl.FlightH : 0;
                             if (!fL) Fence(f, -hw + rl.Off, rl.R, z0, z1, yb, fh, over);
                             if (!wR) Fence(f, xm - rl.Off, rl.R, z0, z1, yb, fh, over);
                         }
                         if (fill) { var a = f.At2(-hw, z1 - 0.04); var c = f.At2(xm, z1 - 0.04); Box(new Seg(a.x, a.z, c.x, c.z, 0.04), yb, yb + fh); }
                         continue;
                     }
-                    double half = fh / 2;
+                    double half = fh / 2; int ns = Lod0.Shared.StairSteps;
                     // up the −u lane along +w to the mid landing, across it, and up the +u lane back along −w
-                    Quad(Pt(-1.3, -1.6, yb), Pt(0, -1.6, yb), Pt(0, 1.6, yb + half), Pt(-1.3, 1.6, yb + half), Up, CollisionKind.Stair);
+                    Steps(f, -1.3, 0, -1.6, 1.6, yb, half, ns);
                     Quad(Pt(-1.3, 1.6, yb + half), Pt(1.3, 1.6, yb + half), Pt(1.3, 2.6, yb + half), Pt(-1.3, 2.6, yb + half), Up, CollisionKind.Stair);
-                    Quad(Pt(0, 1.6, yb + half), Pt(1.3, 1.6, yb + half), Pt(1.3, -1.6, yb + fh), Pt(0, -1.6, yb + fh), Up, CollisionKind.Stair);
+                    Steps(f, 0, 1.3, 1.6, -1.6, yb + half, half, ns);
                 }
+            }
+        }
+
+        /// <summary>
+        /// A flight's steps as LOD0 draws them, in its core's frame <paramref name="f"/>: across from <paramref name="x0"/> to
+        /// <paramref name="x1"/>, up from <paramref name="za"/> (at <paramref name="yb"/>) to <paramref name="ze"/> (at
+        /// <paramref name="yb"/> + <paramref name="rise"/>, the way along w either way), in <paramref name="n"/> equal steps:
+        /// each a riser facing down the flight and a tread over it, the last tread level with what the flight comes up to. One
+        /// strip, the risers' and treads' edges shared.
+        /// </summary>
+        void Steps(Frame f, double x0, double x1, double za, double ze, double yb, double rise, int n)
+        {
+            int Pt(double u, double w, double y) { var q = f.At2(u, w); return V(q.x, y, q.z); }
+            double run = (ze - za) / n, dir = Math.Sign(ze - za);
+            var down = new P3(-f.w.x * dir, 0, -f.w.z * dir);   // the way down the flight, which its risers face
+            int a0 = Pt(x0, za, yb), a1 = Pt(x1, za, yb);
+            for (int i = 0; i < n; i++)
+            {
+                double z = za + i * run, t = yb + (i + 1) * rise / n;
+                int b0 = Pt(x0, z, t), b1 = Pt(x1, z, t);
+                Quad(a0, a1, b1, b0, down, CollisionKind.Stair);                                     // its riser
+                int c0 = Pt(x0, z + run, t), c1 = Pt(x1, z + run, t);
+                Quad(b0, b1, c1, c0, Up, CollisionKind.Stair);                                       // its tread
+                a0 = c0; a1 = c1;
             }
         }
 

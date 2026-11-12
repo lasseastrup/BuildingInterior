@@ -417,6 +417,15 @@ namespace Triband.Storey.Generate
         /// </summary>
         public const double StairNewel = 1.18;
 
+        /// <summary>
+        /// How many steps a straight flight up a storey <paramref name="fh"/> high has: risers of about 18 cm, at least 8, over
+        /// its fixed run (Dim.FLIGHT_D less its landings). LOD0 draws them; the collision mesh has them as drawn.
+        /// </summary>
+        public static int FlightSteps(double fh) => Math.Max(8, (int)Math.Round(fh / 0.18));
+
+        /// <summary>How many steps each of switchback stairs' two flights has, up half the storey over 3.2 m.</summary>
+        public const int StairSteps = 10;
+
         /// <summary>The curb round a flat roof without a parapet (and round a courtyard through it): its top over the roof.</summary>
         public const double RoofCurb = 0.3;
 
@@ -1497,7 +1506,7 @@ namespace Triband.Storey.Generate
                     op.Ctx(null, 0);
                     if (Cores.HasFlight(b, s, k))
                     {
-                        double fh = Derived.FloorH(b, k), half = fh / 2; int n = 10; double run = 3.2 / n;
+                        double fh = Derived.FloorH(b, k), half = fh / 2; int n = StairSteps; double run = 3.2 / n;
                         for (int i = 0; i < n; i++) { double z0 = -1.6 + i * run, t = y + (i + 1) * half / n; Bx(-1.25, -0.05, t - 0.2, t, z0, z0 + run, C.step, null, Skip.UEnd); }
                         // the steps' ends against the centre wall, which the prototype leaves out as the wall covers them: where a
                         // step reaches past the wall (the second flight's last steps over its top, a slab under the next floor; the
@@ -1555,7 +1564,7 @@ namespace Triband.Storey.Generate
                     Swatch treadC = Railing.Colour(C, lk?.treadColor, C.step), riserC = Railing.Colour(C, lk?.riserColor, C.step), sideC = Railing.Colour(C, lk?.sideColor, C.inner);
                     Swatch bottomC = Railing.Colour(C, lk?.bottomColor, railC);
                     // a flight's handrail's top over the floor where it ends in a newel: its riser over its nosings' line's
-                    double Rise(int kk) { double h = Derived.FloorH(b, kk); return h / Math.Max(8, (int)Math.Round(h / 0.18)); }
+                    double Rise(int kk) { double h = Derived.FloorH(b, kk); return h / FlightSteps(h); }
                     // a newel on the lane's edge xe, from za to zb along it, as high as the look sets it over the rails and over the
                     // flight's handrail (flight, over the floor) that ends in it, and its foot
                     void Newel(double xe, double za, double zb, double flight)
@@ -1702,7 +1711,7 @@ namespace Triband.Storey.Generate
                     if (up)
                     {
                         // risers of about 18 cm, whatever the storey's height, over a fixed run
-                        double fh = Derived.FloorH(b, k); int n = Math.Max(8, (int)Math.Round(fh / 0.18)); double run = (z1 - z0) / n;
+                        double fh = Derived.FloorH(b, k); int n = FlightSteps(fh); double run = (z1 - z0) / n;
                         double sl = fh / (z1 - z0), cs = 1 / Math.Sqrt(1 + sl * sl);   // the flight's slope, and its cosine
                         // standing on this storey's floor (the stack's lowest flight, or over a filled storey), not on the
                         // flight below's opening
