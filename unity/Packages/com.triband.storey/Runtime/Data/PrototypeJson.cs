@@ -349,6 +349,12 @@ namespace Triband.Storey
                 s.roofSurface = new RoofSurface { pattern = c.Enum<RoofPattern>(ro, "pattern", RoofPattern.Tiles, rp), w = c.Opt(ro, "w", rp), h = c.Opt(ro, "h", rp), relief = c.Opt(ro, "relief", rp), variation = c.Opt(ro, "variation", rp) };
                 c.Check(ro, rp, Keys.RoofSurface);
             }
+            if (o.TryGetValue("wallSurface", out var ws) && ws != null)
+            {
+                var wp = path.In("wallSurface"); var wo = c.Obj(ws, wp);
+                s.wallSurface = new WallSurface { pattern = c.Enum<WallPattern>(wo, "pattern", WallPattern.Cladding, wp), w = c.Opt(wo, "w", wp), horizontal = c.Bool(wo, "horizontal", false, wp), relief = c.Opt(wo, "relief", wp), variation = c.Opt(wo, "variation", wp) };
+                c.Check(wo, wp, Keys.WallSurface);
+            }
             s.sillH = c.Opt(o, "sillH", path);
             s.winCentre = c.Bool(o, "winCentre", false, path);
             s.recess = c.Opt(o, "recess", path);
@@ -621,6 +627,15 @@ namespace Triband.Storey
                 if (rs.variation.HasValue) ro["variation"] = rs.variation.Value;
                 o["roofSurface"] = ro;
             }
+            if (s.wallSurface is WallSurface ws)
+            {
+                var wo = new Dictionary<string, object?> { ["pattern"] = Lower(ws.pattern) };
+                if (ws.w.HasValue) wo["w"] = ws.w.Value;
+                if (ws.horizontal) wo["horizontal"] = true;
+                if (ws.relief.HasValue) wo["relief"] = ws.relief.Value;
+                if (ws.variation.HasValue) wo["variation"] = ws.variation.Value;
+                o["wallSurface"] = wo;
+            }
             if (s.sillH.HasValue) o["sillH"] = s.sillH.Value;
             if (s.winCentre) o["winCentre"] = true;
             if (s.recess.HasValue) o["recess"] = s.recess.Value;
@@ -745,6 +760,7 @@ namespace Triband.Storey
             public static readonly string[] Terrace = { "pitch", "type" };
             public static readonly string[] TerraceEdge = { "parapet", "capH", "capDepth", "capStrip" };
             public static readonly string[] RoofSurface = { "pattern", "w", "h", "relief", "variation" };
+            public static readonly string[] WallSurface = { "pattern", "w", "horizontal", "relief", "variation" };
             public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof", "rails", "solid" };
             public static readonly string[] DetailRules = { "ac", "vents" };
             public static readonly string[] KindRule = { "p", "density", "spacing", "per", "floors", "corners", "color", "colorOff" };
@@ -754,7 +770,7 @@ namespace Triband.Storey
             {
                 "preset", "label", "wall", "trim", "interior", "floor", "roof", "core", "glass", "windows", "winW", "bay", "ground", "bands", "parapet", "roofType", "pitch", "eave", "mansard", "dormers", "capH", "capDepth", "capStrip", "details",
                 "head", "sills", "heads", "panes", "frames", "bandH", "bandDepth", "bandWall", "bandGround", "corniceH", "corniceDepth", "plinthH", "plinthDepth", "foundation", "foundationH", "foundationOut", "windowKind", "doorKind", "sillH", "winCentre", "recess", "doorRecess", "doorRecessOffset", "recessBack",
-                "windowSet", "groundSet", "doorSet", "windowPick", "bayFit", "roofSurface",
+                "windowSet", "groundSet", "doorSet", "windowPick", "bayFit", "roofSurface", "wallSurface",
                 "door", "rail", "metal", "ceiling", "liftInterior", "liftButton", "detailMetal", "grille", "detailDark", "dish", "frame", "foundationColor", "plinth", "groundWall", "band", "cornice", "cap", "capRim",
                 "doorType",   // street doors' Canopy or Glazed, gone (every generated door is plain): read and dropped, not reported
                 "bricks",     // the built-in brick patches, gone (a project scatters its own, as a facade detail): read and dropped, not reported

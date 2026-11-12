@@ -5,6 +5,10 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- **Metal cladding on the walls** (`FacadeStyle.wallSurface`, `WallSurface`, `WallPattern.Cladding`, layout key `wallSurface` on a style, an object with `pattern`, `w`, `horizontal`, `relief` and `variation`, each written only when set; docs/EDITOR.md §6.7, `WallSurfaceTests`): metal panels in the walls' colour, a standing seam at each one's edge, running up the wall or along it, drawn by the shader (StoreyWallSurface.hlsl) as a roof's surface is, so it adds no triangles.
+  - It is on upright faces in the walls' colour (the ground storey's own too) at full shade, so the plinth and bands in a shade of the wall stay plain. Where a seam is under a pixel or two, it fades to the plain colour, which every panel averages and LOD2's massing paints. LOD0 and LOD1.
+  - It rides in two spare entries of the style's colour row (`ColorRows.WallEntry`, `ColorRows.WallSurface`, `ColorRows.PanelWidth`), which StoreyWallOf in StoreyPalette.hlsl reads from the row's last uint4, as the roof's. The vertex stage hands it to the fragment in a pane's place, as a roof's, with the panels' way below 0 where a roof's tile height goes.
+- **The baked layout format is 18** (`BakedLayout.Version`): styles carry `wallSurface`.
 - **Rails and solid straight flights** (`CoreData.rails`, `CoreData.solid`, layout keys `rails` and `solid` on a shaft, both on unless the layout says otherwise and written only when off; `Lod0.Shared.StairNewel`; docs/EDITOR.md §5, `StairRailTests`):
   - **Rails:** a handrail up each side of every flight that no building wall stands against, 90 cm over the nosings, on balusters standing on the treads, from a newel at the flight's foot to one at its head. The rails round the openings get balusters to match, between newels on their corners. Off, those are plain as before.
   - **Solid:** each flight built solid, its sides in the rooms' walls' colour: filled down to the floor it stands on, or, over the flight below, with a sloped underside 20 cm under its treads' back edges that keeps that flight's headroom.

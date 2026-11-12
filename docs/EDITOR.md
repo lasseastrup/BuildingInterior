@@ -342,6 +342,13 @@ Engine-free: `Buildings.AsTemplate`, `Buildings.FromTemplate`, `Setbacks.ApplyFo
 
 **Details** in the Facade tab, from the artist's brick building. Each option is per style, so a setback can differ. A style with none of them builds exactly as before.
 
+- **Surface** (*Walls*, Storey's own): *Plain*, or *Metal cladding*: metal panels in the walls' colour, a standing seam at each one's edge, drawn by the shader rather than modelled, as a roof's *Surface* is (§6.2), so it adds no triangles, draw calls or textures.
+  - *Panels*: *Vertical* (up the wall, the seams upright) or *Horizontal* (along it, the seams level). *Panel width* is from seam to seam (0.5 m by default), *Relief* how strongly the light picks out the seams, and *Variation* how much each panel's shade differs from the next.
+  - It is on every upright face in the walls' colour at full shade: the walls, the ground storey's in its own colour too, parapets and window reveals. The plinth and floor bands in a shade of the wall stay plain, as do the trim, frames and windows. A part of an artist's window coloured as the wall is clad too.
+  - Vertical seams run along each wall's own direction, so where two walls meet each has its panels where they fall. Horizontal seams are at the same heights on every wall.
+  - Where a seam is under a pixel or two on screen, it fades to the walls' plain colour, which every panel averages and LOD2's massing paints, so it doesn't shimmer in the distance and the switch to the massing changes nothing. LOD0 and LOD1 have it.
+  - How it is drawn: the style's surface rides in two spare entries of its colour row (`ColorRows.WallEntry`). A vertex of the walls' colour slots at full shade on an upright face reads them, from the part of the row its colour's remap comes from, and hands them to its fragments where a window pane's coordinates go (a pane never lies on a wall's face). The fragment works out the seams from the face's normal and its place, on clad walls' pixels only (StoreyWallSurface.hlsl; `WallSurfaceTests`).
+  - Layout key `wallSurface` on the style: an object with `pattern` (`cladding`), `w`, `horizontal`, `relief` and `variation`, each written only when set. The baked layout format is version 18.
 - **Sills** and **Heads** (*Windows › Built-in window*, shown while a style picks the built-in window): turn off the sill under each window, or the head over it (flat or arched; on doors, the arched hood). Both are on by default. Off, the window is a plain opening with its glass. Layout keys `sills` and `heads`, written only when off.
 - **Head shape:** *Flat* (the thin head strip) or *Arch*, the artist's cap over each window and door. It's a solid hood standing 14 cm out from the wall and reaching 10 cm past the opening each side. Its top is arched (7 cm thick at the ends, rising about a twelfth of its span in the middle), and its underside dips 4 cm at the ends, so it hangs over the window.
 - **Glazing bars:** *Panes across* × *Panes up* (2 × 3 like the artist's) divides every window into panes.
@@ -375,8 +382,9 @@ Layout keys: `head`, `panes`, `frames`, `bandH`, `bandDepth`, `bandWall`, `bandG
 
 **Checks:**
 1. Arch heads, 2 × 3 panes, Frames, Band 0.65 m in a wall shade, Plinth 0.8 m with a grey Plinth colour, Foundation: the building looks like the artist's.
-2. Set Foundation *Below ground* to 1 m and lower the ground (or lift the site): the foundation shows down to it.
-3. On an L-shaped building set *Bay width* to 1.5 m and *Bays* to *Fixed width*: each wall has as many windows as whole 1.5 m bays fit on its outside, centred on it, at LOD0, LOD1 and LOD2 alike; AC units sit under windows and vents between them; one Undo puts the bays back to *Fill the wall*.
+2. Walls ▸ Surface ▸ Metal cladding, *Vertical* then *Horizontal*, close up and far off: the seams follow each wall, the plinth and bands stay plain, and far off the walls are their plain colour again.
+3. Set Foundation *Below ground* to 1 m and lower the ground (or lift the site): the foundation shows down to it.
+4. On an L-shaped building set *Bay width* to 1.5 m and *Bays* to *Fixed width*: each wall has as many windows as whole 1.5 m bays fit on its outside, centred on it, at LOD0, LOD1 and LOD2 alike; AC units sit under windows and vents between them; one Undo puts the bays back to *Fill the wall*.
 
 **Blank, quiet and bare walls** (`EdgeState`, Storey's own, for the old BuildingGenerator's per-edge states). *Details › Place by hand › Blank wall* has three choices for what a click makes a wall:
 - *No windows* (**blank**, as before): no windows; doors placed by hand stay, as do the bands, plinth and details. The old generator's *suppressed* edge.

@@ -60,11 +60,12 @@ namespace Triband.Storey.Tests
             Assert.Matches(new Regex(@"uint3 StoreyRoofOf\(uint row\)\s+\{\s+row = min\(row, \(uint\)max\(\(int\)_StoreyTableSize\.z - 1, 0\)\);\s+uint4 tail = _StoreyColors\[row \* STOREY_ROW_UINT4S \+ STOREY_ROW_UINT4S - 1\];\s+return uint3\(tail\.z & 0xFFFF, tail\.z >> 16, tail\.w & 0xFFFF\);"), palette);
             // a vertex of the roof's slot on a face that isn't level reads it, and hands it on in the pane's place
             var lit = Code("Unity", "Shaders", "StoreyLit.hlsl");
-            Assert.Matches(new Regex(@"\[branch\] if \(!pane && ce\.z == STOREY_SLOT_ROOF && IN\.normalOS\.y < 0\.985\)\s+\{\s+uint3 r = StoreyRoofOf\(ce\.x \| \(ce\.y << 8\)\);\s+if \(\(r\.x & 15u\) != 0u\)\s+roof = float4\(r\.y / 1000\.0, r\.z / 1000\.0, -\(\(float\)\(r\.x & 15u\) \+ 0\.5 \* \(float\)\(\(r\.x >> 10\) & 63u\) / 63\.0\), \(float\)\(\(r\.x >> 4\) & 63u\) / 63\.0\);\s+\}"), lit);
-            Assert.Matches(new Regex(@"OUT\.win = pane \? float4\([^;]+\) : roof;"), lit);
-            // its fragments draw it (the colour passes of the opaque materials alone), after the derivatives every pixel takes
+            Assert.Matches(new Regex(@"\[branch\] if \(!pane && ce\.z == STOREY_SLOT_ROOF && IN\.normalOS\.y < 0\.985\)\s+\{\s+uint3 r = StoreyRoofOf\(ce\.x \| \(ce\.y << 8\)\);\s+if \(\(r\.x & 15u\) != 0u\)\s+surface = float4\(r\.y / 1000\.0, r\.z / 1000\.0, -\(\(float\)\(r\.x & 15u\) \+ 0\.5 \* \(float\)\(\(r\.x >> 10\) & 63u\) / 63\.0\), \(float\)\(\(r\.x >> 4\) & 63u\) / 63\.0\);\s+\}"), lit);
+            Assert.Matches(new Regex(@"OUT\.win = pane \? float4\([^;]+\) : surface;"), lit);
+            // its fragments draw it (the colour passes of the opaque materials alone), after the derivatives every pixel takes;
+            // a wall's surface has its tile height's place below 0 (WallSurfaceTests), a roof's never
             var frag = Code("Unity", "Shaders", "StoreyFragment.hlsl");
-            Assert.Matches(new Regex(@"#if !defined\(STOREY_MASSING\) && !defined\(STOREY_GLASS\)\s+float3 dpx = ddx\(s\.positionWS\), dpy = ddy\(s\.positionWS\);\s+if \(IN\.win\.z < -0\.5 && isFront\) StoreyRoofSurface\(IN\.win, s\.positionWS, dpx, dpy, s\.albedo, s\.normalWS\);\s+#endif"), frag);
+            Assert.Matches(new Regex(@"#if !defined\(STOREY_MASSING\) && !defined\(STOREY_GLASS\)\s+float3 dpx = ddx\(s\.positionWS\), dpy = ddy\(s\.positionWS\);\s+if \(IN\.win\.z < -0\.5 && isFront\)\s+\{\s+if \(IN\.win\.y < -0\.5\) StoreyWallSurface\(IN\.win, s\.positionWS, dpx, dpy, s\.albedo, s\.normalWS\);\s+else StoreyRoofSurface\(IN\.win, s\.positionWS, dpx, dpy, s\.albedo, s\.normalWS\);\s+\}\s+#endif"), frag);
             Assert.Contains("#include \"StoreyRoof.hlsl\"", frag);
             // a pane's place below 0 is never a pane: every test of a pane wants it over 0.5
             Assert.Contains("if (IN.win.z > 1.5 && isFront)", frag);

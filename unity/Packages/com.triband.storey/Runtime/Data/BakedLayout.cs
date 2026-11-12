@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 17;
+        public const int Version = 18;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -261,6 +261,7 @@ namespace Triband.Storey
             s.cap = Str(ref r); s.capRim = Str(ref r); s.capH = r.Opt(); s.capDepth = r.Opt(); s.capStrip = r.Opt(); s.recess = r.Opt(); s.doorRecess = r.Opt();
             s.winCentre = r.Bool(); s.bayFit = E<BayFit>(ref r); s.doorRecessOffset = r.Opt(); s.recessBack = r.Bool();
             if (r.Bool()) s.roofSurface = new RoofSurface { pattern = E<RoofPattern>(ref r), w = r.Opt(), h = r.Opt(), relief = r.Opt(), variation = r.Opt() };
+            if (r.Bool()) s.wallSurface = new WallSurface { pattern = E<WallPattern>(ref r), w = r.Opt(), horizontal = r.Bool(), relief = r.Opt(), variation = r.Opt() };
             if (r.Bool())
             {
                 var dr = s.details = new DetailRules { ac = r.Opt(), vents = r.Opt() };
@@ -453,6 +454,8 @@ namespace Triband.Storey
             w.Bool(s.winCentre); w.E(s.bayFit); w.Opt(s.doorRecessOffset); w.Bool(s.recessBack);
             w.Bool(s.roofSurface != null);
             if (s.roofSurface is RoofSurface rs) { w.E(rs.pattern); w.Opt(rs.w); w.Opt(rs.h); w.Opt(rs.relief); w.Opt(rs.variation); }
+            w.Bool(s.wallSurface != null);
+            if (s.wallSurface is WallSurface ws) { w.E(ws.pattern); w.Opt(ws.w); w.Bool(ws.horizontal); w.Opt(ws.relief); w.Opt(ws.variation); }
             w.Bool(s.details != null);
             if (s.details != null)
             {

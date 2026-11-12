@@ -27,8 +27,8 @@ namespace Triband.Storey.Generate
     /// <summary>
     /// The GPU side of swatches (docs/COLOURS.md §3.3, §3.4), engine-free so the headless tests can check
     /// exactly what the shaders will read. A colour row is 32 16-bit entries in four <c>uint4</c>s: the palette
-    /// index of each <see cref="ColorSlot"/> of a style, spare entries, the style's roof surface (<see cref="RoofEntry"/>), and
-    /// the atlas row of the building's remap. It was
+    /// index of each <see cref="ColorSlot"/> of a style, a spare entry, the style's wall surface (<see cref="WallEntry"/>) and
+    /// roof surface (<see cref="RoofEntry"/>), and the atlas row of the building's remap. It was
     /// 24 in three until the facade's strips and roof cap needed more slots than were spare (docs/COLOURS.md §3.3).
     /// </summary>
     public static class ColorRows
@@ -56,8 +56,16 @@ namespace Triband.Storey.Generate
         public const int RoofEntry = 28;
 
         /// <summary>
+        /// The walls' surface (<see cref="FacadeStyle.wallSurface"/>, docs/EDITOR.md §6.7), in two spare entries from here: its
+        /// pattern (bits 0 to 2, 0 for plain walls), whether its panels run along the wall (bit 3), relief and variation (6
+        /// bits each, of 63); then a panel's width in millimetres. StoreyWallOf in StoreyPalette.hlsl reads them, in the row's
+        /// last uint4 with the roof's and the remap row. Entry 25 is spare, for the next colour slot.
+        /// </summary>
+        public const int WallEntry = 26;
+
+        /// <summary>
         /// A style's colour row as written (<see cref="Pack"/>): its slots' palette indices (<see cref="Indices"/>), then the
-        /// spare entries, its roof's surface among them (<see cref="RoofEntry"/>).
+        /// spare entries, its walls' and roof's surfaces among them (<see cref="WallEntry"/>, <see cref="RoofEntry"/>).
         /// </summary>
         public static int[] Row(FacadeStyle st, IColorPalette palette)
         {
@@ -69,8 +77,27 @@ namespace Triband.Storey.Generate
                 r[RoofEntry] = pattern | (int)Math.Round(relief * 63) << 4 | (int)Math.Round(variation * 63) << 10;
                 r[RoofEntry + 1] = (int)Math.Round(w * 1000); r[RoofEntry + 2] = (int)Math.Round(h * 1000);
             }
+            var (wp, along, ww, wr, wv) = WallSurface(st);
+            if (wp != 0)
+            {
+                r[WallEntry] = wp | (along ? 8 : 0) | (int)Math.Round(wr * 63) << 4 | (int)Math.Round(wv * 63) << 10;
+                r[WallEntry + 1] = (int)Math.Round(ww * 1000);
+            }
             return r;
         }
+
+        /// <summary>
+        /// A style's wall surface with its defaults filled in: the pattern (0 for none), whether its panels run along the wall,
+        /// a panel's width in metres (kept between 2 cm and 60 m), relief and variation (0 to 1).
+        /// </summary>
+        public static (int pattern, bool along, double w, double relief, double variation) WallSurface(FacadeStyle st)
+        {
+            if (st.wallSurface is not WallSurface ws) return (0, false, 0, 0, 0);
+            return ((int)ws.pattern, ws.horizontal, Math.Max(0.02, Math.Min(60, ws.w ?? PanelWidth)), Math.Max(0, Math.Min(1, ws.relief ?? 0.6)), Math.Max(0, Math.Min(1, ws.variation ?? 0.1)));
+        }
+
+        /// <summary>Metal cladding's own panel width, seam to seam, in metres.</summary>
+        public const double PanelWidth = 0.5;
 
         /// <summary>
         /// A style's roof surface with its defaults filled in: the pattern (0 for none), a tile's width and height in metres

@@ -88,7 +88,7 @@ struct Varyings
     half3 normalWS    : TEXCOORD0;
 #ifndef STOREY_MASSING
     half4 color       : TEXCOORD1;
-    half4 win         : TEXCOORD9;   // a window pane: u, v across and up it, 1 on a pane (2 + its row's high byte, + 256 with a centre bar, on a flat one), its number (LOD0/LOD1)
+    half4 win         : TEXCOORD9;   // a window pane: u, v across and up it, 1 on a pane (2 + its row's high byte, + 256 with a centre bar, on a flat one), its number (LOD0/LOD1); elsewhere a roof's or a wall's surface, z below 0 (StoreyRoof.hlsl, StoreyWallSurface.hlsl)
 #endif
 #if defined(EVALUATE_SH_VERTEX) || defined(EVALUATE_SH_MIXED)
     half3 vertexSH    : TEXCOORD10;  // the ambient probe, or its L2 part, per vertex: every face is flat, so exact (§7.3)
@@ -190,14 +190,24 @@ Varyings StoreyVert(Attributes IN)
     // a pitched roof's face (the roof's slot, not level): its style's roof surface, if it has one, in a pane's place, which a
     // roof never has (StoreyRoof.hlsl): a tile's width and height in metres, minus the pattern plus half its variation, and
     // its relief. The row is read for a roof's vertices alone
-    float4 roof = float4(0, 0, 0, 0);
+    float4 surface = float4(0, 0, 0, 0);
     [branch] if (!pane && ce.z == STOREY_SLOT_ROOF && IN.normalOS.y < 0.985)
     {
         uint3 r = StoreyRoofOf(ce.x | (ce.y << 8));
         if ((r.x & 15u) != 0u)
-            roof = float4(r.y / 1000.0, r.z / 1000.0, -((float)(r.x & 15u) + 0.5 * (float)((r.x >> 10) & 63u) / 63.0), (float)((r.x >> 4) & 63u) / 63.0);
+            surface = float4(r.y / 1000.0, r.z / 1000.0, -((float)(r.x & 15u) + 0.5 * (float)((r.x >> 10) & 63u) / 63.0), (float)((r.x >> 4) & 63u) / 63.0);
     }
-    OUT.win = pane ? float4(IN.color.a, (abs(nw) * 127.0 - 1.0) / 126.0, flat ? 2.0 + (float)ce.y + (bar ? 256.0 : 0.0) : 1.0, (float)ce.z) : roof;
+    // an upright wall's face (the walls' slots, the ground storey's too, at full shade: not the plinth or bands in a shade
+    // of them): its style's wall surface, if it has one, the same way (StoreyWallSurface.hlsl): a panel's width in metres,
+    // -1 for panels up the wall or -2 along it where a roof's tile height goes, then as a roof's. The row's last uint4 is the
+    // one the colour's remap row came from
+    [branch] if (!pane && (ce.z == STOREY_SLOT_WALL || ce.z == STOREY_SLOT_GROUND_WALL) && ce.w == 128u && abs(IN.normalOS.y) < 0.2)
+    {
+        uint2 r = StoreyWallOf(ce.x | (ce.y << 8));
+        if ((r.x & 7u) != 0u)
+            surface = float4(r.y / 1000.0, -1.0 - (float)((r.x >> 3) & 1u), -((float)(r.x & 7u) + 0.5 * (float)((r.x >> 10) & 63u) / 63.0), (float)((r.x >> 4) & 63u) / 63.0);
+    }
+    OUT.win = pane ? float4(IN.color.a, (abs(nw) * 127.0 - 1.0) / 126.0, flat ? 2.0 + (float)ce.y + (bar ? 256.0 : 0.0) : 1.0, (float)ce.z) : surface;
 #endif
 #ifdef STOREY_STEADY
     OUT.misc = float2(v.bid, v.lod);

@@ -16,11 +16,13 @@
 TEXTURE2D(_GlobalColorPaletteTex);          // ColorMappingManager's atlas (512 x 1024 RGBAHalf, linear), or Storey's hex palette
 uint _ColorAtlasWidth;                      // 512 in 2.1.11
 #endif
-StructuredBuffer<uint4> _StoreyColors;      // per colour row, 4 x uint4: 32 x uint16 (the style's slots, spare, roof surface, remap row)
+StructuredBuffer<uint4> _StoreyColors;      // per colour row, 4 x uint4: 32 x uint16 (the style's slots, spare, wall and roof surfaces, remap row)
 StructuredBuffer<uint>  _StoreyDetailColors; // per facade-detail colour (slot - 32): palette index; one for every slot a byte names
 
 #define STOREY_REMAP_ENTRY 31
 #define STOREY_SLOT_ROOF 4u   // ColorSlot.Roof
+#define STOREY_SLOT_WALL 0u   // ColorSlot.Wall
+#define STOREY_SLOT_GROUND_WALL 20u   // ColorSlot.GroundWall
 #define STOREY_ROW_SLOTS 32
 #define STOREY_ROW_UINT4S 4
 #define STOREY_DETAIL_COLORS 224   // _StoreyDetailColors' entries: one for each slot from 32 to 255 (BuildingTable.DetailColors)
@@ -113,6 +115,16 @@ uint3 StoreyRoofOf(uint row)
     row = min(row, (uint)max((int)_StoreyTableSize.z - 1, 0));
     uint4 tail = _StoreyColors[row * STOREY_ROW_UINT4S + STOREY_ROW_UINT4S - 1];
     return uint3(tail.z & 0xFFFF, tail.z >> 16, tail.w & 0xFFFF);
+}
+
+// A style's wall surface (ColorRows.WallEntry: entries 26 and 27 of its row, in its last uint4 with the roof's and the remap
+// row): x its pattern, which way its panels run, relief and variation, y a panel's width in millimetres. A row past the
+// table reads its last row.
+uint2 StoreyWallOf(uint row)
+{
+    row = min(row, (uint)max((int)_StoreyTableSize.z - 1, 0));
+    uint4 tail = _StoreyColors[row * STOREY_ROW_UINT4S + STOREY_ROW_UINT4S - 1];
+    return uint2(tail.y & 0xFFFF, tail.y >> 16);
 }
 
 // The LOD0/LOD1 vertex colour attribute (UNorm8 x 4): row low byte, row high byte, slot, shade x 128

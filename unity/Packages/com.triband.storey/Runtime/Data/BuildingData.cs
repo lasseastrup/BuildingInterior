@@ -379,6 +379,27 @@ namespace Triband.Storey
     }
 
     /// <summary>
+    /// A wall's surface pattern (<see cref="WallSurface"/>): metal cladding, a standing seam at each panel's edge. The
+    /// numbers are the shader's (StoreyWallSurface.hlsl). Storey's own.
+    /// </summary>
+    public enum WallPattern { Cladding = 1 }
+
+    /// <summary>
+    /// A wall's surface (<see cref="FacadeStyle.wallSurface"/>, docs/EDITOR.md §6.7): its pattern, a panel's width from seam to
+    /// seam (metres; null = 0.5), whether its panels run along the wall, their seams across it at heights
+    /// (<see cref="horizontal"/>), or up it, how much it stands out in the light (0 to 1; null = 0.6) and how much each panel's
+    /// shade differs (0 to 1; null = 0.1). Layout key <c>wallSurface</c>, an object with <c>pattern</c>, <c>w</c>,
+    /// <c>horizontal</c>, <c>relief</c> and <c>variation</c>, each written only when set. Storey's own.
+    /// </summary>
+    public sealed class WallSurface
+    {
+        public WallPattern pattern = WallPattern.Cladding;
+        public double? w, relief, variation;
+        public bool horizontal;
+        public WallSurface Clone() => (WallSurface)MemberwiseClone();
+    }
+
+    /// <summary>
     /// Exterior style. Colours are colour references (<see cref="ColorRef"/>): CSS hex as the prototype
     /// stores them, or Color Pipeline palette ids.
     /// </summary>
@@ -521,6 +542,12 @@ namespace Triband.Storey
         /// </summary>
         public RoofSurface? roofSurface;
         /// <summary>
+        /// The walls' surface, drawn by the shader rather than modelled (docs/EDITOR.md §6.7); null = plain. The walls' colour
+        /// (and the ground storey's own) is the panels': their faces in it at full shade, not the plinth and bands in a shade
+        /// of it. Storey's own.
+        /// </summary>
+        public WallSurface? wallSurface;
+        /// <summary>
         /// A cap on a flat roof's edge (docs/EDITOR.md §6.7; the old BuildingGenerator's roof insert): its height (null = none;
         /// above 0 it stands up from the roof, below 0 it hangs from the roof's edge as a fascia), how far its outer side is
         /// in from the wall's face (null = 0; below 0 it overhangs the wall), and the width of the strip round its top in its
@@ -533,7 +560,7 @@ namespace Triband.Storey
 
         public FacadeStyle Clone()
         {
-            var c = (FacadeStyle)MemberwiseClone(); c.details = details?.Clone(); c.roofSurface = roofSurface?.Clone();
+            var c = (FacadeStyle)MemberwiseClone(); c.details = details?.Clone(); c.roofSurface = roofSurface?.Clone(); c.wallSurface = wallSurface?.Clone();
             c.windowSet = OpeningEntry.Copy(windowSet); c.groundSet = OpeningEntry.Copy(groundSet); c.doorSet = OpeningEntry.Copy(doorSet);
             return c;
         }

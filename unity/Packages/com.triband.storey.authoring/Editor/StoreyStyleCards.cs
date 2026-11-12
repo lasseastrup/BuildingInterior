@@ -385,15 +385,48 @@ namespace Triband.Storey.Editor
         public static void WallsCard(StyleTarget t, FacadeStyle st)
         {
             var on = new List<string>();
+            if (st.wallSurface != null) on.Add(st.wallSurface.horizontal ? "horizontal cladding" : "vertical cladding");
             if (st.corniceH.HasValue) on.Add("cornice");
             if (st.bands) on.Add("bands");
             if (t.Base && (st.plinthH ?? 0.45) > 0) on.Add("plinth");
             if (t.Base && st.foundation.HasValue) on.Add("foundation");
             string summary = on.Count == 0 ? "Plain" : char.ToUpperInvariant(on[0][0]) + string.Join(" · ", on).Substring(1);
             using var c = StoreyInspectorUI.Card(t.Cards + "walls", "Walls", StoreyInspectorUI.BricksIcon, StoreyInspectorUI.Tint.Walls, summary,
-                tip: "The strips along the walls, top to bottom");
+                tip: "The walls' surface, and the strips along them, top to bottom");
             if (!c.Open) return;
+            WallSurfaceFields(t, st);
             WallDetails(t, st);
+        }
+
+        static readonly GUIContent WallSurfaceLabel = new GUIContent("Surface",
+            "Drawn on the walls by the shader, in the walls' colour, so it adds no triangles: plain, or metal cladding with a standing seam at each panel's edge. The plinth and bands stay as they are");
+        static readonly GUIContent[] WallSurfaces = { new GUIContent("Plain", "One colour"), new GUIContent("Metal cladding", "Metal panels, a standing seam at each one's edge") };
+        static readonly GUIContent PanelsLabel = new GUIContent("Panels", "Which way the panels run");
+        static readonly GUIContent[] PanelRuns =
+        {
+            new GUIContent("Vertical", "Up the wall: the seams upright"),
+            new GUIContent("Horizontal", "Along the wall: the seams level"),
+        };
+
+        /// <summary>
+        /// The walls' surface (docs/EDITOR.md §6.7): plain, or metal cladding, its panels vertical or horizontal, their width, the
+        /// seams' relief and each panel's own shade. A slider left alone keeps its default.
+        /// </summary>
+        static void WallSurfaceFields(StyleTarget t, FacadeStyle st)
+        {
+            var ws = st.wallSurface;
+            int cur = ws != null ? (int)ws.pattern : 0, pick = StoreyInspectorUI.Segmented(WallSurfaceLabel, cur, WallSurfaces);
+            if (pick != cur) t.Edit(pick == 0 ? "Plain walls" : "Metal cladding", s => s.wallSurface = pick == 0 ? null : new WallSurface { pattern = (WallPattern)pick });
+            if (ws == null) return;
+            using (new EditorGUI.IndentLevelScope())
+            {
+                int run = ws.horizontal ? 1 : 0, way = StoreyInspectorUI.Segmented(PanelsLabel, run, PanelRuns);
+                if (way != run) t.Edit(way == 1 ? "Horizontal cladding" : "Vertical cladding", s => s.wallSurface!.horizontal = way == 1);
+                var (_, _, w, relief, variation) = ColorRows.WallSurface(st);
+                StyleSlider(t, new GUIContent("Panel width", "From seam to seam, in metres"), w, 0.1, 3, 0.01, (s, v) => s.wallSurface!.w = v);
+                StyleSlider(t, new GUIContent("Relief", "How strongly the light picks out the seams"), relief, 0, 1, 0.05, (s, v) => s.wallSurface!.relief = v);
+                StyleSlider(t, new GUIContent("Variation", "How much each panel's shade differs from the next"), variation, 0, 1, 0.05, (s, v) => s.wallSurface!.variation = v);
+            }
         }
 
         static readonly GUIContent StandsOutLabel = new GUIContent("Stands out", "How far it stands out from the wall's face, in metres");
