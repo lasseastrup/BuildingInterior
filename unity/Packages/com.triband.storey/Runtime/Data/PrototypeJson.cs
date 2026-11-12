@@ -272,6 +272,18 @@ namespace Triband.Storey
                 roof = c.Bool(o, "roof", false, w),
                 rails = c.Bool(o, "rails", true, w), solid = c.Bool(o, "solid", true, w),
             };
+            if (o.TryGetValue("look", out var lk) && lk != null)
+            {
+                var lp = w.In("look"); var lo = c.Obj(lk, lp);
+                s.look = new StairLook
+                {
+                    height = c.Opt(lo, "height", lp), railW = c.Opt(lo, "railW", lp), railT = c.Opt(lo, "railT", lp), gap = c.Opt(lo, "gap", lp), spindle = c.Opt(lo, "spindle", lp),
+                    posts = c.OptInt(lo, "posts", lp), post = c.Opt(lo, "post", lp), newel = c.Opt(lo, "newel", lp),
+                    railColor = c.OptColor(lo, "railColor", lp), spindleColor = c.OptColor(lo, "spindleColor", lp), postColor = c.OptColor(lo, "postColor", lp),
+                    treadColor = c.OptColor(lo, "treadColor", lp), riserColor = c.OptColor(lo, "riserColor", lp), sideColor = c.OptColor(lo, "sideColor", lp),
+                };
+                c.Check(lo, lp, Keys.StairLook);
+            }
             c.Check(o, w, Keys.Core);
             return s;
         }
@@ -473,6 +485,17 @@ namespace Triband.Storey
                 // only when off: a layout whose stairs have both reads as before
                 if (!s.rails) so["rails"] = false;
                 if (!s.solid) so["solid"] = false;
+                if (s.look is StairLook l && !l.IsDefault)
+                {
+                    var lo = new Dictionary<string, object?>();
+                    void N(string key, double? v) { if (v.HasValue) lo[key] = v.Value; }
+                    void C(string key, string? v) { if (v != null) lo[key] = v; }
+                    N("height", l.height); N("railW", l.railW); N("railT", l.railT); N("gap", l.gap); N("spindle", l.spindle);
+                    if (l.posts.HasValue) lo["posts"] = l.posts.Value;
+                    N("post", l.post); N("newel", l.newel);
+                    C("railColor", l.railColor); C("spindleColor", l.spindleColor); C("postColor", l.postColor); C("treadColor", l.treadColor); C("riserColor", l.riserColor); C("sideColor", l.sideColor);
+                    so["look"] = lo;
+                }
                 shafts.Add(so);
             }
             o["shafts"] = shafts;
@@ -761,7 +784,8 @@ namespace Triband.Storey
             public static readonly string[] TerraceEdge = { "parapet", "capH", "capDepth", "capStrip" };
             public static readonly string[] RoofSurface = { "pattern", "w", "h", "relief", "variation" };
             public static readonly string[] WallSurface = { "pattern", "w", "horizontal", "relief", "variation" };
-            public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof", "rails", "solid" };
+            public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof", "rails", "solid", "look" };
+            public static readonly string[] StairLook = { "height", "railW", "railT", "gap", "spindle", "posts", "post", "newel", "railColor", "spindleColor", "postColor", "treadColor", "riserColor", "sideColor" };
             public static readonly string[] DetailRules = { "ac", "vents" };
             public static readonly string[] KindRule = { "p", "density", "spacing", "per", "floors", "corners", "color", "colorOff" };
             public static readonly string[] OpeningEntry = { "kind", "none", "weight", "recess" };
@@ -826,6 +850,10 @@ namespace Triband.Storey
                 if (d != Math.Floor(d)) throw new FormatException($"{w.At(key)}: expected an integer");
                 return (int)d;
             }
+
+            /// <summary>A whole number that may be absent.</summary>
+            public int? OptInt(Dictionary<string, object?> o, string key, Where w) =>
+                o.TryGetValue(key, out var v) && v != null ? Int(o, key, 0, w) : (int?)null;
 
             public bool Bool(Dictionary<string, object?> o, string key, bool dflt, Where w)
             {

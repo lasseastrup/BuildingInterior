@@ -20,7 +20,7 @@ namespace Triband.Storey
     public sealed class BakedLayout
     {
         /// <summary>The format's version: bytes of another are not read (<see cref="Of"/> gives null).</summary>
-        public const int Version = 18;
+        public const int Version = 19;
 
         static readonly byte[] Magic = { (byte)'S', (byte)'T', (byte)'B', (byte)'L' };
         const int Header = 4 + 1 + 5 * 4;   // magic, version, the sections' offsets
@@ -223,7 +223,16 @@ namespace Triband.Storey
                 b.floors.Add(f);
             }
             for (n = r.Count(); n > 0; n--)
-                b.shafts.Add(new CoreData { id = Str(ref r)!, type = E<CoreType>(ref r), x = r.F64(), z = r.F64(), rot = r.F64(), bottom = r.Int(), top = r.Int(), roof = r.Bool(), rails = r.Bool(), solid = r.Bool() });
+            {
+                var c = new CoreData { id = Str(ref r)!, type = E<CoreType>(ref r), x = r.F64(), z = r.F64(), rot = r.F64(), bottom = r.Int(), top = r.Int(), roof = r.Bool(), rails = r.Bool(), solid = r.Bool() };
+                if (r.Bool())
+                    c.look = new StairLook
+                    {
+                        height = r.Opt(), railW = r.Opt(), railT = r.Opt(), gap = r.Opt(), spindle = r.Opt(), posts = r.OptInt(), post = r.Opt(), newel = r.Opt(),
+                        railColor = Str(ref r), spindleColor = Str(ref r), postColor = Str(ref r), treadColor = Str(ref r), riserColor = Str(ref r), sideColor = Str(ref r),
+                    };
+                b.shafts.Add(c);
+            }
             for (n = r.Count(); n > 0; n--)
                 b.entrances.Add(new EntranceData { edge = r.Int(), t = r.F64(), k = r.Int(), door = Str(ref r) });
             for (n = r.Count(); n > 0; n--)
@@ -419,7 +428,16 @@ namespace Triband.Storey
                 w.Points(f.blocked);
             }
             w.Count(b.shafts.Count);
-            foreach (var s in b.shafts) { w.Count(S(s.id)); w.E(s.type); w.F64(s.x); w.F64(s.z); w.F64(s.rot); w.Int(s.bottom); w.Int(s.top); w.Bool(s.roof); w.Bool(s.rails); w.Bool(s.solid); }
+            foreach (var s in b.shafts)
+            {
+                w.Count(S(s.id)); w.E(s.type); w.F64(s.x); w.F64(s.z); w.F64(s.rot); w.Int(s.bottom); w.Int(s.top); w.Bool(s.roof); w.Bool(s.rails); w.Bool(s.solid);
+                w.Bool(s.look != null);
+                if (s.look is StairLook l)
+                {
+                    w.Opt(l.height); w.Opt(l.railW); w.Opt(l.railT); w.Opt(l.gap); w.Opt(l.spindle); w.OptInt(l.posts); w.Opt(l.post); w.Opt(l.newel);
+                    w.Count(S(l.railColor)); w.Count(S(l.spindleColor)); w.Count(S(l.postColor)); w.Count(S(l.treadColor)); w.Count(S(l.riserColor)); w.Count(S(l.sideColor));
+                }
+            }
             w.Count(b.entrances.Count);
             foreach (var e in b.entrances) { w.Int(e.edge); w.F64(e.t); w.Int(e.k); w.Count(S(e.door)); }
             w.Count(b.details.Count);

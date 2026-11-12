@@ -1378,8 +1378,83 @@ namespace Triband.Storey.Editor
                 if (rails != s.rails) e.ApplyTo(rails ? "Stair rails on" : "Stair rails off", bb => { bb.shafts.First(x => x.id == id).rails = rails; return true; });
                 bool solid = EditorGUILayout.Toggle(FlightSolidLabel, s.solid);
                 if (solid != s.solid) e.ApplyTo(solid ? "Solid flights" : "Steps in the air", bb => { bb.shafts.First(x => x.id == id).solid = solid; return true; });
+                // how its rails and steps look (CoreData.look): each setting as built until set
+                if (StoreyInspectorUI.Fold($"{b.id}/{id}/railing", "Railing", false, "The rails' height, the handrail's size, the spindles' spacing and thickness, posts between them, the newels"))
+                    using (new EditorGUI.IndentLevelScope()) RailingFields(e, s, id);
+                if (StoreyInspectorUI.Fold($"{b.id}/{id}/colours", "Colours", false, "The rails' and steps' own colours: each the style's until set"))
+                    using (new EditorGUI.IndentLevelScope()) StairColours(e, b, s, id);
+                if (s.look != null && GUILayout.Button(new GUIContent("Look's defaults", "Every size, spacing and colour of these stairs back to its default"), EditorStyles.miniButton))
+                    e.ApplyTo("Stair look's defaults", bb => { bb.shafts.First(x => x.id == id).look = null; return true; });
             }
             TurnAndRemove(e, s, id);
+        }
+
+        /// <summary>A change to a selected stair's look (<see cref="StairLook"/>), made where it has none, dropped once it is all defaults.</summary>
+        static void SetLook(StoreyEdit e, string id, string undoName, Action<StairLook> op) => e.ApplyTo(undoName, bb =>
+        {
+            var c = bb.shafts.First(x => x.id == id);
+            op(c.look ??= new StairLook());
+            if (c.look.IsDefault) c.look = null;
+            return true;
+        });
+
+        /// <summary>
+        /// A straight flight's rails' sizes and spacing (docs/EDITOR.md §5): each shows what it's built with (<see cref="Railing"/>:
+        /// the default, or what's set held to its range). The spindles, posts and newels only with its own rails; the height
+        /// and the handrail are the plain rails' round the openings too.
+        /// </summary>
+        static void RailingFields(StoreyEdit e, CoreData s, string id)
+        {
+            var rl = Railing.Of(s.look);
+            void Look(string label, string tip, double value, double min, double max, double step, Action<StairLook, double> set)
+            {
+                EditorGUI.BeginChangeCheck();
+                double x = Math.Round(EditorGUILayout.Slider(new GUIContent(label, tip), (float)value, (float)min, (float)max) / step) * step;
+                if (EditorGUI.EndChangeCheck() && Math.Abs(x - value) > 1e-9) SetLook(e, id, "Stair " + label.ToLowerInvariant(), l => set(l, Math.Round(x, 4)));
+            }
+            Look("Height", "The rails' top over the floor round the openings, in metres; the flights' handrail is 12 cm lower over the steps' nosings, and the newels stand 16 cm higher", rl.H, 0.6, 2.0, 0.01, (l, v) => l.height = v);
+            Look("Handrail width", "Across the handrail, in metres", rl.W, 0.02, 0.2, 0.005, (l, v) => l.railW = v);
+            Look("Handrail thickness", "From the handrail's top to its underside, in metres", rl.T, 0.02, 0.3, 0.005, (l, v) => l.railT = v);
+            if (!s.rails) return;
+            Look("Spindle spacing", "From one spindle to the next, centre to centre, in metres; up the flights, a whole number of them to a step", rl.Gap, 0.05, 1.0, 0.005, (l, v) => l.gap = v);
+            Look("Spindle thickness", "Each spindle's width, in metres (they're square)", rl.Spindle, 0.01, 0.1, 0.005, (l, v) => l.spindle = v);
+            int posts = EditorGUILayout.IntSlider(new GUIContent("Spindles between posts", "A post, thicker than a spindle, after every this many spindles; 0 for none, the newels at the ends alone"), rl.Posts, 0, 20);
+            if (posts != rl.Posts) SetLook(e, id, "Stair posts", l => l.posts = posts == 0 ? (int?)null : posts);
+            if (rl.Posts > 0) Look("Post width", "Each post's width, in metres (they're square)", rl.Post, 0.02, 0.2, 0.005, (l, v) => l.post = v);
+            Look("Newel width", "The posts at the rails' ends, which their handrails end in, in metres: at least as wide as the two rails beside each other", rl.Newel, 0.08, 0.4, 0.005, (l, v) => l.newel = v);
+        }
+
+        static readonly (string label, string key, ColorSlot slot, Func<StairLook, string?> get, Action<StairLook, string?> set)[] StairColourRows =
+        {
+            ("Handrail", "rail", ColorSlot.Rail, l => l.railColor, (l, v) => l.railColor = v),
+            ("Spindles", "rail", ColorSlot.Rail, l => l.spindleColor, (l, v) => l.spindleColor = v),
+            ("Posts and newels", "rail", ColorSlot.Rail, l => l.postColor, (l, v) => l.postColor = v),
+            ("Treads", "core", ColorSlot.Core, l => l.treadColor, (l, v) => l.treadColor = v),
+            ("Risers", "core", ColorSlot.Core, l => l.riserColor, (l, v) => l.riserColor = v),
+            ("Sides", "interior", ColorSlot.Interior, l => l.sideColor, (l, v) => l.sideColor = v),
+        };
+
+        /// <summary>
+        /// A straight flight's own colours (docs/EDITOR.md §5), with the project's colour picker: each shows the style's it
+        /// follows (its rails', its stairs', its rooms' walls'; the steps are drawn a shade darker) until it has its own, and
+        /// Default takes that away.
+        /// </summary>
+        static void StairColours(StoreyEdit e, BuildingData b, CoreData s, string id)
+        {
+            var st = Derived.StyleAt(b, s.bottom); var dflt = StoreyColorField.Defaults?.Invoke() ?? new StyleDefaults();
+            foreach (var (label, key, slot, get, set) in StairColourRows)
+            {
+                string? value = s.look != null ? get(s.look) : null;
+                string shown = value ?? StyleColors.Of(st, slot, dflt) ?? "#FF00FF";
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    string? picked = StoreyColorField.Picker.Draw($"{b.id}/{id}/{label}", value == null ? label + " (style's)" : label, shown, key,
+                        pid => e.Document.palette.TryGetValue(pid, out var pe) ? pe : null);
+                    if (picked != null && picked != value) SetLook(e, id, label + " colour", l => set(l, picked));
+                    if (value != null && GUILayout.Button(new GUIContent("Default", "The style's colour"), EditorStyles.miniButton, GUILayout.Width(56)))
+                        SetLook(e, id, label + " colour", l => set(l, null));
+                }
+            }
         }
 
         static readonly GUIContent FlightRailsLabel = new GUIContent("Rails",

@@ -1537,35 +1537,60 @@ namespace Triband.Storey.Generate
                     // the floor is open: both sides of the flight lane on every storey a flight comes up through (the
                     // building's wall stands in on a side against it), and across the front where no flight carries on,
                     // the roof included: no bulkhead, the opening is railed like any other storey's. With the flights' own
-                    // rails (CoreData.rails), a handrail on balusters between newels on the opening's corners, which those
-                    // start and end at: they and the solid flights (CoreData.solid) are Storey's own
+                    // rails (CoreData.rails), a handrail on spindles between newels on the opening's corners, which those
+                    // start and end at: they, the solid flights (CoreData.solid) and how they look (CoreData.look, Railing)
+                    // are Storey's own
                     double hw = Dim.FLIGHT_W / 2, hd = Dim.FLIGHT_D / 2, xm = -hw + Dim.FLIGHT_LANE;
                     double z0 = -hd + Dim.FLIGHT_LANDING, z1 = hd - Dim.FLIGHT_LANDING;
                     // one flight alone (Cores.OneFlight) has no walkway: its lane's other side can stand against a wall too
                     bool wR = fR && Cores.OneFlight(b, s);
                     bool hole = Cores.StairHoleAt(b, s, k), up = Cores.HasFlight(b, s, k), draw = !op.ShapeOnly;
                     op.Ctx(null, 0);
-                    // a newel: half its width and its top over the floor; balusters: half their width, and about how far apart
-                    const double NH = 0.065, NT = StairNewel, BH = 0.0125, Gap = 0.135;
+                    // its look: the rails' top over the floor, the handrail's width and thickness, the spindles' half width
+                    // and spacing, the newels' half width and top, each rail's line off the lane's edge, and the colours
+                    var rl = Railing.Of(s.look); var lk = s.look;
+                    double H = rl.H, RW = rl.W / 2, RT = rl.T, BH = rl.Spindle / 2, Gap = rl.Gap, NH = rl.Newel / 2, NT = rl.NewelH, Off = rl.Off;
+                    Swatch railC = Railing.Colour(C, lk?.railColor, C.rail), spindleC = Railing.Colour(C, lk?.spindleColor, C.rail), postC = Railing.Colour(C, lk?.postColor, C.rail);
+                    Swatch treadC = Railing.Colour(C, lk?.treadColor, C.step), riserC = Railing.Colour(C, lk?.riserColor, C.step), sideC = Railing.Colour(C, lk?.sideColor, C.inner);
                     // a newel on the lane's edge xe, from za to zb along it
                     void Newel(double xe, double za, double zb)
                     {
-                        Bx(xe - NH, xe + NH, y, y + NT, za, zb, C.rail, null, Skip.Bot);
+                        Bx(xe - NH, xe + NH, y, y + NT, za, zb, postC, null, Skip.Bot);
                         S(xe, (za + zb) / 2, xe, (za + zb) / 2, NH + 0.015, NT);
                     }
-                    // a level rail's handrail, its top StairRail over the floor, and its balusters, between its ends (newels,
-                    // or a post against a wall): along z at x, or along x at z
+                    // an upright under a handrail (a spindle, or a post every so many), at c along the rail and at across it,
+                    // from y0 to y1
+                    void Upright(bool post, double at, double c, double y0, double y1, bool alongZ)
+                    {
+                        double h = post ? rl.Post / 2 : BH;
+                        // never quite as wide as the handrail, whose sides it would lie in where its top goes into it; wider, its
+                        // top shows beside it, so it has one
+                        if (Math.Abs(h - RW) < 0.002) h = RW - 0.002;
+                        var top = h > RW ? Skip.Bot : Skip.Top | Skip.Bot;
+                        if (alongZ) Bx(at - h, at + h, y0, y1, c - h, c + h, post ? postC : spindleC, null, top);
+                        else Bx(c - h, c + h, y0, y1, at - h, at + h, post ? postC : spindleC, null, top);
+                    }
+                    // a level rail's handrail, its top H over the floor, and its uprights, between its ends (newels, or a post
+                    // against a wall): along z at x, or along x at z. Its spindles Gap apart; with posts, the rail in equal
+                    // stretches between them, each with that many spindles
                     void Level(double a, double e, double at, bool alongZ)
                     {
                         if (!draw) return;
-                        double h0 = y + StairRail - 0.07; int m = Math.Max(1, (int)Math.Round((e - a) / Gap));
-                        if (alongZ) Bx(at - 0.02, at + 0.02, h0, y + StairRail, a, e, C.rail, null, Skip.In | Skip.Out);
-                        else Bx(a, e, h0, y + StairRail, at - 0.02, at + 0.02, C.rail, null, Skip.UStart | Skip.UEnd);
-                        for (int j = 0; j < m; j++)
+                        double h0 = y + H - RT;
+                        if (alongZ) Bx(at - RW, at + RW, h0, y + H, a, e, railC, null, Skip.In | Skip.Out);
+                        else Bx(a, e, h0, y + H, at - RW, at + RW, railC, null, Skip.UStart | Skip.UEnd);
+                        int n = rl.Posts;
+                        if (n == 0)
                         {
-                            double c = a + (j + 0.5) * (e - a) / m;
-                            if (alongZ) Bx(at - BH, at + BH, y, h0, c - BH, c + BH, C.rail, null, Skip.Top | Skip.Bot);
-                            else Bx(c - BH, c + BH, y, h0, at - BH, at + BH, C.rail, null, Skip.Top | Skip.Bot);
+                            int m = Math.Max(1, (int)Math.Round((e - a) / Gap));
+                            for (int j = 0; j < m; j++) Upright(false, at, a + (j + 0.5) * (e - a) / m, y, h0, alongZ);
+                            return;
+                        }
+                        int parts = Math.Max(1, (int)Math.Round((e - a) / ((n + 1) * Gap))); double part = (e - a) / parts;
+                        for (int i = 0; i < parts; i++)
+                        {
+                            if (i > 0) Upright(true, at, a + i * part, y, h0, alongZ);
+                            for (int j = 0; j < n; j++) Upright(false, at, a + i * part + (j + 1) * part / (n + 1), y, h0, alongZ);
                         }
                     }
                     if (hole && !s.rails)
@@ -1574,21 +1599,21 @@ namespace Triband.Storey.Generate
                         // of the flight lane, so no rail face lies on a step's
                         void RailZ(double x)
                         {
-                            Bx(x - 0.02, x + 0.02, y + 0.95, y + 1.02, z0 + 0.04, z1 - 0.04, C.rail);
-                            Bx(x - 0.02, x + 0.02, y, y + 1.02, z0, z0 + 0.04, C.rail, null, Skip.Bot);
-                            Bx(x - 0.02, x + 0.02, y, y + 1.02, z1 - 0.04, z1, C.rail, null, Skip.Bot);
-                            S(x, z0, x, z1, 0.04, StairRail);
+                            Bx(x - RW, x + RW, y + H - RT, y + H, z0 + 0.04, z1 - 0.04, railC);
+                            Bx(x - RW, x + RW, y, y + H, z0, z0 + 0.04, postC, null, Skip.Bot);
+                            Bx(x - RW, x + RW, y, y + H, z1 - 0.04, z1, postC, null, Skip.Bot);
+                            S(x, z0, x, z1, rl.R, H);
                         }
-                        if (!wR) RailZ(xm + 0.04);
-                        if (!fL) RailZ(-hw - 0.04);
+                        if (!wR) RailZ(xm + Off);
+                        if (!fL) RailZ(-hw - Off);
                         if (!up)
                         {
                             // the top: nothing carries on up, so the front of the opening is railed too
-                            double zr = z0 - 0.04, x0 = fL ? -hw + 0.02 : -hw - 0.06, x1 = wR ? xm - 0.02 : xm + 0.06;
-                            Bx(x0 + 0.04, x1 - 0.04, y + 0.95, y + 1.02, zr - 0.02, zr + 0.02, C.rail);
-                            Bx(x0, x0 + 0.04, y, y + 1.02, zr - 0.02, zr + 0.02, C.rail, null, Skip.Bot);
-                            Bx(x1 - 0.04, x1, y, y + 1.02, zr - 0.02, zr + 0.02, C.rail, null, Skip.Bot);
-                            S(x0, zr, x1, zr, 0.04, StairRail);
+                            double zr = z0 - Off, x0 = fL ? -hw + 0.02 : -hw - Off - RW, x1 = wR ? xm - 0.02 : xm + Off + RW;
+                            Bx(x0 + 0.04, x1 - 0.04, y + H - RT, y + H, zr - RW, zr + RW, railC);
+                            Bx(x0, x0 + 0.04, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
+                            Bx(x1 - 0.04, x1, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
+                            S(x0, zr, x1, zr, rl.R, H);
                         }
                     }
                     else if (hole)
@@ -1599,21 +1624,21 @@ namespace Triband.Storey.Generate
                         void Side(double xe, double o, bool wall)
                         {
                             if (wall) return;
-                            double xc = xe + o * 0.04;
+                            double xc = xe + o * Off;
                             Newel(xe, z0 - 2 * NH, z0); Newel(xe, z1, z1 + 2 * NH);
                             Level(z0, z1, xc, true);
-                            S(xc, z0, xc, z1, 0.04, StairRail);
+                            S(xc, z0, xc, z1, rl.R, H);
                         }
                         Side(-hw, -1, fL); Side(xm, 1, wR);
                         if (!up)
                         {
                             // the top: nothing carries on up, so the front of the opening is railed too, newel to newel (a post
                             // where it meets a wall)
-                            double zr = z0 - 0.04, x0 = fL ? -hw + 0.02 : -hw - 0.06, x1 = wR ? xm - 0.02 : xm + 0.06;
-                            if (fL) Bx(x0, x0 + 0.04, y, y + StairRail, zr - 0.02, zr + 0.02, C.rail, null, Skip.Bot);
-                            if (wR) Bx(x1 - 0.04, x1, y, y + StairRail, zr - 0.02, zr + 0.02, C.rail, null, Skip.Bot);
+                            double zr = z0 - Off, x0 = fL ? -hw + 0.02 : -hw - Off - RW, x1 = wR ? xm - 0.02 : xm + Off + RW;
+                            if (fL) Bx(x0, x0 + 0.04, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
+                            if (wR) Bx(x1 - 0.04, x1, y, y + H, zr - RW, zr + RW, postC, null, Skip.Bot);
                             Level(fL ? x0 + 0.04 : -hw + NH, wR ? x1 - 0.04 : xm - NH, zr, false);
-                            S(x0, zr, x1, zr, 0.04, StairRail);
+                            S(x0, zr, x1, zr, rl.R, H);
                         }
                     }
                     if (up)
@@ -1626,9 +1651,9 @@ namespace Triband.Storey.Generate
                         bool onFloor = !hole;
                         if (!s.solid)
                         {
-                            // steps in the air. Against a wall, a step's side would lie in the wall's inner face and flicker with
-                            // it: left out
-                            for (int i = 0; i < n; i++) { double za = z0 + i * run, t = y + (i + 1) * fh / n; Bx(-hw, xm, t - 0.2, t, za, za + run, C.step, null, (fL ? Skip.UStart : Skip.None) | (wR ? Skip.UEnd : Skip.None)); }
+                            // steps in the air, their fronts the risers'. Against a wall, a step's side would lie in the wall's
+                            // inner face and flicker with it: left out
+                            for (int i = 0; i < n; i++) { double za = z0 + i * run, t = y + (i + 1) * fh / n; Bx(-hw, xm, t - 0.2, t, za, za + run, treadC, riserC, (fL ? Skip.UStart : Skip.None) | (wR ? Skip.UEnd : Skip.None)); }
                         }
                         else if (draw)
                         {
@@ -1642,8 +1667,8 @@ namespace Triband.Storey.Generate
                             for (int i = 0; i < n; i++)
                             {
                                 double za = Z(i), zb = Z(i + 1), t = T(i), tb = i == 0 ? y : T(i - 1);
-                                op.Quad(f.At(-hw, t, za), f.At(xm, t, za), f.At(xm, t, zb), f.At(-hw, t, zb), upN, C.step);
-                                op.Quad(f.At(-hw, tb, za), f.At(xm, tb, za), f.At(xm, t, za), f.At(-hw, t, za), fore, C.step);
+                                op.Quad(f.At(-hw, t, za), f.At(xm, t, za), f.At(xm, t, zb), f.At(-hw, t, zb), upN, treadC);
+                                op.Quad(f.At(-hw, tb, za), f.At(xm, tb, za), f.At(xm, t, za), f.At(-hw, t, za), fore, riserC);
                             }
                             // its side, in the frame's (w, y)
                             var side = new List<Vec2>(2 * n + 2) { new Vec2(z0, onFloor ? y : y - Waist) };
@@ -1657,42 +1682,45 @@ namespace Triband.Storey.Generate
                                 var pts = new List<P3>(side.Count);
                                 foreach (var p in side) pts.Add(f.At(wall ? x - o * 0.01 : x, p.z, p.x));
                                 bool was = op.Backing; op.Backing = was || wall;
-                                op.PolyTris(pts, tris, new P3(f.u.x * o, 0, f.u.z * o), C.inner);
+                                op.PolyTris(pts, tris, new P3(f.u.x * o, 0, f.u.z * o), sideC);
                                 op.Backing = was;
                             }
                             Face(-hw, -1, fL); Face(xm, 1, wR);
-                            if (onFloor) op.Quad(f.At(-hw, y, z1), f.At(xm, y, z1), f.At(xm, T(n - 1), z1), f.At(-hw, T(n - 1), z1), new P3(f.w.x, 0, f.w.z), C.inner);
+                            if (onFloor) op.Quad(f.At(-hw, y, z1), f.At(xm, y, z1), f.At(xm, T(n - 1), z1), f.At(-hw, T(n - 1), z1), new P3(f.w.x, 0, f.w.z), sideC);
                             else op.Quad(f.At(-hw, y - Waist, z0), f.At(xm, y - Waist, z0), f.At(xm, T(n - 1) - Waist, z1), f.At(-hw, T(n - 1) - Waist, z1),
-                                new P3(f.w.x * sl * cs, -cs, f.w.z * sl * cs), C.inner);
+                                new P3(f.w.x * sl * cs, -cs, f.w.z * sl * cs), sideC);
                         }
                         if (s.rails)
                         {
-                            // up each open side: a handrail 90 cm over the nosings' line from the newel at the flight's foot
-                            // (the opening's, or its own on a floor) to the one at its head (the storey above's), on balusters
-                            // standing on the treads, about as far apart as the level rails'
+                            // up each open side: a handrail its look's height over the nosings' line (90 cm), from the newel at
+                            // the flight's foot (the opening's, or its own on a floor) to the one at its head (the storey
+                            // above's), on spindles standing on the treads, about as far apart as the level rails' (a whole
+                            // number to a tread), with a post every so many where the look has posts
                             int m = Math.Max(1, (int)Math.Round(run / Gap));
-                            double Top(double z) => y + (z - z0 + run) * sl + 0.9;
+                            double Top(double z) => y + (z - z0 + run) * sl + rl.FlightH;
                             var top = new P3(-f.w.x * sl * cs, cs, -f.w.z * sl * cs);
                             void Rail(double xe, double o, bool wall)
                             {
                                 if (wall) return;
                                 if (onFloor) Newel(xe, z0 - 2 * NH, z0);
                                 if (!draw) return;
-                                double xc = xe - o * 0.04, xa = xc - 0.02, xb = xc + 0.02, ya = Top(z0), ye = Top(z1);
+                                double xc = xe - o * Off, xa = xc - RW, xb = xc + RW, ya = Top(z0), ye = Top(z1);
                                 P3 Q(double x, double yy, double z) => f.At(x, yy, z);
-                                op.Quad(Q(xa, ya, z0), Q(xb, ya, z0), Q(xb, ye, z1), Q(xa, ye, z1), top, C.rail);
-                                op.Quad(Q(xa, ya - 0.07, z0), Q(xb, ya - 0.07, z0), Q(xb, ye - 0.07, z1), Q(xa, ye - 0.07, z1), new P3(-top.x, -top.y, -top.z), C.rail);
-                                op.Quad(Q(xa, ya - 0.07, z0), Q(xa, ya, z0), Q(xa, ye, z1), Q(xa, ye - 0.07, z1), new P3(-f.u.x, 0, -f.u.z), C.rail);
-                                op.Quad(Q(xb, ya - 0.07, z0), Q(xb, ya, z0), Q(xb, ye, z1), Q(xb, ye - 0.07, z1), new P3(f.u.x, 0, f.u.z), C.rail);
+                                op.Quad(Q(xa, ya, z0), Q(xb, ya, z0), Q(xb, ye, z1), Q(xa, ye, z1), top, railC);
+                                op.Quad(Q(xa, ya - RT, z0), Q(xb, ya - RT, z0), Q(xb, ye - RT, z1), Q(xa, ye - RT, z1), new P3(-top.x, -top.y, -top.z), railC);
+                                op.Quad(Q(xa, ya - RT, z0), Q(xa, ya, z0), Q(xa, ye, z1), Q(xa, ye - RT, z1), new P3(-f.u.x, 0, -f.u.z), railC);
+                                op.Quad(Q(xb, ya - RT, z0), Q(xb, ya, z0), Q(xb, ye, z1), Q(xb, ye - RT, z1), new P3(f.u.x, 0, f.u.z), railC);
                                 // its ends, in the newels (the head's is the storey above's, which a setback there may leave out)
-                                op.Quad(Q(xa, ya - 0.07, z0), Q(xb, ya - 0.07, z0), Q(xb, ya, z0), Q(xa, ya, z0), new P3(-f.w.x, 0, -f.w.z), C.rail);
-                                op.Quad(Q(xa, ye - 0.07, z1), Q(xb, ye - 0.07, z1), Q(xb, ye, z1), Q(xa, ye, z1), new P3(f.w.x, 0, f.w.z), C.rail);
-                                // the balusters' tops a centimetre into the handrail's sloped underside, all across them
-                                for (int i = 0; i < n; i++)
-                                    for (int j = 0; j < m; j++)
+                                op.Quad(Q(xa, ya - RT, z0), Q(xb, ya - RT, z0), Q(xb, ya, z0), Q(xa, ya, z0), new P3(-f.w.x, 0, -f.w.z), railC);
+                                op.Quad(Q(xa, ye - RT, z1), Q(xb, ye - RT, z1), Q(xb, ye, z1), Q(xa, ye, z1), new P3(f.w.x, 0, f.w.z), railC);
+                                // the uprights' tops a centimetre into the handrail's sloped underside, all across them; a post
+                                // after every so many spindles up the flight
+                                for (int i = 0, q = 0; i < n; i++)
+                                    for (int j = 0; j < m; j++, q++)
                                     {
-                                        double zc = z0 + (i + (j + 0.5) / m) * run;
-                                        Bx(xc - BH, xc + BH, y + (i + 1) * fh / n, Top(zc) - 0.07 + BH * sl + 0.01, zc - BH, zc + BH, C.rail, null, Skip.Top | Skip.Bot);
+                                        bool post = rl.Posts > 0 && q % (rl.Posts + 1) == rl.Posts;
+                                        double zc = z0 + (i + (j + 0.5) / m) * run, hb = post ? rl.Post / 2 : BH;
+                                        Upright(post, xc, zc, y + (i + 1) * fh / n, Top(zc) - RT + hb * sl + 0.01, true);
                                     }
                             }
                             Rail(-hw, -1, fL); Rail(xm, 1, wR);
@@ -1703,8 +1731,8 @@ namespace Triband.Storey.Generate
                         bool fill = s.solid && onFloor;
                         if (s.rails || fill)
                         {
-                            if (!fL) S(-hw + 0.04, z0, -hw + 0.04, z1, 0.04, Seg.Flush);
-                            if (!wR) S(xm - 0.04, z0, xm - 0.04, z1, 0.04, Seg.Flush);
+                            if (!fL) S(-hw + Off, z0, -hw + Off, z1, rl.R, Seg.Flush);
+                            if (!wR) S(xm - Off, z0, xm - Off, z1, rl.R, Seg.Flush);
                         }
                         if (fill) S(-hw, z1 - 0.04, xm, z1 - 0.04, 0.04, Seg.Flush);
                     }

@@ -21,7 +21,7 @@ namespace Triband.Storey.Tests
     {
         // a 12 × 9 m walk-in block of three storeys (3.6 m, 3 m, 3 m) under a flat roof, straight flights up to the roof from
         // the ground with their front at z 1.3 (rot 0: across x, up along z)
-        static (StoreyDocument d, BuildingData b, CoreData s) Stack(double x = 6, bool rails = true, bool solid = true)
+        internal static (StoreyDocument d, BuildingData b, CoreData s) Stack(double x = 6, bool rails = true, bool solid = true)
         {
             var d = new StoreyDocument();
             var b = Buildings.Add(d, "rect", new Vec2(0, 0)); b.pos = new Vec2(0, 0);
@@ -227,9 +227,20 @@ namespace Triband.Storey.Tests
         public void FromInsideNoRayMeetsTheBackOfAFace(string name, bool rails, bool solid)
         {
             var (d, b, s) = Laid(name, rails, solid);
+            var (holes, rays, where) = Inside(d, b, s);
+            Assert.True(rays > 2000, $"{rays} rays");   // a lone flight on the east wall has half the eyes round it
+            Assert.True(holes == 0, $"{name}, rails {rails}, solid {solid}: {holes} of {rays} rays meet a back face first:\n  " + string.Join("\n  ", where));
+        }
+
+        /// <summary>Rays from eyes on each storey round the stairs <paramref name="s"/> of a 12 × 9 m block: how many meet a back face first, of how many.</summary>
+        internal static (int holes, int rays, List<string> where) Inside(StoreyDocument d, BuildingData b, CoreData s)
+        {
             var op = Lod0.Build(new Site(d.buildings), b).Op;
             var sc = new RayScene(); sc.Add(op.P, op.I, t => 0);
             var f = Cores.FrameOf(b, s); var rng = new Random(3); int holes = 0, rays = 0; var where = new List<string>();
+            // clear of the rails and newels either side of the lane's edges and past its ends, as wide as the stairs' look makes them
+            var rl = Railing.Of(s.look);
+            double mu = Math.Max(rl.Newel / 2, rl.Off + Math.Max(rl.W, Math.Max(rl.Spindle, rl.Post)) / 2) + 0.06, mw = Math.Max(rl.Newel, rl.Off + rl.W / 2) + 0.1;
             for (int k = 0; k < 3; k++)
             {
                 double yb = Derived.FloorBase(b, k), ceil = Derived.FloorBase(b, k + 1) - Dim.SLAB;
@@ -237,7 +248,7 @@ namespace Triband.Storey.Tests
                 {
                     // an eye round the stairs, not over the flight lane (the flights, the opening) nor in a wall
                     double u = -Hw - 1.6 + rng.NextDouble() * (2 * Hw + 3.2), w = -4.0 + rng.NextDouble() * 8.0;
-                    if (u > -Hw - 0.12 && u < Xm + 0.12 && w > Z0 - 0.2 && w < Z1 + 0.2) continue;
+                    if (u > -Hw - mu && u < Xm + mu && w > Z0 - mw && w < Z1 + mw) continue;
                     var p = f.At2(u, w);
                     if (p.x < Dim.T_EXT + 0.1 || p.x > 12 - Dim.T_EXT - 0.1 || p.z < Dim.T_EXT + 0.1 || p.z > 9 - Dim.T_EXT - 0.1) continue;
                     if (Cores.OneFlight(b, s) && u > Xm) continue;   // a lone flight has no walkway: there is the floor round it, or the wall
@@ -258,8 +269,7 @@ namespace Triband.Storey.Tests
                     if (where.Count < 10) where.Add($"storey {k}: a back face at ({hx:0.000}, {hy:0.000}, {hz:0.000}), from ({p.x:0.00}, {ey:0.00}, {p.z:0.00})");
                 }
             }
-            Assert.True(rays > 2000, $"{rays} rays");   // a lone flight on the east wall has half the eyes round it
-            Assert.True(holes == 0, $"{name}, rails {rails}, solid {solid}: {holes} of {rays} rays meet a back face first:\n  " + string.Join("\n  ", where));
+            return (holes, rays, where);
         }
 
         [Theory]

@@ -296,9 +296,10 @@ namespace Triband.Storey.Play
                         {
                             var flush = Cores.CoreFlush(Derived.OutlineAt(b, k), s, b: b);
                             bool fL = flush[0] != null, wR = flush[1] != null && Cores.OneFlight(b, s);
-                            double over = s.rails ? fh / Math.Max(8, (int)Math.Round(fh / 0.18)) + 0.9 : 0;
-                            if (!fL) Fence(f, -hw + 0.04, z0, z1, yb, fh, over);
-                            if (!wR) Fence(f, xm - 0.04, z0, z1, yb, fh, over);
+                            var rl = Railing.Of(s.look);
+                            double over = s.rails ? fh / Math.Max(8, (int)Math.Round(fh / 0.18)) + rl.FlightH : 0;
+                            if (!fL) Fence(f, -hw + rl.Off, rl.R, z0, z1, yb, fh, over);
+                            if (!wR) Fence(f, xm - rl.Off, rl.R, z0, z1, yb, fh, over);
                         }
                         if (fill) { var a = f.At2(-hw, z1 - 0.04); var c = f.At2(xm, z1 - 0.04); Box(new Seg(a.x, a.z, c.x, c.z, 0.04), yb, yb + fh); }
                         continue;
@@ -313,14 +314,13 @@ namespace Triband.Storey.Play
         }
 
         /// <summary>
-        /// A wall along a straight flight's side, in its core's frame <paramref name="f"/>: 4 cm either side of
+        /// A wall along a straight flight's side, in its core's frame <paramref name="f"/>: <paramref name="r"/> either side of
         /// <paramref name="x"/>, from <paramref name="z0"/> to <paramref name="z1"/>, standing on the floor at
         /// <paramref name="yb"/>, its top <paramref name="over"/> over the ramp up the flight (from yb at z0 to yb +
         /// <paramref name="fh"/> at z1). No front where it rises from the floor (a solid flight's side, unrailed).
         /// </summary>
-        void Fence(Frame f, double x, double z0, double z1, double yb, double fh, double over)
+        void Fence(Frame f, double x, double r, double z0, double z1, double yb, double fh, double over)
         {
-            const double r = 0.04;
             int Pt(double u, double w, double y) { var q = f.At2(u, w); return V(q.x, y, q.z); }
             double ya = yb + over, ye = yb + fh + over;
             bool front = over > 1e-6;

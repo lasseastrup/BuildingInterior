@@ -251,6 +251,43 @@ namespace Triband.Storey
         /// Storey's own.
         /// </summary>
         public bool solid = true;
+        /// <summary>
+        /// Straight flights: how their rails and steps look (sizes, spacing, posts, colours); null, or any setting it leaves
+        /// null, for the defaults. Storey's own.
+        /// </summary>
+        public StairLook? look;
+    }
+
+    /// <summary>
+    /// How a straight flight's rails and steps look (<see cref="CoreData.look"/>, docs/EDITOR.md §5): each setting null for its
+    /// default, which is how they looked before they could be set. Out of range, a setting is held to its range where the
+    /// stairs are built (<c>Railing.Of</c>), not here. Layout key <c>look</c> on a shaft, an object with each key written
+    /// only when set. Storey's own.
+    /// </summary>
+    public sealed class StairLook
+    {
+        /// <summary>The rails' top over the floor round the openings (metres; 1.02). The flights' handrail is 12 cm lower over the nosings' line, and the newels stand 16 cm higher.</summary>
+        public double? height;
+        /// <summary>The handrail's width and thickness (metres; 0.04 and 0.07).</summary>
+        public double? railW, railT;
+        /// <summary>The spindles, the thin uprights under the handrail: how far apart, centre to centre, and how thick (metres; 0.135 and 0.025).</summary>
+        public double? gap, spindle;
+        /// <summary>A post between every this many spindles (null or 0: none, the newels at the ends alone), as wide as <see cref="post"/>.</summary>
+        public int? posts;
+        /// <summary>A post's width (metres; 0.05) and a newel's (0.13), each square.</summary>
+        public double? post, newel;
+        /// <summary>
+        /// Colours of its own (colour references, as a style's): the handrails, the spindles, the posts and newels, the treads,
+        /// the risers, and a solid flight's sides and underside. Null: the style's (its rails' colour, its stairs' steps', its
+        /// rooms' walls').
+        /// </summary>
+        public string? railColor, spindleColor, postColor, treadColor, riserColor, sideColor;
+
+        /// <summary>Every setting the default.</summary>
+        public bool IsDefault => height == null && railW == null && railT == null && gap == null && spindle == null && posts == null && post == null && newel == null
+            && railColor == null && spindleColor == null && postColor == null && treadColor == null && riserColor == null && sideColor == null;
+
+        public StairLook Clone() => (StairLook)MemberwiseClone();
     }
 
     public sealed class EntranceData

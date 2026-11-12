@@ -37,11 +37,40 @@ namespace Triband.Storey
             }
         }
 
-        /// <summary>Every colour reference a layout's styles hold.</summary>
+        /// <summary>Every colour reference a layout's styles hold, and its stairs' own (<see cref="StairColorFields"/>).</summary>
         public static IEnumerable<string> Values(StoreyDocument d)
         {
             foreach (var st in Styles(d))
                 foreach (var f in All) { var v = f.get(st); if (v != null) yield return v; }
+            foreach (var v in StairColorFields.Values(d)) yield return v;
+        }
+    }
+
+    /// <summary>
+    /// A straight flight's own colours (<see cref="StairLook"/>), as <see cref="StyleColorFields"/> has a style's, so the palette
+    /// keeps them as it keeps a style's: in the layout's palette block, conformed to the palette, mapped to it. Storey's own.
+    /// </summary>
+    public static class StairColorFields
+    {
+        public static readonly (string name, Func<StairLook, string?> get, Action<StairLook, string?> set)[] All =
+        {
+            ("railColor", l => l.railColor, (l, v) => l.railColor = v), ("spindleColor", l => l.spindleColor, (l, v) => l.spindleColor = v),
+            ("postColor", l => l.postColor, (l, v) => l.postColor = v), ("treadColor", l => l.treadColor, (l, v) => l.treadColor = v),
+            ("riserColor", l => l.riserColor, (l, v) => l.riserColor = v), ("sideColor", l => l.sideColor, (l, v) => l.sideColor = v),
+        };
+
+        /// <summary>Every stair's look a layout has.</summary>
+        public static IEnumerable<StairLook> Looks(StoreyDocument d)
+        {
+            foreach (var b in d.buildings)
+                foreach (var s in b.shafts) if (s.look != null) yield return s.look;
+        }
+
+        /// <summary>Every colour reference a layout's stairs hold.</summary>
+        public static IEnumerable<string> Values(StoreyDocument d)
+        {
+            foreach (var l in Looks(d))
+                foreach (var f in All) { var v = f.get(l); if (v != null) yield return v; }
         }
     }
 
@@ -130,6 +159,12 @@ namespace Triband.Storey
                 {
                     var v = f.get(st);
                     if (v != null && ColorRef.IsHex(v) && map.TryGetValue(ColorRef.Normalise(v), out var id)) { f.set(st, id); n++; }
+                }
+            foreach (var l in StairColorFields.Looks(d))
+                foreach (var f in StairColorFields.All)
+                {
+                    var v = f.get(l);
+                    if (v != null && ColorRef.IsHex(v) && map.TryGetValue(ColorRef.Normalise(v), out var id)) { f.set(l, id); n++; }
                 }
             PaletteSnapshot.Refresh(d, lookup);
             return n;

@@ -86,7 +86,7 @@ namespace Triband.Storey
     }
 
     /// <summary>
-    /// Keep a layout inside the palette: every CSS colour in its styles, and every palette id the palette no longer has
+    /// Keep a layout inside the palette: every CSS colour in its styles and its stairs, and every palette id the palette no longer has
     /// (by the colour its palette block last saw), becomes the nearest palette entry. The palette block is refreshed.
     /// </summary>
     public static class PaletteConform
@@ -107,15 +107,18 @@ namespace Triband.Storey
                 if (n == null) return null;
                 map[v] = n.Value; return n.Value;
             }
+            void Conform(string? v, Action<string> set)
+            {
+                if (v == null) return;
+                var key = ColorRef.IsHex(v) ? ColorRef.Normalise(v) : v;
+                var t = Target(key); if (t == null) return;
+                set(t.Value.Item1.id);
+                uses[key] = uses.TryGetValue(key, out int u) ? u + 1 : 1;
+            }
             foreach (var st in StyleColorFields.Styles(d))
-                foreach (var f in StyleColorFields.All)
-                {
-                    var v = f.get(st); if (v == null) continue;
-                    var key = ColorRef.IsHex(v) ? ColorRef.Normalise(v) : v;
-                    var t = Target(key); if (t == null) continue;
-                    f.set(st, t.Value.Item1.id);
-                    uses[key] = uses.TryGetValue(key, out int u) ? u + 1 : 1;
-                }
+                foreach (var f in StyleColorFields.All) Conform(f.get(st), id => f.set(st, id));
+            foreach (var l in StairColorFields.Looks(d))
+                foreach (var f in StairColorFields.All) Conform(f.get(l), id => f.set(l, id));
             foreach (var kv in map.Where(kv => uses.ContainsKey(kv.Key)))
                 changed.Add(new ConformedColor(kv.Key, kv.Value.e.id, kv.Value.e.name, kv.Value.d, uses[kv.Key]));
             var byId = palette.GroupBy(p => p.id).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
