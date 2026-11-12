@@ -123,7 +123,8 @@ namespace Triband.Storey.Tests
             var fl = Cores.CoreFlush(Derived.OutlineAt(b, 0), s, b: b);
             Assert.NotNull(fl[1]); Assert.Null(fl[0]);
             var op = Lod0.Build(new Site(d.buildings), b, solids: true).Op; double y = Derived.FloorBase(b, 1);
-            var rails = Enumerable.Range(0, op.Verts).Where(v => op.C[v].slot == ColorSlot.Rail && op.P[v].y > y).Select(v => op.P[v]).ToList();
+            bool Rail(Swatch c) => c.slot == ColorSlot.Rail || KindColors.RefOf(c.slot) is Railing.HandrailColour or Railing.UprightColour;   // the style's, or a stair's own
+            var rails = Enumerable.Range(0, op.Verts).Where(v => Rail(op.C[v]) && op.P[v].y > y).Select(v => op.P[v]).ToList();
             Assert.NotEmpty(rails);                                                   // the open side's, and across the front
             Assert.DoesNotContain(rails, p => p.x > s.x + 0.01 && p.x < 2.4);          // none along the wall
             var r = CoplanarCheck.Run(op);

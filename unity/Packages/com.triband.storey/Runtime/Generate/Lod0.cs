@@ -1550,7 +1550,8 @@ namespace Triband.Storey.Generate
                     // and spacing, the newels' half width and top, each rail's line off the lane's edge, and the colours
                     var rl = Railing.Of(s.look); var lk = s.look;
                     double H = rl.H, RW = rl.W / 2, RT = rl.T, BH = rl.Spindle / 2, Gap = rl.Gap, NH = rl.Newel / 2, Off = rl.Off;
-                    Swatch railC = Railing.Colour(C, lk?.railColor, C.rail), spindleC = Railing.Colour(C, lk?.spindleColor, C.rail), postC = Railing.Colour(C, lk?.postColor, C.rail);
+                    Swatch railC = Railing.Colour(C, lk?.railColor ?? Railing.HandrailColour, C.rail), spindleC = Railing.Colour(C, lk?.spindleColor ?? Railing.UprightColour, C.rail);
+                    Swatch postC = Railing.Colour(C, lk?.postColor ?? Railing.UprightColour, C.rail);
                     Swatch treadC = Railing.Colour(C, lk?.treadColor, C.step), riserC = Railing.Colour(C, lk?.riserColor, C.step), sideC = Railing.Colour(C, lk?.sideColor, C.inner);
                     Swatch bottomC = Railing.Colour(C, lk?.bottomColor, railC);
                     // a flight's handrail's top over the floor where it ends in a newel: its riser over its nosings' line's
@@ -1561,7 +1562,22 @@ namespace Triband.Storey.Generate
                     {
                         double nt = rl.NewelTop(flight), zc = (za + zb) / 2;
                         Bx(xe - NH, xe + NH, y, y + nt, za, zb, postC, null, Skip.Bot);
-                        if (rl.FootW > 0) Bx(xe - rl.FootW / 2, xe + rl.FootW / 2, y, y + rl.FootH, zc - rl.FootW / 2, zc + rl.FootW / 2, postC, null, Skip.Bot);
+                        // its foot no further than its face toward the flight lane's run: not into the first step, nor out over
+                        // an opening. Cut there, the foot's face lies in the newel's: only its strips either side show
+                        double fa = zc - rl.FootW / 2, fb = zc + rl.FootW / 2, fx = rl.FootW / 2;
+                        if (zb <= z0 + 1e-9) fb = Math.Min(fb, z0); if (za >= z1 - 1e-9) fa = Math.Max(fa, z1);
+                        if (rl.FootW > 0)
+                        {
+                            bool cb = Math.Abs(fb - zb) < 1e-9, ca = Math.Abs(fa - za) < 1e-9;
+                            Bx(xe - fx, xe + fx, y, y + rl.FootH, fa, fb, postC, null, Skip.Bot | (cb ? Skip.Out : Skip.None) | (ca ? Skip.In : Skip.None));
+                            void Strips(double zf, double sign)
+                            {
+                                var n = new P3(sign * f.w.x, 0, sign * f.w.z);
+                                foreach (var (s0, s1) in new[] { (xe - fx, xe - NH), (xe + NH, xe + fx) })
+                                    op.Quad(f.At(s0, y, zf), f.At(s1, y, zf), f.At(s1, y + rl.FootH, zf), f.At(s0, y + rl.FootH, zf), n, postC);
+                            }
+                            if (cb) Strips(fb, 1); if (ca) Strips(fa, -1);
+                        }
                         S(xe, zc, xe, zc, Math.Max(NH, rl.FootW / 2) + 0.015, nt);
                     }
                     // an upright under a handrail (a spindle, or a post every so many), at c along the rail and at across it,

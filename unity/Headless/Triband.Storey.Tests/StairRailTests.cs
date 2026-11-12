@@ -21,6 +21,17 @@ namespace Triband.Storey.Tests
     {
         // a 12 × 9 m walk-in block of three storeys (3.6 m, 3 m, 3 m) under a flat roof, straight flights up to the roof from
         // the ground with their front at z 1.3 (rot 0: across x, up along z)
+        /// <summary>
+        /// The look straight flights had before their defaults were an artist's (spindles 13.5 cm apart, no posts, 13 cm newels,
+        /// no feet nor bottom rail): what the tests of how each part is built count with. <paramref name="also"/> changes it.
+        /// </summary>
+        internal static StairLook Classic(Action<StairLook>? also = null)
+        {
+            var l = new StairLook { gap = 0.135, posts = 0, newel = 0.13, feet = false, bottom = false };
+            also?.Invoke(l);
+            return l;
+        }
+
         internal static (StoreyDocument d, BuildingData b, CoreData s) Stack(double x = 6, bool rails = true, bool solid = true)
         {
             var d = new StoreyDocument();
@@ -47,7 +58,7 @@ namespace Triband.Storey.Tests
         [Fact]
         public void ARailedFlightHasAHandrailOnBalustersUpEachOpenSideFromNewelToNewel()
         {
-            var (d, b, s) = Stack();
+            var (d, b, s) = Stack(); s.look = Classic();
             var op = Lod0.Build(new Site(d.buildings), b, solids: true).Op; var f = Cores.FrameOf(b, s);
             var boxes = Boxes(op, f);
             for (int k = 0; k < 3; k++)
@@ -81,7 +92,7 @@ namespace Triband.Storey.Tests
         public void AWallStandsInForTheRailOnItsSide()
         {
             // the flight lane against the block's west wall: railed on the walkway's side alone, round the opening as up the flights
-            var (d, b, s) = Stack(x: Dim.FLIGHT_W / 2);
+            var (d, b, s) = Stack(x: Dim.FLIGHT_W / 2); s.look = Classic();
             Assert.NotNull(Cores.CoreFlush(b.footprint, s, b: b)[0]);
             var op = Lod0.Build(new Site(d.buildings), b, solids: true).Op; var f = Cores.FrameOf(b, s);
             var boxes = Boxes(op, f);
@@ -96,7 +107,7 @@ namespace Triband.Storey.Tests
         {
             // no balusters nor newels anywhere: round each opening (the first floor's, the second's, the roof's), on both sides,
             // a handrail and a post at each end, as before the flights had rails of their own
-            var (d, b, s) = Stack(rails: false);
+            var (d, b, s) = Stack(rails: false); s.look = Classic();
             var op = Lod0.Build(new Site(d.buildings), b, solids: true).Op; var f = Cores.FrameOf(b, s);
             var boxes = Boxes(op, f);
             Assert.DoesNotContain(boxes, x => Baluster(x) || Newel(x));
@@ -116,7 +127,7 @@ namespace Triband.Storey.Tests
         public void ALevelRailHasBalustersUnderItsHandrailBetweenItsNewels()
         {
             // the first floor's opening, its walkway side: a baluster every 13.5 cm or so from the front newel to the back one
-            var (d, b, s) = Stack();
+            var (d, b, s) = Stack(); s.look = Classic();
             var op = Lod0.Build(new Site(d.buildings), b, solids: true).Op; var f = Cores.FrameOf(b, s);
             double y = Derived.FloorBase(b, 1);
             var mine = Boxes(op, f).Where(x => Baluster(x) && At((x.u0 + x.u1) / 2, Xm + 0.04) && Math.Abs(x.y0 - y) < 1e-6).OrderBy(x => x.w0).ToList();
@@ -287,7 +298,8 @@ namespace Triband.Storey.Tests
             var on = f.At2(Xm - 0.05, 0); double yOn = world.SurfaceAt(on.x, on.z, fh / 2 + 0.1);
             Assert.Equal(fh / 2, yOn, 6);
             var (u1, _) = Local(world.Collide(on.x, on.z, yOn).x, world.Collide(on.x, on.z, yOn).z);
-            if (rails || solid) Assert.True(u1 <= Xm - 0.04 - 0.04 - PlayWorld.Radius + 1e-6, $"on the flight at u {u1:0.000}");
+            var rl = Railing.Of(s.look);
+            if (rails || solid) Assert.True(u1 <= Xm - rl.Off - rl.R - PlayWorld.Radius + 1e-6, $"on the flight at u {u1:0.000}");
             else Assert.Equal(Xm - 0.05, u1, 6);
             // walking on the floor in 5 cm steps, as a frame's are: from the walkway in under the flight's high end, kept out where
             // it's solid down to the floor (and where it's railed, which the walk model has as a wall all the way up); from behind
@@ -298,7 +310,7 @@ namespace Triband.Storey.Tests
                 return (u, w);
             }
             var (u2, _) = Walk(Xm + 0.45, 1.8, -0.05, 0);
-            if (rails || solid) Assert.Equal(Xm + PlayWorld.Radius, u2, 6);
+            if (rails || solid) Assert.Equal(Xm - rl.Off + rl.R + PlayWorld.Radius, u2, 6);
             else Assert.True(u2 < Xm - 0.5, $"under the flight at u {u2:0.000}");
             var (_, w3) = Walk(-Hw / 2, Z1 + 0.5, 0, -0.05);
             if (solid) Assert.Equal(Z1 + PlayWorld.Radius, w3, 6);
@@ -337,12 +349,13 @@ namespace Triband.Storey.Tests
             P3 From(double w, double y) { var p = f.At2(Xm + 1, w); return new P3(p.x, y, p.z); }
             // from the walkway, toward the flight's middle: its handrail's top 90 cm over the nosings' line
             double top = fh / 2 + rise + 0.9;
+            double face = 1 + Railing.Of(s.look).Off - Railing.Of(s.look).R;   // to the wall's face, at the rail's line less its half width
             double? low = WallHit(m, From(0, top - 0.05), dir), high = WallHit(m, From(0, top + 0.05), dir);
-            if (rails) Assert.True(low is double l && Math.Abs(l - 1) < 1e-6, $"under the handrail: {low}");
+            if (rails) Assert.True(low is double l && Math.Abs(l - face) < 1e-6, $"under the handrail: {low}");
             Assert.True(high == null || high > 3, $"over the handrail: {high}");
             // low down under its high end: the solid's side, or the rail's wall from the floor
             double? under = WallHit(m, From(1.8, 0.3), dir);
-            if (rails || solid) Assert.True(under is double u && Math.Abs(u - 1) < 1e-6, $"under the flight: {under}");
+            if (rails || solid) Assert.True(under is double u && Math.Abs(u - face) < 1e-6, $"under the flight: {under}");
             else Assert.True(under == null || under > 3, $"under the flight: {under}");
             // its back, from behind
             var bp = f.At2(-Hw / 2, Z1 + 1);

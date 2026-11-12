@@ -270,33 +270,35 @@ namespace Triband.Storey
         public double? height;
         /// <summary>The handrail's width and thickness (metres; 0.04 and 0.07).</summary>
         public double? railW, railT;
-        /// <summary>The spindles, the thin uprights under the handrail: how far apart, centre to centre, and how thick (metres; 0.135 and 0.025).</summary>
+        /// <summary>The spindles, the thin uprights under the handrail: how far apart, centre to centre, and how thick (metres; 0.19 and 0.025).</summary>
         public double? gap, spindle;
-        /// <summary>A post between every this many spindles (null or 0: none, the newels at the ends alone), as wide as <see cref="post"/>.</summary>
+        /// <summary>A post between every this many spindles (4; 0: none, the newels at the ends alone), as wide as <see cref="post"/>.</summary>
         public int? posts;
-        /// <summary>A post's width (metres; 0.05) and a newel's (0.13), each square.</summary>
+        /// <summary>A post's width (metres; 0.05) and a newel's (0.14), each square.</summary>
         public double? post, newel;
         /// <summary>How far the newels stand over the handrails that end in them (metres; 0.16 over the rails' height; 0: flush with the highest).</summary>
         public double? newelAbove;
-        /// <summary>A foot at each newel's base, a square block wider than it: its width and height (metres; null: none).</summary>
+        /// <summary>Whether each newel stands on a foot, a square block wider than it (null: it does), its width and height (metres; 0.17 and 0.08).</summary>
+        public bool? feet;
         public double? footW, footH;
         /// <summary>
-        /// A bottom rail the spindles stand on, parallel to the handrail: the gap under it over the floor round the openings and
-        /// over the nosings' line up the flights (metres; null: none, the spindles on the floor and treads), its width and
-        /// thickness (the handrail's width, and 0.04).
+        /// Whether there is a bottom rail the spindles stand on, parallel to the handrail (null: there is); the gap under it
+        /// over the floor round the openings and over the nosings' line up the flights, its width and thickness (metres;
+        /// 0.065, the handrail's width, and 0.04).
         /// </summary>
+        public bool? bottom;
         public double? bottomGap, bottomW, bottomT;
         /// <summary>
-        /// Colours of its own (colour references, as a style's): the handrails, the spindles, the posts and newels, the treads,
-        /// the risers, and a solid flight's sides and underside. Null: the style's (its rails' colour, its stairs' steps', its
-        /// rooms' walls'). The bottom rail's, null for the handrail's; a solid flight's steps' ends, the 20 cm under each tread
-        /// along its sides, null for the sides'.
+        /// Colours of its own (colour references, as a style's): the handrails (#6D6D6D), the spindles and the posts and newels
+        /// (#444445), the treads, the risers, and a solid flight's sides and underside (null: the style's, its stairs' steps'
+        /// and its rooms' walls'). The bottom rail's, null for the handrail's; a solid flight's steps' ends, the 20 cm under
+        /// each tread along its sides, null for the sides'.
         /// </summary>
         public string? railColor, spindleColor, postColor, treadColor, riserColor, sideColor, bottomColor, endColor;
 
         /// <summary>Every setting the default.</summary>
         public bool IsDefault => height == null && railW == null && railT == null && gap == null && spindle == null && posts == null && post == null && newel == null
-            && newelAbove == null && footW == null && footH == null && bottomGap == null && bottomW == null && bottomT == null
+            && newelAbove == null && feet == null && footW == null && footH == null && bottom == null && bottomGap == null && bottomW == null && bottomT == null
             && railColor == null && spindleColor == null && postColor == null && treadColor == null && riserColor == null && sideColor == null && bottomColor == null && endColor == null;
 
         public StairLook Clone() => (StairLook)MemberwiseClone();
