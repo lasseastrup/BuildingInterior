@@ -63,7 +63,6 @@ namespace Triband.Storey.Editor
             if (tr.rotation != Quaternion.identity || tr.lossyScale != Vector3.one)
                 EditorGUILayout.HelpBox("Keep the Storey Site unrotated and unscaled: the layout is in metres, and the Interior tab's floor clip and cutaway assume it. Moving it is fine.", MessageType.Warning);
             BuildingBar(e);
-            ProblemsPanel(e);
             var b = e.Selected;
             if (b != null)
             {
@@ -230,66 +229,6 @@ namespace Triband.Storey.Editor
             else { Undo.RecordObject(t, "Save building template"); t.Set(b); EditorUtility.SetDirty(t); }
             AssetDatabase.SaveAssets();
             EditorGUIUtility.PingObject(t);
-        }
-
-        // ---- problems ----
-
-        /// <summary>
-        /// The layout's problems (Validate.Problems): a foldout with a count, one line each, and a click that selects the
-        /// building, opens the storey and frames the Scene view on it.
-        /// </summary>
-        void ProblemsPanel(StoreyEdit e)
-        {
-            var v = e.View; var ps = StoreyProblems.For(e);
-            int errors = ps.Count(p => p.severity == Validate.Severity.Error);
-            bool stale = StoreyProblems.Stale(e);
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                string status =
-                    StoreyProblems.Running ? $"Checking for problems … {StoreyProblems.RunningFor:0} s" :
-                    !StoreyProblems.Checked(e) ? "Problems: not checked yet" :
-                    ps.Count == 0 ? (stale ? "✓ No problems at the last check (edited since)" : "✓ No problems: every storey can be reached") :
-                    $"⚠ {ps.Count} problem{(ps.Count == 1 ? "" : "s")}{(errors > 0 ? $", {errors} serious" : "")}{(stale ? " (edited since)" : "")}";
-                const string tip = "Rooms and storeys nobody can reach, stairs that are walled in, overlapping buildings";
-                if (ps.Count == 0 || StoreyProblems.Running && !StoreyProblems.Checked(e)) EditorGUILayout.LabelField(new GUIContent(status, tip), StoreyInspectorUI.Caption);
-                else
-                {
-                    var keepC = GUI.contentColor; if (errors > 0) GUI.contentColor = Color.Lerp(Color.white, StoreyProblems.ColorOf(ps.First(p => p.severity == Validate.Severity.Error)), 0.6f);
-                    bool show = EditorGUILayout.Foldout(v.showProblems, new GUIContent(status, "Click one to go to it"), true);
-                    GUI.contentColor = keepC;
-                    if (show != v.showProblems) { v.showProblems = show; SceneView.RepaintAll(); }
-                }
-                using (new EditorGUI.DisabledScope(StoreyProblems.Running || (!stale && StoreyProblems.Checked(e))))
-                    if (GUILayout.Button(new GUIContent("Check", "Check for problems now, in the background: the whole layout the first time (a 3,000-building layout takes about 7 s), then only what changed since"), EditorStyles.miniButton, GUILayout.Width(52)))
-                        StoreyProblems.CheckNow(e);
-                bool want = GUILayout.Toggle(StoreyProblems.Auto, new GUIContent("Auto", "Check again by itself after each edit: only the buildings it changed, with their neighbours and bridges"), EditorStyles.miniButton, GUILayout.Width(40));
-                if (want != StoreyProblems.Auto) StoreyProblems.Auto = want;
-            }
-            if (!v.showProblems || ps.Count == 0) return;
-            const int Most = 25;
-            foreach (var p in ps.Take(Most))
-            {
-                var keep = GUI.color; GUI.color = Color.Lerp(Color.white, StoreyProblems.ColorOf(p), 0.55f);
-                string where = p.k >= 0 ? $"{p.building} · {Floor(e.Document.buildings.FirstOrDefault(x => x.id == p.buildingId) ?? new BuildingData(), p.k)}" : p.building;
-                bool go = GUILayout.Button(new GUIContent($"{(p.severity == Validate.Severity.Error ? "●" : "○")} {where}: {p.message}", "Show it"), EditorStyles.miniButtonLeft);
-                GUI.color = keep;
-                if (go) GoTo(e, p);
-            }
-            if (ps.Count > Most) EditorGUILayout.LabelField($"and {ps.Count - Most} more", EditorStyles.miniLabel);
-        }
-
-        static void GoTo(StoreyEdit e, Validate.Problem p)
-        {
-            var v = e.View; v.Select(p.buildingId);
-            var b = e.Selected;
-            if (b != null && p.k >= 0 && p.k < b.floors.Count && p.code.StartsWith("unreached")) { v.floor = p.k; SetTab(v, StoreyTab.Interior); }
-            var sv = SceneView.lastActiveSceneView;
-            if (sv != null && e.Site != null)
-            {
-                var at = e.Site.transform.TransformPoint(new Vector3((float)p.x, (float)p.y, (float)p.z));
-                sv.LookAt(at, sv.rotation, 14f);
-            }
-            SceneView.RepaintAll();
         }
 
         // ---- Shape ----

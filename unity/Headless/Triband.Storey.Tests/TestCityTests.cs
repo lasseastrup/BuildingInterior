@@ -171,9 +171,8 @@ namespace Triband.Storey.Tests
         {
             var d = Demo();
             TestCity.Generate(d, new TestCity.Options { Count = 60, WalkIn = 0.5, HeightScale = 1.5, MaxStoreys = TestCity.MostStoreys, LiftAbove = 3 });
-            var site = new Site(d.buildings);
-            var gen = new HashSet<string>(d.buildings.Where(b => b.gen && b.shafts.Count > 0).Select(b => b.id));
-            var bad = Validate.Problems.Check(site).Where(p => gen.Contains(p.buildingId) && p.severity == Validate.Severity.Error).ToList();
+            Assert.True(d.buildings.Count(b => b.gen && b.shafts.Count > 0) >= 10, "walk-in buildings to check");
+            var bad = Unwalkable(d);
             Assert.True(bad.Count == 0, string.Join("\n", bad.Take(10)));
         }
 
@@ -182,10 +181,33 @@ namespace Triband.Storey.Tests
         {
             var d = PrototypeJson.Read(Fixtures.Text("demo.json")).Document;
             TestCity.Generate(d, 60, walkIn: true);
-            var site = new Site(d.buildings);
-            var gen = new HashSet<string>(d.buildings.Where(b => b.gen && b.shafts.Count > 0).Select(b => b.id));
-            var bad = Validate.Problems.Check(site).Where(p => gen.Contains(p.buildingId) && p.severity == Validate.Severity.Error).ToList();
+            Assert.True(d.buildings.Count(b => b.gen && b.shafts.Count > 0) >= 10, "walk-in buildings to check");
+            var bad = Unwalkable(d);
             Assert.True(bad.Count == 0, string.Join("\n", bad.Take(10)));
+        }
+
+        /// <summary>
+        /// What would keep someone off a generated walk-in building's storeys, by its plan (its storeys have no rooms of their
+        /// own: each is one floor): stairs or a lift that don't fit every storey they serve, or that stand in each other's way,
+        /// no street door, or a storey no stairs stop on.
+        /// </summary>
+        static List<string> Unwalkable(StoreyDocument d)
+        {
+            var bad = new List<string>();
+            foreach (var b in d.buildings.Where(b => b.gen && b.shafts.Count > 0))
+            {
+                foreach (var s in b.shafts)
+                {
+                    if (!Tiers.ShaftFits(b, s)) bad.Add($"{b.name}: {s.id} doesn't fit every storey it serves");
+                    foreach (var t in b.shafts)
+                        if (string.CompareOrdinal(s.id, t.id) < 0 && Cores.Levels(b, s).Intersect(Cores.Levels(b, t)).Any() && Shafts.Overlap(s, t, 0, of: b))
+                            bad.Add($"{b.name}: {s.id} and {t.id} overlap");
+                }
+                if (b.entrances.Count == 0) bad.Add($"{b.name}: no street door");
+                for (int k = 0; k < b.floors.Count; k++)
+                    if (!b.shafts.Any(s => Cores.IsStairs(s) && Cores.Levels(b, s).Contains(k))) bad.Add($"{b.name}: no stairs stop on storey {k}");
+            }
+            return bad;
         }
     }
 }

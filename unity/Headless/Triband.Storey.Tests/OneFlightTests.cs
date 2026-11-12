@@ -96,7 +96,6 @@ namespace Triband.Storey.Tests
             Assert.False(Shafts.Overlap(s, lift, of: b));
             Assert.True(Shafts.Overlap(s, lift));   // as the kind's whole size, it would be in the way
             b.shafts.Add(lift);
-            Assert.DoesNotContain(Problems.Check(new Site(d.buildings)), p => p.code == "core-overlap");
             // a longer stack needs its walkway: the same lift is in its way
             Shafts.SetTop(s, -1);
             Assert.True(Shafts.Overlap(s, lift, of: b));
@@ -129,7 +128,6 @@ namespace Triband.Storey.Tests
             Assert.DoesNotContain(rails, p => p.x > s.x + 0.01 && p.x < 2.4);          // none along the wall
             var r = CoplanarCheck.Run(op);
             Assert.True(r.Overlaps.Count == 0, string.Join("\n", r.Overlaps.Take(10)));
-            Assert.DoesNotContain(Problems.Check(new Site(d.buildings)), p => p.code == "core-fit" || p.code == "unreached");
         }
     }
 }

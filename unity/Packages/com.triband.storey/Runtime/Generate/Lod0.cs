@@ -26,7 +26,7 @@ namespace Triband.Storey.Generate
 
     /// <summary>
     /// What is read of a building's LOD0 after its meshes are uploaded (docs/CITY.md §7): the collision segments (the walk
-    /// model, colliders, the problem list), the collider's other solids, and the walls given ids (the cutaway). Tens of
+    /// model, colliders), the collider's other solids, and the walls given ids (the cutaway). Tens of
     /// kilobytes, about 1% of the LOD0's GPU meshes, where the generator's whole result is several megabytes.
     /// <see cref="Lod0.BuildShape"/> makes it without the meshes.
     /// </summary>
@@ -179,7 +179,7 @@ namespace Triband.Storey.Generate
                 {
                     FacadeStorey(op, gl, sg, k, g, apart, walls); Details.Build(op, site, b, k, g.C, 0);
                     foreach (var br in b.bridges) if (br.k == k && Bridges.Span(site, b, br) is BridgeSpan bs) Bridges.Build(op, gl, r.Extra, bs, g.C);
-                    foreach (var v in b.voids) if (Courtyards.WallsAt(b, v, k)) Courtyards.Walls(op, gl, sg, b, v, k, g.C, apart, IntoWalls(op, k), Live);
+                    foreach (var v in b.voids) if (Courtyards.WallsAt(b, v, k)) Courtyards.Walls(op, gl, sg, b, v, k, g.C, apart, IntoWalls(op, k), Live, sh ? null : Gone(k), sh ? null : BlockedRooms(k));
                     if (!sh) { op.Inside = apart; Interior(op, sg, k, g.C); foreach (var v in b.voids) if (Courtyards.RailsAt(b, v, k)) Courtyards.Rails(op, sg, b, v, k, g.C); op.Inside = false; }
                 }
                 else
@@ -279,7 +279,21 @@ namespace Triband.Storey.Generate
                     foreach (var (ring, inner) in Rings(tree)) Surf(ring, inner, y, up, C.roof);
                 }
             }
-            if (k > 0 && !topOnly) Surf(outer, holes, yb, down, C.ceil);
+            if (k > 0 && !topOnly)
+            {
+                // none over storey k - 1's rooms built one solid with their walls (MergedRooms): the walls' faces into them
+                // aren't built either. Their floor is, which keeps the sun off the storey below
+                var merged = MergedRooms(k - 1);
+                if (merged.Count == 0) Surf(outer, holes, yb, down, C.ceil);
+                else
+                {
+                    var cut = new Clipper2Lib.PathsD(); foreach (var h in holes) cut.Add(Path(h));
+                    foreach (var r in merged) foreach (var ring in RingsOf(r)) cut.Add(Path(V2(ring)));
+                    var tree = new Clipper2Lib.PolyTreeD();
+                    Clipper2Lib.Clipper.BooleanOp(Clipper2Lib.ClipType.Difference, new Clipper2Lib.PathsD { Path(outer) }, cut, tree, Clipper2Lib.FillRule.EvenOdd, 6);
+                    foreach (var (ring, inner) in Rings(tree)) Surf(ring, inner, yb, down, C.ceil);
+                }
+            }
             if (step) foreach (var poly in Geo.TerracePolys(above!, below!)) Surf(V2(poly[0]), poly.GetRange(1, poly.Count - 1).ConvertAll(V2), yb, down, C.ceil);   // soffit under an overhang
             // a straight flight's opening along the building's outline: that side is the wall's inner face already (the
             // walls run down through the slab), and drawn again it would flicker with it. (Only Storey's own straight
@@ -504,6 +518,7 @@ namespace Triband.Storey.Generate
             var Wp = g.Wp; var C = g.C; int n = Wp.Count; bool shell = Derived.ShellAt(b, k); double h = Derived.FloorH(b, k), y = Derived.FloorBase(b, k), T = Dim.T_EXT;   // shell: this storey (a filled one is closed as a shell building is)
             var into = IntoWalls(op, k);   // where the rooms' walls run into the inner faces
             var blocked = shell ? NoRooms : BlockedRooms(k);
+            var gone = shell ? null : Gone(k);   // what faces into a room built one solid with its walls
             if (into != null) { openK = k; openAt = new List<(double, double)>[n]; }
             for (int i = 0; i < n; i++)
             {
@@ -525,8 +540,13 @@ namespace Triband.Storey.Generate
                     if (!party && walls != null && walls[i] == 0) walls[i] = op.WallId;
                     gl.Ctx(wc, 1);
                     var stk = Derived.StyleAt(b, k);
-                    Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : Wall(stk, C, k == 0), C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? Facade.ShellRevealFrom(stk, false, OpeningSets.Representative(stk, k == 0, out var rk) ? rk : null) : 0, rooms: rooms,
-                        doorRevealFrom: shell ? Facade.ShellRevealFrom(stk, true, OpeningKinds.Of(stk, true)) : (double?)null, thresholdC: k == 0 ? C.foundation : (Swatch?)null, doorsRecessed: stk.doorRecess.HasValue, buried: into));
+                    // a shell storey's openings, and those shut into a room blocked out, go in only as far as the pane
+                    bool shut = !shell && blocked.Count > 0;
+                    double? winFrom = shell || shut ? Facade.ShellRevealFrom(stk, false, OpeningSets.Representative(stk, k == 0, out var rk) ? rk : null) : (double?)null;
+                    double? doorFrom = shell || shut ? Facade.ShellRevealFrom(stk, true, OpeningKinds.Of(stk, true)) : (double?)null;
+                    Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : Wall(stk, C, k == 0), C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? winFrom : 0, rooms: rooms,
+                        doorRevealFrom: shell ? doorFrom : null, thresholdC: k == 0 ? C.foundation : (Swatch?)null, doorsRecessed: stk.doorRecess.HasValue, buried: into,
+                        gone: gone, shutFrom: shut ? winFrom : null, shutDoorFrom: shut ? doorFrom : null));
                     Facade.Dress(op, gl, F, ops, y, C, shell, stk, Wall(stk, C, k == 0), Panel, pm, h, Live, rooms);
                     if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
                     if (!party) { op.Ctx(wc, 1); PieceStrips(op, k, F, m, pc, ops, y, h, C, rooms && !shell); }
@@ -718,7 +738,7 @@ namespace Triband.Storey.Generate
         public void Interior(MeshBuilder op, List<Seg> sg, int k, Palette C)
         {
             double y = Derived.FloorBase(b, k), hh = Derived.FloorH(b, k) - Dim.SLAB, E = RoomWall.E, t = Dim.T_INT / 2 + 0.025;
-            var walls = RoomWalls(k);
+            var walls = RoomWalls(k); var gone = Gone(k);   // what faces into a room built one solid with its walls
             if (openK == k && openAt != null) foreach (var r in walls) { r.stubA = IntoSolid(k, r.a); r.stubB = IntoSolid(k, new Vec2(r.a.x + r.u.x * r.L, r.a.z + r.u.z * r.L)); }
             for (int i = 0; i < walls.Count; i++)
             {
@@ -726,7 +746,7 @@ namespace Triband.Storey.Generate
                 op.Ctx(Geo.WallCtx(r.a, r.u, r.w, L), 1, partition: true);   // a room either side: its normal's sign is the way it was drawn
                 // where it runs into another (and that one into it), its faces lie inside the other: buried (PanelOpt.buried)
                 Facade.WallPanel(op, F, new Miter(new Cut(-E, 0), new Cut(L + E, 0)), -Dim.T_INT / 2, Dim.T_INT / 2, y, hh, ops, C.inner, C.inner,
-                    new Facade.PanelOpt { ends = true, buried = !op.ShapeOnly && !op.Lean && (walls.Count > 1 || r.stubA || r.stubB) ? (p, q) => RoomWall.Inside(walls, p, q, self) : null });
+                    new Facade.PanelOpt { ends = true, buried = !op.ShapeOnly && !op.Lean && (walls.Count > 1 || r.stubA || r.stubB) ? (p, q) => RoomWall.Inside(walls, p, q, self) : null, gone = gone });
                 foreach (var o in Facade.MergeOps(ops.Exists(x => x.kind != null) ? ops.FindAll(x => x.kind == null) : ops)) Casing(op, F, o, y, t, C.doorTrim, walls, self);
                 foreach (var o in ops) if (o.kind != null) InteriorDoor(op, r, o, y, C);
                 foreach (var (s0, e0) in Facade.SolidRanges(-E, L + E, ops)) Facade.PushSeg(sg, F, s0, e0, 0, Dim.T_INT / 2);
@@ -755,16 +775,23 @@ namespace Triband.Storey.Generate
         }
 
         /// <summary>
-        /// Storey k's rooms blocked out (<see cref="FloorData.blocked"/>, Storey's own): each a closed solid a centimetre in from
-        /// the walls round it, from a centimetre over the floor to just inside the slab above, its faces turned out. Its sides
-        /// are walls to the cutaway, which takes them down with the others, and the ceiling's clip takes its top on the storey
-        /// being looked into: either way what shows is its inside, in the section's colour, as a cut wall shows (the doorways
-        /// into it are closed, <see cref="RoomWalls"/>, and the windows over it opaque, <see cref="FacadeStorey"/>). Its outline is a
-        /// wall to the walk model, the whole storey high: a street door into it is shut too.
+        /// Storey k's rooms blocked out (<see cref="FloorData.blocked"/>, Storey's own), solid and shut (the doorways into them
+        /// closed, <see cref="RoomWalls"/>; the windows over them opaque, <see cref="FacadeStorey"/>). Its outline is a wall to the
+        /// walk model, the whole storey high: a street door into it is shut too.
+        /// <list type="bullet">
+        /// <item>One with walls all round (<see cref="MergedRooms"/>) is one solid with them: what faces into it isn't built, and
+        /// a face at the walls' feet, turned down, closes it from below over its floor. A cut through it, the cutaway's or the
+        /// ceiling's clip, shows the room and its walls whole, in the section's colour.</item>
+        /// <item>One open to an atrium is a closed solid of its own, a centimetre in from the walls round it, from a centimetre over
+        /// the floor to just inside the slab above, its faces turned out. Its sides are walls to the cutaway, which takes them
+        /// down with the others, and the ceiling's clip takes its top on the storey being looked into: either way what shows
+        /// is its inside, in the section's colour, as a cut wall shows.</item>
+        /// </list>
         /// </summary>
         void Blocked(MeshBuilder op, List<Seg> sg, int k, Palette C)
         {
             var rooms = BlockedRooms(k); if (rooms.Count == 0) return;
+            var merged = MergedRooms(k);
             double y = Derived.FloorBase(b, k), y0 = y + 0.01, y1 = y + Derived.FloorH(b, k) - Dim.SLAB + 0.005, ox = b.pos.x, oz = b.pos.z;
             foreach (var room in rooms)
             {
@@ -781,6 +808,20 @@ namespace Triband.Storey.Generate
                     paths.Add(Path(w));
                 }
                 if (op.ShapeOnly) continue;
+                if (merged.Contains(room))
+                {
+                    // its bottom, level with the walls' feet (Dim.BACK) and as wide as the room: the walls take its sides, the
+                    // slab above its top (the ceiling over it isn't built, Slab). From above, where a cut opens it, it is the cap
+                    op.Ctx(null, 0);
+                    var outer = new List<Vec2>(room.ring.Count); foreach (var p in room.ring) outer.Add(new Vec2(p.x + ox, p.z + oz));
+                    var inner = new List<List<Vec2>>(room.holes.Count);
+                    foreach (var hole in room.holes) { var hw = new List<Vec2>(hole.Count); foreach (var p in hole) hw.Add(new Vec2(p.x + ox, p.z + oz)); inner.Add(hw); }
+                    var bt = Triangulate.Shape(outer, inner);
+                    var bp = new List<P3>(); double yb = y + Dim.BACK;
+                    foreach (var p in outer) bp.Add(new P3(p.x, yb, p.z)); foreach (var hl in inner) foreach (var p in hl) bp.Add(new P3(p.x, yb, p.z));
+                    op.PolyTris(bp, bt, new P3(0, -1, 0), C.inner);
+                    continue;
+                }
                 var tree = new Clipper2Lib.PolyTreeD();
                 Clipper2Lib.Clipper.BooleanOp(Clipper2Lib.ClipType.Union, Clipper2Lib.Clipper.InflatePaths(paths, -0.01, Clipper2Lib.JoinType.Miter, Clipper2Lib.EndType.Polygon, 4, 6),
                     new Clipper2Lib.PathsD(), tree, Clipper2Lib.FillRule.NonZero, 6);
@@ -934,6 +975,109 @@ namespace Triband.Storey.Generate
         {
             if (!blockedRooms.TryGetValue(k, out var l)) blockedRooms[k] = l = k >= 0 && k < N ? Rooms.Blocked(b, k) : new List<Rooms.Room>();
             return l;
+        }
+
+        readonly Dictionary<int, List<Rooms.Room>> mergedRooms = new Dictionary<int, List<Rooms.Room>>();
+        Func<Vec2, Vec2, List<(double, double)>?>? goneK; int goneFor = -1;
+
+        /// <summary>
+        /// Storey k's blocked rooms built one solid with the walls round them (Storey's own): those every edge of which stands
+        /// against a wall the storey high, its outside walls (a neighbour's party wall too), a room wall or a courtyard's.
+        /// What faces into them isn't built (<see cref="IntoMerged"/>, <see cref="Facade.PanelOpt.gone"/>): the walls' faces and
+        /// ends, their ceiling, the pockets of the windows over them; a face at the walls' feet closes them from below
+        /// (<see cref="Blocked"/>). A blocked room open to an atrium, behind its rails, is a solid of its own inside it.
+        /// Building-local. Made once a build.
+        /// </summary>
+        public List<Rooms.Room> MergedRooms(int k)
+        {
+            if (mergedRooms.TryGetValue(k, out var l)) return l;
+            l = new List<Rooms.Room>();
+            var blocked = BlockedRooms(k);
+            if (blocked.Count > 0)
+            {
+                var fp = Derived.OutlineAt(b, k); double hw = Dim.T_INT / 2;
+                // the room walls as Rooms cuts them out of the storey: each as thick as it is built, run on past its ends
+                var walls = new List<List<Vec2>>();
+                foreach (var w0 in b.floors[k].walls)
+                    foreach (var wl in Courtyards.ClipOut(b, k, Geo.ClipWall(fp, w0)))
+                    {
+                        double dx = wl.b.x - wl.a.x, dz = wl.b.z - wl.a.z, L = Geo.Hypot(dx, dz); if (L < 0.05) continue;
+                        double ux = dx / L, uz = dz / L, wx = -uz * hw, wz = ux * hw, ax = wl.a.x - ux * hw, az = wl.a.z - uz * hw, cx = wl.b.x + ux * hw, cz = wl.b.z + uz * hw;
+                        walls.Add(new List<Vec2> { new Vec2(ax + wx, az + wz), new Vec2(cx + wx, cz + wz), new Vec2(cx - wx, cz - wz), new Vec2(ax - wx, az - wz) });
+                    }
+                // what stands just past a room's edge: a wall the storey high, or not (an atrium's rails)
+                bool Against(double x, double z)
+                {
+                    if (!Geo.Pip(fp, x, z)) return true;
+                    foreach (var w in walls) if (Geo.Pip(w, x, z)) return true;
+                    foreach (var v in b.voids) if (Courtyards.Taken(b, v, k) && Geo.Pip(v.shape, x, z)) return Courtyards.WallsAt(b, v, k);
+                    return false;
+                }
+                bool Walled(Rooms.Room r)
+                {
+                    foreach (var ring in RingsOf(r))
+                        for (int i = 0; i < ring.Count; i++)
+                        {
+                            var p = ring[i]; var q = ring[(i + 1) % ring.Count]; double dx = q.x - p.x, dz = q.z - p.z, L = Geo.Hypot(dx, dz);
+                            if (L < 1e-4) continue;
+                            foreach (double f in new[] { 0.25, 0.5, 0.75 })
+                            {
+                                double mx = p.x + dx * f, mz = p.z + dz * f, nx = -dz / L * Facade.GoneProbe, nz = dx / L * Facade.GoneProbe;
+                                if (r.Contains(mx + nx, mz + nz)) { nx = -nx; nz = -nz; }   // the side away from the room
+                                if (!Against(mx + nx, mz + nz)) return false;
+                            }
+                        }
+                    return true;
+                }
+                foreach (var r in blocked) if (Walled(r)) l.Add(r);
+            }
+            mergedRooms[k] = l;
+            return l;
+        }
+
+        static IEnumerable<List<Vec2>> RingsOf(Rooms.Room r) { yield return r.ring; foreach (var h in r.holes) yield return h; }
+
+        /// <summary>
+        /// The parts of the line from <paramref name="p"/> to <paramref name="q"/> (site space) inside storey k's rooms built one solid
+        /// with their walls (<see cref="MergedRooms"/>), as fractions from p, in order and apart; null for none: given a face moved
+        /// a little out along its normal, what of it faces into one (<see cref="Facade.PanelOpt.gone"/>).
+        /// </summary>
+        public List<(double, double)>? IntoMerged(int k, Vec2 p, Vec2 q)
+        {
+            var rooms = MergedRooms(k); if (rooms.Count == 0) return null;
+            double ax = p.x - b.pos.x, az = p.z - b.pos.z, dx = q.x - p.x, dz = q.z - p.z;
+            var ts = new List<double> { 0, 1 };
+            foreach (var r in rooms)
+                foreach (var ring in RingsOf(r))
+                    for (int i = 0; i < ring.Count; i++)
+                    {
+                        // where the line crosses the ring's edge from c to e
+                        var c = ring[i]; var e = ring[(i + 1) % ring.Count];
+                        double ex = e.x - c.x, ez = e.z - c.z, den = dx * ez - dz * ex;
+                        if (Math.Abs(den) < 1e-12) continue;
+                        double t = ((c.x - ax) * ez - (c.z - az) * ex) / den, s = ((c.x - ax) * dz - (c.z - az) * dx) / den;
+                        if (t > 0 && t < 1 && s >= -1e-9 && s <= 1 + 1e-9) ts.Add(t);
+                    }
+            ts.Sort();
+            List<(double, double)>? o = null;
+            for (int i = 0; i + 1 < ts.Count; i++)
+            {
+                double t0 = ts[i], t1 = ts[i + 1]; if (t1 - t0 < 1e-9) continue;
+                double tm = (t0 + t1) / 2, mx = ax + dx * tm, mz = az + dz * tm;
+                bool inside = false; foreach (var r in rooms) if (r.Contains(mx, mz)) { inside = true; break; }
+                if (!inside) continue;
+                o ??= new List<(double, double)>();
+                if (o.Count > 0 && Math.Abs(o[o.Count - 1].Item2 - t0) < 1e-9) o[o.Count - 1] = (o[o.Count - 1].Item1, t1); else o.Add((t0, t1));
+            }
+            return o;
+        }
+
+        /// <summary>What faces into storey k's rooms built one solid with their walls, for a panel's options (<see cref="Facade.PanelOpt.gone"/>); null with none.</summary>
+        Func<Vec2, Vec2, List<(double, double)>?>? Gone(int k)
+        {
+            if (MergedRooms(k).Count == 0) return null;
+            if (goneFor != k) { goneFor = k; goneK = (p, q) => IntoMerged(k, p, q); }
+            return goneK;
         }
 
         /// <summary>A doorway at <paramref name="mm"/> along a room wall from <paramref name="a"/> (site space) opens into a room blocked out.</summary>

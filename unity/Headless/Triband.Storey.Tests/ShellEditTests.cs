@@ -92,15 +92,5 @@ namespace Triband.Storey.Tests
             shell.voids.Add(v);
             Assert.Equal(VoidIssue.None, Voids.SetBottom(shell, "v1", 1));
         }
-
-        [Fact]
-        public void MadeWalkInAgainTheStairsThatNoLongerFitAreAProblem()
-        {
-            var (d, b, _) = Block(true);
-            Assert.Equal(OutlineIssue.None, Outlines.Set(b, 0, Narrower));
-            Assert.DoesNotContain(Problems.Check(new Site(d.buildings)), p => p.code == "core-fit");
-            b.interior = true;
-            Assert.Contains(Problems.Check(new Site(d.buildings)), p => p.code == "core-fit" && p.buildingId == b.id);
-        }
     }
 }

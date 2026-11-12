@@ -80,7 +80,7 @@ namespace Triband.Storey.Edit
 
         /// <summary>
         /// Paste: rooms <see cref="CopyRooms"/> copied, in place of storey k's, as copy up put a floor's in place of those above.
-        /// Walls that fall outside the storey are kept and not built, as any are (the problem list says so). False, with
+        /// Walls that fall outside the storey are kept and not built, as any are. False, with
         /// nothing changed, when the text isn't rooms or there is no storey k.
         /// </summary>
         public static bool PasteRooms(BuildingData b, int k, string rooms)

@@ -160,7 +160,10 @@ namespace Triband.Storey.Generate
         /// <param name="rooms">LOD0: the walls' inner faces are the rooms' (<see cref="MeshBuilder.Inside"/>).</param>
         /// <param name="buried">LOD0: where the storey's room walls run into the inner faces (<see cref="Facade.PanelOpt.buried"/>).</param>
         /// <param name="live">LOD0: where its door's Open prefab goes live (<see cref="LiveDoor"/>), on a storey walked in.</param>
-        public static void Walls(MeshBuilder op, MeshBuilder? gl, List<Seg>? sg, BuildingData b, VoidData v, int k, Palette C, bool rooms = false, Func<Vec2, Vec2, List<(double, double)>?>? buried = null, List<LiveDoor>? live = null)
+        /// <param name="gone">LOD0: what of the inner faces faces into a room built one solid with its walls, left out (<see cref="Facade.PanelOpt.gone"/>).</param>
+        /// <param name="blocked">LOD0: storey k's rooms blocked out (<see cref="Rooms.Blocked"/>): a window or door into one is shut, as on the outside walls.</param>
+        public static void Walls(MeshBuilder op, MeshBuilder? gl, List<Seg>? sg, BuildingData b, VoidData v, int k, Palette C, bool rooms = false, Func<Vec2, Vec2, List<(double, double)>?>? buried = null, List<LiveDoor>? live = null,
+            Func<Vec2, Vec2, List<(double, double)>?>? gone = null, List<Rooms.Room>? blocked = null)
         {
             var g = RingOf(b, v); int n = g.Wp.Count; double T = Dim.T_EXT, y = Derived.FloorBase(b, k), h = Derived.FloorH(b, k);
             bool shell = Derived.ShellAt(b, k), lod1 = gl == null, bands = Facade.BandAt(b, k);
@@ -168,6 +171,9 @@ namespace Triband.Storey.Generate
             {
                 var e = Geo.EdgeInfo(g.Wp, i, g.flag); var F = e.F; var m = Geo.MiterOf(g.cor, i, e.L); var (uS, uE) = Facade.Span(m, e.L);
                 var ops = Ops(b, v, k, i, e.L, uS, uE);
+                // a window or door into a room blocked out is shut, as a filled storey's (Opening.closed)
+                if (!lod1 && blocked != null && blocked.Count > 0)
+                    foreach (var o in ops) { var p = F.At2((o.u0 + o.u1) / 2, -0.2); if (Rooms.InBlocked(blocked, p.x - b.pos.x, p.z - b.pos.z)) o.closed = true; }
                 var wc = Geo.WallCtx(e.a, e.u, e.w, e.L);
                 op.Ctx(wc, 1); gl?.Ctx(wc, 1);
                 if (lod1)
@@ -178,7 +184,9 @@ namespace Triband.Storey.Generate
                 }
                 else
                 {
-                    Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.inner, new Facade.PanelOpt { inner = !shell, threshold = k == v.bottom, revealFrom = shell ? Facade.PaneW(Derived.StyleAt(b, k), false) : 0, doorRevealFrom = shell ? Facade.PaneW(Derived.StyleAt(b, k), true) : (double?)null, rooms = rooms, buried = buried });
+                    var stk = Derived.StyleAt(b, k); bool shut = !shell && blocked != null && blocked.Count > 0;
+                    Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.inner, new Facade.PanelOpt { inner = !shell, threshold = k == v.bottom, revealFrom = shell ? Facade.PaneW(stk, false) : 0, doorRevealFrom = shell ? Facade.PaneW(stk, true) : (double?)null, rooms = rooms, buried = buried,
+                        gone = gone, shutFrom = shut ? Facade.PaneW(stk, false) : (double?)null, shutDoorFrom = shut ? Facade.PaneW(stk, true) : (double?)null });
                     Facade.Dress(op, gl!, F, ops, y, C, shell, Derived.StyleAt(b, k), live: live, rooms: rooms);
                     if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
                 }

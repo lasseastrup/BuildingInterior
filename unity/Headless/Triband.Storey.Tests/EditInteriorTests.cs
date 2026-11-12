@@ -90,7 +90,7 @@ namespace Triband.Storey.Tests
 
         /// <summary>A wall wholly over a setback's terrace builds nothing: the editor refuses it, the problem list flags one.</summary>
         [Fact]
-        public void AWallOnTheTerraceIsRefusedAndFlagged()
+        public void AWallOnTheTerraceIsRefused()
         {
             var d = new StoreyDocument();
             var b = Buildings.Add(d, "rect", new Vec2(0, 0));   // 12 × 9 m
@@ -101,9 +101,6 @@ namespace Triband.Storey.Tests
             Assert.True(Walls.Inside(b, 2, new Vec2(0, 2), new Vec2(6, 2)));        // from wall to wall
             Assert.False(Walls.Inside(b, 2, new Vec2(8, 2), new Vec2(11, 6)));      // wholly on the terrace
             Assert.True(Walls.Inside(b, 1, new Vec2(8, 2), new Vec2(11, 6)));       // the storey below has room there
-            b.floors[2].walls.Add(new WallData { a = new Vec2(8, 2), b = new Vec2(11, 6) });
-            var site = new Site(d.buildings);
-            Assert.Contains(Validate.Problems.Check(site), p => p.code == "wall-outside" && p.k == 2);
         }
     }
 }

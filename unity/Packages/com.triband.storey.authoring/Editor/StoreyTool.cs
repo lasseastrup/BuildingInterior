@@ -89,7 +89,6 @@ namespace Triband.Storey.Editor
                 else Hint("Click a building to select it.");
                 DefaultClick(e, e.Selected, sv);
                 SelectionGlow(e);
-                StoreyProblems.Draw(e);
                 StoreyJuice.Draw();
             }
             var shown = site.View;

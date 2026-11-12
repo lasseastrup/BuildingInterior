@@ -106,10 +106,8 @@ namespace Triband.Storey.Tests
             var fp = b.footprint; var a = fp[e.edge]; var c = fp[(e.edge + 1) % fp.Count];
             var mid = new Vec2((a.x + c.x) / 2, (a.z + c.z) / 2);
             Assert.True(mid.z < Middle.z - 11 && Math.Abs(mid.x - Middle.x) < 3, $"the door's wall's middle {mid}");
-            var site = new Site(d.buildings);
-            Assert.Equal(1, Doors(b, site));
-            // walked in: the ground floor is reached by it (the floors above have no stairs)
-            Assert.DoesNotContain(Problems.Check(site), p => p.code.StartsWith("unreached") && p.k == 0);
+            // built: the way in to the walk-in ground floor
+            Assert.Equal(1, Doors(b, new Site(d.buildings)));
         }
 
         [Fact]
