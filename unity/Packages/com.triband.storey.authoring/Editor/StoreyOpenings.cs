@@ -252,7 +252,10 @@ namespace Triband.Storey.Editor
             string lod1 = k.lod1 == null ? "; LOD1 shows the plain pane"
                 : $"; LOD1 {c.lod1Tris}{(o.door ? "" : k.lod1OnWall ? ", on the flat wall" : ", in a hole cut in the wall")}{(k.lod1Covers ? "" : $" with the plain {(o.door ? "door" : "pane")} where it leaves the hole open")}";
             string slices = (o.slice || !o.stretch) && o.borders != Vector4.zero ? $" Slice lines {o.borders.x:0.00}, {o.borders.y:0.00}, {o.borders.z:0.00} and {o.borders.w:0.00} m in from its sides." : "";
-            EditorGUILayout.HelpBox($"{c.tris} triangles ({what}){lod1}. The hole is {o.size.x:0.00} × {o.size.y:0.00} m, from {o.holeFrom}.{slices} Every {(o.door ? "street door" : "window")} of a style that picks it gets one.", MessageType.None);
+            // where the rooms see it from inside too: the backs of what they see behind it, its glass both faces, a door's leaf
+            // left out (a door with an Open prefab is that prefab there)
+            string walkIn = o.door && o.openPrefab != null ? "" : $"; {c.walkInTris} on a walk-in storey, seen from inside too";
+            EditorGUILayout.HelpBox($"{c.tris} triangles ({what}){walkIn}{lod1}. The hole is {o.size.x:0.00} × {o.size.y:0.00} m, from {o.holeFrom}.{slices} Every {(o.door ? "street door" : "window")} of a style that picks it gets one.", MessageType.None);
             Warnings(o, k, c);
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -263,7 +266,7 @@ namespace Triband.Storey.Editor
             if (trials.TryGetValue(o, out var t))
             {
                 string flicker = t.overlaps.Count == 0 ? "No faces overlap." : $"{t.overlaps.Count} pair{(t.overlaps.Count == 1 ? "" : "s")} of faces overlap and flicker, the first at {t.overlaps[0].At}.";
-                EditorGUILayout.HelpBox($"On a 20 × 12 m block of six storeys: LOD0 {t.lod0:N0} triangles ({t.plainLod0:N0} with the built-in ones), LOD1 {t.lod1:N0} ({t.plainLod1:N0}). {flicker}", t.overlaps.Count == 0 ? MessageType.Info : MessageType.Warning);
+                EditorGUILayout.HelpBox($"On a 20 × 12 m block of six storeys: LOD0 {t.lod0:N0} triangles ({t.plainLod0:N0} with the built-in ones), walked in {t.walkIn:N0} ({t.plainWalkIn:N0}), LOD1 {t.lod1:N0} ({t.plainLod1:N0}). {flicker}", t.overlaps.Count == 0 ? MessageType.Info : MessageType.Warning);
             }
         }
 

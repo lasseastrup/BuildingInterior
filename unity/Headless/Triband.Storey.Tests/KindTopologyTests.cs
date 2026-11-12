@@ -26,7 +26,7 @@ namespace Triband.Storey.Tests
         // ---- the kinds ----
 
         /// <summary>The converted scenes' kinds, by name: each number the float it was.</summary>
-        static Dictionary<string, OpeningKind> Converted()
+        internal static Dictionary<string, OpeningKind> Converted()
         {
             static double F(JsonElement e) => (double)float.Parse(e.GetRawText(), CultureInfo.InvariantCulture);
             static P3[] Ps(JsonElement e) => e.EnumerateArray().Select(p => new P3(F(p[0]), F(p[1]), F(p[2]))).ToArray();

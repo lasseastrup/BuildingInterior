@@ -179,7 +179,7 @@ namespace Triband.Storey.Generate
                 else
                 {
                     Facade.WallPanel(op, F, m, 0, T, y, h, ops, C.wall, C.inner, new Facade.PanelOpt { inner = !shell, threshold = k == v.bottom, revealFrom = shell ? Facade.PaneW(Derived.StyleAt(b, k), false) : 0, doorRevealFrom = shell ? Facade.PaneW(Derived.StyleAt(b, k), true) : (double?)null, rooms = rooms, buried = buried });
-                    Facade.Dress(op, gl!, F, ops, y, C, shell, Derived.StyleAt(b, k), live: live);
+                    Facade.Dress(op, gl!, F, ops, y, C, shell, Derived.StyleAt(b, k), live: live, rooms: rooms);
                     if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
                 }
                 if (bands)

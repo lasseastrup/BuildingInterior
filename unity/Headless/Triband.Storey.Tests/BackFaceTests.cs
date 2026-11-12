@@ -27,7 +27,7 @@ namespace Triband.Storey.Tests
 
         const int Rays = 4000;
 
-        sealed class Layout
+        internal sealed class Layout
         {
             public StoreyDocument Doc = null!;
             public List<Lod0Result> L0 = null!;
@@ -42,7 +42,7 @@ namespace Triband.Storey.Tests
             ["city"] = new Lazy<Layout>(() => { var d = new StoreyDocument(); TestCity.Generate(d, 40, walkIn: true); return Make(d); }),
         };
 
-        static Layout Make(StoreyDocument d)
+        internal static Layout Make(StoreyDocument d)
         {
             var site = new Site(d.buildings);
             return new Layout { Doc = d, L0 = d.buildings.Select(b => Lod0.Build(site, b)).ToList(), L1 = d.buildings.Select(b => Lod1.Build(site, b)).ToList(), L2 = d.buildings.Select(b => Lod2.Build(site, b)).ToList() };
@@ -76,7 +76,7 @@ namespace Triband.Storey.Tests
         }
 
         /// <summary>The holes culling makes from outside: rays whose first hit is a back face with no front face close behind; and rays meeting a room first.</summary>
-        static (int holes, int rooms, int rays, List<string> where) Look(Layout l, View view)
+        internal static (int holes, int rooms, int rays, List<string> where) Look(Layout l, View view)
         {
             var sc = Scene(l, view); var rng = new Random(5); int holes = 0, rooms = 0, rays = 0; var where = new List<string>();
             int n = l.Doc.buildings.Count;

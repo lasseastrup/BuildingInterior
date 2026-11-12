@@ -195,6 +195,7 @@ On the block above, a two-triangle sill in front of the wall makes LOD1 1,448 tr
 - **Holes that aren't rectangles** (arched or round). `WallPanel` already cuts holes as polygons, but the reveals, the merging of neighbouring openings, LOD1's flat pane and LOD2's painted windows are all rectangles. Meanwhile, an arched surround in front of a rectangular hole looks the same from the street.
 - **Doors of their own size**, after §4.1: the entrance tools, courtyards and walls would take the width from the door kind instead of `Dim.DOOR_EXT`.
 - ~~**Several windows a style**~~: built, §7.1.
+- **Dressing only the rooms see** (a window board, an inner architrave). §7.3 gives a window's inside the frame seen from behind, and nothing more. If a window wants its own inside, its objects would go in the same prefab, listed on the Storey Cutout as the leaf is, drawn only where the rooms see them, rather than in a second prefab (§7.3).
 
 ### 7.1 Several windows and doors a style (built)
 
@@ -230,6 +231,27 @@ A door's *Open prefab* (`StoreyOpening.openPrefab`) is the door as it stands whe
 - **Where:** every door LOD0 makes that the player walks through: a walk-in storey's street, terrace and courtyard doors, and a door set in a room wall (`DoorData.door`). The kind says it has one (`OpeningKind.live`); there LOD0 draws none of it, and records where its own space lies (`LiveDoor`: the hole's bottom middle on the wall's face, +X across as `KindPlace` puts the mesh, +Z out, the width and height it fills, and whether it is in the rooms) in `Lod0Shape.Doors`. Shut doors (shell and filled storeys, a blocked room's) are drawn as before, and LOD1 and LOD2 draw the closed door.
 - **Placed:** `SiteRenderer` instantiates the prefab for each when the LOD0 is up, as a Storey Prop under the site, and destroys them with it. Its root goes where the door's own space puts it: the bake keeps the root's place in that space (`openOffset`, from its own Storey Cutout or the door's hole) and its hole's size (`openSize`), and the instance is scaled across and up as the doorway is to that hole.
 - **Shown:** with the LOD0; an interior door also with the rooms (`RoomsDraw`), which are left out when LOD0's far windows paint over them.
+
+### 7.3 Seen from inside (built)
+
+The converted windows were made for the street alone: no faces turned to the building (the converted window has none of its 278), because none could be seen. A walk-in storey's rooms see them from behind, and saw holes: a steady building culls back faces, and a cut one, the building the player is in, draws them in the section cap's colour. From its rooms, half the rays that met the converted window met a face's back.
+
+**Decision: no second prefab.** A *walk-in prefab* beside *Prefab* was considered: the artist models each window's inside and the generator places that one on walk-in storeys. It was turned down:
+- What the rooms see of a window is the same frame, sash and bars seen from behind. Storey can make that from the one prefab.
+- A second prefab must fill the same hole and be cut at the same slice lines (§4.3), its keep-shape objects anchored alike, its materials the same parts. Two prefabs drift apart, and a frame would change width between a walk-in ground floor and the shell storeys over it.
+- Every existing window would stay broken from inside until someone made its second prefab.
+- It would cost the same triangles, or more.
+
+**What is built** (`KindPart.Backs`, `KindSight`; Storey's own): wherever LOD0 places a window or door on a storey with rooms, a courtyard's walls and doors in room walls too (`OpeningKinds.Place` where it isn't shut), it also places the back of what the rooms see behind it:
+- **Which faces:** those over the hole, and those on one of its sides in front of the wall turned away from the hole (a member's side standing proud, seen through the member). Not those turned to the rooms, already seen from the front, nor anything round the hole (shutters, a sill, a surround), which the wall hides from the rooms.
+- **Seen from the rooms:** rays from just behind a face, from a lattice of points on it at most 2 cm apart, go into the building straight and aslant. A ray that gets behind all of the window, within the hole and past none of it, reaches the rooms. Glass doesn't stop a ray (see-through there) and neither does a door's leaf (left out there). So a window made whole, its members closed, gets no backs, and a window open behind gets backs only where it is open. Worked out once a mesh, on first use (`KindSight`, cached on the mesh), and once a part (`KindPart.Backs`, cached like its other forms).
+- **The back:** the face wound the other way, its normal turned, in its part's colour, set half a millimetre behind the face along its winding (`KindPart.BackOff`). A cut building draws both sides of every face, and two faces back to back would flicker. It stays inside any member the artist models, and a ray slipping in between a face and its back at an open edge is a sliver no wider.
+- **Kept with:** the faces only Unity draws (`MeshBuilder.Backing`), and the rooms (`MeshBuilder.Inside`) where the storey keeps them apart. Where a window's clear glass shows the rooms at any distance, they and the backs stay with the shell.
+- **Not:** shell and filled storeys, LOD1 and LOD2, a window shut into a room blocked out, and a door's Open prefab (the prefab is the artist's) build exactly as before. Glass on a walk-in storey was already drawn both ways. An interior door's opaque glass gets its back with the rest.
+
+**Cost:** the converted window gets 20 backs for its 278 opaque triangles (7 %), worked out in 15 ms; the converted double door gets 92 for its 199. Only LOD0 walk-in storeys draw them. The inspector gives a window's triangles on a walk-in storey (`OpeningKinds.Checked.walkInTris`), and *Check on a building* the block walked in (`KindTrial.Result.walkIn`).
+
+**Checked** (`OpeningBackTests`): rays from each storey's room of a walk-in block meet no window's back face, slivers aside, with a street-only window made for the test and with the converted window (the converted window had 245 of 523 before). Through a walk-in city's clear glass from outside (`BackFaceTests`' rays), none either (33 near and 49 far before). Each back lies just behind the face it backs, turned the other way. A shell building's windows are as made. A window made whole gets none. Nothing round the hole gets one. The backs go with the rooms where they are kept apart. Nothing flickers (`CoplanarCheck`).
 
 ## 8. Order of work
 

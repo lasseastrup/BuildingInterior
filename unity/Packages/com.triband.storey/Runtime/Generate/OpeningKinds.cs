@@ -38,6 +38,8 @@ namespace Triband.Storey.Generate
         {
             public P3[] P = Array.Empty<P3>(), N = Array.Empty<P3>();
             public List<Part> parts = new List<Part>();
+            // what a storey's rooms see of it from behind (KindPart.Backs): made once, on first use
+            internal KindSight? sight;
         }
 
         public string id = "", name = "";
@@ -191,6 +193,11 @@ namespace Triband.Storey.Generate
         public sealed class Checked
         {
             public int tris, lod1Tris;
+            /// <summary>
+            /// Its LOD0 triangles on a storey with rooms, where it is seen from inside too: a door's leaf left out, its glass
+            /// both faces, and the backs of what the rooms see from behind (<see cref="KindPart.Backs"/>).
+            /// </summary>
+            public int walkInTris;
             /// <summary>The share of the hole nothing covers as seen from the street, 0 to 1: on a shell storey that shows into the building.</summary>
             public double uncovered;
             /// <summary>Something reaches behind the wall's back, into the rooms.</summary>
@@ -209,6 +216,8 @@ namespace Triband.Storey.Generate
             var c = new Checked();
             var m = k.lod0; var P = m.P;
             foreach (var part in m.parts) c.tris += part.tris.Length / 3;
+            foreach (var part in m.parts)
+                if (!part.leaf) c.walkInTris += part.slot == ColorSlot.Glass ? 2 * (part.tris.Length / 3) : part.tris.Length / 3 + KindPart.Of(k, m, part).Backs.Tris;
             if (k.lod1 != null) foreach (var part in k.lod1.parts) c.lod1Tris += part.tris.Length / 3;
             foreach (var part in m.parts)
             {
@@ -282,7 +291,9 @@ namespace Triband.Storey.Generate
         /// whole <paramref name="deep"/> metres in (<see cref="Facade.Whole"/>), what the recess buries in it is left out
         /// (Storey's own: a frame made to lie on the wall's face, pushed back, is in the wall).
         /// </summary>
-        public static void Place(MeshBuilder op, MeshBuilder? gl, Frame F, OpeningKind k, OpeningKind.Mesh m, double u0, double u1, double y0, double y1, Palette C, bool shell, double back = 0, double deep = 0)
+        /// <param name="rooms">On a storey with rooms (not <paramref name="shell"/>), where it is seen from inside too, the backs of
+        /// what the rooms see of it from behind are the rooms' (<see cref="Backs"/>).</param>
+        public static void Place(MeshBuilder op, MeshBuilder? gl, Frame F, OpeningKind k, OpeningKind.Mesh m, double u0, double u1, double y0, double y1, Palette C, bool shell, double back = 0, double deep = 0, bool rooms = false)
         {
             var fitted = At(back != 0 ? new Frame(new Vec2(F.O.x - F.w.x * back, F.O.z - F.w.z * back), F.u, F.w) : F, k, u0, u1, y0, y1);
             foreach (var whole in m.parts)
@@ -298,6 +309,8 @@ namespace Triband.Storey.Generate
                         // a door's glass shows a room too, as the project's Window shader shows one behind the old generator's doors
                         int first = part.Put(op, at, C.glassDark, false, back, d);
                         Facade.PaneUV(op, first, F, u0, u1, y0, y1);
+                        // a door in a room wall (no see-through glass there) is seen from the room behind it too
+                        if (!shell) { first = Backs(op, part, at, C.glassDark, back, d, rooms); Facade.PaneUV(op, first, F, u0, u1, y0, y1); }
                     }
                     else
                     {
@@ -306,8 +319,25 @@ namespace Triband.Storey.Generate
                     }
                     continue;
                 }
-                part.Put(op, at, new Swatch(C.style, whole.ownSlot ?? whole.slot), false, back, d);
+                var c = new Swatch(C.style, whole.ownSlot ?? whole.slot);
+                part.Put(op, at, c, false, back, d);
+                if (!shell) Backs(op, part, at, c, back, d, rooms);
             }
+        }
+
+        /// <summary>
+        /// On a storey with rooms, part <paramref name="part"/>'s back where they see it (<see cref="KindPart.Backs"/>): a
+        /// window or door made for the street alone has none, and seen from inside its frame showed as holes. Backs that close
+        /// what a renderer culling back faces would leave open (<see cref="MeshBuilder.Backing"/>); with the rooms
+        /// (<paramref name="rooms"/>, <see cref="MeshBuilder.Inside"/>) where the storey keeps them apart, as nothing else
+        /// shows them. Returns the first new vertex. Storey's own.
+        /// </summary>
+        static int Backs(MeshBuilder op, KindPart part, in KindPlace at, Swatch c, double back, double deep, bool rooms)
+        {
+            bool was = op.Backing, wasIn = op.Inside; op.Backing = true; op.Inside = wasIn || rooms;
+            int first = part.PutBacks(op, at, c, back, deep);
+            op.Inside = wasIn; op.Backing = was;
+            return first;
         }
     }
 }

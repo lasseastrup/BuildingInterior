@@ -553,8 +553,10 @@ namespace Triband.Storey.Generate
         /// <param name="live">Takes the artist's doors the player walks through (on a storey with rooms, not shut) that have an Open
         /// prefab (<see cref="OpeningKind.live"/>): none of such a door is drawn, its prefab goes live in the doorway at LOD0
         /// (<see cref="LiveDoor"/>). Not given, or without one, the door is drawn, its leaf left out. Storey's own.</param>
+        /// <param name="rooms">The backs of the artist's windows and doors the rooms see from behind are the rooms'
+        /// (<see cref="OpeningKinds.Place"/>, <see cref="MeshBuilder.Inside"/>).</param>
         public static void Dress(MeshBuilder op, MeshBuilder gl, Frame F, List<Opening> ops, double y, Palette C, bool shell, FacadeStyle? st = null, Swatch? wall = null,
-            PanelOpt? panel = null, Miter piece = default, double h = 0, List<LiveDoor>? live = null)
+            PanelOpt? panel = null, Miter piece = default, double h = 0, List<LiveDoor>? live = null, bool rooms = false)
         {
             var wc = wall ?? C.wall;   // the storey's wall colour, for the backs of recesses
             if (op.ShapeOnly) return;   // faces only: no walls numbered, no segments
@@ -581,13 +583,13 @@ namespace Triband.Storey.Generate
                     double back = o.recess.HasValue ? KindBack(st, o) : db;
                     // walked through, a door with an Open prefab is that prefab, live: none of it drawn here
                     bool swap = !sh && kk.live && live != null;
-                    if (!swap) OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0 + o.hl, o.u1 - o.hr, y, y + o.y1 - o.ht, C, sh, back, deep);
+                    if (!swap) OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0 + o.hl, o.u1 - o.hr, y, y + o.y1 - o.ht, C, sh, back, deep, rooms);
                     if (sh) { HoleBack(op, F, o, y, C, st, wc); continue; }
                     op.SeeThrough++;   // its leaf is left out (or all of it, its Open prefab there instead)
                     if (swap) live!.Add(LiveDoor.Of(kk, back != 0 ? new Frame(new Vec2(F.O.x - F.w.x * back, F.O.z - F.w.z * back), F.u, F.w) : F, o.u0 + o.hl, o.u1 - o.hr, y, y + o.y1 - o.ht));
                     continue;
                 }
-                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, sh, wb, deep); if (sh) HoleBack(op, F, o, y, C, st, wc); continue; }
+                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, sh, wb, deep, rooms); if (sh) HoleBack(op, F, o, y, C, st, wc); continue; }
                 if (o.door)
                 {
                     // the generator's door: the wall's recess, with a flat panel at its back where the doorway is closed

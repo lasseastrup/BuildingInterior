@@ -527,7 +527,7 @@ namespace Triband.Storey.Generate
                     var stk = Derived.StyleAt(b, k);
                     Facade.WallPanel(op, F, pm, 0, T, y, h, ops, party ? pc.r!.pInner : Wall(stk, C, k == 0), C.inner, Panel.Set(inner: !shell, threshold: k == 0, revealFrom: shell ? Facade.ShellRevealFrom(stk, false, OpeningSets.Representative(stk, k == 0, out var rk) ? rk : null) : 0, rooms: rooms,
                         doorRevealFrom: shell ? Facade.ShellRevealFrom(stk, true, OpeningKinds.Of(stk, true)) : (double?)null, thresholdC: k == 0 ? C.foundation : (Swatch?)null, doorsRecessed: stk.doorRecess.HasValue, buried: into));
-                    Facade.Dress(op, gl, F, ops, y, C, shell, stk, Wall(stk, C, k == 0), Panel, pm, h, Live);
+                    Facade.Dress(op, gl, F, ops, y, C, shell, stk, Wall(stk, C, k == 0), Panel, pm, h, Live, rooms);
                     if (!shell) Facade.SlabEdges(op, F, ops, y, h, C.slabSide, rooms);
                     if (!party) { op.Ctx(wc, 1); PieceStrips(op, k, F, m, pc, ops, y, h, C, rooms && !shell); }
                     var (cs, ce) = pm.Span(T / 2, T / 2);

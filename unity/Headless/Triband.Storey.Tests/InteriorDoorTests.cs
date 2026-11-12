@@ -143,12 +143,17 @@ namespace Triband.Storey.Tests
                 Assert.Equal(2.05, o.y1, 9);
                 var r = Lod0.Build(new Site(d.buildings), b);
                 var op = r.Op; var here = AtDoor(op, b);
-                // its frame 0.9 m wide, 10 cm into the wall from the face it faces: the wall's left, the west
-                var frame = here.Where(v => op.C[v].slot == ColorSlot.Frame).Select(v => op.P[v]).ToList();
-                Assert.NotEmpty(frame);
+                // its frame 0.9 m wide, 10 cm into the wall from the face it faces: the wall's left, the west; and its back,
+                // which the east room sees, half a millimetre behind it, turned east (KindPart.Backs)
+                var frame = here.Where(v => op.C[v].slot == ColorSlot.Frame && op.N[v].x < -0.5).Select(v => op.P[v]).ToList();
+                var back = here.Where(v => op.C[v].slot == ColorSlot.Frame && op.N[v].x > 0.5).Select(v => op.P[v]).ToList();
+                Assert.NotEmpty(frame); Assert.NotEmpty(back);
+                Assert.Equal(here.Count(v => op.C[v].slot == ColorSlot.Frame), frame.Count + back.Count);
                 Assert.Equal(0.9, frame.Max(p => p.z) - frame.Min(p => p.z), 6);
                 Assert.Equal(2.05, frame.Max(p => p.y) - Derived.FloorBase(b, 1), 6);
                 Assert.All(frame, p => Assert.Equal(6 - Dim.T_INT / 2 + 0.1, p.x, 6));
+                Assert.All(back, p => Assert.Equal(6 - Dim.T_INT / 2 + 0.1 + KindPart.BackOff, p.x, 6));
+                Assert.Equal(0.9, back.Max(p => p.z) - back.Min(p => p.z), 6);
                 // its leaf left out, and no casing round it (a doorway's)
                 Assert.DoesNotContain(here, v => op.C[v].slot == ColorSlot.Door);
                 Assert.DoesNotContain(here, v => op.C[v].slot == ColorSlot.Interior && Math.Abs(op.C[v].tone - 0.72) < 1e-9);
@@ -157,12 +162,14 @@ namespace Triband.Storey.Tests
                 Assert.Contains(AtDoor(op0, b0), v => op0.C[v].slot == ColorSlot.Interior && Math.Abs(op0.C[v].tone - 0.72) < 1e-9);
                 // no Open prefab: nothing goes live
                 Assert.Empty(r.Doors);
-                // facing the other way, its frame 10 cm in from the east face
+                // facing the other way, its frame 10 cm in from the east face, its back turned west
                 b.floors[1].walls[0].doors[0].flip = true;
                 var opf = Lod0.Build(new Site(d.buildings), b).Op;
-                var ff = AtDoor(opf, b).Where(v => opf.C[v].slot == ColorSlot.Frame).Select(v => opf.P[v]).ToList();
-                Assert.NotEmpty(ff);
+                var ff = AtDoor(opf, b).Where(v => opf.C[v].slot == ColorSlot.Frame && opf.N[v].x > 0.5).Select(v => opf.P[v]).ToList();
+                var fb = AtDoor(opf, b).Where(v => opf.C[v].slot == ColorSlot.Frame && opf.N[v].x < -0.5).Select(v => opf.P[v]).ToList();
+                Assert.NotEmpty(ff); Assert.NotEmpty(fb);
                 Assert.All(ff, p => Assert.Equal(6 + Dim.T_INT / 2 - 0.1, p.x, 6));
+                Assert.All(fb, p => Assert.Equal(6 + Dim.T_INT / 2 - 0.1 - KindPart.BackOff, p.x, 6));
                 Assert.Equal(0.9, ff.Max(p => p.z) - ff.Min(p => p.z), 6);
             }
             finally { OpeningKinds.Remove("idoor-frame"); }

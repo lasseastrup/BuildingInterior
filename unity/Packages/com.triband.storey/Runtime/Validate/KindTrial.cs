@@ -17,6 +17,11 @@ namespace Triband.Storey.Validate
         {
             /// <summary>The block's triangles with the kind (a shell building), and with the generator's own windows and doors.</summary>
             public int lod0, lod1, plainLod0, plainLod1;
+            /// <summary>
+            /// The block walked in (rooms behind every window, which see the kind from behind too: <see cref="KindPart.Backs"/>):
+            /// LOD0's triangles with the kind, and with the generator's own windows and doors.
+            /// </summary>
+            public int walkIn, plainWalkIn;
             /// <summary>How many of a facade detail the block has (<see cref="Run(DetailKind)"/>).</summary>
             public int placed;
             public readonly List<CoplanarCheck.Overlap> overlaps = new List<CoplanarCheck.Overlap>();
@@ -43,8 +48,9 @@ namespace Triband.Storey.Validate
                 return (l0.Op.Tris + l0.Glass.Tris, l1.Tris);
             }
             (r.lod0, r.lod1) = Build(true, false, true);
-            Build(true, true, true);
+            (r.walkIn, _) = Build(true, true, true);
             (r.plainLod0, r.plainLod1) = Build(false, false, false);
+            (r.plainWalkIn, _) = Build(false, true, false);
             return r;
         }
 
