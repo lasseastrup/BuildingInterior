@@ -589,7 +589,8 @@ namespace Triband.Storey.Generate
                     if (swap) live!.Add(LiveDoor.Of(kk, back != 0 ? new Frame(new Vec2(F.O.x - F.w.x * back, F.O.z - F.w.z * back), F.u, F.w) : F, o.u0 + o.hl, o.u1 - o.hr, y, y + o.y1 - o.ht));
                     continue;
                 }
-                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, kk.lod0, o.u0, o.u1, y + o.y0, y + o.y1, C, sh, wb, deep, rooms); if (sh) HoleBack(op, F, o, y, C, st, wc); continue; }
+                // a window the rooms see is its version for rooms where it has one (OpeningKind.inside)
+                if (!o.door && kk != null) { OpeningKinds.Place(op, gl, F, kk, OpeningKinds.Lod0Of(kk, sh), o.u0, o.u1, y + o.y0, y + o.y1, C, sh, wb, deep, rooms); if (sh) HoleBack(op, F, o, y, C, st, wc); continue; }
                 if (o.door)
                 {
                     // the generator's door: the wall's recess, with a flat panel at its back where the doorway is closed

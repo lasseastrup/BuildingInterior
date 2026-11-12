@@ -389,6 +389,33 @@ namespace Triband.Storey.Generate
         // what of it the rooms see from behind (Backs): made once, on first use
         KindPart? backs;
 
+        // its triangles turned to the rooms, [1], and the rest, [0] (Turned): made once, on first use
+        KindPart[]? sides;
+
+        /// <summary>
+        /// Its triangles turned to the rooms (<paramref name="rooms"/>), facing more into the building than across it as
+        /// <see cref="Backs"/> has them, or the rest: an opening's version for rooms (<see cref="OpeningKind.inside"/>), made for
+        /// both sides, puts those with the rooms, which alone see them. Itself where all of it is one or the other.
+        /// </summary>
+        internal KindPart Turned(bool rooms)
+        {
+            var two = Volatile.Read(ref sides);
+            if (two == null)
+            {
+                var into = new List<int>(); var rest = new List<int>(t.Length);
+                for (int i = 0; i + 2 < t.Length; i += 3)
+                {
+                    P3 a = p[t[i]], b = p[t[i + 1]], c = p[t[i + 2]];
+                    var cr = P3.Cross(b - a, c - a); double l = cr.Length;
+                    var to = l > 0 && cr.z < -0.5 * l ? into : rest;
+                    to.Add(t[i]); to.Add(t[i + 1]); to.Add(t[i + 2]);
+                }
+                two = new[] { rest.Count == t.Length ? this : Keep(rest, p, n), into.Count == t.Length ? this : Keep(into, p, n) };
+                Volatile.Write(ref sides, two);
+            }
+            return two[rooms ? 1 : 0];
+        }
+
         /// <summary>
         /// How far behind a face its back lies (<see cref="Backs"/>), metres: off it, as a cut building draws both sides of
         /// every face and two back to back would flicker (docs/PERFORMANCE.md §7.1), yet within the thinnest member an artist
@@ -468,14 +495,16 @@ namespace Triband.Storey.Generate
         /// Into <paramref name="m"/> where <paramref name="at"/> puts it: front faces as made, or (<paramref name="inside"/>)
         /// wound the other way with the normals turned. At its own size its cuts are joined (<see cref="Join"/>); pushed
         /// <paramref name="back"/> metres into a wall known to be whole <paramref name="deep"/> metres in round the hole, what
-        /// that buries is left out (<see cref="Buried"/>). Returns the first new vertex.
+        /// that buries is left out (<see cref="Buried"/>). Given <paramref name="turned"/>, only its triangles turned to the
+        /// rooms, or only the rest (<see cref="Turned"/>). Returns the first new vertex.
         /// </summary>
-        public int Put(MeshBuilder m, in KindPlace at, Swatch c, bool inside = false, double back = 0, double deep = 0)
+        public int Put(MeshBuilder m, in KindPlace at, Swatch c, bool inside = false, double back = 0, double deep = 0, bool? turned = null)
         {
             int bse = m.Verts;
             if (m.ShapeOnly) return bse;
             var k = at.OwnSize ? AtOwnSize : this;
             if (deep > 0) k = k.Buried(back, deep);
+            if (turned is bool tr) k = k.Turned(tr);
             var p = k.p; var n = k.n; var t = k.t; var tt = inside ? k.Back : t;
             if (k.twinAt == null)
             {

@@ -14,8 +14,9 @@ namespace Triband.Storey.Unity
     ///
     /// A prefab: every object under it with a mesh, where it is in the prefab (docs/OPENINGS.md §3); its Storey Cutout says
     /// where the hole is, so its pivot can be anywhere. A mesh: its pivot at the bottom middle of the hole. Either way +Y up, +Z out of the wall (Z 0 on the wall's outer face, negative into the reveal), metres.
-    /// Make it for the street alone: where a storey's rooms see it from behind, LOD0 draws the back of what they see
-    /// (docs/OPENINGS.md §7.3), so a walk-in building needs no prefab of its own.
+    /// A window can have a version of its own for buildings with interiors (<c>interiorPrefab</c>): where a storey's
+    /// rooms see it, LOD0 places that one instead, as it is. Without one, make it for the street alone: there LOD0 draws the
+    /// back of what the rooms see of it (docs/OPENINGS.md §7.3).
     /// Each part (a prefab's material, a mesh's submesh) takes one of the style's colours (<see cref="parts"/>): the
     /// materials themselves aren't used, as the building's colours come from the palette. The geometry is baked in when it
     /// is set (<c>Bake</c>), and the prefab and mesh references are the editor's: they don't ship in a build.
@@ -69,9 +70,16 @@ namespace Triband.Storey.Unity
         public Mesh? mesh;
         [Tooltip("LOD1's mesh (the shell seen from further away): something much simpler, or none for LOD1's plain pane.")]
         public Mesh? lod1Mesh;
+        [Tooltip("A window's: the version used on buildings with interiors, wherever a storey's rooms see it (at LOD0): the window made for both sides, round the same hole (its Storey Cutout as the prefab's). Placed as it is. None: the prefab there too, with the back of what the rooms see of it drawn for it.")]
+        public GameObject? interiorPrefab;
+        [Tooltip("A window's: the version used on buildings with interiors, wherever a storey's rooms see it (at LOD0), as one mesh: pivot at the bottom middle of the same hole, +Z out of the wall, made for both sides. None: the mesh there too, with the back of what the rooms see of it drawn for it.")]
+        public Mesh? interiorMesh;
         // what the last bake found, for the inspector
         [SerializeField, HideInInspector] internal string holeFrom = "", notes = "";
         [SerializeField, HideInInspector] internal int objects, hiddenFaces, wallFaces;
+        // the version for interiors' hole and slice lines, as its Storey Cutout has them (or the prefab's, without one)
+        [SerializeField, HideInInspector] internal Vector2 interiorHole;
+        [SerializeField, HideInInspector] internal Vector4 interiorBorders;
 #endif
         [Tooltip("It was made facing −Z: turn it round.")]
         public bool facesBack;
@@ -86,9 +94,9 @@ namespace Triband.Storey.Unity
         [Tooltip("The slice lines, in from the hole's left, right, bottom and top (x, y, z, w), metres: a prefab's from its Storey Cutout.")]
         public Vector4 borders;
 
-        [SerializeField, HideInInspector] Baked lod0 = new Baked(), lod1 = new Baked();
+        [SerializeField, HideInInspector] Baked lod0 = new Baked(), lod1 = new Baked(), interior = new Baked();
 #pragma warning disable CS0649   // a player's are never assigned in code: Bake (editor) sets them, the asset brings them
-        [SerializeField, HideInInspector] bool hasLod1;
+        [SerializeField, HideInInspector] bool hasLod1, hasInterior;
         // how the geometry was baked: 0, the mesh copied as it is (turned round at ToMesh); 1, by KindBake, in the opening's space
         [SerializeField, HideInInspector] int baked;
 #pragma warning restore CS0649
@@ -144,14 +152,16 @@ namespace Triband.Storey.Unity
             {
                 // before the editor's baker is installed: the mesh copied as it is
                 lod0 = Copy(mesh); hasLod1 = lod1Mesh != null; lod1 = hasLod1 ? Copy(lod1Mesh) : new Baked(); baked = 0;
+                hasInterior = !door && interiorMesh != null; interior = hasInterior ? Copy(interiorMesh) : new Baked();
             }
             Register();
         }
 
-        /// <summary>What the editor's bake made: LOD0's parts, LOD1's (null: none), and the hole they fill.</summary>
-        internal void Store(KindBake.Result made, KindBake.Result? lod1Made, Vector2 hole)
+        /// <summary>What the editor's bake made: LOD0's parts, LOD1's (null: none), the version for interiors' (null: none), and the hole they fill.</summary>
+        internal void Store(KindBake.Result made, KindBake.Result? lod1Made, KindBake.Result? interiorMade, Vector2 hole)
         {
             lod0 = From(made); hasLod1 = lod1Made != null; lod1 = lod1Made != null ? From(lod1Made) : new Baked();
+            hasInterior = interiorMade != null; interior = interiorMade != null ? From(interiorMade) : new Baked();
             size = hole; baked = 1;
         }
 
@@ -192,7 +202,7 @@ namespace Triband.Storey.Unity
         {
             id = id, name = name, door = door, live = door && openPrefab != null, w = Mathf.Max(0.05f, size.x), h = Mathf.Max(0.05f, size.y), stretch = stretch, slice = slice,
             borderL = Mathf.Max(0, borders.x), borderR = Mathf.Max(0, borders.y), borderB = Mathf.Max(0, borders.z), borderT = Mathf.Max(0, borders.w),
-            lod0 = ToMesh(lod0), lod1 = hasLod1 ? ToMesh(lod1) : null,
+            lod0 = ToMesh(lod0), lod1 = hasLod1 ? ToMesh(lod1) : null, inside = hasInterior && !door ? ToMesh(interior) : null,
         };
 
         OpeningKind.Mesh ToMesh(Baked b)

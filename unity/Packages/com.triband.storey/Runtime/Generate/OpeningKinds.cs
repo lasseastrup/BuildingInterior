@@ -70,6 +70,14 @@ namespace Triband.Storey.Generate
         /// <summary>LOD1's mesh; null keeps LOD1's plain pane.</summary>
         public Mesh? lod1;
         /// <summary>
+        /// A window's LOD0 where a storey's rooms see it (a storey with rooms, the window not shut into a room blocked out): the
+        /// artist's version for buildings with interiors (the Unity side's <c>StoreyOpening.interiorPrefab</c>; Storey's own),
+        /// made for both sides, in the same hole. Placed there as it is, in place of <see cref="lod0"/>, what it turns to the
+        /// rooms with them (<see cref="KindPart.Turned"/>). Null: <see cref="lod0"/> there too, with the backs of what the rooms
+        /// see of it (<see cref="KindPart.Backs"/>).
+        /// </summary>
+        public Mesh? inside;
+        /// <summary>
         /// How far it reaches past its hole, in its own space, left, right, below and above (metres; 0 for none): found from
         /// LOD0's mesh when it is registered. What keeps clear of windows keeps clear of its dressing (shutters, a sill, a
         /// pediment: docs/OPENINGS.md §4.2).
@@ -107,7 +115,7 @@ namespace Triband.Storey.Generate
             k.lod1OnWall = k.lod1 != null && OnWall(k, k.lod1);
             k.lod1Covers = k.lod1 != null && Uncovered(k, k.lod1) <= 0.01;
             k.lod0Covers = Uncovered(k, k.lod0) <= 0.01;
-            foreach (var m in new[] { k.lod0, k.lod1 })
+            foreach (var m in new[] { k.lod0, k.lod1, k.inside })
                 if (m != null)
                 {
                     var places = Stretched(k) ? null : KindPart.Places(m, new KindPart.Hole(k));
@@ -136,17 +144,22 @@ namespace Triband.Storey.Generate
         /// <summary>Stretched with the opening, as a whole: a kind fitted by stretching, not slicing.</summary>
         public static bool Stretched(OpeningKind k) => k.stretch && !k.slice;
 
-        /// <summary>How far a kind's LOD0 reaches past its hole (<see cref="OpeningKind.reachL"/> and the rest); under a millimetre is none.</summary>
+        /// <summary>
+        /// How far a kind's LOD0 reaches past its hole (<see cref="OpeningKind.reachL"/> and the rest), its version for rooms
+        /// (<see cref="OpeningKind.inside"/>) too, so the openings keep clear of either; under a millimetre is none.
+        /// </summary>
         static void Reach(OpeningKind k)
         {
-            var m = k.lod0; double x0 = 0, x1 = 0, y0 = 0, y1 = k.h;
-            foreach (var part in m.parts)
-                foreach (int i in part.tris)
-                {
-                    if ((uint)i >= (uint)m.P.Length) continue;
-                    var p = m.P[i];
-                    x0 = Math.Min(x0, p.x + k.w / 2); x1 = Math.Max(x1, p.x - k.w / 2); y0 = Math.Min(y0, p.y); y1 = Math.Max(y1, p.y);
-                }
+            double x0 = 0, x1 = 0, y0 = 0, y1 = k.h;
+            foreach (var m in new[] { k.lod0, k.inside })
+                if (m != null)
+                    foreach (var part in m.parts)
+                        foreach (int i in part.tris)
+                        {
+                            if ((uint)i >= (uint)m.P.Length) continue;
+                            var p = m.P[i];
+                            x0 = Math.Min(x0, p.x + k.w / 2); x1 = Math.Max(x1, p.x - k.w / 2); y0 = Math.Min(y0, p.y); y1 = Math.Max(y1, p.y);
+                        }
             static double Mm(double v) => v < 1e-3 ? 0 : v;
             k.reachL = Mm(-x0); k.reachR = Mm(x1); k.reachB = Mm(-y0); k.reachT = Mm(y1 - k.h);
         }
@@ -179,6 +192,12 @@ namespace Triband.Storey.Generate
         public static OpeningKind? Get(string? id) => id != null && all.TryGetValue(id, out var k) ? k : null;
         public static IEnumerable<OpeningKind> All => all.Values;
 
+        /// <summary>
+        /// The mesh LOD0 places of kind <paramref name="k"/>: on a storey whose rooms see it (not <paramref name="shut"/>: a
+        /// shell or filled storey, or a room blocked out), its version for rooms where it has one (<see cref="OpeningKind.inside"/>).
+        /// </summary>
+        public static OpeningKind.Mesh Lod0Of(OpeningKind k, bool shut) => !shut && k.inside != null ? k.inside : k.lod0;
+
         /// <summary>The kind a style's windows (or street doors) take, if it names one that is registered and fits.</summary>
         public static OpeningKind? Of(FacadeStyle? st, bool door)
         {
@@ -195,7 +214,8 @@ namespace Triband.Storey.Generate
             public int tris, lod1Tris;
             /// <summary>
             /// Its LOD0 triangles on a storey with rooms, where it is seen from inside too: a door's leaf left out, its glass
-            /// both faces, and the backs of what the rooms see from behind (<see cref="KindPart.Backs"/>).
+            /// both faces, and the backs of what the rooms see from behind (<see cref="KindPart.Backs"/>); or, where it has a
+            /// version for rooms (<see cref="OpeningKind.inside"/>), that one's, its glass both faces.
             /// </summary>
             public int walkInTris;
             /// <summary>The share of the hole nothing covers as seen from the street, 0 to 1: on a shell storey that shows into the building.</summary>
@@ -216,8 +236,14 @@ namespace Triband.Storey.Generate
             var c = new Checked();
             var m = k.lod0; var P = m.P;
             foreach (var part in m.parts) c.tris += part.tris.Length / 3;
-            foreach (var part in m.parts)
-                if (!part.leaf) c.walkInTris += part.slot == ColorSlot.Glass ? 2 * (part.tris.Length / 3) : part.tris.Length / 3 + KindPart.Of(k, m, part).Backs.Tris;
+            if (k.inside is OpeningKind.Mesh mi)
+            {
+                foreach (var part in mi.parts)
+                    if (!part.leaf) c.walkInTris += (part.slot == ColorSlot.Glass ? 2 : 1) * (part.tris.Length / 3);
+            }
+            else
+                foreach (var part in m.parts)
+                    if (!part.leaf) c.walkInTris += part.slot == ColorSlot.Glass ? 2 * (part.tris.Length / 3) : part.tris.Length / 3 + KindPart.Of(k, m, part).Backs.Tris;
             if (k.lod1 != null) foreach (var part in k.lod1.parts) c.lod1Tris += part.tris.Length / 3;
             foreach (var part in m.parts)
             {
@@ -293,9 +319,14 @@ namespace Triband.Storey.Generate
         /// </summary>
         /// <param name="rooms">On a storey with rooms (not <paramref name="shell"/>), where it is seen from inside too, the backs of
         /// what the rooms see of it from behind are the rooms' (<see cref="Backs"/>).</param>
+        /// <remarks>
+        /// Its version for rooms (<see cref="OpeningKind.inside"/>, <see cref="Lod0Of"/>) is made for both sides: placed as it
+        /// is, with no backs, what it turns to the rooms theirs where <paramref name="rooms"/> says the storey keeps them apart.
+        /// </remarks>
         public static void Place(MeshBuilder op, MeshBuilder? gl, Frame F, OpeningKind k, OpeningKind.Mesh m, double u0, double u1, double y0, double y1, Palette C, bool shell, double back = 0, double deep = 0, bool rooms = false)
         {
             var fitted = At(back != 0 ? new Frame(new Vec2(F.O.x - F.w.x * back, F.O.z - F.w.z * back), F.u, F.w) : F, k, u0, u1, y0, y1);
+            bool both = ReferenceEquals(m, k.inside);   // made for both sides
             foreach (var whole in m.parts)
             {
                 if (whole.leaf && !shell) continue;
@@ -310,7 +341,7 @@ namespace Triband.Storey.Generate
                         int first = part.Put(op, at, C.glassDark, false, back, d);
                         Facade.PaneUV(op, first, F, u0, u1, y0, y1);
                         // a door in a room wall (no see-through glass there) is seen from the room behind it too
-                        if (!shell) { first = Backs(op, part, at, C.glassDark, back, d, rooms); Facade.PaneUV(op, first, F, u0, u1, y0, y1); }
+                        if (!shell && !both) { first = Backs(op, part, at, C.glassDark, back, d, rooms); Facade.PaneUV(op, first, F, u0, u1, y0, y1); }
                     }
                     else
                     {
@@ -320,6 +351,15 @@ namespace Triband.Storey.Generate
                     continue;
                 }
                 var c = new Swatch(C.style, whole.ownSlot ?? whole.slot);
+                if (both)
+                {
+                    // as made: what it turns to the rooms, which alone see it, with them where the storey keeps them apart
+                    part.Put(op, at, c, false, back, d, turned: false);
+                    bool wasIn = op.Inside; op.Inside = wasIn || rooms;
+                    part.Put(op, at, c, false, back, d, turned: true);
+                    op.Inside = wasIn;
+                    continue;
+                }
                 part.Put(op, at, c, false, back, d);
                 if (!shell) Backs(op, part, at, c, back, d, rooms);
             }

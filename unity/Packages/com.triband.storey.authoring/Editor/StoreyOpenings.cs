@@ -54,7 +54,7 @@ namespace Triband.Storey.Editor
             }
         }
 
-        static bool MadeFrom(StoreyOpening o, ISet<string> imported) => MadeFrom(imported, o.prefab, o.lod1Prefab, o.mesh, o.lod1Mesh, o.openPrefab);
+        static bool MadeFrom(StoreyOpening o, ISet<string> imported) => MadeFrom(imported, o.prefab, o.lod1Prefab, o.mesh, o.lod1Mesh, o.openPrefab, o.interiorPrefab, o.interiorMesh);
 
         /// <summary>Whether any of <paramref name="sources"/> was just imported: a model or a prefab, or anything a prefab uses (a facade detail's too).</summary>
         internal static bool MadeFrom(ISet<string> imported, params UnityEngine.Object?[] sources)
@@ -163,6 +163,12 @@ namespace Triband.Storey.Editor
         {
             var w = new List<(string, MessageType)>();
             foreach (var line in o.notes.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries)) w.Add((line, MessageType.Info));
+            // a window's version for interiors fills the same hole, cut at the same slice lines (docs/OPENINGS.md §7.3)
+            if (k.inside != null && o.interiorHole != Vector2.zero && (Mathf.Abs(o.interiorHole.x - o.size.x) > 0.001f || Mathf.Abs(o.interiorHole.y - o.size.y) > 0.001f))
+                w.Add(($"The interior prefab's hole is {o.interiorHole.x:0.000} × {o.interiorHole.y:0.000} m and the prefab's {o.size.x:0.000} × {o.size.y:0.000} m: it is placed in the prefab's, so it won't line up with the windows over and under it. Give its Storey Cutout the prefab's.", MessageType.Warning));
+            else if (k.inside != null && (o.slice || !o.stretch) && (Mathf.Abs(o.interiorBorders.x - o.borders.x) > 0.001f || Mathf.Abs(o.interiorBorders.y - o.borders.y) > 0.001f
+                || Mathf.Abs(o.interiorBorders.z - o.borders.z) > 0.001f || Mathf.Abs(o.interiorBorders.w - o.borders.w) > 0.001f))
+                w.Add(("The interior prefab's slice lines aren't the prefab's: what keeps its size round the hole differs between the two. Give its Storey Cutout the prefab's.", MessageType.Warning));
             if (o.prefab != null && o.holeFrom == "the meshes' bounds")
                 w.Add(("The hole is the meshes' bounds. Add a Storey Cutout to the prefab's root to say where it is, so what goes round it (shutters, a sill) stays outside it.", MessageType.Info));
             if (o.wallFaces > 0)
@@ -221,6 +227,7 @@ namespace Triband.Storey.Editor
             if (o.prefab == null) Field("mesh");
             Field(o.prefab != null ? "lod1Prefab" : "lod1Mesh");
             if (o.door) Field("openPrefab");   // live where the doorway is walked through, at LOD0 (docs/EDITOR.md §6.9)
+            else Field(o.prefab != null ? "interiorPrefab" : "interiorMesh");   // where a storey's rooms see it (docs/OPENINGS.md §7.3)
             Field("facesBack");
             serializedObject.ApplyModifiedProperties();
             bool changed = EditorGUI.EndChangeCheck();
@@ -252,9 +259,9 @@ namespace Triband.Storey.Editor
             string lod1 = k.lod1 == null ? "; LOD1 shows the plain pane"
                 : $"; LOD1 {c.lod1Tris}{(o.door ? "" : k.lod1OnWall ? ", on the flat wall" : ", in a hole cut in the wall")}{(k.lod1Covers ? "" : $" with the plain {(o.door ? "door" : "pane")} where it leaves the hole open")}";
             string slices = (o.slice || !o.stretch) && o.borders != Vector4.zero ? $" Slice lines {o.borders.x:0.00}, {o.borders.y:0.00}, {o.borders.z:0.00} and {o.borders.w:0.00} m in from its sides." : "";
-            // where the rooms see it from inside too: the backs of what they see behind it, its glass both faces, a door's leaf
-            // left out (a door with an Open prefab is that prefab there)
-            string walkIn = o.door && o.openPrefab != null ? "" : $"; {c.walkInTris} on a walk-in storey, seen from inside too";
+            // where the rooms see it from inside too: its version for interiors, or the backs of what they see behind it; its glass
+            // both faces, a door's leaf left out (a door with an Open prefab is that prefab there)
+            string walkIn = o.door && o.openPrefab != null ? "" : k.inside != null ? $"; {c.walkInTris} on a walk-in storey, its interior version's" : $"; {c.walkInTris} on a walk-in storey, seen from inside too";
             EditorGUILayout.HelpBox($"{c.tris} triangles ({what}){walkIn}{lod1}. The hole is {o.size.x:0.00} × {o.size.y:0.00} m, from {o.holeFrom}.{slices} Every {(o.door ? "street door" : "window")} of a style that picks it gets one.", MessageType.None);
             Warnings(o, k, c);
             using (new EditorGUILayout.HorizontalScope())

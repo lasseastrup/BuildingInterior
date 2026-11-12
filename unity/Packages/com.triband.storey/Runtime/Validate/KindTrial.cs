@@ -18,8 +18,9 @@ namespace Triband.Storey.Validate
             /// <summary>The block's triangles with the kind (a shell building), and with the generator's own windows and doors.</summary>
             public int lod0, lod1, plainLod0, plainLod1;
             /// <summary>
-            /// The block walked in (rooms behind every window, which see the kind from behind too: <see cref="KindPart.Backs"/>):
-            /// LOD0's triangles with the kind, and with the generator's own windows and doors.
+            /// The block walked in (rooms behind every window, which see the kind from behind too: its version for interiors,
+            /// <see cref="OpeningKind.inside"/>, or <see cref="KindPart.Backs"/>): LOD0's triangles with the kind, and with the
+            /// generator's own windows and doors.
             /// </summary>
             public int walkIn, plainWalkIn;
             /// <summary>How many of a facade detail the block has (<see cref="Run(DetailKind)"/>).</summary>

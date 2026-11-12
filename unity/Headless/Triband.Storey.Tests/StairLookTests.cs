@@ -216,7 +216,7 @@ namespace Triband.Storey.Tests
             treadColor = "#CFCFCC", riserColor = "#C4C4C1", endColor = "#BDBDBA", sideColor = "#E9E9E6",
         };
 
-        public static IEnumerable<object[]> Looks()
+        public static IEnumerable<object?[]> Looks()
         {
             var looks = new (string name, StairLook? look)[]
             {
@@ -233,7 +233,7 @@ namespace Triband.Storey.Tests
             };
             foreach (var (name, look) in looks)
                 foreach (var (rails, solid) in new[] { (true, true), (true, false), (false, true) })
-                    yield return new object[] { name, rails, solid, look };
+                    yield return new object?[] { name, rails, solid, look };
         }
 
         [Theory, MemberData(nameof(Looks))]

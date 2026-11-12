@@ -70,41 +70,52 @@ namespace Triband.Storey.Editor
 
         static void Bake(StoreyOpening o)
         {
-            Gathered g; Gathered? g1 = null; KindBake.Hole hole, hole1; string from;
+            Gathered g; Gathered? g1 = null, gi = null; KindBake.Hole hole, hole1, holeI; string from;
+            o.interiorBorders = Vector4.zero;
             if (o.prefab != null)
             {
                 g = FromPrefab(o.prefab, 0);
                 (hole, from) = HoleOf(o.prefab) ?? (KindBake.Bounds(g.sources) is { } b ? KindBake.HoleOf(b) : new KindBake.Hole(0, 0.8, 1.2, 1.6), "the meshes' bounds");
-                hole1 = hole;
+                hole1 = holeI = hole;
                 if (o.lod1Prefab != null) { g1 = FromPrefab(o.lod1Prefab, 0); hole1 = HoleOf(o.lod1Prefab)?.hole ?? hole; }
                 else if (Levels(o.prefab) > 1) g1 = FromPrefab(o.prefab, 1);
-                var cutout = o.prefab.GetComponent<StoreyCutout>();   // a prefab's slice lines are its cutout's, the root's scale applied
-                var sc = o.prefab.transform.localScale; float ax = Mathf.Abs(sc.x), ay = Mathf.Abs(sc.y);
-                o.borders = cutout != null ? new Vector4(cutout.borders.x * ax, cutout.borders.y * ax, cutout.borders.z * ay, cutout.borders.w * ay) : Vector4.zero;
+                o.borders = Borders(o.prefab);
+                // a window's version for interiors: its own hole and slice lines, which should be the prefab's (the inspector says
+                // where they aren't); without a cutout, the prefab's
+                if (!o.door && o.interiorPrefab != null)
+                {
+                    gi = FromPrefab(o.interiorPrefab, 0); holeI = HoleOf(o.interiorPrefab)?.hole ?? hole;
+                    o.interiorBorders = o.interiorPrefab.GetComponent<StoreyCutout>() != null ? Borders(o.interiorPrefab) : o.borders;
+                }
             }
             else if (o.mesh != null)
             {
                 g = FromMesh(o.mesh);
-                hole = hole1 = new KindBake.Hole(0, o.size.y / 2, o.size.x, o.size.y);   // the pivot at the hole's bottom middle
+                hole = hole1 = holeI = new KindBake.Hole(0, o.size.y / 2, o.size.x, o.size.y);   // the pivot at the hole's bottom middle
                 from = "Size";
                 if (o.lod1Mesh != null) g1 = FromMesh(o.lod1Mesh);
+                if (!o.door && o.interiorMesh != null) { gi = FromMesh(o.interiorMesh); o.interiorBorders = o.borders; }
             }
-            else { g = new Gathered(); hole = hole1 = new KindBake.Hole(0, o.size.y / 2, o.size.x, o.size.y); from = "Size"; }
+            else { g = new Gathered(); hole = hole1 = holeI = new KindBake.Hole(0, o.size.y / 2, o.size.x, o.size.y); from = "Size"; }
             // sliced (and kept to its size, which slices where an opening had to give): cut along the slice lines
             bool sliced = o.slice || !o.stretch;
             KindBake.Cuts? Cuts(KindBake.Hole at) => sliced ? new KindBake.Cuts(at.w, at.h, o.borders.x, o.borders.y, o.borders.z, o.borders.w) : (KindBake.Cuts?)null;
             var made = KindBake.Bake(g.sources, hole, o.facesBack, Cuts(hole));
             var lod1Made = g1 != null ? KindBake.Bake(g1.sources, hole1, o.facesBack, Cuts(hole1)) : null;
+            var interiorMade = gi != null ? KindBake.Bake(gi.sources, holeI, o.facesBack, Cuts(holeI)) : null;
             var labels = new Dictionary<string, string>(g.labels, StringComparer.Ordinal);
             var owns = new Dictionary<string, string>(g.owns, StringComparer.Ordinal);
             var keys = new List<string>(g.keys);
-            if (g1 != null)
+            // LOD1's parts and the version for interiors' are the prefab's where they share its materials, rows of their own where not
+            foreach (var more in new[] { g1, gi })
             {
-                foreach (var k in g1.keys) if (!labels.ContainsKey(k)) { labels[k] = g1.labels[k]; keys.Add(k); }
-                foreach (var kv in g1.owns) owns[kv.Key] = kv.Value;
+                if (more == null) continue;
+                foreach (var k in more.keys) if (!labels.ContainsKey(k)) { labels[k] = more.labels[k]; keys.Add(k); }
+                foreach (var kv in more.owns) owns[kv.Key] = kv.Value;
             }
             Rows(o, keys, labels, owns);
-            o.Store(made, lod1Made, new Vector2((float)hole.w, (float)hole.h));
+            o.Store(made, lod1Made, interiorMade, new Vector2((float)hole.w, (float)hole.h));
+            o.interiorHole = gi != null ? new Vector2((float)holeI.w, (float)holeI.h) : Vector2.zero;
             // a door's Open prefab, placed live (SiteRenderer.SpawnDoors): its root's place in the door's own space, as KindBake
             // maps a point there, by its own Storey Cutout or the door's hole, and that hole's size
             if (o.door && o.openPrefab != null)
@@ -114,7 +125,15 @@ namespace Triband.Storey.Editor
                 o.openSize = new Vector2((float)oh.w, (float)oh.h);
             }
             o.holeFrom = from; o.objects = g.objects; o.hiddenFaces = made.hidden; o.wallFaces = made.onWall;
-            o.notes = string.Join("\n", g.notes.Concat(g1?.notes ?? Enumerable.Empty<string>()).Distinct());
+            o.notes = string.Join("\n", g.notes.Concat(g1?.notes ?? Enumerable.Empty<string>()).Concat(gi?.notes ?? Enumerable.Empty<string>()).Distinct());
+        }
+
+        /// <summary>A prefab's slice lines: its Storey Cutout's, the root's scale applied; none without one.</summary>
+        static Vector4 Borders(GameObject root)
+        {
+            var cutout = root.GetComponent<StoreyCutout>();
+            var sc = root.transform.localScale; float ax = Mathf.Abs(sc.x), ay = Mathf.Abs(sc.y);
+            return cutout != null ? new Vector4(cutout.borders.x * ax, cutout.borders.y * ax, cutout.borders.z * ay, cutout.borders.w * ay) : Vector4.zero;
         }
 
         /// <summary>
