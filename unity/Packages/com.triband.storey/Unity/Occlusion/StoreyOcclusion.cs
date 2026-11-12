@@ -15,7 +15,9 @@ namespace Triband.Storey.Unity
     /// buildings in the way sink, slice, open a hole or fade. Camera- and character-agnostic: a project's own controller
     /// sets <see cref="player"/> (or calls <see cref="SetPlayer"/>) and, if its camera trails the player, the point the
     /// camera looks at. The play kit is the reference. Runs the engine-free <see cref="OcclusionCore"/> and writes the
-    /// building table and the shader globals; nothing per material, no extra draws but Sink's footprints.
+    /// building table and the shader globals; nothing per material, no extra draws but Sink's footprints. The player is in
+    /// one site, but a building of any other loaded site can be in the way too: the next district over, or a prop placed as
+    /// a site of its own (docs/PLAY.md §7, <see cref="Guests"/>).
     /// </summary>
     [AddComponentMenu("Storey/Storey Occlusion")]
     public sealed class StoreyOcclusion : MonoBehaviour
@@ -28,13 +30,18 @@ namespace Triband.Storey.Unity
         public Camera? viewCamera;
         [Tooltip("The player's feet. Or leave empty and call SetPlayer each frame.")]
         public Transform? player;
-        [Tooltip("With the city split into districts (several Storey Sites loaded at once), occlude the one the player is in, moving over as they cross into the next.")]
+        [Tooltip("With the city split into districts (several Storey Sites loaded at once), occlude the one the player is in, moving over as they cross into the next. Only sites with District on are followed.")]
         public bool followPlayer = true;
 
         /// <summary>How far round the player the walk model has its buildings' shapes made ahead, on build threads (metres).</summary>
         const double PrepareRadius = 24;
         /// <summary>How many of Sink's footprint meshes a site keeps; past it, the least recently shown go.</summary>
         const int FootprintsKept = 32;
+        /// <summary>
+        /// How near the camera's line to the player another site's ground plan must come for its buildings to be looked at
+        /// (metres): the segment test reaches a wall's thickness past an outline (docs/PLAY.md §7).
+        /// </summary>
+        const double GuestReach = 1;
 
         /// <summary>
         /// A site's walk model and occlusion state, kept while the site shows the same layout: crossing back into a district
@@ -63,13 +70,34 @@ namespace Triband.Storey.Unity
         Walked? cur;
         Vector3 feet; bool hasFeet;
         Vector3? cameraTarget;
-        readonly PlayerState playerState = new PlayerState();
+        readonly PlayerState playerState = new PlayerState(), guestPlayer = new PlayerState();
         readonly List<StoreySite> gone = new List<StoreySite>();
+        // the other sites whose buildings were looked at this frame, and the frame before's (FrameGuests)
+        List<StoreySite> guests = new List<StoreySite>(), guestsWas = new List<StoreySite>();
 
         /// <summary>The walk model for this layout (where the player is, what they stand on, what stops them), for a controller. Null while it is being made.</summary>
         public PlayWorld? World => cur?.world;
         /// <summary>The occlusion state this frame (the building the player is in, the buildings in the way).</summary>
         public OcclusionCore? Core => cur?.occ;
+
+        /// <summary>
+        /// The other sites whose buildings were looked at as buildings in the way this frame (docs/PLAY.md §7): those whose
+        /// ground plan comes near the camera's line to the player, and those with a building still going or coming back.
+        /// Their states are <see cref="CoreOf"/>'s.
+        /// </summary>
+        public IReadOnlyList<StoreySite> Guests => guests;
+
+        /// <summary>
+        /// A site's occlusion state this frame: <see cref="Core"/> for the site the player is in; for one of
+        /// <see cref="Guests"/>, its buildings in the way alone (no view, <see cref="OcclusionCore.FrameOccluders"/>), in
+        /// that site's space. Every core's occluders take their slots from the same table. Null for any other site.
+        /// </summary>
+        public OcclusionCore? CoreOf(StoreySite s)
+        {
+            if (s == null) return null;
+            if (s == site) return Core;
+            return guests.Contains(s) && walked.TryGetValue(s, out var w) ? w.occ : null;
+        }
         /// <summary>The camera assist's extra pitch this frame (radians), for a camera that honours it.</summary>
         public float Assist => cur?.occ != null ? (float)cur.occ.Assist : 0;
 
@@ -109,7 +137,9 @@ namespace Triband.Storey.Unity
             Vector3? at = player != null ? player.position : hasFeet ? feet : cam != null ? cam.transform.position : (Vector3?)null;
             if (at == null) return;
             candidates.Clear(); areas.Clear();
-            foreach (var s in StoreySite.AllSet) if (s.isActiveAndEnabled && s.PlanArea is Lod.Districts.Area a) { candidates.Add(s); areas.Add(a); }
+            // districts only: a site placed as a prop is a few metres across, and the player near one past every district's
+            // edge took the occlusion into it, the districts' buildings no longer in the way (docs/PLAY.md §7)
+            foreach (var s in StoreySite.AllSet) if (s.isActiveAndEnabled && s.district && s.PlanArea is Lod.Districts.Area a) { candidates.Add(s); areas.Add(a); }
             int pick = Lod.Districts.PlayerIn(areas, site != null ? candidates.IndexOf(site) : -1, at.Value.x, at.Value.z);
             if (pick >= 0 && candidates[pick] != site) Attach(candidates[pick]);
             foreach (var s in candidates) if (s != site && s.Renderer is SiteRenderer r && r.Site is Site laid) Ready(StateOf(s), r, laid, BuildLane.Background);
@@ -130,6 +160,8 @@ namespace Triband.Storey.Unity
         void OnDisable()
         {
             if (site != null && site.Occlusion == this) site.Occlusion = null;
+            foreach (var s in guests) if (s != null && s.GuestOf == this) s.GuestOf = null;
+            guests.Clear(); guestsWas.Clear();
             foreach (var kv in walked) { if (kv.Key != null) Leave(kv.Key, kv.Value); Drop(kv.Value); }
             walked.Clear(); cur = null;
         }
@@ -156,6 +188,10 @@ namespace Triband.Storey.Unity
         {
             if (!ReferenceEquals(w.site, s))
             {
+                // the old layout's buildings in the way let go: their slots are every site's, and a row left naming one would
+                // draw this site's building there with another's occluder
+                foreach (int i in w.occluding) r.Table.SetOccluder(i, -1);
+                w.occ?.Clear();
                 w.site = s; w.world = null; w.occ = null; w.occluding.Clear(); w.wallsSet.Clear();
                 ClearFootprints(w);
                 w.making = MakeWorld(s, lane);
@@ -174,7 +210,8 @@ namespace Triband.Storey.Unity
             // each building's shape from the renderer's LOD0 when it has one (built on a worker as the camera nears, long
             // before the player is close enough to touch), or made ahead round the player (Prepare)
             w.world.Source = ShapesFrom(r, s);
-            w.occ = new OcclusionCore(w.world, core) { Hidden = r.Hidden };   // a hidden building is never in the way (docs/PLAY.md §6)
+            // a hidden building is never in the way (docs/PLAY.md §6); the slots are the table's, shared with every other site's core
+            w.occ = new OcclusionCore(w.world, core, r.Table.OccluderSlots) { Hidden = r.Hidden };
             return true;
         }
 
@@ -203,6 +240,7 @@ namespace Triband.Storey.Unity
                 using (StoreyTimings.Time("occlusion: cutaway")) occ.FrameCutaway(Time.deltaTime);
             }
             using (StoreyTimings.Time("occlusion: table and globals")) Write(r, w, occ, origin, pw);
+            using (StoreyTimings.Time("occlusion: other sites' buildings in the way")) FrameGuests(pw, cw, Time.deltaTime);
             // the shapes the walk and the cutaway will want next: round the player, and the neighbours of the building they are in
             using (StoreyTimings.Time("occlusion: shapes asked ahead"))
             {
@@ -219,7 +257,10 @@ namespace Triband.Storey.Unity
             StoreyGlobals.SetOcclusion(StoreyGlobals.OcclusionMode.Off, Vector3.zero, 2.4f);
         }
 
-        /// <summary>The occlusion leaves a site (to another district, or off): what it wrote into the site's table is undone, its footprints hidden.</summary>
+        /// <summary>
+        /// The occlusion leaves a site (to another district, off, or a site no longer round the player): what it wrote into the
+        /// site's table is undone, its occluders' slots given back, its footprints hidden.
+        /// </summary>
         void Leave(StoreySite s, Walked w)
         {
             var r = s.Renderer;
@@ -234,9 +275,10 @@ namespace Triband.Storey.Unity
             for (int i = 0; i < w.slots.Length; i++) { w.shown[i] = false; var go = w.slots[i]; if (go != null && go.activeSelf) go.SetActive(false); }
         }
 
-        /// <summary>A state let go: its footprints' meshes and objects destroyed.</summary>
+        /// <summary>A state let go: its occluders' slots given back, its footprints' meshes and objects destroyed.</summary>
         void Drop(Walked w)
         {
+            w.occ?.Clear();
             ClearFootprints(w);
             for (int i = 0; i < w.slots.Length; i++) { if (w.slots[i] != null) Destroy(w.slots[i]); w.slots[i] = null; w.filters[i] = null; }
         }
@@ -280,9 +322,28 @@ namespace Triband.Storey.Unity
             foreach (int id in w.wallsSet) if (!wallsNow.Contains(id)) table.SetWall(id, 0);
             (w.wallsSet, w.wallsNow) = (wallsNow, w.wallsSet);
 
-            // buildings in the way: the slot in each one's state row, the rows with world heights. Written where they changed
-            // (docs/PERFORMANCE.md §10.4): every occluder's slot was cleared and set again, and its 64 texels marked for
-            // upload, every frame, about 1 KB an occluder a frame and its building looked at again by the steady pass
+            WriteOccluders(r, site!, w, o, lift);
+            var modeG = core.mode switch
+            {
+                OccluderMode.Off => StoreyGlobals.OcclusionMode.Off,
+                OccluderMode.Cutout => StoreyGlobals.OcclusionMode.Cutout,
+                OccluderMode.Fade => StoreyGlobals.OcclusionMode.Fade,
+                OccluderMode.Dissolve => StoreyGlobals.OcclusionMode.Dissolve,
+                _ => StoreyGlobals.OcclusionMode.SinkOrSlice,
+            };
+            StoreyGlobals.SetOcclusion(modeG, playerWorld + Vector3.up * 1.1f, (float)core.holeRadius);
+        }
+
+        /// <summary>
+        /// A core's buildings in the way into the table, through the renderer of the site they belong to: the slot in each
+        /// one's state row, the rows with world heights (<paramref name="lift"/>, the site's height), and the footprints.
+        /// </summary>
+        void WriteOccluders(SiteRenderer r, StoreySite s, Walked w, OcclusionCore o, float lift)
+        {
+            var table = r.Table;
+            // written where they changed (docs/PERFORMANCE.md §10.4): every occluder's slot was cleared and set again, and its
+            // 64 texels marked for upload, every frame, about 1 KB an occluder a frame and its building looked at again by the
+            // steady pass
             var occNow = w.occludingNow; occNow.Clear();
             Array.Clear(w.shown, 0, w.shown.Length);
             for (int ai = 0; ai < o.Active.Count; ai++)
@@ -303,22 +364,44 @@ namespace Triband.Storey.Unity
                 // None for a building hidden meanwhile (docs/PLAY.md §6): nothing of it is drawn while it comes back up
                 if (oc.k < oc.b.floors.Count && (core.mode == OccluderMode.Sink ? oc.t > 0 : core.mode == OccluderMode.Dissolve && oc.a > 0) && !r.IsHidden(oc.b.id))
                 {
-                    ShowFootprint(r, w, oc.b, oc.k, oc.slot);
+                    ShowFootprint(r, s, w, oc.b, oc.k, oc.slot);
                     table.SetLod(BuildingTable.FootprintRow(oc.slot), 0, 0, core.mode == OccluderMode.Dissolve ? (float)oc.a : 1);
                 }
             }
             foreach (int i in w.occluding) if (!occNow.Contains(i)) table.SetOccluder(i, -1);   // out of the way now
             (w.occluding, w.occludingNow) = (occNow, w.occluding);
             for (int i = 0; i < w.slots.Length; i++) { var go = w.slots[i]; if (!w.shown[i] && go != null && go.activeSelf) go.SetActive(false); }
-            var modeG = core.mode switch
+        }
+
+        /// <summary>
+        /// The other loaded sites' buildings in the way (docs/PLAY.md §7). Each site whose ground plan comes near the camera's
+        /// line to the player, or which has a building still going or coming back, runs its own core with the player and the
+        /// camera in its space (<see cref="OcclusionCore.FrameOccluders"/>), and its occluders are written through its own
+        /// renderer. A site no longer round the player has what it wrote undone and its slots given back.
+        /// </summary>
+        void FrameGuests(Vector3 feetWorld, Vector3 camWorld, float dt)
+        {
+            (guests, guestsWas) = (guestsWas, guests); guests.Clear();
+            foreach (var s in StoreySite.AllSet)
             {
-                OccluderMode.Off => StoreyGlobals.OcclusionMode.Off,
-                OccluderMode.Cutout => StoreyGlobals.OcclusionMode.Cutout,
-                OccluderMode.Fade => StoreyGlobals.OcclusionMode.Fade,
-                OccluderMode.Dissolve => StoreyGlobals.OcclusionMode.Dissolve,
-                _ => StoreyGlobals.OcclusionMode.SinkOrSlice,
-            };
-            StoreyGlobals.SetOcclusion(modeG, playerWorld + Vector3.up * 1.1f, (float)core.holeRadius);
+                if (s == site || !s.isActiveAndEnabled || s.Renderer is not SiteRenderer gr || gr.Site is not Site laid) continue;
+                walked.TryGetValue(s, out var gw);
+                bool busy = gw?.occ != null && gw.occ.Active.Count > 0;
+                if (!busy && !(s.PlanArea is Lod.Districts.Area a && a.Distance(camWorld.x, camWorld.z, feetWorld.x, feetWorld.z) <= GuestReach)) continue;
+                gw ??= StateOf(s);
+                if (!Ready(gw, gr, laid, BuildLane.Forced)) continue;   // its walk model being made: a frame or two
+                guests.Add(s); s.GuestOf = this;
+                var o = s.transform.position; var oc = gw.occ!;
+                var p = guestPlayer; p.Spawn(feetWorld.x - o.x, feetWorld.y - o.y, feetWorld.z - o.z);
+                oc.FrameOccluders(p, (camWorld.x - o.x, camWorld.y - o.y, camWorld.z - o.z), dt);
+                WriteOccluders(gr, s, gw, oc, o.y);
+            }
+            foreach (var s in guestsWas)
+            {
+                if (s == null || guests.Contains(s)) continue;
+                if (s != site && walked.TryGetValue(s, out var gw)) Leave(s, gw);
+                if (s.GuestOf == this) s.GuestOf = null;
+            }
         }
 
         /// <summary>A texel of the occluder rows written: true when it differs (exactly: an approximate test could let small steps drift unsent).</summary>
@@ -330,8 +413,9 @@ namespace Triband.Storey.Unity
         }
 
         // a footprint's mesh carries its row, so it is kept per slot: drawn through the slot's row, always at LOD0, never
-        // occluded, and faded with the building in Dissolve. Each slot keeps its own object, given a mesh only when it changes
-        void ShowFootprint(SiteRenderer r, Walked w, BuildingData b, int k, int slot)
+        // occluded, and faded with the building in Dissolve. Each slot keeps its own object, given a mesh only when it changes,
+        // under the site the building is in (s)
+        void ShowFootprint(SiteRenderer r, StoreySite s, Walked w, BuildingData b, int k, int slot)
         {
             var key = (b.id, k, slot);
             if (!w.footprints.TryGetValue(key, out var f))
@@ -346,10 +430,10 @@ namespace Triband.Storey.Unity
             }
             w.footprints[key] = (f.mesh, Time.frameCount);
             var go = w.slots[slot];
-            if (go == null) { go = NewFootprint(); w.slots[slot] = go; w.filters[slot] = go.GetComponent<MeshFilter>(); }
+            if (go == null) { go = NewFootprint(s); w.slots[slot] = go; w.filters[slot] = go.GetComponent<MeshFilter>(); }
             var mf = w.filters[slot]!;
             if (mf.sharedMesh != f.mesh) mf.sharedMesh = f.mesh;
-            int layer = site!.gameObject.layer;   // the site's layer, like its buildings
+            int layer = s.gameObject.layer;   // the site's layer, like its buildings
             if (go.layer != layer) go.layer = layer;
             if (!go.activeSelf) go.SetActive(true);
             w.shown[slot] = true;
@@ -369,13 +453,13 @@ namespace Triband.Storey.Unity
             }
         }
 
-        GameObject NewFootprint()
+        GameObject NewFootprint(StoreySite s)
         {
             var go = new GameObject("Storey footprint") { hideFlags = HideFlags.DontSave };
-            go.transform.SetParent(site!.transform, false);
+            go.transform.SetParent(s.transform, false);
             go.AddComponent<MeshFilter>();
             var mr = go.AddComponent<MeshRenderer>();
-            mr.sharedMaterial = site.opaque;
+            mr.sharedMaterial = s.opaque;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;   // the building it stands for still casts its whole shadow
             mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
             go.SetActive(false);

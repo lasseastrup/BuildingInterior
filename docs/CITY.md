@@ -127,7 +127,7 @@ A city too big for one layout is split into districts: one Storey Site each, a s
 
 **Party walls across an edge.** A site lists its neighbouring districts: their layouts, and how far their sites are from it. In the site's inspector, **Find neighbouring districts** links every other open site whose buildings come within 2 m, both ways. Their buildings near the edge join this site's generator as context (`Site.WithContext`): copies, never drawn, there so the party walls along the edge are worked out as within one layout. A neighbour with a baked layout (every layout imported by this version) gives only those buildings, read from its bytes, and isn't parsed or kept parsed for them (`SiteRenderer.BakedNeighbours`; docs/PERFORMANCE.md §6.3). Where two buildings across the edge are as tall, the owner is picked by layout name and id, so both districts agree and the wall is built once (`Site.OwnerKey`, `DistrictsTests`).
 
-**The player.** **Storey Occlusion** with *Follow Player* (on by default) attaches each frame to the district the player is in (the one they are in while within 4 m of it, otherwise the nearest), and the play kit's character keeps its place in the world as it moves to the next site.
+**The player.** **Storey Occlusion** with *Follow Player* (on by default) attaches each frame to the district the player is in (the one they are in while within 4 m of it, otherwise the nearest), and the play kit's character keeps its place in the world as it moves to the next site. Only sites with **District** on are followed. A site placed as a prop (a pillar, a landmark: a prefab with a layout of its own) has it off. The buildings of the other districts and of those sites still go when they are in the camera's way (docs/PLAY.md §7).
 
 **Streaming.** Add **Storey Districts** to the scene that stays loaded (the player, the camera, the lighting):
 1. Open the district scenes alongside it and press **Add open district scenes**: each becomes a district, with its area read from its Storey Site. **Read areas** reads them again after editing.
@@ -192,7 +192,6 @@ Both budgets in the package plan (§6.6: 120 MB on iPhone 7, 200 MB on iPhone 14
 
 - Measuring the upload in Unity, and moving the vertex buffers onto the workers if it hitches (the MeshData API, `Mesh.AllocateWritableMeshData`; §4).
 - Loading districts through Addressables. They load as scenes from the build's scene list today (§5).
-- Occluders across a district edge: the occlusion works on the district the player is in, so a building of the next district in the camera's way doesn't sink.
 - Bridges between districts: a bridge reaches only buildings of its own layout.
 - A neighbour district edited in the same session: its party walls along the edge update when this site next rebuilds everything (the neighbour's file is saved and reimported).
 - Cells baked at import. They are merged when the layout loads: over frames in Play mode, at once after an edit or in the editor.

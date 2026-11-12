@@ -21,6 +21,38 @@ namespace Triband.Storey.Lod
                 double dx = Math.Max(Math.Max(x0 - x, 0), x - x1), dz = Math.Max(Math.Max(z0 - z, 0), z - z1);
                 return Math.Sqrt(dx * dx + dz * dz);
             }
+
+            /// <summary>
+            /// How near the segment from (ax, az) to (bx, bz) comes to the area (0 when any of it is inside): whether a site's
+            /// buildings can stand between a camera and the player (docs/PLAY.md §7).
+            /// </summary>
+            public double Distance(double ax, double az, double bx, double bz)
+            {
+                // the segment clipped to the box (Liang–Barsky): any of it left is inside
+                double t0 = 0, t1 = 1, dx = bx - ax, dz = bz - az;
+                if (Clip(-dx, ax - x0, ref t0, ref t1) && Clip(dx, x1 - ax, ref t0, ref t1) && Clip(-dz, az - z0, ref t0, ref t1) && Clip(dz, z1 - az, ref t0, ref t1)) return 0;
+                // apart: the nearest is an end of the segment to the box, or a corner of the box to the segment
+                double d = Math.Min(Distance(ax, az), Distance(bx, bz));
+                d = Math.Min(d, Math.Min(ToSegment(x0, z0, ax, az, dx, dz), ToSegment(x1, z0, ax, az, dx, dz)));
+                return Math.Min(d, Math.Min(ToSegment(x0, z1, ax, az, dx, dz), ToSegment(x1, z1, ax, az, dx, dz)));
+            }
+
+            // one side of the box: the part of the segment within it kept (p t <= q), false when none is
+            static bool Clip(double p, double q, ref double t0, ref double t1)
+            {
+                if (p == 0) return q >= 0;
+                double r = q / p;
+                if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; }
+                else { if (r < t0) return false; if (r < t1) t1 = r; }
+                return true;
+            }
+
+            static double ToSegment(double x, double z, double ax, double az, double dx, double dz)
+            {
+                double l = dx * dx + dz * dz, t = l > 0 ? Math.Max(0, Math.Min(1, ((x - ax) * dx + (z - az) * dz) / l)) : 0;
+                double ex = ax + dx * t - x, ez = az + dz * t - z;
+                return Math.Sqrt(ex * ex + ez * ez);
+            }
         }
 
         /// <summary>

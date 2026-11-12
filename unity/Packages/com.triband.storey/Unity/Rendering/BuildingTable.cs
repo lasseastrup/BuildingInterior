@@ -73,6 +73,11 @@ namespace Triband.Storey.Unity
         public readonly Vector4[] State = new Vector4[MaxBuildings];
         /// <summary>Per occluder slot, OccWidth texels: header (segments, dark, clip height, base height) then storey rows.</summary>
         public readonly Vector4[] Occ = new Vector4[OccSlots * OccWidth];
+        /// <summary>
+        /// Who holds each occluder slot: the occlusion cores of the site the player is in and of the sites round it take
+        /// their slots here, so no two buildings in the way share a row of <see cref="Occ"/> (docs/PLAY.md §7).
+        /// </summary>
+        public readonly global::Triband.Storey.Occlusion.OccluderSlots OccluderSlots = new global::Triband.Storey.Occlusion.OccluderSlots();
         /// <summary>How far each wall has slid down, 0 up .. 1 down, by global wall id. Write through <see cref="SetWall"/>.</summary>
         public float[] Wall { get; private set; } = new float[WallIdsStart];
         /// <summary>Per wall id: the wall's start (x, z) and its normal scaled by 1 + its length, for the cutaway (written once, at upload; <see cref="SetWallData"/>).</summary>
