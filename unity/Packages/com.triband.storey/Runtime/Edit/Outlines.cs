@@ -92,7 +92,9 @@ namespace Triband.Storey.Edit
             double a0 = Math.Atan2(P.z - oz, P.x - ox), a1 = Math.Atan2(Q.z - oz, Q.x - ox), sweep = a1 - a0;
             while (sweep > Math.PI) sweep -= 2 * Math.PI;
             while (sweep < -Math.PI) sweep += 2 * Math.PI;
-            int steps = Math.Max(2, (int)Math.Ceiling(Math.Abs(sweep) / (Math.PI / 12)));
+            // a twentieth of a step's leeway: the cut's ends are kept to the centimetre, and a square corner's sweep a hair over
+            // 90° made one quarter of a circle 7 steps and the next 6
+            int steps = Math.Max(2, (int)Math.Ceiling(Math.Abs(sweep) / (Math.PI / 12) - 0.05));
             steps = Math.Max(1, Math.Min(steps, (int)Math.Floor(size * Math.Abs(sweep) / 0.35)));
             var o = new List<Vec2>();
             for (int j = 0; j <= steps; j++) { double a = a0 + sweep * j / steps; o.Add(Cm(new Vec2(ox + size * Math.Cos(a), oz + size * Math.Sin(a)))); }

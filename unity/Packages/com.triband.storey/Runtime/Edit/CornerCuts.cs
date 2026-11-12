@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Triband.Storey.Generate;
 
 namespace Triband.Storey.Edit
 {
@@ -293,6 +294,130 @@ namespace Triband.Storey.Edit
             int had = 0;
             Around(b, k0, (bb, cuts) => { had = cuts.Count; cuts.Clear(); return true; });
             return had;
+        }
+
+        /// <summary>
+        /// Corner i of tier k0's sharp outline moved to <paramref name="to"/> (the building's own metres), as the Shape tab's
+        /// list of corners types it (docs/EDITOR.md §6.11, Storey's own): its cut and its neighbours' made again to meet their
+        /// edges (<see cref="Around"/>). False, nothing to keep, where it doesn't move, the outline rules refuse it
+        /// (<paramref name="why"/>), or a cut would no longer fit its edges (<paramref name="lost"/>: how many), which a drag
+        /// allows but a typed place doesn't: round the corner less first.
+        /// </summary>
+        public static bool Move(BuildingData b, int k0, int i, Vec2 to, out OutlineIssue why, out int lost)
+        {
+            why = OutlineIssue.None; lost = 0;
+            var (sharp, _) = Sharp(b, k0);
+            if (i < 0 || i >= sharp.Count || Same(sharp[i], to)) return false;
+            var nf = Tiers.Copy(sharp); nf[i] = to;
+            var w = OutlineIssue.None;
+            bool done = Around(b, k0, (x, _) => (w = Outlines.Set(x, k0, nf)) == OutlineIssue.None, out lost);
+            why = w;
+            return done && lost == 0;
+        }
+
+        /// <summary>
+        /// The largest cut corner i of tier k0's sharp outline takes this way, as its edges and its neighbours' cuts leave
+        /// room (<see cref="Outlines.CornerPoints"/> keeps 0.3 m of each edge; and 2 cm for the cut's ends, kept to the
+        /// centimetre): the Shape tab's Radius or Size goes up to it. 0 where it takes none (a straight corner). The outline
+        /// rules (setbacks, cores) may still refuse one that big. Storey's own.
+        /// </summary>
+        public static double Largest(BuildingData b, int k0, int i, CornerShape shape)
+        {
+            var (sharp, cuts) = Sharp(b, k0); int n = sharp.Count;
+            if (i < 0 || i >= n) return 0;
+            // half the angle between corner j's edges, and how far back along them a cut of its starts
+            double Half(int j)
+            {
+                var A = sharp[(j - 1 + n) % n]; var V = sharp[j]; var C = sharp[(j + 1) % n];
+                double L1 = Tiers.Hypot(A.x - V.x, A.z - V.z), L2 = Tiers.Hypot(C.x - V.x, C.z - V.z);
+                if (L1 < 1e-6 || L2 < 1e-6) return Math.PI / 2;
+                return Math.Acos(Tiers.Clamp(((A.x - V.x) * (C.x - V.x) + (A.z - V.z) * (C.z - V.z)) / (L1 * L2), -1, 1)) / 2;
+            }
+            double Back(int j)
+            {
+                var c = cuts.FirstOrDefault(x => x.i == j);
+                return c == null || j == i ? 0 : c.shape == CornerShape.Round ? c.size / Math.Tan(Half(j)) : c.size;
+            }
+            double half = Half(i);
+            if (half > (Math.PI - 0.05) / 2) return 0;   // straight: nothing to cut
+            int prev = (i - 1 + n) % n, next = (i + 1) % n;
+            double room = Math.Min(Tiers.EdgeLen(sharp, prev) - Back(prev), Tiers.EdgeLen(sharp, i) - Back(next)) - 0.3 - 0.02;
+            if (room <= 0) return 0;
+            return shape == CornerShape.Round ? room * Math.Tan(half) : room;
+        }
+
+        /// <summary>
+        /// How much less than a circle's radius its corners are rounded (<see cref="Circle"/>): an arc leaves 0.3 m of each
+        /// edge (<see cref="Outlines.CornerPoints"/>), and a centimetre is kept for the outline's centimetres, so a circle has
+        /// four short straight walls, 0.32 m long, where it touches the square round it. The arcs are within 8 cm of a true
+        /// circle of the radius.
+        /// </summary>
+        public const double CircleGap = 0.16;
+
+        /// <summary>
+        /// Tier k0's outline made a circle of <paramref name="radius"/> metres, round the middle of the outline as it stands
+        /// (docs/EDITOR.md §6.1, Storey's own): a square's four corners, each rounded as far as it goes
+        /// (<see cref="CircleGap"/> less than the radius), so it is four corners to drag, type (<see cref="Move"/>) or round
+        /// less one at a time, not dozens. What was anchored to the old outline's walls goes, as with a new footprint
+        /// (<see cref="Setbacks.ApplyFootprint"/>: setbacks, cores and courtyards that don't fit go too). The base's street door
+        /// goes on the wall nearest the front (the square's first edge) where the standard doorway fits; where none does
+        /// (<paramref name="door"/> false: a circle under about 10 m, whose arcs' 15° steps are too short), it is on the
+        /// front's short wall, built once that is long enough. The issue when the outline rules refuse it, the building
+        /// then the caller's to put back.
+        /// </summary>
+        public static OutlineIssue Circle(BuildingData b, int k0, double radius, out bool door)
+        {
+            door = true;
+            double R = Tiers.Cm(radius), r = R - CircleGap;
+            if (r < 0.5) return OutlineIssue.Shape;
+            var (sharp, _) = Sharp(b, k0);
+            double cx = Tiers.Cm((sharp.Min(p => p.x) + sharp.Max(p => p.x)) / 2), cz = Tiers.Cm((sharp.Min(p => p.z) + sharp.Max(p => p.z)) / 2);
+            // counter-clockwise, from the front's left, as the presets go
+            var square = new List<Vec2> { new Vec2(Tiers.Cm(cx - R), Tiers.Cm(cz - R)), new Vec2(Tiers.Cm(cx + R), Tiers.Cm(cz - R)), new Vec2(Tiers.Cm(cx + R), Tiers.Cm(cz + R)), new Vec2(Tiers.Cm(cx - R), Tiers.Cm(cz + R)) };
+            if (k0 == 0) Setbacks.ApplyFootprint(b, square);
+            else
+            {
+                // a setback's: its terrace doors, details, windows by hand and wall states were its old walls'
+                b.details.RemoveAll(d => Derived.TierStart(b, d.k) == k0);
+                b.windows.RemoveAll(w => Derived.TierStart(b, w.k) == k0);
+                b.entrances.RemoveAll(e => Tiers.DoorOn(b, e, k0));
+                Tiers.Corners(b, k0).Clear(); Tiers.MapEdges(b, k0, _ => new List<int>());
+                var set = Outlines.Set(b, k0, square);
+                if (set != OutlineIssue.None) return set;
+            }
+            if (CutAll(b, k0, CornerShape.Round, r) < 4)
+            {
+                // the rules' reason, from the first corner left sharp
+                var (now, cuts) = Sharp(b, k0);
+                int i = Enumerable.Range(0, now.Count).FirstOrDefault(j => cuts.All(c => c.i != j));
+                var why = Cut(b, k0, i, CornerShape.Round, r, false);
+                return why == OutlineIssue.None ? OutlineIssue.Shape : why;
+            }
+            if (k0 == 0) door = FrontDoor(b, new Vec2(cx, cz - R));
+            return OutlineIssue.None;
+        }
+
+        /// <summary>
+        /// The base's street door on the wall nearest <paramref name="front"/> where the standard doorway fits, as the generator
+        /// lays it out (<see cref="Facade.Ops"/>: 0.3 m clear of each end of the wall's span). False where no wall is long
+        /// enough: the door stays where it is.
+        /// </summary>
+        static bool FrontDoor(BuildingData b, Vec2 front)
+        {
+            var fp = b.footprint; int best = -1; double bd = double.MaxValue;
+            bool Fits(int j) { var f = Details.EdgeFrameAt(b, 0, j); return f.uE - f.uS > Dim.DOOR_EXT + 0.6 + 1e-6; }
+            for (int j = 0; j < fp.Count; j++)
+            {
+                if (!Fits(j)) continue;
+                var a = fp[j]; var c = fp[(j + 1) % fp.Count];
+                double d = Tiers.Hypot((a.x + c.x) / 2 - front.x, (a.z + c.z) / 2 - front.z);
+                if (d < bd - 1e-6) { bd = d; best = j; }
+            }
+            var e = b.entrances.FirstOrDefault(x => x.k == 0);
+            if (best < 0) return e != null && Fits(e.edge);
+            if (e == null) b.entrances.Insert(0, e = new EntranceData());
+            e.edge = best; e.t = 0.5;
+            return true;
         }
     }
 }

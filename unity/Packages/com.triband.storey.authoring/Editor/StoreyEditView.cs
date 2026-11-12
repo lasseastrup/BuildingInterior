@@ -60,6 +60,8 @@ namespace Triband.Storey.Editor
         [SerializeField] internal CornerShape cornerShape = CornerShape.Chamfer;
         [SerializeField] internal float cornerSize = 2f;
         [SerializeField] internal bool cornerDoor;
+        /// <summary>The Outline card's Circle: the radius it makes the outline edited, metres (docs/EDITOR.md §6.1).</summary>
+        [SerializeField] internal float circleRadius = 10f;
         /// <summary>The courtyard or atrium the Shape tool's handles edit, by id; "" for none.</summary>
         [SerializeField] internal string selectedVoid = "";
         [SerializeField] internal bool showProblems = true;

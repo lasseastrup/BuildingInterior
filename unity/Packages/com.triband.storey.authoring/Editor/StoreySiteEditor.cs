@@ -296,13 +296,13 @@ namespace Triband.Storey.Editor
 
         /// <summary>
         /// The building's height in the site (docs/EDITOR.md §6.11): moved up and down with the move gizmo in the Scene view,
-        /// or stood on the ground under it.
+        /// or stood on the ground under it; and the corners of the outline the Shape tab edits, each where it is (<see cref="CornerList"/>).
         /// </summary>
         void Placement(StoreyEdit e, BuildingData b)
         {
             using var c = StoreyInspectorUI.Card("placement", "Placement", StoreyInspectorUI.PlacementIcon, StoreyInspectorUI.Tint.Details,
                 b.elevation == 0 ? "On the site's ground" : $"{b.elevation:0.##} m up",
-                tip: "Where the building stands in the site: its ground floor's height above the site's ground");
+                tip: "Where the building stands in the site: its ground floor's height above the site's ground, and where its corners are");
             if (!c.Open) return;
             StoreyInspectorUI.Note("Move the building with the move gizmo in the Scene view; its up arrow raises and lowers it, level with the ground or a neighbour as it passes them (Alt: free).");
             bool follow = EditorGUILayout.Toggle(PropsFollowLabel, StoreyPropsFollow.Enabled);
@@ -313,6 +313,52 @@ namespace Triband.Storey.Editor
                 if (GUILayout.Button(new GUIContent("Snap to ground", "Cast down onto the scene's colliders (a Terrain has one) under the building: it stands on the highest ground it finds, and its foundation reaches down to the lowest"), GUILayout.Width(120)))
                     SnapToGround(e, b);
             }
+            CornerList(e, b);
+        }
+
+        /// <summary>
+        /// The corners of the outline the Shape tab edits (the Outline card's base or setback), as the Scene view's handles have
+        /// them: a cut corner is one, at its sharp point. Each is where it stands in the site, in metres from the site's origin;
+        /// a place typed moves it there (<see cref="CornerCuts.Move"/>), its cut and its neighbours' made again, one undo step.
+        /// Its number selects it, for the Scene view and the Corners card; its cut is shown beside it. Storey's own.
+        /// </summary>
+        void CornerList(StoreyEdit e, BuildingData b)
+        {
+            var v = e.View; int k0 = v.tier;
+            var (fp, cuts) = CornerCuts.Sharp(b, k0);
+            StoreyInspectorUI.Section(k0 == 0 ? "Corners" : $"Corners of the setback from {Floor(b, k0)}",
+                "The outline's corners, in metres from the site's origin: type a place to move one there. Its number selects it, for the Corners card");
+            (int i, double x, double z)? moved = null;
+            for (int i = 0; i < fp.Count; i++)
+            {
+                var cut = cuts.FirstOrDefault(c => c.i == i);
+                double x = Math.Round(b.pos.x + fp[i].x, 2), z = Math.Round(b.pos.z + fp[i].z, 2);
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    bool sel = v.selectedCorner == i;
+                    if (GUILayout.Toggle(sel, new GUIContent((i + 1).ToString(), "Select this corner: the Scene view rings it, and the Corners card cuts it"), EditorStyles.miniButton, GUILayout.Width(28)) && !sel)
+                    { v.selectedCorner = i; SceneView.RepaintAll(); }
+                    float lw = EditorGUIUtility.labelWidth; EditorGUIUtility.labelWidth = 14;
+                    double nx = EditorGUILayout.DelayedDoubleField("X", x, GUILayout.MinWidth(64));
+                    double nz = EditorGUILayout.DelayedDoubleField("Z", z, GUILayout.MinWidth(64));
+                    EditorGUIUtility.labelWidth = lw;
+                    GUILayout.Label(new GUIContent(cut == null ? "" : $"{(cut.shape == CornerShape.Round ? "round" : "chamfer")} {cut.size:0.##}",
+                        cut == null ? "" : cut.shape == CornerShape.Round ? "Rounded: its radius, metres (Corners)" : "Chamfered: how far back along each edge, metres (Corners)"), StoreyInspectorUI.Caption, GUILayout.Width(72));
+                    if (nx != x || nz != z) moved = (i, nx, nz);
+                }
+            }
+            // moved once every row is drawn, so the list is laid out alike in every event
+            if (moved is (int mi, double mx, double mz)) MoveCorner(e, b, k0, mi, mx, mz);
+        }
+
+        /// <summary>Corner i of tier k0 moved to (x, z), in metres from the site's origin, as the Placement card's list types it.</summary>
+        void MoveCorner(StoreyEdit e, BuildingData b, int k0, int i, double x, double z)
+        {
+            var to = new Vec2(Tiers.Cm(x - b.pos.x), Tiers.Cm(z - b.pos.z));
+            var why = OutlineIssue.None; int lost = 0;
+            if (e.ApplyTo($"Corner {i + 1} moved", bb => CornerCuts.Move(bb, k0, i, to, out why, out lost))) { message = null; e.View.selectedCorner = i; SceneView.RepaintAll(); }
+            else if (lost > 0) message = $"Corner {i + 1} can't go there: a cut corner's edges would be too short for its cut. Round or chamfer it less first (Corners).";
+            else if (why != OutlineIssue.None) message = $"Corner {i + 1} can't go there: {Outlines.Why(why)}.";
         }
 
         static readonly GUIContent PropsFollowLabel = new GUIContent("Its props move with it",
@@ -424,6 +470,7 @@ namespace Triband.Storey.Editor
                     message = why == OutlineIssue.None ? null : Outlines.Why(why);
                 }
             }
+            CircleRow(e, b, k0);
             if (k0 > 0)
             {
                 int lo = ts.First(t => t.k1 == k0).k0;
@@ -473,6 +520,44 @@ namespace Triband.Storey.Editor
             }
         }
 
+        static readonly GUIContent CircleLabel = new GUIContent("Circle",
+            "The radius of a circle to make this outline, round its middle: four corners, each rounded as far as it goes. Select one to round it less (Corners), or move it (Placement)");
+
+        /// <summary>
+        /// The Outline card's Circle (docs/EDITOR.md §6.1, Storey's own): the outline edited made a circle of the radius typed,
+        /// round its middle (<see cref="CornerCuts.Circle"/>). It is four corners, each rounded as far as it goes, so the Corners
+        /// card rounds each less and the Placement card's list moves them.
+        /// </summary>
+        void CircleRow(StoreyEdit e, BuildingData b, int k0)
+        {
+            var v = e.View;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.PrefixLabel(CircleLabel);
+                float r = EditorGUILayout.DelayedFloatField(v.circleRadius, GUILayout.MinWidth(48));
+                if (r != v.circleRadius) v.circleRadius = Mathf.Clamp((float)Math.Round(r, 2), 2f, 100f);
+                GUILayout.Label("m", GUILayout.Width(14));
+                if (GUILayout.Button(new GUIContent("Make round", "Make this outline a circle of that radius, round its middle"), EditorStyles.miniButton, GUILayout.Width(82)))
+                    MakeCircle(e, b, k0, v.circleRadius);
+            }
+        }
+
+        void MakeCircle(StoreyEdit e, BuildingData b, int k0, double radius)
+        {
+            var why = OutlineIssue.None; bool door = true; int had = Tiers.Of(b).Count;
+            if (!e.ApplyTo($"Circle of {radius:0.##} m", bb => (why = CornerCuts.Circle(bb, k0, radius, out door)) == OutlineIssue.None))
+            {
+                message = "It can't be a circle that size here: " + (why == OutlineIssue.Shape ? "its corners can't be rounded that far." : Outlines.Why(why) + ".");
+                return;
+            }
+            e.View.selectedCorner = -1; SceneView.RepaintAll();
+            var nb = e.Selected;
+            string lost = k0 == 0 && nb != null && Tiers.Of(nb).Count < had ? " Setbacks that no longer fit were removed." : "";
+            message = !door
+                ? $"A circle of {radius:0.##} m, its four corners rounded as far as they go.{lost} Under 10 m no wall of a circle is long enough for a street door (about 2.5 m): round corners 1 and 2 less (Corners) to leave a straight wall between them, where its door is."
+                : $"A circle of {radius:0.##} m, its four corners rounded as far as they go.{lost} Select a corner to round it less (Corners), or move it (Placement).";
+        }
+
         /// <summary>
         /// Chamfer or round the selected corner of this outline, or every corner (CornerCuts). A cut corner stays one
         /// corner: select it and its cut changes as you set it, or goes with Make sharp. On the base outline a chamfer
@@ -490,7 +575,11 @@ namespace Triband.Storey.Editor
             var shape = cut?.shape ?? v.cornerShape; float size = cut != null ? (float)cut.size : v.cornerSize; bool door = cut?.door ?? v.cornerDoor;
             EditorGUI.BeginChangeCheck();
             shape = (CornerShape)StoreyInspectorUI.Segmented(new GUIContent("Cut", "How a corner is cut"), (int)shape, CornerShapes);
-            size = EditorGUILayout.Slider(shape == CornerShape.Round ? "Radius" : "Size", size, 0.5f, 8f);
+            // up to as much as the selected corner's edges and its neighbours' cuts leave room for (a circle's corner: about its
+            // radius); with none selected, 8 m
+            float most = ci < 0 ? 8f : Mathf.Max(0.5f, (float)CornerCuts.Largest(b, k0, ci, shape));
+            if (cut != null && cut.shape == shape) most = Mathf.Max(most, (float)cut.size);
+            size = EditorGUILayout.Slider(shape == CornerShape.Round ? "Radius" : "Size", Mathf.Min(size, most), 0.5f, most);
             if (k0 == 0 && shape == CornerShape.Chamfer)
                 door = EditorGUILayout.Toggle(new GUIContent("Corner entrance", "A street door in the middle of the chamfer (it needs about 2.7 m)"), door);
             bool changed = EditorGUI.EndChangeCheck();
