@@ -100,6 +100,22 @@ namespace Triband.Storey.Occlusion
     }
 
     /// <summary>
+    /// The occluder slots and their rows, one set for every core drawing through one building table (docs/PLAY.md §7): the
+    /// core of the site the player is in and those of the sites round it take their slots here, so no two buildings in
+    /// the way share one, and each core writes only its own slots' rows. A core made without one has its own.
+    /// </summary>
+    public sealed class OccluderSlots
+    {
+        /// <summary>The occluder rows, <see cref="OcclusionCore.Slots"/> × <see cref="OcclusionCore.RowTexels"/> × 4 floats, as the shader reads them.</summary>
+        public readonly float[] Rows = new float[OcclusionCore.Slots * OcclusionCore.RowTexels * 4];
+        // the occluder in each slot, whichever core it is
+        internal readonly Occluder?[] taken = new Occluder?[OcclusionCore.Slots];
+
+        /// <summary>How many slots are taken now, by every core sharing them.</summary>
+        public int Taken { get { int n = 0; for (int i = 0; i < taken.Length; i++) if (taken[i] != null) n++; return n; } }
+    }
+
+    /// <summary>
     /// Occlusion, engine-free (docs/PLAY.md, slice 5.2): per frame, the view (the building the player is in, its
     /// ceiling clip and cutaway range), each wall's slide for the cutaway, and the buildings in the way with their
     /// occluder rows. A port of the prototype's <c>applyView</c>, <c>updateCutaway</c> and <c>updateOccluders</c>,
@@ -114,8 +130,13 @@ namespace Triband.Storey.Occlusion
         public readonly PlayWorld World;
         public readonly OcclusionSettings Settings;
         public OcclusionView View;
-        /// <summary>The occluder rows, <see cref="Slots"/> × <see cref="RowTexels"/> × 4 floats, as the shader reads them.</summary>
-        public readonly float[] Rows = new float[Slots * RowTexels * 4];
+        /// <summary>
+        /// The occluder rows, <see cref="Slots"/> × <see cref="RowTexels"/> × 4 floats, as the shader reads them: the
+        /// <see cref="Shared"/> slots', so an occluder's row is at its slot whichever core it is.
+        /// </summary>
+        public readonly float[] Rows;
+        /// <summary>Where this core's occluders take their slots: its own, or the slots every site's core drawing through one table shares.</summary>
+        public readonly OccluderSlots Shared;
         /// <summary>
         /// How far each wall has slid down (0..1), by building id and its index in LOD0's wall list; walls fully up are
         /// absent. Only walls near the player's storey slide (<see cref="CutBand"/>, docs/PERFORMANCE.md §10.1).
@@ -137,7 +158,7 @@ namespace Triband.Storey.Occlusion
         /// </summary>
         public ICollection<string>? Hidden;
 
-        readonly Occluder?[] slots = new Occluder?[Slots];
+        readonly Occluder?[] slots;   // Shared's
         readonly List<Occluder> active = new List<Occluder>();
         readonly Dictionary<string, Occluder> records = new Dictionary<string, Occluder>(StringComparer.Ordinal);
         double hiddenFor;
@@ -193,7 +214,12 @@ namespace Triband.Storey.Occlusion
         // grazed), and a rounding's worth over
         static readonly double Reach = Math.Max(Dim.T_EXT, 0.05) + 1e-6;
 
-        public OcclusionCore(PlayWorld world, OcclusionSettings settings) { World = world; Settings = settings; }
+        /// <summary>A core for a site's walk model; its occluders take their slots from <paramref name="slots"/>, or slots of its own.</summary>
+        public OcclusionCore(PlayWorld world, OcclusionSettings settings, OccluderSlots? slots = null)
+        {
+            World = world; Settings = settings;
+            Shared = slots ?? new OccluderSlots(); Rows = Shared.Rows; this.slots = Shared.taken;
+        }
 
         /// <summary>
         /// The buildings in the way now, each with its slot. Out on a terrace with what stands over it in the way, the building
@@ -231,10 +257,26 @@ namespace Triband.Storey.Occlusion
         /// <summary><see cref="Frame"/>'s second half, after <see cref="FrameView"/>: the cutaway's walls (a Profiler marker of their own in Unity).</summary>
         public void FrameCutaway(double dt) => UpdateCutaway(dt);
 
-        /// <summary>Stop: every occluder and every wall back to normal.</summary>
+        /// <summary>
+        /// One frame for a site the player isn't in (docs/PLAY.md §7): the next district over, or a prop or landmark placed as a
+        /// site of its own. Only its buildings in the way, by the same three rays, door rule, fade and hold as
+        /// <see cref="Frame"/>, the player and the camera given in this site's space. There is no view: none of its
+        /// buildings holds the player, so none is clipped or cut away and any can be in the way. <see cref="View"/> stays
+        /// neutral, and a wall still down from when the player was in the site slides back up. Its occluders take their slots
+        /// from <see cref="Shared"/>, as the core of the site the player is in does.
+        /// </summary>
+        public void FrameOccluders(PlayerState p, (double x, double y, double z) cam, double dt)
+        {
+            held = null; terrace = null; terraceInWay = terraceAtDoor = false;
+            View = new OcclusionView { clipY = 1e9, terraceY = 1e9 };
+            UpdateOccluders(p, cam, dt);
+            UpdateCutaway(dt);
+        }
+
+        /// <summary>Stop: every occluder and every wall back to normal, the occluders' slots given back.</summary>
         public void Clear()
         {
-            foreach (var r in active) { r.a = 0; r.t = 0; if (r.slot >= 0) slots[r.slot] = null; r.slot = -1; }
+            foreach (var r in active) { r.a = 0; r.t = 0; if (r.slot >= 0 && ReferenceEquals(slots[r.slot], r)) slots[r.slot] = null; r.slot = -1; }
             active.Clear(); Walls.Clear(); wallStates.Clear(); down.Clear(); hiddenFor = 0; Assist = 0; held = null;
             terrace = null; terraceInWay = terraceAtDoor = false;
             View = new OcclusionView { clipY = 1e9, terraceY = 1e9 };
@@ -662,8 +704,12 @@ namespace Triband.Storey.Occlusion
                     World.NearInto(c.x + (p.x - c.x) * f, c.z + (p.z - c.z) * f, 17, near);
                     foreach (var b in near) if (candSeen.Add(b)) cand.Add(b);
                 }
+                var site = World.Site; bool context = site.Own < site.Buildings.Count;
                 foreach (var b in cand)
                 {
+                    // a neighbouring district's building, a copy here for the party walls (Site.WithContext): never drawn by this
+                    // site, so its own district's core takes it (docs/PLAY.md §7)
+                    if (context && site.IndexOf(b) >= site.Own) continue;
                     if (b == held || AtDoorOf(b, p) || (Hidden != null && Hidden.Count > 0 && Hidden.Contains(b.id))) continue;
                     if (AnyHits(b, c, tg))
                     {
@@ -709,7 +755,7 @@ namespace Triband.Storey.Occlusion
                 if (done || b == null || (b == held && !OutOn(b)))
                 {
                     r.a = 0; r.t = 0; active.Remove(r);
-                    if (r.slot >= 0) { slots[r.slot] = null; r.slot = -1; }
+                    if (r.slot >= 0) { if (ReferenceEquals(slots[r.slot], r)) slots[r.slot] = null; r.slot = -1; }
                     continue;
                 }
                 WriteRow(r, b);

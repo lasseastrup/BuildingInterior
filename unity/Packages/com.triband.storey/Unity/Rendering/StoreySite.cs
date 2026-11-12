@@ -44,6 +44,8 @@ namespace Triband.Storey.Unity
         public List<StoreyOpening> openings = new List<StoreyOpening>();
         [Tooltip("The artist-made facade details the layout uses, placed by hand or by its styles' rules (the editor keeps this list), so builds include them.")]
         public List<StoreyDetail> facadeDetails = new List<StoreyDetail>();
+        [Tooltip("A district of the city, which the player walks about in: Storey Occlusion's Follow Player moves over to it as they cross into it, and Find neighbouring districts links it. Off for a site that only stands somewhere, such as a prop, a landmark or a pillar placed as a prefab: its buildings still go when they are in the camera's way, but the occlusion never follows the player into it, and no district takes it for a neighbour.")]
+        public bool district = true;
         [Tooltip("Districts next to this one (their layouts, and how far their sites are from this one): buildings back to back across the edge share one party wall. The inspector's Find neighbouring districts fills it.")]
         public List<NeighbourDistrict> neighbours = new List<NeighbourDistrict>();
 
@@ -215,10 +217,22 @@ namespace Triband.Storey.Unity
         /// <summary>The occlusion system driving this site in Play mode (it registers itself), or null.</summary>
         public StoreyOcclusion? Occlusion { get; internal set; }
 
-        /// <summary>The layout's ground plan in world space (its buildings' bounds), for picking the district a player is in.</summary>
+        /// <summary>
+        /// The occlusion system that looked at this site's buildings as buildings in the way this frame while driving another
+        /// site, the one the player is in (<see cref="StoreyOcclusion.Guests"/>; it sets this), or null.
+        /// </summary>
+        internal StoreyOcclusion? GuestOf { get; set; }
+
+        /// <summary>
+        /// The occlusion system whose <see cref="StoreyOcclusion.CoreOf"/> this site is its buildings' occlusion state: the one
+        /// driving it, or the one with this site round the player's (docs/PLAY.md §7). Null when neither is on.
+        /// </summary>
+        internal StoreyOcclusion? OccludedBy => Occlusion != null && Occlusion.isActiveAndEnabled ? Occlusion : GuestOf != null && GuestOf.isActiveAndEnabled ? GuestOf : null;
+
         /// <summary>The site's renderer (null until it has built), for the props manager.</summary>
         internal SiteRenderer? Renderer => site;
 
+        /// <summary>The layout's ground plan in world space (its buildings' bounds), for picking the district a player is in.</summary>
         public Lod.Districts.Area? PlanArea
         {
             get
@@ -458,7 +472,9 @@ namespace Triband.Storey.Unity
                 if (sv.activeId != null) f.Add(sv.activeId);
                 if (sv.focusId != null) f.Add(sv.focusId);
             }
-            var core = Application.isPlaying && Occlusion != null && Occlusion.isActiveAndEnabled ? Occlusion.Core : null;
+            // the site the player is in, or one round it whose buildings can be in the way (docs/PLAY.md §7)
+            var occ = Application.isPlaying ? OccludedBy : null;
+            var core = occ != null ? occ.CoreOf(this) : null;
             if (core != null)
             {
                 if (core.View.active != null) f.Add(core.View.active.id);
@@ -469,7 +485,7 @@ namespace Triband.Storey.Unity
             // teleport asked for. Built after the forced ones and those in view
             var pf = s.Prefetch; pf.Clear();
             var o = transform.position;
-            if (core != null && Occlusion!.PlayerAndCamera(out var feet, out var camAt))
+            if (core != null && occ!.PlayerAndCamera(out var feet, out var camAt))
             {
                 double px = feet.x - o.x, pz = feet.z - o.z, dx = camAt.x - feet.x, dz = camAt.z - feet.z;
                 int n = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(dx * dx + dz * dz) / 8));
