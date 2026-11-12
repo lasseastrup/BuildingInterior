@@ -270,6 +270,7 @@ namespace Triband.Storey
                 x = c.Num(o, "x", 0, w), z = c.Num(o, "z", 0, w), rot = c.Num(o, "rot", 0, w),
                 bottom = c.Int(o, "bottom", 0, w), top = c.Int(o, "top", -1, w),
                 roof = c.Bool(o, "roof", false, w),
+                rails = c.Bool(o, "rails", true, w), solid = c.Bool(o, "solid", true, w),
             };
             c.Check(o, w, Keys.Core);
             return s;
@@ -457,10 +458,17 @@ namespace Triband.Storey
             foreach (var f in b.floors) floors.Add(Floor(f));
             o["floors"] = floors;
             var shafts = new List<object?>();
-            foreach (var s in b.shafts) shafts.Add(new Dictionary<string, object?>
+            foreach (var s in b.shafts)
             {
-                ["id"] = s.id, ["type"] = Lower(s.type), ["x"] = s.x, ["z"] = s.z, ["rot"] = s.rot, ["bottom"] = s.bottom, ["top"] = s.top, ["roof"] = s.roof,
-            });
+                var so = new Dictionary<string, object?>
+                {
+                    ["id"] = s.id, ["type"] = Lower(s.type), ["x"] = s.x, ["z"] = s.z, ["rot"] = s.rot, ["bottom"] = s.bottom, ["top"] = s.top, ["roof"] = s.roof,
+                };
+                // only when off: a layout whose stairs have both reads as before
+                if (!s.rails) so["rails"] = false;
+                if (!s.solid) so["solid"] = false;
+                shafts.Add(so);
+            }
             o["shafts"] = shafts;
             var ents = new List<object?>();
             foreach (var e in b.entrances)
@@ -737,7 +745,7 @@ namespace Triband.Storey
             public static readonly string[] Terrace = { "pitch", "type" };
             public static readonly string[] TerraceEdge = { "parapet", "capH", "capDepth", "capStrip" };
             public static readonly string[] RoofSurface = { "pattern", "w", "h", "relief", "variation" };
-            public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof" };
+            public static readonly string[] Core = { "id", "type", "x", "z", "rot", "bottom", "top", "roof", "rails", "solid" };
             public static readonly string[] DetailRules = { "ac", "vents" };
             public static readonly string[] KindRule = { "p", "density", "spacing", "per", "floors", "corners", "color", "colorOff" };
             public static readonly string[] OpeningEntry = { "kind", "none", "weight", "recess" };

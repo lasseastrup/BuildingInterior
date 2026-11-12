@@ -175,7 +175,9 @@ namespace Triband.Storey.Tests
             var b = Edit.Buildings.Add(d, "rect", new Vec2(0, 0)); b.pos = new Vec2(0, 0);
             b.footprint = new() { new Vec2(0, 0), new Vec2(12, 0), new Vec2(12, 9), new Vec2(0, 9) };
             b.floors = Enumerable.Range(0, 3).Select(_ => new FloorData()).ToList(); b.interior = true; b.shafts.Clear();
-            Assert.NotNull(Edit.Shafts.Place(b, 0, new Vec2(6, 4.5), CoreType.Flight, 0, Edit.Shafts.NewId(d)));
+            var s = Edit.Shafts.Place(b, 0, new Vec2(6, 4.5), CoreType.Flight, 0, Edit.Shafts.NewId(d));
+            Assert.NotNull(s);
+            s!.rails = false;   // the opening's rails alone: the flight going on up from here has none of its own
             var site = new Site(d.buildings);
             var m = CollisionMesh.Build(site, b, Lod0.BuildShape(site, b));
             // on storey 1, across the opening from the walkway's side: the rail along the flight lane at x 6.04, then the far one

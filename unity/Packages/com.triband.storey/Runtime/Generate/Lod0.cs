@@ -411,6 +411,12 @@ namespace Triband.Storey.Generate
         /// <summary>The rails round a stair opening: their top over the floor (<see cref="Seg.h"/>).</summary>
         public const double StairRail = 1.02;
 
+        /// <summary>
+        /// The newels on the corners of a straight flight's opening, and at the foot of a railed flight on a floor: their top
+        /// over the floor, above the handrails that end in them. Storey's own.
+        /// </summary>
+        public const double StairNewel = 1.18;
+
         /// <summary>The curb round a flat roof without a parapet (and round a courtyard through it): its top over the roof.</summary>
         public const double RoofCurb = 0.3;
 
@@ -1530,15 +1536,42 @@ namespace Triband.Storey.Generate
                     // front (−z), off at the back, then back along the walkway (the +x half) to the next flight. Rails where
                     // the floor is open: both sides of the flight lane on every storey a flight comes up through (the
                     // building's wall stands in on a side against it), and across the front where no flight carries on,
-                    // the roof included: no bulkhead, the opening is railed like any other storey's.
+                    // the roof included: no bulkhead, the opening is railed like any other storey's. With the flights' own
+                    // rails (CoreData.rails), a handrail on balusters between newels on the opening's corners, which those
+                    // start and end at: they and the solid flights (CoreData.solid) are Storey's own
                     double hw = Dim.FLIGHT_W / 2, hd = Dim.FLIGHT_D / 2, xm = -hw + Dim.FLIGHT_LANE;
                     double z0 = -hd + Dim.FLIGHT_LANDING, z1 = hd - Dim.FLIGHT_LANDING;
                     // one flight alone (Cores.OneFlight) has no walkway: its lane's other side can stand against a wall too
                     bool wR = fR && Cores.OneFlight(b, s);
+                    bool hole = Cores.StairHoleAt(b, s, k), up = Cores.HasFlight(b, s, k), draw = !op.ShapeOnly;
                     op.Ctx(null, 0);
-                    if (Cores.StairHoleAt(b, s, k))
+                    // a newel: half its width and its top over the floor; balusters: half their width, and about how far apart
+                    const double NH = 0.065, NT = StairNewel, BH = 0.0125, Gap = 0.135;
+                    // a newel on the lane's edge xe, from za to zb along it
+                    void Newel(double xe, double za, double zb)
                     {
-                        // 2 cm clear of the flight lane, so no rail face lies on a step's
+                        Bx(xe - NH, xe + NH, y, y + NT, za, zb, C.rail, null, Skip.Bot);
+                        S(xe, (za + zb) / 2, xe, (za + zb) / 2, NH + 0.015, NT);
+                    }
+                    // a level rail's handrail, its top StairRail over the floor, and its balusters, between its ends (newels,
+                    // or a post against a wall): along z at x, or along x at z
+                    void Level(double a, double e, double at, bool alongZ)
+                    {
+                        if (!draw) return;
+                        double h0 = y + StairRail - 0.07; int m = Math.Max(1, (int)Math.Round((e - a) / Gap));
+                        if (alongZ) Bx(at - 0.02, at + 0.02, h0, y + StairRail, a, e, C.rail, null, Skip.In | Skip.Out);
+                        else Bx(a, e, h0, y + StairRail, at - 0.02, at + 0.02, C.rail, null, Skip.UStart | Skip.UEnd);
+                        for (int j = 0; j < m; j++)
+                        {
+                            double c = a + (j + 0.5) * (e - a) / m;
+                            if (alongZ) Bx(at - BH, at + BH, y, h0, c - BH, c + BH, C.rail, null, Skip.Top | Skip.Bot);
+                            else Bx(c - BH, c + BH, y, h0, at - BH, at + BH, C.rail, null, Skip.Top | Skip.Bot);
+                        }
+                    }
+                    if (hole && !s.rails)
+                    {
+                        // plain, the flights having no rails of their own to match: a handrail and a post at each end, 2 cm clear
+                        // of the flight lane, so no rail face lies on a step's
                         void RailZ(double x)
                         {
                             Bx(x - 0.02, x + 0.02, y + 0.95, y + 1.02, z0 + 0.04, z1 - 0.04, C.rail);
@@ -1548,7 +1581,7 @@ namespace Triband.Storey.Generate
                         }
                         if (!wR) RailZ(xm + 0.04);
                         if (!fL) RailZ(-hw - 0.04);
-                        if (!Cores.HasFlight(b, s, k))
+                        if (!up)
                         {
                             // the top: nothing carries on up, so the front of the opening is railed too
                             double zr = z0 - 0.04, x0 = fL ? -hw + 0.02 : -hw - 0.06, x1 = wR ? xm - 0.02 : xm + 0.06;
@@ -1558,12 +1591,122 @@ namespace Triband.Storey.Generate
                             S(x0, zr, x1, zr, 0.04, StairRail);
                         }
                     }
-                    if (Cores.HasFlight(b, s, k))
+                    else if (hole)
+                    {
+                        // to match the flights' own: along the opening's sides, 2 cm clear of the flight lane so no rail face lies
+                        // on a step's, from the newel at its front corner to the one at its back (the head of the flight that
+                        // comes up here)
+                        void Side(double xe, double o, bool wall)
+                        {
+                            if (wall) return;
+                            double xc = xe + o * 0.04;
+                            Newel(xe, z0 - 2 * NH, z0); Newel(xe, z1, z1 + 2 * NH);
+                            Level(z0, z1, xc, true);
+                            S(xc, z0, xc, z1, 0.04, StairRail);
+                        }
+                        Side(-hw, -1, fL); Side(xm, 1, wR);
+                        if (!up)
+                        {
+                            // the top: nothing carries on up, so the front of the opening is railed too, newel to newel (a post
+                            // where it meets a wall)
+                            double zr = z0 - 0.04, x0 = fL ? -hw + 0.02 : -hw - 0.06, x1 = wR ? xm - 0.02 : xm + 0.06;
+                            if (fL) Bx(x0, x0 + 0.04, y, y + StairRail, zr - 0.02, zr + 0.02, C.rail, null, Skip.Bot);
+                            if (wR) Bx(x1 - 0.04, x1, y, y + StairRail, zr - 0.02, zr + 0.02, C.rail, null, Skip.Bot);
+                            Level(fL ? x0 + 0.04 : -hw + NH, wR ? x1 - 0.04 : xm - NH, zr, false);
+                            S(x0, zr, x1, zr, 0.04, StairRail);
+                        }
+                    }
+                    if (up)
                     {
                         // risers of about 18 cm, whatever the storey's height, over a fixed run
                         double fh = Derived.FloorH(b, k); int n = Math.Max(8, (int)Math.Round(fh / 0.18)); double run = (z1 - z0) / n;
-                        // against a wall, a step's side would lie in the wall's inner face and flicker with it: left out
-                        for (int i = 0; i < n; i++) { double za = z0 + i * run, t = y + (i + 1) * fh / n; Bx(-hw, xm, t - 0.2, t, za, za + run, C.step, null, (fL ? Skip.UStart : Skip.None) | (wR ? Skip.UEnd : Skip.None)); }
+                        double sl = fh / (z1 - z0), cs = 1 / Math.Sqrt(1 + sl * sl);   // the flight's slope, and its cosine
+                        // standing on this storey's floor (the stack's lowest flight, or over a filled storey), not on the
+                        // flight below's opening
+                        bool onFloor = !hole;
+                        if (!s.solid)
+                        {
+                            // steps in the air. Against a wall, a step's side would lie in the wall's inner face and flicker with
+                            // it: left out
+                            for (int i = 0; i < n; i++) { double za = z0 + i * run, t = y + (i + 1) * fh / n; Bx(-hw, xm, t - 0.2, t, za, za + run, C.step, null, (fL ? Skip.UStart : Skip.None) | (wR ? Skip.UEnd : Skip.None)); }
+                        }
+                        else if (draw)
+                        {
+                            // solid: its treads and risers, and its sides in the rooms' walls' colour, filled down to the floor it
+                            // stands on; over the flight below, a sloped underside through where the steps in the air have their
+                            // back edges' undersides, 20 cm under the treads' back edges, so that flight's headroom is kept
+                            const double Waist = 0.2;
+                            double T(int i) => y + (i + 1) * fh / n;
+                            double Z(int i) => i == n ? z1 : z0 + i * run;
+                            var upN = new P3(0, 1, 0); var fore = new P3(-f.w.x, 0, -f.w.z);
+                            for (int i = 0; i < n; i++)
+                            {
+                                double za = Z(i), zb = Z(i + 1), t = T(i), tb = i == 0 ? y : T(i - 1);
+                                op.Quad(f.At(-hw, t, za), f.At(xm, t, za), f.At(xm, t, zb), f.At(-hw, t, zb), upN, C.step);
+                                op.Quad(f.At(-hw, tb, za), f.At(xm, tb, za), f.At(xm, t, za), f.At(-hw, t, za), fore, C.step);
+                            }
+                            // its side, in the frame's (w, y)
+                            var side = new List<Vec2>(2 * n + 2) { new Vec2(z0, onFloor ? y : y - Waist) };
+                            for (int i = 0; i < n; i++) { side.Add(new Vec2(Z(i), T(i))); side.Add(new Vec2(Z(i + 1), T(i))); }
+                            side.Add(new Vec2(z1, onFloor ? y : T(n - 1) - Waist));
+                            var tris = Triangulate.Shape(side, null);
+                            // against a wall its side would flicker with the wall's inner face: a centimetre in, by Unity only,
+                            // for the wall's windows (as a core wall's end, End)
+                            void Face(double x, double o, bool wall)
+                            {
+                                var pts = new List<P3>(side.Count);
+                                foreach (var p in side) pts.Add(f.At(wall ? x - o * 0.01 : x, p.z, p.x));
+                                bool was = op.Backing; op.Backing = was || wall;
+                                op.PolyTris(pts, tris, new P3(f.u.x * o, 0, f.u.z * o), C.inner);
+                                op.Backing = was;
+                            }
+                            Face(-hw, -1, fL); Face(xm, 1, wR);
+                            if (onFloor) op.Quad(f.At(-hw, y, z1), f.At(xm, y, z1), f.At(xm, T(n - 1), z1), f.At(-hw, T(n - 1), z1), new P3(f.w.x, 0, f.w.z), C.inner);
+                            else op.Quad(f.At(-hw, y - Waist, z0), f.At(xm, y - Waist, z0), f.At(xm, T(n - 1) - Waist, z1), f.At(-hw, T(n - 1) - Waist, z1),
+                                new P3(f.w.x * sl * cs, -cs, f.w.z * sl * cs), C.inner);
+                        }
+                        if (s.rails)
+                        {
+                            // up each open side: a handrail 90 cm over the nosings' line from the newel at the flight's foot
+                            // (the opening's, or its own on a floor) to the one at its head (the storey above's), on balusters
+                            // standing on the treads, about as far apart as the level rails'
+                            int m = Math.Max(1, (int)Math.Round(run / Gap));
+                            double Top(double z) => y + (z - z0 + run) * sl + 0.9;
+                            var top = new P3(-f.w.x * sl * cs, cs, -f.w.z * sl * cs);
+                            void Rail(double xe, double o, bool wall)
+                            {
+                                if (wall) return;
+                                if (onFloor) Newel(xe, z0 - 2 * NH, z0);
+                                if (!draw) return;
+                                double xc = xe - o * 0.04, xa = xc - 0.02, xb = xc + 0.02, ya = Top(z0), ye = Top(z1);
+                                P3 Q(double x, double yy, double z) => f.At(x, yy, z);
+                                op.Quad(Q(xa, ya, z0), Q(xb, ya, z0), Q(xb, ye, z1), Q(xa, ye, z1), top, C.rail);
+                                op.Quad(Q(xa, ya - 0.07, z0), Q(xb, ya - 0.07, z0), Q(xb, ye - 0.07, z1), Q(xa, ye - 0.07, z1), new P3(-top.x, -top.y, -top.z), C.rail);
+                                op.Quad(Q(xa, ya - 0.07, z0), Q(xa, ya, z0), Q(xa, ye, z1), Q(xa, ye - 0.07, z1), new P3(-f.u.x, 0, -f.u.z), C.rail);
+                                op.Quad(Q(xb, ya - 0.07, z0), Q(xb, ya, z0), Q(xb, ye, z1), Q(xb, ye - 0.07, z1), new P3(f.u.x, 0, f.u.z), C.rail);
+                                // its ends, in the newels (the head's is the storey above's, which a setback there may leave out)
+                                op.Quad(Q(xa, ya - 0.07, z0), Q(xb, ya - 0.07, z0), Q(xb, ya, z0), Q(xa, ya, z0), new P3(-f.w.x, 0, -f.w.z), C.rail);
+                                op.Quad(Q(xa, ye - 0.07, z1), Q(xb, ye - 0.07, z1), Q(xb, ye, z1), Q(xa, ye, z1), new P3(f.w.x, 0, f.w.z), C.rail);
+                                // the balusters' tops a centimetre into the handrail's sloped underside, all across them
+                                for (int i = 0; i < n; i++)
+                                    for (int j = 0; j < m; j++)
+                                    {
+                                        double zc = z0 + (i + (j + 0.5) / m) * run;
+                                        Bx(xc - BH, xc + BH, y + (i + 1) * fh / n, Top(zc) - 0.07 + BH * sl + 0.01, zc - BH, zc + BH, C.rail, null, Skip.Top | Skip.Bot);
+                                    }
+                            }
+                            Rail(-hw, -1, fL); Rail(xm, 1, wR);
+                        }
+                        // the walk model's walls: no stepping off a railed side, nor walking in under a solid flight on its
+                        // floor (by its sides or its back). The walk model's alone (Seg.Flush): the collision mesh has them
+                        // sloping with the flight, as high as they are (CollisionMesh.Stairs)
+                        bool fill = s.solid && onFloor;
+                        if (s.rails || fill)
+                        {
+                            if (!fL) S(-hw + 0.04, z0, -hw + 0.04, z1, 0.04, Seg.Flush);
+                            if (!wR) S(xm - 0.04, z0, xm - 0.04, z1, 0.04, Seg.Flush);
+                        }
+                        if (fill) S(-hw, z1 - 0.04, xm, z1 - 0.04, 0.04, Seg.Flush);
                     }
                 }
                 else

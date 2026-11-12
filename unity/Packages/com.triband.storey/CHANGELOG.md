@@ -5,6 +5,12 @@ All notable changes to this package are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- **Rails and solid straight flights** (`CoreData.rails`, `CoreData.solid`, layout keys `rails` and `solid` on a shaft, both on unless the layout says otherwise and written only when off; `Lod0.Shared.StairNewel`; docs/EDITOR.md §5, `StairRailTests`):
+  - **Rails:** a handrail up each side of every flight that no building wall stands against, 90 cm over the nosings, on balusters standing on the treads, from a newel at the flight's foot to one at its head. The rails round the openings get balusters to match, between newels on their corners. Off, those are plain as before.
+  - **Solid:** each flight built solid, its sides in the rooms' walls' colour: filled down to the floor it stands on, or, over the flight below, with a sloped underside 20 cm under its treads' back edges that keeps that flight's headroom.
+  - The walk model keeps the player on a railed flight and out from under a solid one on its floor (walls of its own, `Seg.Flush`). The collision mesh has those walls as they are, sloping with the flight (`CollisionMesh.Fence`).
+  - With both off, a straight flight's LOD0, walls and collider are what they were. Both on costs about 1,100 LOD0 triangles a flight: with the shell where the flights reach the roof (the stack is seen down its opening), otherwise with the rooms.
+- **The baked layout format is 17** (`BakedLayout.Version`): shafts carry `rails` and `solid`.
 - **A circle from four corners** (`CornerCuts.Circle`, `CornerCuts.CircleGap`; docs/EDITOR.md §6.1, `CircleTests`). A tier's outline becomes a square twice the radius wide, round the middle of the outline as it was. Each of its four corners is rounded as far as it goes: the radius less 16 cm, so the arcs leave 0.32 m straight walls where they touch the square, and the outline is within 8 cm of a true circle. It stays four corners, to drag, type or round less one at a time.
   - What was on the old walls goes, as with a new footprint (`Setbacks.ApplyFootprint`). A setback's terrace doors, details, windows by hand and wall states go with its old walls.
   - The base's street door goes on the 15° step nearest the front where the standard doorway fits: a radius of about 10 m or more. Under that, it stays on the front's short wall, built once corners 0 and 1 (the Placement list's 1 and 2) are rounded less and that wall is long enough (`out door` says which).

@@ -238,6 +238,19 @@ namespace Triband.Storey
         public int top = -1;
         /// <summary>Continues to the roof.</summary>
         public bool roof;
+        /// <summary>
+        /// Straight flights (<see cref="CoreType.Flight"/>): a railing up each side of every flight that no building wall
+        /// stands against, a handrail on balusters from a newel at its foot to one at its head, and the rails round the
+        /// openings the flights come up through on balusters to match, between newels on their corners (docs/EDITOR.md §5).
+        /// Off, those are plain, a handrail and a post at each end, as they were. Storey's own.
+        /// </summary>
+        public bool rails = true;
+        /// <summary>
+        /// Straight flights: each flight built solid rather than as steps in the air. One on a floor (the stack's lowest, one
+        /// flight up) is filled down to it; one over the flight below has a sloped underside, clear of that flight's headroom.
+        /// Storey's own.
+        /// </summary>
+        public bool solid = true;
     }
 
     public sealed class EntranceData

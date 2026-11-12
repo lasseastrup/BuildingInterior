@@ -1371,10 +1371,21 @@ namespace Triband.Storey.Editor
             if (roof != s.roof) e.ApplyTo(roof ? "Now reaches the roof" : "Stops at the top floor", bb => { bb.shafts.First(x => x.id == id).roof = roof; return true; });
             // one flight up has no walkway back beside it (Cores.OneFlight): the stairs take the flight lane alone
             if (s.type == CoreType.Flight)
+            {
                 StoreyInspectorUI.Note(Cores.OneFlight(b, s) ? "One flight: it takes the flight lane alone, and the floor beside it is free."
                     : "Several flights: the walkway beside them leads back to the next one. One flight up takes half the width.");
+                bool rails = EditorGUILayout.Toggle(FlightRailsLabel, s.rails);
+                if (rails != s.rails) e.ApplyTo(rails ? "Stair rails on" : "Stair rails off", bb => { bb.shafts.First(x => x.id == id).rails = rails; return true; });
+                bool solid = EditorGUILayout.Toggle(FlightSolidLabel, s.solid);
+                if (solid != s.solid) e.ApplyTo(solid ? "Solid flights" : "Steps in the air", bb => { bb.shafts.First(x => x.id == id).solid = solid; return true; });
+            }
             TurnAndRemove(e, s, id);
         }
+
+        static readonly GUIContent FlightRailsLabel = new GUIContent("Rails",
+            "A handrail on balusters up each side of every flight that no building wall stands against, from a newel at its foot to one at its head, and balusters on the rails round the floor openings to match. Nobody steps off a railed side. Off: the openings' rails are plain");
+        static readonly GUIContent FlightSolidLabel = new GUIContent("Solid",
+            "Each flight built solid: on a floor, filled down to it, and nobody walks in under it; over the flight below, a sloped underside that keeps that flight's headroom. Off: steps in the air");
 
         /// <summary>Turning and removing, for every core.</summary>
         void TurnAndRemove(StoreyEdit e, CoreData s, string id)

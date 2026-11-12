@@ -168,8 +168,9 @@ namespace Triband.Storey.Tests
         [Fact]
         public void EachFlightEndsOnTheFloorAbove()
         {
+            // its steps in the air (CoreData.solid off): a box each
             var (d, b) = Block();
-            var s = Place(d, b, 0);
+            var s = Place(d, b, 0); s.solid = false;
             var op = Lod0.Build(new Site(d.buildings), b, solids: true).Op;
             var f = Cores.FrameOf(b, s);
             double z0 = -Dim.FLIGHT_D / 2 + Dim.FLIGHT_LANDING, z1 = Dim.FLIGHT_D / 2 - Dim.FLIGHT_LANDING;
@@ -187,14 +188,14 @@ namespace Triband.Storey.Tests
         [Fact]
         public void ThereAreNoWallsNorABulkhead()
         {
-            // nothing of the flights' taller than a rail, on any storey or on the roof, at LOD0 or LOD1
+            // nothing of the flights' taller than a rail's newel, on any storey or on the roof, at LOD0 or LOD1
             var (d, b) = Block();
-            var s = Place(d, b, 0);
+            var s = Place(d, b, 0); s.solid = false;
             Assert.True(Cores.ShaftRoof(b, s));
             var site = new Site(d.buildings);
             var f = Cores.FrameOf(b, s);
             foreach (var op in new[] { Lod0.Build(site, b, solids: true).Op, Lod1.Build(site, b, solids: true) })
-                Assert.Empty(op.Solids!.Where(x => !x.Mitred && x.F.O.x == f.O.x && x.F.O.z == f.O.z && x.y1 - x.y0 > 1.1));
+                Assert.Empty(op.Solids!.Where(x => !x.Mitred && x.F.O.x == f.O.x && x.F.O.z == f.O.z && x.y1 - x.y0 > Lod0.Shared.StairNewel + 1e-9));
         }
 
         [Fact]

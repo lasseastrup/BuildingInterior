@@ -180,7 +180,9 @@ namespace Triband.Storey.Generate
         public double h;
         /// <summary>
         /// <see cref="h"/> for a segment that nothing stands on over its floor: a flat roof's edge round a cap set in, where the
-        /// walls' top is closed flush with the roof. A wall to the walk model alone; the collision mesh has none there.
+        /// walls' top is closed flush with the roof. A wall to the walk model alone; the collision mesh has none there. Also a
+        /// straight flight's railed or solid sides, and a solid one's back, which slope with it: the collision mesh has them
+        /// as they are (<see cref="Play.CollisionMesh"/>).
         /// </summary>
         public const double Flush = -1;
         public Seg(double ax, double az, double bx, double bz, double r) { this.ax = ax; this.az = az; this.bx = bx; this.bz = bz; this.r = r; h = 0; }

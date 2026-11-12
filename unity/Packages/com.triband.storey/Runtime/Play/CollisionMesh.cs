@@ -26,7 +26,8 @@ namespace Triband.Storey.Play
     /// parapet is.</item>
     /// <item>Floors: one polygon per level (the floor, terrace or roof), as far out as the walk model lets the player step,
     /// with the stair holes cut out; none inside storeys nobody can enter (shell-only buildings, filled storeys).</item>
-    /// <item>Stairs: a ramp up each flight, a flat mid landing.</item>
+    /// <item>Stairs: a ramp up each flight, a flat mid landing; a straight flight's railed sides as high as their handrail,
+    /// and a solid one's sides and back on its floor, sloping with it.</item>
     /// <item>Pitched roofs: their planes.</item>
     /// <item>A roof cap set in (<see cref="RoofCap.inset"/>): where it stands, as high as it is, its sides walls and its top a
     /// wall's (a ring) or a roof's (a block over the whole roof, which the walk model walks under).</item>
@@ -287,6 +288,19 @@ namespace Triband.Storey.Play
                     {
                         double hw = Dim.FLIGHT_W / 2, xm = -hw + Dim.FLIGHT_LANE, z0 = -Dim.FLIGHT_D / 2 + Dim.FLIGHT_LANDING, z1 = Dim.FLIGHT_D / 2 - Dim.FLIGHT_LANDING;
                         Quad(Pt(-hw, z0, yb), Pt(xm, z0, yb), Pt(xm, z1, yb + fh), Pt(-hw, z1, yb + fh), Up, CollisionKind.Stair);
+                        // its railed sides as high as their handrail, 90 cm over the nosings (a riser over the ramp); a solid
+                        // flight on its floor, its sides and its back as high as it is. Where the walk model has a wall all the
+                        // way up (Seg.Flush), as LOD0 builds them
+                        bool fill = s.solid && !Cores.StairHoleAt(b, s, k);
+                        if (s.rails || fill)
+                        {
+                            var flush = Cores.CoreFlush(Derived.OutlineAt(b, k), s, b: b);
+                            bool fL = flush[0] != null, wR = flush[1] != null && Cores.OneFlight(b, s);
+                            double over = s.rails ? fh / Math.Max(8, (int)Math.Round(fh / 0.18)) + 0.9 : 0;
+                            if (!fL) Fence(f, -hw + 0.04, z0, z1, yb, fh, over);
+                            if (!wR) Fence(f, xm - 0.04, z0, z1, yb, fh, over);
+                        }
+                        if (fill) { var a = f.At2(-hw, z1 - 0.04); var c = f.At2(xm, z1 - 0.04); Box(new Seg(a.x, a.z, c.x, c.z, 0.04), yb, yb + fh); }
                         continue;
                     }
                     double half = fh / 2;
@@ -296,6 +310,33 @@ namespace Triband.Storey.Play
                     Quad(Pt(0, 1.6, yb + half), Pt(1.3, 1.6, yb + half), Pt(1.3, -1.6, yb + fh), Pt(0, -1.6, yb + fh), Up, CollisionKind.Stair);
                 }
             }
+        }
+
+        /// <summary>
+        /// A wall along a straight flight's side, in its core's frame <paramref name="f"/>: 4 cm either side of
+        /// <paramref name="x"/>, from <paramref name="z0"/> to <paramref name="z1"/>, standing on the floor at
+        /// <paramref name="yb"/>, its top <paramref name="over"/> over the ramp up the flight (from yb at z0 to yb +
+        /// <paramref name="fh"/> at z1). No front where it rises from the floor (a solid flight's side, unrailed).
+        /// </summary>
+        void Fence(Frame f, double x, double z0, double z1, double yb, double fh, double over)
+        {
+            const double r = 0.04;
+            int Pt(double u, double w, double y) { var q = f.At2(u, w); return V(q.x, y, q.z); }
+            double ya = yb + over, ye = yb + fh + over;
+            bool front = over > 1e-6;
+            int a0 = Pt(x - r, z0, yb), b0 = Pt(x + r, z0, yb), c0 = Pt(x + r, z1, yb), d0 = Pt(x - r, z1, yb);
+            int a1 = front ? Pt(x - r, z0, ya) : a0, b1 = front ? Pt(x + r, z0, ya) : b0, c1 = Pt(x + r, z1, ye), d1 = Pt(x - r, z1, ye);
+            var u = new P3(f.u.x, 0, f.u.z); var w = new P3(f.w.x, 0, f.w.z); double sl = fh / (z1 - z0);
+            var nu = new P3(-u.x, 0, -u.z);
+            if (front)
+            {
+                Quad(a0, d0, d1, a1, nu, CollisionKind.Wall);                                         // its −u side
+                Quad(b0, c0, c1, b1, u, CollisionKind.Wall);                                          // its +u side
+                Quad(a0, b0, b1, a1, new P3(-w.x, 0, -w.z), CollisionKind.Wall);                     // its front end
+            }
+            else { Tri(a0, d0, d1, nu, CollisionKind.Wall); Tri(b0, c0, c1, u, CollisionKind.Wall); }
+            Quad(d0, c0, c1, d1, w, CollisionKind.Wall);                                              // its back end
+            Quad(a1, b1, c1, d1, new P3(-w.x * sl, 1, -w.z * sl).Normalized, CollisionKind.Wall);    // its top
         }
 
         // ---- pitched roofs ----
