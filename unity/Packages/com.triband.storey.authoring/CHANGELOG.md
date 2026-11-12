@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Changed
+- **Find neighbouring districts links districts alone** (docs/CITY.md §5, docs/PLAY.md §7). A site with **District** off, one placed as a prop, is neither linked nor links others: a prefab moves, and a neighbour is linked by where it stands. Pressed on such a site, it says so and links nothing. The Site settings show **District** with the rest.
 - **Shape ▸ Placement lists the outline's corners, each where it stands** (docs/EDITOR.md §6.11): the corners of the outline the Shape tab edits (the Outline card's base or setback), as the Scene view's handles have them, a cut corner one with its cut beside it. Each has its X and Z in metres from the site's origin. A place typed moves it there, one undo step, its cut and its neighbours' following (`CornerCuts.Move`), or says why not. Its number selects it for the Scene view and the Corners card.
 - **Shape ▸ Outline makes a circle** (docs/EDITOR.md §6.1): *Circle*, a radius (remembered, 10 m to start), and *Make round*. The outline edited, the base's or a setback's, becomes four corners each rounded as far as it goes (`CornerCuts.Circle`). The inspector says where no wall of it takes a street door, and how to make room for one.
 - **Shape ▸ Corners' Radius and Size go as far as the selected corner takes** (`CornerCuts.Largest`), where the slider stopped at 8 m: a circle's corners round all the way, and the slider never pushes a neighbour's cut out. With no corner selected, 8 m as before.

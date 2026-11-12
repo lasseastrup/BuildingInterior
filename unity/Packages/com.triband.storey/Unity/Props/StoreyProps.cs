@@ -340,7 +340,9 @@ namespace Triband.Storey.Unity
             for (int i = 0; i < whole.Count; i++)
             {
                 var e = whole[i];
-                var core = e.site != null && e.site.Occlusion != null ? e.site.Occlusion.Core : null;
+                // the site the player is in, or one round it whose buildings can be in the way (docs/PLAY.md §7)
+                var occ = e.site != null ? e.site.OccludedBy : null;
+                var core = occ != null ? occ.CoreOf(e.site!) : null;
                 var r = e.site != null ? e.site.Renderer : null;
                 var b = e.buildingId != null ? r?.Site?.ById(e.buildingId) : null;
                 bool off = playing && b != null && ((core != null && core.HidesPoint(b, e.last.y - e.site!.transform.position.y)) || r!.IsHidden(b.id));

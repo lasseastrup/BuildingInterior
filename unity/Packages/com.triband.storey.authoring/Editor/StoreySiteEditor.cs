@@ -104,15 +104,17 @@ namespace Triband.Storey.Editor
 
         /// <summary>
         /// Every other site in the open scenes whose layout comes within 2 m of this one's becomes its neighbour, and this
-        /// one becomes theirs (docs/CITY.md §5).
+        /// one becomes theirs (docs/CITY.md §5). Districts only: a site placed as a prop moves with its prefab, where a
+        /// neighbour is linked by where it stands now.
         /// </summary>
         static void FindNeighbours(StoreySite me)
         {
             if (me.layout == null || me.PlanArea is not Lod.Districts.Area a) return;
+            if (!me.district) { Debug.Log("Storey: this site isn't a district (District is off), so it links no neighbours."); return; }
             int linked = 0;
             foreach (var other in StoreySite.All)
             {
-                if (other == me || other.layout == null || other.layout == me.layout || other.PlanArea is not Lod.Districts.Area b) continue;
+                if (other == me || !other.district || other.layout == null || other.layout == me.layout || other.PlanArea is not Lod.Districts.Area b) continue;
                 bool near = a.x0 <= b.x1 + 2 && b.x0 <= a.x1 + 2 && a.z0 <= b.z1 + 2 && b.z0 <= a.z1 + 2;
                 if (!near) continue;
                 Undo.RecordObjects(new UnityEngine.Object[] { me, other }, "Link neighbouring districts");
