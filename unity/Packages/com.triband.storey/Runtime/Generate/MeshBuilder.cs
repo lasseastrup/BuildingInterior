@@ -57,6 +57,12 @@ namespace Triband.Storey.Generate
         /// (<see cref="Occlusion.OcclusionSettings.wallsFacingCamera"/>). Storey's own.
         /// </summary>
         public List<int> Partitions = new List<int>();
+        /// <summary>
+        /// The colour slot of each wall's outside face in <see cref="Walls"/>, as <see cref="Facade.WallPanel"/> was given it (the
+        /// ground storey's own wall colour, a courtyard's walls'...), -1 where no panel said (<see cref="NoteOutside"/>): what
+        /// colours its section cap (<see cref="Lod0Shape.OutsideSlots"/>). Storey's own.
+        /// </summary>
+        public List<int> Outside = new List<int>();
         /// <summary>The floor height of the storey being generated, recorded with each wall.</summary>
         public double StoreyBase;
         public List<Solid>? Solids;
@@ -189,7 +195,7 @@ namespace Triband.Storey.Generate
             if (ShapeOnly) return;
             lock (spares) if (spares.Contains(this)) return;
             P.Clear(); N.Clear(); C.Clear(); K.Clear(); WI.Clear(); I.Clear(); PaneUV.Clear(); InsideTris.Clear(); BackingTris.Clear();
-            Walls = new List<(double[], int)>(); WallBase = new List<double>(); Partitions = new List<int>(); Solids = null;
+            Walls = new List<(double[], int)>(); WallBase = new List<double>(); Partitions = new List<int>(); Outside = new List<int>(); Solids = null;
             StoreyBase = 0; curW = Zero4; curK = curI = 0; Welded = false; inside = false; insideFrom = 0; SeeThrough = 0; backing = false; backingFrom = 0; Buried = false;
             lock (spares) if (spares.Count < Spares) spares.Add(this);
         }
@@ -306,7 +312,7 @@ namespace Triband.Storey.Generate
             curW = w ?? Zero4; curK = k;
             if (!Lean && curK % 8 == 1)
             {
-                Walls.Add(((double[])curW.Clone(), curK)); WallBase.Add(StoreyBase); curI = Walls.Count;
+                Walls.Add(((double[])curW.Clone(), curK)); WallBase.Add(StoreyBase); Outside.Add(-1); curI = Walls.Count;
                 if (partition) Partitions.Add(curI - 1);
             }
             else curI = 0;
@@ -315,6 +321,12 @@ namespace Triband.Storey.Generate
 
         /// <summary>The id of the wall the cutaway context names (<see cref="Ctx"/>, <see cref="CtxOf"/>), 1-based; 0 for none.</summary>
         public int WallId => curI;
+
+        /// <summary>The wall the context names has its outside face in <paramref name="c"/>'s slot, if nothing has said so first (<see cref="Outside"/>).</summary>
+        public void NoteOutside(Swatch c)
+        {
+            if (curI > 0 && curI <= Outside.Count && Outside[curI - 1] < 0) Outside[curI - 1] = (int)c.slot;
+        }
 
         /// <summary>
         /// The cutaway context of a wall already numbered, by its id (<see cref="WallId"/>), for what follows: it slides with

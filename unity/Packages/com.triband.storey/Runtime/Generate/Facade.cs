@@ -927,6 +927,7 @@ namespace Triband.Storey.Generate
         public static void WallPanel(MeshBuilder gb, Frame F, Miter m, double w0, double w1, double y0, double h, List<Opening> ops, Swatch cOut, Swatch cIn, PanelOpt? opt = null)
         {
             if (gb.ShapeOnly) return;   // faces only: no walls numbered, no segments
+            gb.NoteOutside(cOut);       // the wall's outside colour, for its section cap
             opt ??= DefaultPanel;
             // the outline, holes, triangles and points of each face, and the merged openings, in the builder's own lists
             // (a builder is used by one thread at a time)

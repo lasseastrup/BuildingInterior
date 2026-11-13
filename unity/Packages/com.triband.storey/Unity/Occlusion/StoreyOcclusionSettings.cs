@@ -25,8 +25,10 @@ namespace Triband.Storey.Unity
         public bool outlineStoreys = true;
         [Tooltip("A building with interiors keeps its doors while it is in the way, so the player can see where to go in: the doors of its walk-in storeys at or under the player's height, with a little of the wall round them, stay as they are under every mode.")]
         public bool keepDoors = true;
-        [Tooltip("The colour of a cut wall's top: where the cutaway or the ceiling clip cuts a wall, its section is drawn as a solid top face in this colour, lit.")]
+        [Tooltip("Where the cutaway or the ceiling clip cuts a wall, its section is drawn as a solid top face, lit, in the wall's own colour (an outside wall's facade colour from either side, a room wall's room colour). Cut Cap Tint takes it towards this colour.")]
         public Color cutCapColour = new Color(0.72f, 0.71f, 0.68f);
+        [Tooltip("How far a cut wall's top is tinted towards Cut Cap Colour: 0 the wall's own colour, 1 Cut Cap Colour alone.")]
+        [Range(0f, 1f)] public float cutCapTint = 0f;
         [Tooltip("Cut away the walls between the camera and the player in the building they are in.")]
         public bool cutaway = true;
         [Tooltip("Cutaway: take down every wall facing the camera too, not only those between the camera and the player. The storey opens on the camera's side like a doll's house and its far walls stand; a wall goes down or up only as the camera turns past it, never as the player walks about. Room walls, which face both ways, go down as before, when they are between the camera and the player.")]

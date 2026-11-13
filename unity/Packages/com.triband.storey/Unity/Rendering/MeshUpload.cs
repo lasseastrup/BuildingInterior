@@ -202,8 +202,13 @@ namespace Triband.Storey.Unity
             return Upload(parts[0], name, rowOf, wallBase);
         }
 
-        /// <summary>A wall's cutaway data as the shader reads it from the table: its start (x, z) and its normal scaled by 1 + its length.</summary>
-        public static Vector4 WallData(double[] w) => new Vector4((float)w[0], (float)w[1], (float)w[2], (float)w[3]);
+        /// <summary>
+        /// A wall's data as the shaders read it from the table: its start (x, z), which the cutaway's tall parts read, and the
+        /// colour slot of its outside face + 1, 0 for a wall with a room either side (<see cref="Lod0Shape.OutsideSlots"/>), which
+        /// colours its section cap (StoreyLit.hlsl). The cutaway's normal and length, which the engine-free core reads from the
+        /// wall itself, no shader reads.
+        /// </summary>
+        public static Vector4 WallData(double[] w, int outsideSlot) => new Vector4((float)w[0], (float)w[1], outsideSlot + 1, 0);
 
         /// <summary>
         /// One building's LOD2 massing, packed as a cell's piece is (<see cref="Cells.Pack"/>). <paramref name="rowMap"/> maps

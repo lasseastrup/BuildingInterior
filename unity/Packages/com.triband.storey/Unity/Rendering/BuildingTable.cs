@@ -80,7 +80,7 @@ namespace Triband.Storey.Unity
         public readonly global::Triband.Storey.Occlusion.OccluderSlots OccluderSlots = new global::Triband.Storey.Occlusion.OccluderSlots();
         /// <summary>How far each wall has slid down, 0 up .. 1 down, by global wall id. Write through <see cref="SetWall"/>.</summary>
         public float[] Wall { get; private set; } = new float[WallIdsStart];
-        /// <summary>Per wall id: the wall's start (x, z) and its normal scaled by 1 + its length, for the cutaway (written once, at upload; <see cref="SetWallData"/>).</summary>
+        /// <summary>Per wall id: the wall's start (x, z), for the cutaway, and its outside's colour slot + 1, for its section cap (written once, at upload; <see cref="SetWallData"/>, <see cref="MeshUpload.WallData"/>).</summary>
         public Vector4[] WallData { get; private set; } = new Vector4[WallIdsStart];
         /// <summary>LOD2 parameter rows: wall, trim, glass, roof colours, window spec, run data.</summary>
         public Vector4[] Params { get; private set; } = new Vector4[ParamRowsStart * ParamTexels];

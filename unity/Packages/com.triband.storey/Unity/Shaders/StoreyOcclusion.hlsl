@@ -31,7 +31,8 @@ StructuredBuffer<float4> _StoreyOcc;
 // how far each wall has slid down, by global wall id; -1 for a terrace's own wall standing while what stands over the
 // terrace is in the way (StoreyTerraceWall)
 StructuredBuffer<float> _StoreyWall;
-// each wall's cutaway data, by global wall id: its start (xy) and its normal scaled by 1 + its length (zw)
+// each wall's data, by global wall id (MeshUpload.WallData): its start (xy), for the cutaway's tall parts, and the colour slot of
+// its outside face + 1 (z; 0 for a wall with a room either side), for its section cap (StoreyLit.hlsl)
 StructuredBuffer<float4> _StoreyWallData;
 
 #define STOREY_OCC_W 64
@@ -66,7 +67,7 @@ float3 _StoreyFocus;    // the player
 float2 _StoreyCamDir;   // camera forward in the XZ plane
 float4 _StoreyCut;      // x: cutaway on, y: stub height, z: cut base, w: cut top
 float4 _StoreyActive;   // x: active building index (-1 none), y: ceiling clip height, z: the floor of the terrace over which it is in the way, w: 1 while it is, 2 while it is being left (StoreyLeaving)
-float4 _StoreyCap;      // section cap colour
+float4 _StoreyCap;      // the section cap: rgb a colour, w how far a cut wall's top is tinted to it from the wall's own colour
 float4 _StoreyIso;      // x: isolate amount, y: isolated building index
 float _StoreyOccMode;   // 0 off, 1 Sink/Slice, 2 Cutout, 3 Fade, 4 Dissolve
 float4 _StoreyDissolve; // Dissolve's look: x the look (StoreyLook), y how much Ghost and Hatch keep (Ghost's share of the pixels, Hatch's line's of its spacing), z Hatch's spacing (metres), w Stub's height (metres)

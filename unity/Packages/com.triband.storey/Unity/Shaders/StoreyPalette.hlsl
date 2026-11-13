@@ -22,6 +22,7 @@ StructuredBuffer<uint>  _StoreyDetailColors; // per facade-detail colour (slot -
 #define STOREY_REMAP_ENTRY 31
 #define STOREY_SLOT_ROOF 4u   // ColorSlot.Roof
 #define STOREY_SLOT_WALL 0u   // ColorSlot.Wall
+#define STOREY_SLOT_INTERIOR 2u   // ColorSlot.Interior
 #define STOREY_SLOT_GROUND_WALL 20u   // ColorSlot.GroundWall
 #define STOREY_ROW_SLOTS 32
 #define STOREY_ROW_UINT4S 4

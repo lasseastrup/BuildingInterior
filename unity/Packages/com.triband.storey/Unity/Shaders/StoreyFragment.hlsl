@@ -36,12 +36,13 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     // face would be, a solid face at the cut's height: lit facing up, where the line of sight crosses the cut. Everything
     // between there and the back face is the wall's inside, so nothing else can be drawn in front of it. Storey's own: the
     // backs were a flat colour, and a cut wall looked hollow. Round a door a building in the way keeps, the wall is cut by the
-    // door's box, and capped on the box's side or top the line of sight comes in by (StoreyDoorCap)
+    // door's box, and capped on the box's side or top the line of sight comes in by (StoreyDoorCap). Its colour is the wall's
+    // (the vertex stage's, for a face seen from behind), tinted towards the cap colour as far as _StoreyCap.w says
     if (!isFront && doorAt >= 0)
     {
         float3 at, up;
         StoreyDoorCap(doorAt, s.positionWS, GetWorldSpaceViewDir(s.positionWS), at, up);
-        s.positionWS = at; s.normalWS = up; s.albedo = _StoreyCap.rgb;
+        s.positionWS = at; s.normalWS = up; s.albedo = lerp(s.albedo, _StoreyCap.rgb, _StoreyCap.w);
         capFace = true;
     }
     else if (!isFront && cutY < 1e8 && s.positionWS.y < cutY && _WorldSpaceCameraPos.y > cutY)
@@ -51,7 +52,7 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
         {
             s.positionWS += toEye * ((cutY - s.positionWS.y) / toEye.y);
             s.normalWS = float3(0.0, 1.0, 0.0);
-            s.albedo = _StoreyCap.rgb;
+            s.albedo = lerp(s.albedo, _StoreyCap.rgb, _StoreyCap.w);
             capFace = true;
         }
     }
@@ -153,15 +154,16 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     }
 #endif
 #ifdef STOREY_CAP
-    // a back face where no cut is known to have opened it (or seen from under the cut): the section cap's flat colour, fogged
-    // as the lighting fogs (STOREY_FOG, when it does). In the distance a thin parapet's back face can win the depth test
-    // against its front, and an unfogged cap there shows as dark specks along far roofs
+    // a back face where no cut is known to have opened it (or seen from under the cut): lit in the wall's colour, towards the
+    // cap colour's flat colour as far as it is tinted, that fogged as the lighting fogs (STOREY_FOG, when it does). In the
+    // distance a thin parapet's back face can win the depth test against its front, and an unfogged cap there shows as dark
+    // specks along far roofs
     if (!isFront && !capFace)
     {
     #ifdef STOREY_FOG
-        color.rgb = STOREY_FOG(_StoreyCap.rgb, s.positionWS);
+        color.rgb = lerp(color.rgb, STOREY_FOG(_StoreyCap.rgb, s.positionWS), _StoreyCap.w);
     #else
-        color.rgb = _StoreyCap.rgb;
+        color.rgb = lerp(color.rgb, _StoreyCap.rgb, _StoreyCap.w);
     #endif
     }
 #endif

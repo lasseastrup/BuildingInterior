@@ -868,7 +868,7 @@ namespace Triband.Storey.Unity
             bool writeView = claims || !OtherClaims();
             if (Occlusion != null)
             {
-                StoreyGlobals.SetCap(StoreyGlobals.DefaultCap);   // the occlusion's settings may say otherwise
+                StoreyGlobals.SetCap(StoreyGlobals.DefaultCap, 0);   // the wall's colour; the occlusion's settings may say otherwise
                 using (StoreyTimings.Time("site: occlusion")) Occlusion(this);
                 StoreyGlobals.SetIsolate(0, -1);
                 BindAndUpload();
@@ -884,7 +884,7 @@ namespace Triband.Storey.Unity
             int iso = v.isolateId != null ? TableIndexOf(v.isolateId) : -1;
             StoreyGlobals.SetIsolate(iso >= 0 ? v.isolateAmount : 0, iso);
             StoreyGlobals.SetOcclusion(StoreyGlobals.OcclusionMode.Off, Vector3.zero, 2.4f);
-            StoreyGlobals.SetCap(StoreyGlobals.DefaultCap);
+            StoreyGlobals.SetCap(StoreyGlobals.DefaultCap, 0);   // the wall's colour
             BindAndUpload();
         }
 
@@ -1139,9 +1139,13 @@ namespace Triband.Storey.Unity
             bt.wallCount = shape.Walls.Count; bt.wallBase = table.AllocWalls(bt.wallCount);
             if (bt.wallBase >= 0)
             {
-                for (int i = 0; i < bt.wallCount; i++) table.SetWallData(bt.wallBase + i, MeshUpload.WallData(shape.Walls[i].W));
+                // each wall's outside colour rides with it, for its section cap (Lod0Shape.OutsideSlots)
+                if (outsideSlots.Length < bt.wallCount) outsideSlots = new int[Math.Max(bt.wallCount, outsideSlots.Length * 2)];
+                shape.OutsideSlots(outsideSlots);
+                for (int i = 0; i < bt.wallCount; i++) table.SetWallData(bt.wallBase + i, MeshUpload.WallData(shape.Walls[i].W, outsideSlots[i]));
             }
         }
+        int[] outsideSlots = new int[256];   // BeginDetail's, kept
 
         /// <summary>A build's meshes, in the order they go up: LOD0's opaque parts, its glass, its rooms; LOD1's parts.</summary>
         static int PartsOf(int which, Detail d) => d.opaque.Count + (which == 0 ? d.glass!.Count + d.rooms!.Count : 0);

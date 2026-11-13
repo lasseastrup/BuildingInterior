@@ -58,12 +58,14 @@ namespace Triband.Storey.Unity
         }
 
         /// <summary>
-        /// Colour of the section cap drawn where a cut exposes a wall's inside: the top face of a wall the cutaway, the ceiling
-        /// clip, Slice or Dissolve's Stub cut, lit as a face facing up (StoreyFragment.hlsl).
+        /// The section cap drawn where a cut exposes a wall's inside: the top face of a wall the cutaway, the ceiling clip, Slice
+        /// or Dissolve's Stub cut, lit as a face facing up (StoreyFragment.hlsl). It is the wall's own colour (the colour of its
+        /// outside, a room wall's of its faces; Lod0Shape.OutsideSlots), tinted towards <paramref name="cap"/> by
+        /// <paramref name="tint"/>: 0 the wall's colour, 1 the cap colour.
         /// </summary>
-        public static void SetCap(Color cap) => Shader.SetGlobalVector(StoreyShaderIds.Cap, new Vector4(cap.r, cap.g, cap.b, 1));
+        public static void SetCap(Color cap, float tint) => Shader.SetGlobalVector(StoreyShaderIds.Cap, new Vector4(cap.r, cap.g, cap.b, tint < 0 ? 0 : tint > 1 ? 1 : tint));
 
-        /// <summary>The section cap's colour without occlusion settings to say otherwise (the editor's cutaway): a light warm grey, as a plastered wall's top.</summary>
+        /// <summary>The colour a cut wall's top can be tinted to, without occlusion settings to say otherwise (the editor's cutaway): a light warm grey, as a plastered wall's top.</summary>
         public static readonly Color DefaultCap = new Color(0.72f, 0.71f, 0.68f);
 
         /// <summary>

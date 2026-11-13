@@ -187,6 +187,14 @@ Varyings StoreyVert(Attributes IN)
     // one lookup, its slot and shade picked first (StoreyVertexColor's otherwise): HLSL evaluates both sides of a ?:, and
     // the colour's side read a pane's number as its slot
     OUT.color = float4(StoreyPaletteColor(ce.x | (ce.y << 8), pane ? 6u : ce.z, pane ? paneTone : ce.w / 128.0), flat ? (float)ce.x : 1.0);   // a face's vertices share one swatch: exact per vertex
+#if defined(STOREY_CAP) && !defined(STOREY_STEADY)
+    // a face seen from behind shows through a cut, as its wall's section cap (StoreyFragment.hlsl), in its own colour. A wall's
+    // inside face takes the colour of the wall's outside instead, its row's in the slot the wall's data names
+    // (Lod0Shape.OutsideSlots), so a cut wall's top is the facade's colour from either side; a room wall, with a room either
+    // side, names none, and a party wall's other side is the neighbour's room. Every vertex of a flat face is on the same side
+    [branch] if (!pane && ce.z == STOREY_SLOT_INTERIOR && wall.z > 0.5 && kind < 7.5 && dot(normalWS, GetWorldSpaceViewDir(worldPos)) < 0.0)
+        OUT.color.rgb = StoreyPaletteColor(ce.x | (ce.y << 8), (uint)(wall.z - 0.5), 1.0);
+#endif
     // a pitched roof's face (the roof's slot, not level): its style's roof surface, if it has one, in a pane's place, which a
     // roof never has (StoreyRoof.hlsl): a tile's width and height in metres, minus the pattern plus half its variation, and
     // its relief. The row is read for a roof's vertices alone

@@ -335,7 +335,7 @@ namespace Triband.Storey.Unity
             };
             StoreyGlobals.SetOcclusion(modeG, playerWorld + Vector3.up * 1.1f, (float)core.holeRadius);
             StoreyGlobals.SetDissolve(core.dissolveLook, (float)core.dissolveKeeps, (float)core.hatchSpacing, (float)core.stub);
-            if (settings != null) StoreyGlobals.SetCap(settings.cutCapColour);
+            if (settings != null) StoreyGlobals.SetCap(settings.cutCapColour, settings.cutCapTint);
         }
 
         /// <summary>

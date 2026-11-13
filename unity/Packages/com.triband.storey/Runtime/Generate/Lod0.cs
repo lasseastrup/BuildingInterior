@@ -49,14 +49,28 @@ namespace Triband.Storey.Generate
         public readonly List<int> Partitions;
         /// <summary>The doors walked through whose asset's Open prefab goes live at LOD0 (<see cref="LiveDoor"/>); none in a shape alone.</summary>
         public readonly List<LiveDoor> Doors;
+        /// <summary>The colour slot of each wall's outside face, -1 where none was said (<see cref="MeshBuilder.Outside"/>); none in a shape alone.</summary>
+        public readonly List<int> Outside;
 
-        /// <summary>The lists themselves, trimmed to their length: nothing is added to a built building's. No partitions or doors: none.</summary>
-        public Lod0Shape(List<List<Seg>> segs, List<(Seg s, double y0, double y1)> extra, List<Block> blocks, List<(double[] W, int K)> walls, List<double> wallBase, List<int>? partitions = null, List<LiveDoor>? doors = null)
+        /// <summary>The lists themselves, trimmed to their length: nothing is added to a built building's. No partitions, doors or outside colours: none.</summary>
+        public Lod0Shape(List<List<Seg>> segs, List<(Seg s, double y0, double y1)> extra, List<Block> blocks, List<(double[] W, int K)> walls, List<double> wallBase, List<int>? partitions = null, List<LiveDoor>? doors = null, List<int>? outside = null)
         {
-            partitions ??= new List<int>(); doors ??= new List<LiveDoor>();
+            partitions ??= new List<int>(); doors ??= new List<LiveDoor>(); outside ??= new List<int>();
             foreach (var l in segs) l.TrimExcess();
-            segs.TrimExcess(); extra.TrimExcess(); blocks.TrimExcess(); walls.TrimExcess(); wallBase.TrimExcess(); partitions.TrimExcess(); doors.TrimExcess();
-            Segs = segs; Extra = extra; Blocks = blocks; Walls = walls; WallBase = wallBase; Partitions = partitions; Doors = doors;
+            segs.TrimExcess(); extra.TrimExcess(); blocks.TrimExcess(); walls.TrimExcess(); wallBase.TrimExcess(); partitions.TrimExcess(); doors.TrimExcess(); outside.TrimExcess();
+            Segs = segs; Extra = extra; Blocks = blocks; Walls = walls; WallBase = wallBase; Partitions = partitions; Doors = doors; Outside = outside;
+        }
+
+        /// <summary>
+        /// The colour of each wall's outside, for its section cap where a cut opens it (StoreyLit.hlsl, docs/PLAY.md §3): the
+        /// colour slot of its outside face as LOD0 drew it (<see cref="Outside"/>: the ground storey's own wall colour where its
+        /// style has one, a courtyard's walls'...), the walls' where none was said; -1 for a wall with a room either side
+        /// (<see cref="Partitions"/>), whose cap is its faces' own colour. One a wall, into <paramref name="into"/>. Storey's own.
+        /// </summary>
+        public void OutsideSlots(int[] into)
+        {
+            for (int i = 0; i < Walls.Count; i++) into[i] = i < Outside.Count && Outside[i] >= 0 ? Outside[i] : (int)ColorSlot.Wall;
+            foreach (int i in Partitions) if (i >= 0 && i < Walls.Count) into[i] = -1;
         }
     }
 
@@ -89,11 +103,11 @@ namespace Triband.Storey.Generate
             int idx = site.IndexOf(b);
             var r = new Lod0Result { Op = MeshBuilder.Make(idx, shapeOnly: shapeOnly), Glass = MeshBuilder.Make(idx, shapeOnly: shapeOnly) };
             r.Glass.Walls = r.Op.Walls;   // glass shares the wall ids of the walls it sits in
-            r.Glass.WallBase = r.Op.WallBase; r.Glass.Partitions = r.Op.Partitions;
+            r.Glass.WallBase = r.Op.WallBase; r.Glass.Partitions = r.Op.Partitions; r.Glass.Outside = r.Op.Outside;
             if (solids) r.Op.Solids = new List<Solid>();
             foreach (var _ in self.Steps(r))
                 if (stop != null && stop()) { r.Op.Recycle(); r.Glass.Recycle(); return null; }
-            r.Shape = new Lod0Shape(r.Segs, r.Extra, r.Blocks, r.Op.Walls, r.Op.WallBase, r.Op.Partitions, r.Doors);
+            r.Shape = new Lod0Shape(r.Segs, r.Extra, r.Blocks, r.Op.Walls, r.Op.WallBase, r.Op.Partitions, r.Doors, r.Op.Outside);
             return r;
         }
 
