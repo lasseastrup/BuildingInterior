@@ -9,7 +9,7 @@ namespace Triband.Storey.Occlusion
     /// Sink's footprint (SPEC §5.1): what stands in for a building in the way once it has collapsed. The outline of
     /// the storey at the player's height as a flat near-black fill 2 cm above its floor, ringed by a low rim of its
     /// outer wall in the wall's colour, with no doors or interior. Never along a party wall: that stands while
-    /// the neighbour does, or both sides sank and their outlines merge. A port of the prototype's <c>buildLid</c>.
+    /// the neighbour does, or both sides sank and their outlines merge; nor at a door the building keeps (<see cref="KeptDoors"/>). A port of the prototype's <c>buildLid</c>.
     /// Built once per building version and storey, in a builder of the shared ones (<see cref="MeshBuilder.Make"/>): give
     /// it back once uploaded (<see cref="MeshBuilder.Recycle"/>). A fresh builder made 83 KB of garbage for 60 vertices.
     /// Dissolve's Outline and Blueprint looks add the building's outline to it (<see cref="Cage"/>).
@@ -24,7 +24,9 @@ namespace Triband.Storey.Occlusion
 
         /// <param name="cage">The outline's lines' thickness (metres), 0 for none (<see cref="Cage"/>).</param>
         /// <param name="storeys">The outline has a line round every storey.</param>
-        public static MeshBuilder Build(Site site, BuildingData b, int k, double cage = 0, bool storeys = false)
+        /// <param name="doors">The building keeps its doors (<see cref="KeptDoors"/>): the rim leaves a gap for those on storey k,
+        /// whose wall round the door stands there.</param>
+        public static MeshBuilder Build(Site site, BuildingData b, int k, double cage = 0, bool storeys = false, bool doors = false)
         {
             var shared = new Lod0.Shared(site, b); var g = shared.At(k);
             double y = Derived.FloorBase(b, k), T = Dim.T_EXT; int k0 = Derived.TierStart(b, k);
@@ -33,10 +35,13 @@ namespace Triband.Storey.Occlusion
             var pts = new List<P3>(g.Wp.Count); foreach (var q in g.Wp) pts.Add(new P3(q.x, y + 0.02, q.z));
             op.PolyTris(pts, tris, new P3(0, 1, 0), g.C.wall.Shade(FillTone));
             var party = new List<(double, double)>(); var span = new List<(double, double)>(1);
+            List<DoorBox>? kept = null;
+            if (doors) { kept = new List<DoorBox>(); KeptDoors.Of(site, b, k, kept); }
             for (int i = 0; i < g.Wp.Count; i++)
             {
                 var e = Geo.EdgeInfo(g.Wp, i, g.ccw); var m = Geo.MiterOf(g.cor, i, e.L);
                 party.Clear(); foreach (var r in Party.Ranges(site, b, k0, i)) party.Add((r.s, r.e));
+                if (kept != null) foreach (var d in kept) if (d.k == k && d.edge == i) party.Add((d.u0, d.u1));
                 span.Clear(); span.Add(m.Span(0, T));
                 Facade.StripPieces(op, e.F, m, Geo.MinusRanges(span, party), y, y + RimHeight, 0, T, g.C.wall, g.C.wall, Skip.Bot);
             }

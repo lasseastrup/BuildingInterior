@@ -42,4 +42,9 @@ float4 GetShadowCoord(VertexPositionInputs v) { return TransformWorldToShadowCoo
 float3 ApplyShadowBias(float3 p, float3 n, float3 l) { return p + n * 0.01 + l * 0.01; }
 float4 ApplyShadowClamping(float4 c) { c.z = min(c.z, c.w); return c; }
 float4 UniversalFragmentPBR(InputData i, SurfaceData s) { return float4(s.albedo * (i.bakedGI + saturate(dot(i.normalWS, _MainLightPosition.xyz))), s.alpha); }
+// RealtimeLights.hlsl's main light with its shadow, BRDF.hlsl's BRDF data and Lighting.hlsl's direct light, as URP 17.3 has them
+Light GetMainLight(float4 shadowCoord, float3 positionWS, half4 shadowMask) { Light l = GetMainLight(); l.shadowAttenuation = saturate(shadowCoord.z + shadowMask.x * 0); return l; }
+struct BRDFData { half3 albedo; half3 diffuse; half3 specular; half reflectivity; half perceptualRoughness; half roughness; half roughness2; half grazingTerm; half normalizationTerm; half roughness2MinusOne; };
+void InitializeBRDFData(inout SurfaceData surfaceData, out BRDFData brdfData) { brdfData = (BRDFData)0; brdfData.albedo = half3(surfaceData.albedo); brdfData.diffuse = half3(surfaceData.albedo); }
+half3 LightingPhysicallyBased(BRDFData brdfData, Light light, half3 normalWS, half3 viewDirectionWS) { return brdfData.diffuse * half3(light.color) * half(light.distanceAttenuation * light.shadowAttenuation * saturate(dot(float3(normalWS), light.direction))); }
 #endif

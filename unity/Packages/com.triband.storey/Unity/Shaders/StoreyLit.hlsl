@@ -293,6 +293,10 @@ struct StoreySurface
     float4 positionCS;    // SV_Position: pixel coordinates in xy
     bool   isFront;
     float3 vertexSH;      // the ambient probe from the vertex as URP's SH Evaluation Mode splits it (SampleSHPixel); 0 per pixel
+    // how much of the main light's shadow falls on it, 1 as usual: 0 on a building in the way's footprint, and less on what the
+    // occlusion darkens or pales, as far as it does. A project's lighting takes the main light's shadow times this (the Color
+    // Palette Lit sample's does)
+    float  shadowed;
 };
 
 #ifndef STOREY_CUSTOM_LIGHTING
@@ -314,7 +318,20 @@ float4 StoreyLighting(StoreySurface s)
     surfaceData.metallic = _StoreyMetallic;
     surfaceData.smoothness = _StoreySmoothness;
     surfaceData.occlusion = 1.0;
-    return UniversalFragmentPBR(inputData, surfaceData);
+    float4 color = UniversalFragmentPBR(inputData, surfaceData);
+#if defined(MAIN_LIGHT_CALCULATE_SHADOWS)
+    // where the shadow mustn't fall (s.shadowed below 1): the main light its shadow took away, given back. The light is linear
+    // in its attenuation, so this is the light unshadowed, whatever the shadow mode (screen-space shadows' too)
+    [branch] if (s.shadowed < 1.0)
+    {
+        Light light = GetMainLight(inputData.shadowCoord, inputData.positionWS, half4(1, 1, 1, 1));
+        light.shadowAttenuation = (1.0 - light.shadowAttenuation) * (1.0 - s.shadowed);
+        BRDFData brdf;
+        InitializeBRDFData(surfaceData, brdf);
+        color.rgb += LightingPhysicallyBased(brdf, light, inputData.normalWS, inputData.viewDirectionWS);
+    }
+#endif
+    return color;
 }
 
 #include "StoreyFragment.hlsl"

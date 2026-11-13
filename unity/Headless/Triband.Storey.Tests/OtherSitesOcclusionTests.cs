@@ -234,9 +234,9 @@ namespace Triband.Storey.Tests
             Assert.Contains("a.Distance(camWorld.x, camWorld.z, feetWorld.x, feetWorld.z) <= GuestReach", guests);
             Assert.Contains("bool busy = gw?.occ != null && gw.occ.Active.Count > 0;", guests);
             Assert.Contains("oc.FrameOccluders(p, (camWorld.x - o.x, camWorld.y - o.y, camWorld.z - o.z), dt);", guests);
-            Assert.Contains("WriteOccluders(gr, s, gw, oc, o.y);", guests);
+            Assert.Contains("WriteOccluders(gr, s, gw, oc, o);", guests);   // its place: heights and the kept doors' boxes in world space
             Assert.Contains("Leave(s, gw);", guests);
-            Assert.Contains("WriteOccluders(r, site!, w, o, lift);", Method(occ, "void Write(SiteRenderer r,", "/// <summary>"));
+            Assert.Contains("WriteOccluders(r, site!, w, o, origin);", Method(occ, "void Write(SiteRenderer r,", "/// <summary>"));
             Assert.Contains("ShowFootprint(r, s, w, oc.b, oc.k, oc.slot);", Method(occ, "void WriteOccluders(", "/// <summary>"));
             Assert.Contains("go.transform.SetParent(s.transform, false);", occ);
             Assert.Contains("w.occ?.Clear();", Method(occ, "void Drop(Walked w)", "void ClearFootprints("));

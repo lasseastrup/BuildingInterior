@@ -21,14 +21,15 @@ float3 StoreyGraphToLinear(float3 c)
 }
 
 // The graph's Lighting sub-graph: hard main-light shadow faded out with distance, the global shadow colour as
-// ambient, plus the additional lights (Forward+'s, or a per-object list), plus a tenth of a light from straight above
-float3 StoreyGraphLighting(float3 positionWS, float3 normalWS, float3 shadowColor)
+// ambient, plus the additional lights (Forward+'s, or a per-object list), plus a tenth of a light from straight above.
+// shadowed: how much of the main light's shadow falls (StoreySurface.shadowed: none on a building in the way's footprint)
+float3 StoreyGraphLighting(float3 positionWS, float3 normalWS, float3 shadowColor, float shadowed)
 {
     float3 absWS = GetAbsolutePositionWS(positionWS);
     float3 direction, color; float distanceAtten, shadowAtten;
     MainLight_float(absWS, direction, color, distanceAtten, shadowAtten);
     float ndl = saturate(dot(normalWS, direction));
-    float shadow = saturate(lerp(-100.0, 100.0, distanceAtten * shadowAtten));   // a hard step at 0.5
+    float shadow = saturate(lerp(-100.0, 100.0, distanceAtten * lerp(1.0, shadowAtten, shadowed)));   // a hard step at 0.5
 
     float fadeStart, fadeInterval;
     GetGlobalShadowFadeDistanceStart_float(fadeStart);
@@ -89,8 +90,8 @@ float4 StoreyLighting(StoreySurface s)
     float4 shadowColor;
     GetGlobalShadowColor_float(shadowColor);
     float3 ambient = StoreyGraphToLinear(shadowColor.rgb) * _StoreyShadowStrength;
-    float3 c = StoreyGraphLighting(s.positionWS, s.normalWS, ambient) * s.albedo;
-    c *= StoreyGraphCharacterBlob(s.positionWS);
+    float3 c = StoreyGraphLighting(s.positionWS, s.normalWS, ambient, s.shadowed) * s.albedo;
+    c *= lerp(1.0, StoreyGraphCharacterBlob(s.positionWS), s.shadowed);   // the character's blob is a shadow too
     return float4(StoreyGraphFog(c, s.positionWS), s.alpha);
 }
 

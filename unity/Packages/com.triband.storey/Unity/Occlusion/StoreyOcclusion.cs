@@ -54,8 +54,8 @@ namespace Triband.Storey.Unity
             public Site? site;
             public System.Threading.Tasks.Task<PlayWorld>? making;
             public PlayWorld? world; public OcclusionCore? occ;
-            // Sink's footprints: a mesh per building, storey, slot (it carries the slot's row) and Dissolve's outline (its thickness in
-            // millimetres, negative with a line round every storey; 0 for none), and the frame each was last shown
+            // Sink's footprints: a mesh per building, storey, slot (it carries the slot's row) and look (Dissolve's outline and the kept
+            // doors, ShowFootprint), and the frame each was last shown
             public readonly Dictionary<(string, int, int, int), (Mesh mesh, int used)> footprints = new Dictionary<(string, int, int, int), (Mesh, int)>();
             // one object per slot, kept: its mesh, layer and state are set only when they change (docs/PERFORMANCE.md §10.3)
             public readonly GameObject?[] slots = new GameObject?[OcclusionCore.Slots];
@@ -324,7 +324,7 @@ namespace Triband.Storey.Unity
             foreach (int id in w.wallsSet) if (!wallsNow.Contains(id)) table.SetWall(id, 0);
             (w.wallsSet, w.wallsNow) = (wallsNow, w.wallsSet);
 
-            WriteOccluders(r, site!, w, o, lift);
+            WriteOccluders(r, site!, w, o, origin);
             var modeG = core.mode switch
             {
                 OccluderMode.Off => StoreyGlobals.OcclusionMode.Off,
@@ -340,10 +340,12 @@ namespace Triband.Storey.Unity
 
         /// <summary>
         /// A core's buildings in the way into the table, through the renderer of the site they belong to: the slot in each
-        /// one's state row, the rows with world heights (<paramref name="lift"/>, the site's height), and the footprints.
+        /// one's state row, the rows with world heights (the site's <paramref name="origin"/>'s height added) and the kept doors'
+        /// boxes in world space, and the footprints.
         /// </summary>
-        void WriteOccluders(SiteRenderer r, StoreySite s, Walked w, OcclusionCore o, float lift)
+        void WriteOccluders(SiteRenderer r, StoreySite s, Walked w, OcclusionCore o, Vector3 origin)
         {
+            float lift = origin.y;
             var table = r.Table;
             // written where they changed (docs/PERFORMANCE.md §10.4): every occluder's slot was cleared and set again, and its
             // 64 texels marked for upload, every frame, about 1 KB an occluder a frame and its building looked at again by the
@@ -358,10 +360,20 @@ namespace Triband.Storey.Unity
                 table.SetOccluder(idx, oc.slot); occNow.Add(idx);
                 int at = oc.slot * OcclusionCore.RowTexels, n = (int)o.Rows[at * 4];
                 bool changed = Put(table.Occ, at, new Vector4(o.Rows[at * 4], o.Rows[at * 4 + 1], o.Rows[at * 4 + 2] + lift, o.Rows[at * 4 + 3] + lift));
+                // the kept doors at the row's end (OcclusionCore.WriteDoors): their boxes' middles moved by the site's place, their
+                // feet and tops by its height
+                int nd = (int)o.Rows[(at + OcclusionCore.RowTexels - 1) * 4], doorsFrom = OcclusionCore.DoorTexel(nd - 1);
                 for (int i = 1; i < OcclusionCore.RowTexels; i++)
                 {
                     int q = (at + i) * 4;
-                    changed |= Put(table.Occ, at + i, new Vector4(o.Rows[q] + (i <= n ? lift : 0), o.Rows[q + 1], o.Rows[q + 2], o.Rows[q + 3]));
+                    Vector4 t;
+                    if (i <= n) t = new Vector4(o.Rows[q] + lift, o.Rows[q + 1], o.Rows[q + 2], o.Rows[q + 3]);
+                    else if (nd > 0 && i >= doorsFrom && i < OcclusionCore.RowTexels - 1)
+                        t = (i - doorsFrom) % 2 == 0
+                            ? new Vector4(o.Rows[q] + origin.x, o.Rows[q + 1] + origin.z, o.Rows[q + 2], o.Rows[q + 3])
+                            : new Vector4(o.Rows[q], o.Rows[q + 1], o.Rows[q + 2] + lift, o.Rows[q + 3] + lift);
+                    else t = new Vector4(o.Rows[q], o.Rows[q + 1], o.Rows[q + 2], o.Rows[q + 3]);
+                    changed |= Put(table.Occ, at + i, t);
                 }
                 if (changed) table.MarkOccDirty(oc.slot);
                 // the footprint stands in once the building starts to go: Sink's at once, Dissolve's fading in as it fades out.
@@ -399,7 +411,7 @@ namespace Triband.Storey.Unity
                 var o = s.transform.position; var oc = gw.occ!;
                 var p = guestPlayer; p.Spawn(feetWorld.x - o.x, feetWorld.y - o.y, feetWorld.z - o.z);
                 oc.FrameOccluders(p, (camWorld.x - o.x, camWorld.y - o.y, camWorld.z - o.z), dt);
-                WriteOccluders(gr, s, gw, oc, o.y);
+                WriteOccluders(gr, s, gw, oc, o);
             }
             foreach (var s in guestsWas)
             {
@@ -422,13 +434,14 @@ namespace Triband.Storey.Unity
         // under the site the building is in (s)
         void ShowFootprint(SiteRenderer r, StoreySite s, Walked w, BuildingData b, int k, int slot)
         {
+            // the look: the outline's thickness in millimetres, negative with its storeys, doubled, and 1 with the doors kept
             double cage = core.CageWidth; int mm = (int)Math.Round(cage * 1000);
-            var key = (b.id, k, slot, core.outlineStoreys ? -mm : mm);
+            var key = (b.id, k, slot, (core.outlineStoreys ? -mm : mm) * 2 + (core.keepDoors ? 1 : 0));
             if (!w.footprints.TryGetValue(key, out var f))
             {
                 using (StoreyTimings.Time("occlusion: footprint", b.name))
                 {
-                    var gb = SinkFootprint.Build(r.Site!, b, k, cage, core.outlineStoreys);
+                    var gb = SinkFootprint.Build(r.Site!, b, k, cage, core.outlineStoreys, core.keepDoors);
                     f = (r.UploadExtra(gb, b.name + " footprint " + k, BuildingTable.FootprintRow(slot)), 0);
                     gb.Recycle();   // uploaded: its lists go back for the next build
                 }

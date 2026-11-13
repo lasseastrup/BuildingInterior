@@ -16,8 +16,8 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     UNITY_SETUP_INSTANCE_ID(IN);
     bool isFront = IS_FRONT_VFACE(cullFace, true, false);
     StoreyVarying v = StoreyUnpack(IN);
-    float cutY;
-    float dark = StoreyOccludeCut(v, IN.positionCS.xy, IN.positionCS.z, cutY);
+    float cutY; int doorAt;
+    float dark = StoreyOccludeCut(v, IN.positionCS.xy, IN.positionCS.z, cutY, doorAt);
 
     StoreySurface s;
 #ifdef STOREY_MASSING
@@ -35,8 +35,16 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     // (the cutaway, the ceiling clip, Slice, Dissolve's Stub) and the eye looks down on it, the cap is drawn as the wall's top
     // face would be, a solid face at the cut's height: lit facing up, where the line of sight crosses the cut. Everything
     // between there and the back face is the wall's inside, so nothing else can be drawn in front of it. Storey's own: the
-    // backs were a flat colour, and a cut wall looked hollow
-    if (!isFront && cutY < 1e8 && s.positionWS.y < cutY && _WorldSpaceCameraPos.y > cutY)
+    // backs were a flat colour, and a cut wall looked hollow. Round a door a building in the way keeps, the wall is cut by the
+    // door's box, and capped on the box's side or top the line of sight comes in by (StoreyDoorCap)
+    if (!isFront && doorAt >= 0)
+    {
+        float3 at, up;
+        StoreyDoorCap(doorAt, s.positionWS, GetWorldSpaceViewDir(s.positionWS), at, up);
+        s.positionWS = at; s.normalWS = up; s.albedo = _StoreyCap.rgb;
+        capFace = true;
+    }
+    else if (!isFront && cutY < 1e8 && s.positionWS.y < cutY && _WorldSpaceCameraPos.y > cutY)
     {
         float3 toEye = GetWorldSpaceViewDir(s.positionWS);
         if (toEye.y > 1e-4)
@@ -94,6 +102,9 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
 #endif
     s.positionCS = IN.positionCS;
     s.isFront = isFront || capFace;
+    // how much of the main light's shadow falls on it: none on a building in the way's footprint (drawn through the last rows
+    // of the building table, BuildingTable.FootprintRow), nor on what the occlusion darkens or pales, as far as it does
+    s.shadowed = v.bid > STOREY_ROWS - STOREY_OCC_SLOTS - 0.5 ? 0.0 : 1.0 - saturate(abs(dark));
 #if defined(EVALUATE_SH_VERTEX) || defined(EVALUATE_SH_MIXED)
     s.vertexSH = IN.vertexSH;
 #else

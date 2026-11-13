@@ -23,6 +23,8 @@ namespace Triband.Storey.Unity
         [Range(0.02f, 0.25f)] public float outlineWidth = 0.06f;
         [Tooltip("Dissolve's Outline and Blueprint: a line round every storey too, not only the corners and the roof line.")]
         public bool outlineStoreys = true;
+        [Tooltip("A building with interiors keeps its doors while it is in the way, so the player can see where to go in: the doors of its walk-in storeys at or under the player's height, with a little of the wall round them, stay as they are under every mode.")]
+        public bool keepDoors = true;
         [Tooltip("The colour of a cut wall's top: where the cutaway or the ceiling clip cuts a wall, its section is drawn as a solid top face in this colour, lit.")]
         public Color cutCapColour = new Color(0.72f, 0.71f, 0.68f);
         [Tooltip("Cut away the walls between the camera and the player in the building they are in.")]
@@ -51,7 +53,7 @@ namespace Triband.Storey.Unity
             s.holeRadius = holeRadius; s.assist = cameraAssist; s.silhouette = silhouette;
             s.wallMargin = wallMargin; s.holdAfterExit = holdAfterExit;
             s.dissolveLook = dissolveLook; s.dissolveKeeps = dissolveKeeps; s.hatchSpacing = hatchSpacing;
-            s.outlineWidth = outlineWidth; s.outlineStoreys = outlineStoreys;
+            s.outlineWidth = outlineWidth; s.outlineStoreys = outlineStoreys; s.keepDoors = keepDoors;
         }
     }
 }

@@ -83,6 +83,12 @@ namespace Triband.Storey.Occlusion
         public double outlineWidth = 0.06;
         /// <summary>Outline and Blueprint: a line round every storey too, not only the corners and each tier's top.</summary>
         public bool outlineStoreys = true;
+        /// <summary>
+        /// A walk-in building in the way keeps its doors, so the player sees where they can go in (<see cref="KeptDoors"/>): its
+        /// entrances on walk-in storeys at or under the player's height, with a little of the wall round them, are drawn as they
+        /// are, under every mode. Storey's own.
+        /// </summary>
+        public bool keepDoors = true;
 
         /// <summary>The outline's thickness Dissolve's footprint is made with now (0: none; <see cref="SinkFootprint.Build"/>).</summary>
         public double CageWidth => mode == OccluderMode.Dissolve && (dissolveLook == DissolveLook.Outline || dissolveLook == DissolveLook.Blueprint) ? Math.Max(0.01, outlineWidth) : 0;
@@ -134,6 +140,12 @@ namespace Triband.Storey.Occlusion
         public double hold, sliceY, top;
         public SinkPlan plan = new SinkPlan();
         internal bool started;
+        /// <summary>
+        /// Its doors kept while it is in the way (<see cref="OcclusionSettings.keepDoors"/>, <see cref="KeptDoors"/>), worked out
+        /// once for the building and the storey that stays, and written at the end of its row.
+        /// </summary>
+        public readonly List<DoorBox> doors = new List<DoorBox>(2);
+        internal BuildingData? doorsOf; internal int doorsK = -1;
     }
 
     /// <summary>Sink's plan: the storeys from the player's up, collapsing from the roof down, staggered.</summary>
@@ -856,6 +868,8 @@ namespace Triband.Storey.Occlusion
                 {
                     Plan(r.plan, b, Math.Min(r.k, b.floors.Count));
                     r.t = m == OccluderMode.Sink ? Math.Max(0, Math.Min(r.plan.total, r.t + (want ? dt : -dt * 1.25))) : 0;
+                    // its doors, once for the building as it is and the storey that stays
+                    if (Settings.keepDoors && (!ReferenceEquals(r.doorsOf, b) || r.doorsK != r.k)) { KeptDoors.Of(World.Site, b, r.k, r.doors); r.doorsOf = b; r.doorsK = r.k; }
                 }
                 bool done = !want && r.a <= 0 && !(r.t > 0);
                 // the building the view is on is never in the way, but for what stands over the terrace the player is out on,
@@ -875,6 +889,33 @@ namespace Triband.Storey.Occlusion
         }
 
         void WriteRow(Occluder r, BuildingData b)
+        {
+            WriteMode(r, b);
+            WriteDoors(r, r.slot * RowTexels * 4);
+        }
+
+        /// <summary>
+        /// The doors kept (<see cref="OcclusionSettings.keepDoors"/>) at the end of the row, after Sink's segments: their count in
+        /// the last texel, then from the one before it down, each door's box in two texels, (middle x, z, along x, z) and (half
+        /// along, half across, foot, top). As many as fit after the segments, up to <see cref="KeptDoors.Max"/>.
+        /// </summary>
+        void WriteDoors(Occluder r, int o)
+        {
+            int segs = (int)Rows[o], room = (RowTexels - 2 - segs) / 2;
+            int nd = Settings.keepDoors ? Math.Max(0, Math.Min(Math.Min(r.doors.Count, KeptDoors.Max), room)) : 0;
+            Rows[o + (RowTexels - 1) * 4] = nd;
+            for (int i = 0; i < nd; i++)
+            {
+                var d = r.doors[i]; int a = o + DoorTexel(i) * 4, q = a + 4;
+                Rows[a] = (float)d.cx; Rows[a + 1] = (float)d.cz; Rows[a + 2] = (float)d.ux; Rows[a + 3] = (float)d.uz;
+                Rows[q] = (float)d.halfW; Rows[q + 1] = (float)d.halfD; Rows[q + 2] = (float)d.y0; Rows[q + 3] = (float)d.y1;
+            }
+        }
+
+        /// <summary>Door i's first texel in its occluder's row (<see cref="WriteDoors"/>); its second is the next.</summary>
+        public static int DoorTexel(int i) => RowTexels - 3 - 2 * i;
+
+        void WriteMode(Occluder r, BuildingData b)
         {
             var m = Settings.mode; int o = r.slot * RowTexels * 4;
             Array.Clear(Rows, o, RowTexels * 4); Rows[o + 2] = 1e9f; Rows[o + 3] = -1e9f;

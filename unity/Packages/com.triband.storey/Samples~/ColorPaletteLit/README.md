@@ -17,6 +17,7 @@ What those files do, checked against the copies of 2026-10-28:
 - **Additional lights.** With the renderer on Forward+ (`_CLUSTER_LIGHT_LOOP`, as the project has been since 2026-10-02) the node takes the additional directional lights and the clustered ones; on Forward, only when the URP asset sets Additional Lights to *Per Vertex* (`_ADDITIONAL_LIGHTS_VERTEX`), from the per-object list. Either way they are evaluated per pixel, each light's colour both Lambert-shaded and unshaded, 30 : 70, so they lift the faces turned away from them too. These shaders declare the two keywords as one set (URP never has both: three variants, not four); plain *Per Pixel* on Forward adds nothing in the node, so `_ADDITIONAL_LIGHTS` isn't declared. The graph's other lighting keywords are declared as it declares them. After a player build, Storey's line in the Console gives each shader's programs and the keywords left in them.
 - **From above.** The Lighting sub-graph adds a tenth of a white light from straight above (`0.1 × saturate(normal.y)`, after the rest is saturated), so roofs and sills read a little lighter (2026-10-08).
 - **Globals.** `_GlobalShadowColor`, the shadow fade, `_GlobalPlayerPosition` (the blob) and `_GlobalNightBlend` are set by the project, and buildings follow them.
+- **Where no shadow falls.** A building in the way's footprint takes no shadow, and what the occlusion darkens or pales takes less as it does (`StoreySurface.shadowed`, docs/PLAY.md §4): the main light's shadow and the character's blob are both scaled by it here. A copy of this file from before it had `shadowed` shades the footprint as before.
 - **Windows.** Storey's panes that show a room (with a `StoreyWindows` in the scene) map it with the project's `WindowInteriorParallax_float` and light up as the project's night blend rises, as the Window graph's do (`STOREY_WINDOW_PARALLAX`, `STOREY_WINDOW_NIGHT_BLEND`, StoreyWindow.hlsl), and are fogged as the walls are. `StoreyWindows.nightBlend` is not used with this sample: set `_GlobalNightBlend` as the project does.
 
 If those files move, change the four include paths. If the graph's lighting changes, change this file to match.
@@ -26,6 +27,7 @@ If those files move, change the four include paths. If the graph's lighting chan
 | `PipelineColor`: the palette colour of `uv3.x + _ColorPaletteOffset`, sampled in the vertex stage | `s.albedo`: the palette colour of the vertex's colour row and slot, times its shade |
 | `_ShadowStrenght` | `_StoreyShadowStrength` |
 | Cull Back | Cull Off: walls are seen from inside, and back faces show the section cap |
+| The main light's shadow, the blob | Scaled by `StoreySurface.shadowed` (none on a building in the way's footprint) |
 | UnlitShadowStep, UnlitShadowSmoothness, CelShading, NoiseColor, NoiseTile | Not used by the graph's output either |
 
 ## Use

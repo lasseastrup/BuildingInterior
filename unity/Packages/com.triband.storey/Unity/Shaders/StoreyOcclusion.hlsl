@@ -40,6 +40,7 @@ StructuredBuffer<float4> _StoreyWallData;
 #define STOREY_ROWS 8192       // _StoreyState's rows (BuildingTable.MaxBuildings)
 #define STOREY_OCC_SLOTS 16    // _StoreyOcc's slots of STOREY_OCC_W texels (BuildingTable.OccSlots)
 #define STOREY_HIDDEN 4        // added to a hidden building's displayed LOD (Lod.StateRow.Hidden)
+#define STOREY_DOORS 8         // the most kept doors in an occluder's row (KeptDoors.Max)
 
 // The tables that grow, their sizes now (BuildingTable.Upload): x wall ids, y parameter rows, z colour rows
 #ifndef STOREY_TABLE_SIZE_DECLARED
@@ -118,6 +119,25 @@ bool StoreyTerraceWall(bool act, float wid)
     return kept;
 }
 
+// A walk-in building in the way keeps its doors (KeptDoors, OcclusionSettings.keepDoors): boxes at the end of its occluder
+// row (OcclusionCore.WriteDoors), two texels each, (middle x, z, along x, z) and (half along, half across, foot, top), world
+// space, their count in the row's last texel. The first texel of the box holding p (its height before Sink's squash), or -1:
+// what lies in one is drawn as it is, neither gone nor darkened.
+int StoreyDoorAt(int row, float3 p)
+{
+    int at = -1;
+    int nd = (int)(_StoreyOcc[row + STOREY_OCC_W - 1].x + 0.5);
+    for (int i = 0; i < STOREY_DOORS; i++)
+    {
+        if (i >= nd) break;
+        int door = min(row + STOREY_OCC_W - 3 - 2 * i, STOREY_OCC_SLOTS * STOREY_OCC_W - 2);
+        float4 a = _StoreyOcc[door], b = _StoreyOcc[door + 1];
+        float2 d = p.xz - a.xy;
+        if (abs(dot(d, a.zw)) < b.x && abs(dot(d, float2(-a.w, a.z))) < b.y && p.y > b.z && p.y < b.w) at = door;
+    }
+    return at;
+}
+
 // Sink: squash each storey of a building in the way between its floor lines. World space, before projection.
 float3 StoreySink(float3 worldPos, float tag, float kind, float wid, out float origY)
 {
@@ -134,7 +154,8 @@ float3 StoreySink(float3 worldPos, float tag, float kind, float wid, out float o
     if (slot >= 0 && !own && !mateUp)
     {
         int n = (int)(_StoreyOcc[row].x + 0.5);
-        if (n > 0)
+        // a kept door stands, unsquashed (StoreyDoorAt)
+        if (n > 0 && StoreyDoorAt(row, worldPos) < 0)
         {
             float y = origY, f0 = _StoreyOcc[row + 1].x;
             if (y > f0)
@@ -211,10 +232,11 @@ bool StoreyLook(float look) { return abs(_StoreyDissolve.x - look) < 0.5; }
 // The fragment-stage test. Returns the darkening for a building in the way (0..1; below 0, Dissolve's Ghost: how far it is
 // paled, StoreyShade); clips with `clip(-1)` where the prototype discards. cutY: the height of the cut over this point of a
 // wall, where the cutaway, the ceiling clip, Slice or Dissolve's Stub opened it from above and its section cap lies (1e9 for
-// none; StoreyFragment draws the cap there).
-float StoreyOccludeCut(StoreyVarying v, float2 screenPos, float fragDepth, out float cutY)
+// none; StoreyFragment draws the cap there). doorAt: the kept door whose box holds it (StoreyDoorAt), -1 for none; the box's
+// sides cut the wall round the door, and StoreyFragment caps it there.
+float StoreyOccludeCut(StoreyVarying v, float2 screenPos, float fragDepth, out float cutY, out int doorAt)
 {
-    cutY = 1e9;
+    cutY = 1e9; doorAt = -1;
 #ifdef STOREY_STEADY
     return 0.0;   // nothing hides any of this building's pixels this frame (Triband.Storey.Occlusion.Steady)
 #else
@@ -291,7 +313,10 @@ float StoreyOccludeCut(StoreyVarying v, float2 screenPos, float fragDepth, out f
     // 3. buildings between the camera and the player (never the player's own building, which is sliced above, but the one
     // just left as it is handed over)
     bool mateUp = mate >= 0.0 && _StoreyState[StoreyRow((int)mate)].w < 0.5;
+    // a walk-in building's door is kept (StoreyDoorAt): drawn as it is, by its place before Sink's squash
     if (_StoreyOccMode > 0.5 && (!act || StoreyLeaving()) && v.occ > -0.5 && !mateUp)
+        doorAt = StoreyDoorAt(StoreySlotRow((int)(v.occ + 0.5)), float3(v.worldPos.x, v.origY, v.worldPos.z));
+    if (_StoreyOccMode > 0.5 && (!act || StoreyLeaving()) && v.occ > -0.5 && !mateUp && doorAt < 0)
     {
         int row = StoreySlotRow((int)(v.occ + 0.5));
         float4 hd = _StoreyOcc[row];   // segments, dark, clip height, solid base height
@@ -368,11 +393,30 @@ float StoreyOccludeCut(StoreyVarying v, float2 screenPos, float fragDepth, out f
 #endif
 }
 
-// The fragment-stage test without the cut's height (StoreyOccludeCut).
+// The fragment-stage test without the cut (StoreyOccludeCut).
 float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
 {
-    float cutY;
-    return StoreyOccludeCut(v, screenPos, fragDepth, cutY);
+    float cutY; int doorAt;
+    return StoreyOccludeCut(v, screenPos, fragDepth, cutY, doorAt);
+}
+
+// How far along the line of sight, from c at rate r towards the eye, it leaves the slab lo..hi.
+float StoreySlabExit(float c, float r, float lo, float hi) { return (r >= 0.0 ? hi - c : lo - c) / (r >= 0.0 ? max(r, 1e-6) : min(r, -1e-6)); }
+
+// A back face in a kept door's box (StoreyOccludeCut's doorAt): the wall round the door is cut by the box's sides and top, and
+// its section lies where the line of sight, followed back from this point to the eye, leaves the box. That place, and the
+// normal of the side it leaves by, facing the eye. Everything between there and the back face is the wall's inside.
+void StoreyDoorCap(int doorAt, float3 p, float3 toEye, out float3 at, out float3 normal)
+{
+    float4 a = _StoreyOcc[clamp(doorAt, 0, STOREY_OCC_SLOTS * STOREY_OCC_W - 2)], b = _StoreyOcc[clamp(doorAt + 1, 1, STOREY_OCC_SLOTS * STOREY_OCC_W - 1)];
+    float2 along = a.zw, across = float2(-a.w, a.z), rel = p.xz - a.xy;
+    float ru = dot(toEye.xz, along), rw = dot(toEye.xz, across);
+    float tu = StoreySlabExit(dot(rel, along), ru, -b.x, b.x), tw = StoreySlabExit(dot(rel, across), rw, -b.y, b.y), ty = StoreySlabExit(p.y, toEye.y, b.z, b.w);
+    float t = min(tu, min(tw, ty));
+    at = p + toEye * max(t, 0.0);
+    normal = t == ty ? float3(0.0, toEye.y >= 0.0 ? 1.0 : -1.0, 0.0)
+           : t == tu ? float3(along.x, 0.0, along.y) * (ru >= 0.0 ? 1.0 : -1.0)
+           : float3(across.x, 0.0, across.y) * (rw >= 0.0 ? 1.0 : -1.0);
 }
 
 // Applied after lighting: a building in the way goes near-black (a trace of shading keeps its form); below 0, Dissolve's
