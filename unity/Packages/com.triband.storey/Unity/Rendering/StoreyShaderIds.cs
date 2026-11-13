@@ -19,6 +19,8 @@ namespace Triband.Storey.Unity
         public static readonly int Cap = Shader.PropertyToID("_StoreyCap");
         public static readonly int Iso = Shader.PropertyToID("_StoreyIso");
         public static readonly int OccMode = Shader.PropertyToID("_StoreyOccMode");
+        /// <summary>Dissolve's look and its settings (<see cref="StoreyGlobals.SetDissolve"/>).</summary>
+        public static readonly int Dissolve = Shader.PropertyToID("_StoreyDissolve");
         public static readonly int Player = Shader.PropertyToID("_StoreyPlayer");
         public static readonly int LodTint = Shader.PropertyToID("_StoreyLodTint");
         /// <summary>The Scene view's selection outline, which the selection pass draws (StoreyLit.hlsl): 0 on every building, n on building n - 1 alone. The editor's to set.</summary>

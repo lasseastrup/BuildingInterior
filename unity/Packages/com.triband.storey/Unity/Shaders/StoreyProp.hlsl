@@ -65,8 +65,9 @@ bool StoreyPropGone(int ib, float pivotY)
     return false;
 #else
     int slot = (int)(_StoreyState[StoreyRow(ib)].w + 0.5) - 1, row = StoreySlotRow(slot);
-    // the player's building is never in the way, but for what of it stands over the terrace they are out on
-    if (slot < 0 || (abs((float)ib - _StoreyActive.x) < 0.5 && !StoreyOverTerrace(pivotY))) return false;
+    // the player's building is never in the way, but for what of it stands over the terrace they are out on, and the one
+    // they have just left as it is handed over
+    if (slot < 0 || (abs((float)ib - _StoreyActive.x) < 0.5 && !StoreyOverTerrace(pivotY) && !StoreyLeaving())) return false;
     int n = (int)(_StoreyOcc[row].x + 0.5);
     for (int i = 0; i < STOREY_OCC_W - 1; i++)
     {
@@ -141,7 +142,7 @@ void StoreyPropFragment_float(float3 PositionWS, float3 BaseColor, out float3 Co
     float4 cs = TransformWorldToHClip(PositionWS);
     float2 pixel = (cs.xy / cs.w * 0.5 + 0.5) * _ScreenParams.xy;
     float dark = StoreyOcclude(v, pixel, 0.0);
-    Color = lerp(Color, Color * 0.1 + float3(0.01, 0.011, 0.013), dark);
+    Color = StoreyShade(Color, dark);   // darkened as its building in the way, or paled with Dissolve's Ghost
 #endif
 }
 

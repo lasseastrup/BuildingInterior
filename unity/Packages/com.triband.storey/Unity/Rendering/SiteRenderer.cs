@@ -868,9 +868,9 @@ namespace Triband.Storey.Unity
             bool writeView = claims || !OtherClaims();
             if (Occlusion != null)
             {
+                StoreyGlobals.SetCap(StoreyGlobals.DefaultCap);   // the occlusion's settings may say otherwise
                 using (StoreyTimings.Time("site: occlusion")) Occlusion(this);
                 StoreyGlobals.SetIsolate(0, -1);
-                StoreyGlobals.SetCap(new Color(0.23f, 0.25f, 0.24f));
                 BindAndUpload();
                 return;
             }
@@ -884,7 +884,7 @@ namespace Triband.Storey.Unity
             int iso = v.isolateId != null ? TableIndexOf(v.isolateId) : -1;
             StoreyGlobals.SetIsolate(iso >= 0 ? v.isolateAmount : 0, iso);
             StoreyGlobals.SetOcclusion(StoreyGlobals.OcclusionMode.Off, Vector3.zero, 2.4f);
-            StoreyGlobals.SetCap(new Color(0.23f, 0.25f, 0.24f));
+            StoreyGlobals.SetCap(StoreyGlobals.DefaultCap);
             BindAndUpload();
         }
 

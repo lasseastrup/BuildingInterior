@@ -16,7 +16,8 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     UNITY_SETUP_INSTANCE_ID(IN);
     bool isFront = IS_FRONT_VFACE(cullFace, true, false);
     StoreyVarying v = StoreyUnpack(IN);
-    float dark = StoreyOcclude(v, IN.positionCS.xy, IN.positionCS.z);
+    float cutY;
+    float dark = StoreyOccludeCut(v, IN.positionCS.xy, IN.positionCS.z, cutY);
 
     StoreySurface s;
 #ifdef STOREY_MASSING
@@ -28,6 +29,25 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
 #endif
     s.positionWS = IN.worldPos;
     s.normalWS = normalize(isFront ? IN.normalWS : -IN.normalWS);
+    bool capFace = false;
+#ifdef STOREY_CAP
+    // a cut exposes a wall's inside, and the backs of its faces show through the cut: the section cap. Where the cut is known
+    // (the cutaway, the ceiling clip, Slice, Dissolve's Stub) and the eye looks down on it, the cap is drawn as the wall's top
+    // face would be, a solid face at the cut's height: lit facing up, where the line of sight crosses the cut. Everything
+    // between there and the back face is the wall's inside, so nothing else can be drawn in front of it. Storey's own: the
+    // backs were a flat colour, and a cut wall looked hollow
+    if (!isFront && cutY < 1e8 && s.positionWS.y < cutY && _WorldSpaceCameraPos.y > cutY)
+    {
+        float3 toEye = GetWorldSpaceViewDir(s.positionWS);
+        if (toEye.y > 1e-4)
+        {
+            s.positionWS += toEye * ((cutY - s.positionWS.y) / toEye.y);
+            s.normalWS = float3(0.0, 1.0, 0.0);
+            s.albedo = _StoreyCap.rgb;
+            capFace = true;
+        }
+    }
+#endif
 #if !defined(STOREY_MASSING) && !defined(STOREY_GLASS)
     // LOD1's flat pane (Lod1.PaneProud): what the line of sight meets in the recess LOD0 cuts (StoreyPaneRecess). A reveal
     // is lit as LOD0's is, the wall's colour facing its own way, and the centre bar in the trim's; the pane shows its room
@@ -69,8 +89,11 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
 #else
     s.shadowCoord = float4(0, 0, 0, 0);
 #endif
+#if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR) && defined(MAIN_LIGHT_CALCULATE_SHADOWS) && !defined(_MAIN_LIGHT_SHADOWS_SCREEN)
+    if (capFace) s.shadowCoord = TransformWorldToShadowCoord(s.positionWS);   // the cap's own place, not the back face's
+#endif
     s.positionCS = IN.positionCS;
-    s.isFront = isFront;
+    s.isFront = isFront || capFace;
 #if defined(EVALUATE_SH_VERTEX) || defined(EVALUATE_SH_MIXED)
     s.vertexSH = IN.vertexSH;
 #else
@@ -119,10 +142,10 @@ float4 StoreyFrag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) :
     }
 #endif
 #ifdef STOREY_CAP
-    // a cut exposes a wall's inside: the section cap, fogged as the lighting fogs (STOREY_FOG, when it does). In the
-    // distance a thin parapet's back face can win the depth test against its front, and an unfogged cap there shows as
-    // dark specks along far roofs
-    if (!isFront)
+    // a back face where no cut is known to have opened it (or seen from under the cut): the section cap's flat colour, fogged
+    // as the lighting fogs (STOREY_FOG, when it does). In the distance a thin parapet's back face can win the depth test
+    // against its front, and an unfogged cap there shows as dark specks along far roofs
+    if (!isFront && !capFace)
     {
     #ifdef STOREY_FOG
         color.rgb = STOREY_FOG(_StoreyCap.rgb, s.positionWS);

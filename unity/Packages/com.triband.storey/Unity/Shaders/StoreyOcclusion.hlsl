@@ -64,10 +64,11 @@ float3 _StoreyCam;      // camera position for the cutaway (focus + camera offse
 float3 _StoreyFocus;    // the player
 float2 _StoreyCamDir;   // camera forward in the XZ plane
 float4 _StoreyCut;      // x: cutaway on, y: stub height, z: cut base, w: cut top
-float4 _StoreyActive;   // x: active building index (-1 none), y: ceiling clip height, z: the floor of the terrace over which it is in the way, w: 1 while it is
+float4 _StoreyActive;   // x: active building index (-1 none), y: ceiling clip height, z: the floor of the terrace over which it is in the way, w: 1 while it is, 2 while it is being left (StoreyLeaving)
 float4 _StoreyCap;      // section cap colour
 float4 _StoreyIso;      // x: isolate amount, y: isolated building index
 float _StoreyOccMode;   // 0 off, 1 Sink/Slice, 2 Cutout, 3 Fade, 4 Dissolve
+float4 _StoreyDissolve; // Dissolve's look: x the look (StoreyLook), y how much Ghost and Hatch keep (Ghost's share of the pixels, Hatch's line's of its spacing), z Hatch's spacing (metres), w Stub's height (metres)
 // Heights are world heights; the cutaway's camera and focus are given in the site's own x and z (the wall data in the
 // vertices is), which for an unrotated, unscaled site is world minus its position
 float4 _StoreyPlayer;   // xyz: the player's chest (world), w: Cutout's hole radius (metres)
@@ -101,14 +102,19 @@ float3 StoreyLodTint(float l) { return l < 0.5 ? float3(0.16, 0.62, 0.30) : l < 
 // building's row, and the storeys under the terrace, the player's floor, are drawn as they are. A height of the active
 // building over the terrace's floor (_StoreyActive.z, while _StoreyActive.w is 1): its points are drawn as in the way, but
 // the terrace's own walls' (StoreyTerraceWall).
-bool StoreyOverTerrace(float y) { return _StoreyActive.w > 0.5 && y > _StoreyActive.z + STOREY_DECK; }
+bool StoreyOverTerrace(float y) { return abs(_StoreyActive.w - 1.0) < 0.5 && y > _StoreyActive.z + STOREY_DECK; }
+
+// The active building is one the player has just left, past its door, being handed over to the buildings in the way
+// (OcclusionCore's View.leaving): clipped and cut away as it was, and in the way as well, by the occluder slot in its row, so
+// it goes (sinks, dissolves...) from how it was seen, and looks the same once it is let go and drawn as in the way alone.
+bool StoreyLeaving() { return _StoreyActive.w > 1.5; }
 
 // One of the terrace's own walls (its parapet, a stair's rails out on its deck) while what stands over the terrace is in the
 // way: the wall table marks them -1 (OcclusionCore.TerraceWalls), and they stand. Read for the active building's walls only.
 bool StoreyTerraceWall(bool act, float wid)
 {
     bool kept = false;
-    [branch] if (act && _StoreyActive.w > 0.5 && wid > 0.5) kept = _StoreyWall[StoreyWallId(wid)] < -0.5;
+    [branch] if (act && abs(_StoreyActive.w - 1.0) < 0.5 && wid > 0.5) kept = _StoreyWall[StoreyWallId(wid)] < -0.5;
     return kept;
 }
 
@@ -121,9 +127,10 @@ float3 StoreySink(float3 worldPos, float tag, float kind, float wid, out float o
     int slot = (int)(_StoreyState[StoreyRow(ib)].w + 0.5) - 1, row = StoreySlotRow(slot);
     int im = (int)floor(kind / 8.0) - 1;   // a party wall also belongs to the neighbour: it stays unless the neighbour is sinking too
     bool mateUp = im >= 0 && _StoreyState[StoreyRow(im)].w < 0.5;
-    // the player's building is never in the way, but for what of it stands over the terrace they are out on
+    // the player's building is never in the way, but for what of it stands over the terrace they are out on, and the one
+    // they have just left as it is handed over
     bool act = abs((float)ib - _StoreyActive.x) < 0.5;
-    bool own = act && (!StoreyOverTerrace(origY) || StoreyTerraceWall(act, wid));
+    bool own = act && !StoreyLeaving() && (!StoreyOverTerrace(origY) || StoreyTerraceWall(act, wid));
     if (slot >= 0 && !own && !mateUp)
     {
         int n = (int)(_StoreyOcc[row].x + 0.5);
@@ -190,14 +197,39 @@ bool StoreyVertex(float tag, float4 wall, float kind, float wid, float3 worldPos
     return shown > 0.5;
 }
 
-// The fragment-stage test. Returns the darkening for a building in the way (0..1); clips with `clip(-1)` where the
-// prototype discards.
-float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
+// Dissolve's looks (OcclusionSettings.dissolveLook): what is left of a building in the way once it has dissolved. Plain and
+// Outline leave nothing of the building itself (Outline's lines are its footprint's, SinkFootprint.Cage); Ghost keeps a pale
+// screen of it, Hatch diagonal stripes across its faces, Stub the storey at the player's height up to the cutaway's stub, and
+// Blueprint Ghost's screen with Outline's lines.
+#define STOREY_LOOK_GHOST 2
+#define STOREY_LOOK_HATCH 3
+#define STOREY_LOOK_STUB 4
+#define STOREY_LOOK_BLUEPRINT 5
+#define STOREY_FOOT_RIM 0.31   // over the footprint's rim (SinkFootprint.RimHeight): a building's pixels kept there would z-fight it
+bool StoreyLook(float look) { return abs(_StoreyDissolve.x - look) < 0.5; }
+
+// The fragment-stage test. Returns the darkening for a building in the way (0..1; below 0, Dissolve's Ghost: how far it is
+// paled, StoreyShade); clips with `clip(-1)` where the prototype discards. cutY: the height of the cut over this point of a
+// wall, where the cutaway, the ceiling clip, Slice or Dissolve's Stub opened it from above and its section cap lies (1e9 for
+// none; StoreyFragment draws the cap there).
+float StoreyOccludeCut(StoreyVarying v, float2 screenPos, float fragDepth, out float cutY)
 {
+    cutY = 1e9;
 #ifdef STOREY_STEADY
     return 0.0;   // nothing hides any of this building's pixels this frame (Triband.Storey.Occlusion.Steady)
 #else
     float dark = 0.0;
+#ifndef STOREY_DEPTH
+    // Hatch's stripes, worked out here where every pixel of the quad takes the derivatives (a uniform branch): diagonal on every
+    // face, whichever way it faces, by the place across its dominant axis, in lines at least a pixel wide
+    bool hatched = false;
+    [branch] if (StoreyLook(STOREY_LOOK_HATCH))
+    {
+        float3 p = v.worldPos, an = abs(cross(ddy(p), ddx(p)));
+        float u = (an.y > max(an.x, an.z) ? p.x + p.z : (an.x > an.z ? p.z + p.y : p.x + p.y)) / max(_StoreyDissolve.z, 0.05);
+        hatched = frac(u) < max(_StoreyDissolve.y, abs(ddx(u)) + abs(ddy(u)));
+    }
+#endif
     // 0. LOD cross-fade: the old and new LOD draw complementary dither patterns
     if (v.fade < 2.0)
     {
@@ -220,19 +252,23 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
     float kind = fmod(v.kind, 8.0), mate = floor(v.kind / 8.0) - 1.0;
     bool actCut = act || (mate >= 0.0 && abs(mate - _StoreyActive.x) < 0.5);
 #ifndef STOREY_DEPTH
-    // 1. everything above the ceiling of the active floor
-    if (act && v.worldPos.y > _StoreyActive.y) clip(-1);
+    // 1. everything above the ceiling of the active floor (by its height before Sink's squash, which only the building being
+    // left has while it is active: what sinks under the clip from above stays clipped)
+    if (act) { if (v.origY > _StoreyActive.y) clip(-1); cutY = _StoreyActive.y; }
     // a wall's face inside another wall, where one runs into the other (MeshBuilder.Buried): hidden while that wall stands,
     // but the cut (1, and 2 below) opens walls from above, and it showed inside the section cap. Storey's own
     if (act && abs(kind - 3.0) < 0.5) clip(-1);
-    // 2. cutaway: walls between camera and focus drop to stub height; tall parts on the camera side too
-    if (actCut && _StoreyCut.x > 0.5 && kind > 0.5 && v.worldPos.y > _StoreyCut.z + _StoreyCut.y && v.worldPos.y < _StoreyCut.w && v.worldPos.y > _StoreyCut.z - 0.05)
+    // 2. cutaway: walls between camera and focus drop to stub height; tall parts on the camera side too. Each wall's cut height
+    // is worked out over the whole of the storey's band, under it too, for its section cap (by heights before Sink's squash,
+    // as the clip: the same but for the building being left)
+    if (actCut && _StoreyCut.x > 0.5 && kind > 0.5 && v.origY < _StoreyCut.w && v.origY > _StoreyCut.z - 0.05)
     {
+        float stub = _StoreyCut.z + _StoreyCut.y, h = 1e9;
         if (kind < 1.5 && v.wid > 0.5)
         {
             // walls slide down to the stub and back up (eased per wall on the CPU)
             float a = _StoreyWall[StoreyWallId(v.wid)];
-            if (a > 0.0 && v.worldPos.y > lerp(_StoreyCut.w, _StoreyCut.z + _StoreyCut.y, a * a * (3.0 - 2.0 * a))) clip(-1);
+            if (a > 0.0) h = lerp(_StoreyCut.w, stub, a * a * (3.0 - 2.0 * a));
         }
         else if (kind < 1.5)
         {
@@ -245,18 +281,22 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
             {
                 float2 x = _StoreyCam.xz + (_StoreyFocus.xz - _StoreyCam.xz) * (sc / (sc - sp));
                 float s = dot(x - v.wall.xy, float2(n.y, -n.x));
-                if (nl < 1.01 || (s > -0.5 && s < nl - 1.0 + 0.5)) clip(-1);
+                if (nl < 1.01 || (s > -0.5 && s < nl - 1.0 + 0.5)) h = stub;
             }
         }
-        else if (kind < 2.5 && dot(v.wall.xy - _StoreyFocus.xz, _StoreyCamDir) > 0.4) clip(-1);
+        else if (kind < 2.5 && dot(v.wall.xy - _StoreyFocus.xz, _StoreyCamDir) > 0.4) h = stub;
+        if (v.origY > h) clip(-1);
+        cutY = min(cutY, h);
     }
-    // 3. buildings between the camera and the player (never the player's own building, which is sliced above)
+    // 3. buildings between the camera and the player (never the player's own building, which is sliced above, but the one
+    // just left as it is handed over)
     bool mateUp = mate >= 0.0 && _StoreyState[StoreyRow((int)mate)].w < 0.5;
-    if (_StoreyOccMode > 0.5 && !act && v.occ > -0.5 && !mateUp)
+    if (_StoreyOccMode > 0.5 && (!act || StoreyLeaving()) && v.occ > -0.5 && !mateUp)
     {
         int row = StoreySlotRow((int)(v.occ + 0.5));
         float4 hd = _StoreyOcc[row];   // segments, dark, clip height, solid base height
         if (v.origY > hd.z) clip(-1);                     // Slice: the cut plane lowered to the player's storey
+        cutY = min(cutY, hd.z);
         int n = (int)(hd.x + 0.5);
         if (n > 0)
         {
@@ -277,9 +317,21 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
         else if (_StoreyOccMode > 3.5)
         {
             // Dissolve: Sink's end state, faded to. From the floor of the storey that stays up it dithers away (its
-            // footprint dithers in on the same pattern's complement, so the two never draw the same pixel); all dark
+            // footprint dithers in on the same pattern's complement, so the two never draw the same pixel); all dark. What
+            // its look keeps of it stays: Stub's storey up to the stub, lit as the cutaway leaves its walls and capped there;
+            // Ghost's (and Blueprint's) screen, paling; Hatch's stripes, darkening. Not over the footprint's rim
             dark = hd.y;
-            if (v.origY >= hd.w && StoreyBayer(screenPos) < hd.y) clip(-1);
+            if (v.origY >= hd.w)
+            {
+                float stubTop = hd.w + _StoreyDissolve.w;
+                bool stub = StoreyLook(STOREY_LOOK_STUB);
+                bool over = v.origY > hd.w + STOREY_FOOT_RIM;
+                bool ghost = over && (StoreyLook(STOREY_LOOK_GHOST) || StoreyLook(STOREY_LOOK_BLUEPRINT)) && StoreyBayer(screenPos + float2(2.0, 3.0)) < _StoreyDissolve.y;
+                if (stub && v.origY < stubTop) dark = 0.0;
+                else if (ghost) dark = -hd.y;
+                else if (!(over && hatched) && StoreyBayer(screenPos) < hd.y) clip(-1);
+                if (stub) cutY = min(cutY, stubTop);
+            }
         }
         else if (v.origY < hd.w) dark = hd.y;                              // Cutout / Fade keep a solid dark base
         else if (hd.y > 0.001)
@@ -303,22 +355,38 @@ float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
         }
     }
 #else
-    // Dissolve takes its shadow and depth away with it, dithered alike (Sink's squash is colour-pass only: its shadow stays)
-    if (_StoreyOccMode > 3.5 && !act && v.occ > -0.5 && !(mate >= 0.0 && _StoreyState[StoreyRow((int)mate)].w < 0.5))
+    // Dissolve takes its shadow and depth away with it, dithered alike (Sink's squash is colour-pass only: its shadow stays),
+    // but Stub's storey, which stays. What Ghost and Hatch keep is the colour pass's alone: they cast no shadow
+    if (_StoreyOccMode > 3.5 && (!act || StoreyLeaving()) && v.occ > -0.5 && !(mate >= 0.0 && _StoreyState[StoreyRow((int)mate)].w < 0.5))
     {
         float4 hd = _StoreyOcc[StoreySlotRow((int)(v.occ + 0.5))];
-        if (hd.x < 0.5 && v.origY >= hd.w && StoreyBayer(screenPos) < hd.y) clip(-1);
+        bool stays = StoreyLook(STOREY_LOOK_STUB) && v.origY < hd.w + _StoreyDissolve.w;
+        if (hd.x < 0.5 && v.origY >= hd.w && !stays && StoreyBayer(screenPos) < hd.y) clip(-1);
     }
 #endif
     return dark;
 #endif
 }
 
-// Applied after lighting: a building in the way goes near-black (a trace of shading keeps its form).
+// The fragment-stage test without the cut's height (StoreyOccludeCut).
+float StoreyOcclude(StoreyVarying v, float2 screenPos, float fragDepth)
+{
+    float cutY;
+    return StoreyOccludeCut(v, screenPos, fragDepth, cutY);
+}
+
+// Applied after lighting: a building in the way goes near-black (a trace of shading keeps its form); below 0, Dissolve's
+// Ghost pales it instead, to an x-ray's blue-white with a trace of its own colour.
+float3 StoreyShade(float3 rgb, float dark)
+{
+    if (dark < 0.0) return lerp(rgb, rgb * 0.3 + float3(0.60, 0.67, 0.74), -dark);
+    return lerp(rgb, rgb * 0.1 + float3(0.01, 0.011, 0.013), dark);
+}
+
 float4 StoreyDarken(float4 color, float dark)
 {
-    color.rgb = lerp(color.rgb, color.rgb * 0.1 + float3(0.01, 0.011, 0.013), dark);
-    color.a = lerp(color.a, 1.0, dark);
+    color.rgb = StoreyShade(color.rgb, dark);
+    color.a = lerp(color.a, 1.0, abs(dark));
     return color;
 }
 

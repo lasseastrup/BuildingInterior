@@ -16,6 +16,43 @@ namespace Triband.Storey.Tests
     {
         const double Dt = 1.0 / 30;
 
+        /// <summary>
+        /// Dissolve's looks: only Outline and Blueprint make the footprint with lines, and Stub has no footprint, its storey
+        /// staying up to the stub, so a prop there is still drawn and one over it is hidden as under the others.
+        /// </summary>
+        [Fact]
+        public void ItsLooksLeaveWhatTheySay()
+        {
+            foreach (DissolveLook look in Enum.GetValues(typeof(DissolveLook)))
+            {
+                var s = new OcclusionSettings { mode = OccluderMode.Dissolve, dissolveLook = look, outlineWidth = 0.08 };
+                bool lines = look == DissolveLook.Outline || look == DissolveLook.Blueprint;
+                Assert.Equal(lines ? 0.08 : 0, s.CageWidth);
+                Assert.Equal(look != DissolveLook.Stub, s.Footprint);
+                s.mode = OccluderMode.Sink;
+                Assert.Equal(0, s.CageWidth); Assert.True(s.Footprint);
+            }
+            // the demo's Linden Court, in the way of a camera over it from its street door out
+            var (doc, _) = PlayWorldTests.World("demo");
+            var world = new PlayWorld(new Site(doc.buildings));
+            var b = world.Site.Buildings.First(x => x.name == "Linden Court");
+            var e = b.entrances[0]; var fp = Derived.OutlineAt(b, e.k); var a = fp[e.edge]; var c = fp[(e.edge + 1) % fp.Count];
+            double dx = c.x - a.x, dz = c.z - a.z, L = Math.Sqrt(dx * dx + dz * dz), nx = dz / L, nz = -dx / L;
+            double mx = a.x + dx * e.t, mz = a.z + dz * e.t; if (Geo.Pip(fp, mx + nx, mz + nz)) { nx = -nx; nz = -nz; }
+            double y = Derived.FloorBase(b, e.k), px = b.pos.x + mx + nx * 3, pz = b.pos.z + mz + nz * 3;
+            foreach (var look in new[] { DissolveLook.Plain, DissolveLook.Stub })
+            {
+                var core = new OcclusionCore(world, new OcclusionSettings { mode = OccluderMode.Dissolve, dissolveLook = look, stub = 1.0 });
+                var p = new PlayerState(); p.Spawn(px, y, pz);
+                for (int i = 0; i < 20; i++) core.Frame(p, (px - nx * 9, y + 9, pz - nz * 9), (px, y + FollowCamera.Chest, pz), Dt);
+                var r = core.Active.Single(q => q.b == b);
+                Assert.Equal(1, r.a);
+                double floor = Derived.FloorBase(b, r.k);
+                Assert.Equal(look != DissolveLook.Stub, core.HidesPoint(b, floor + 0.5));   // under the stub
+                Assert.True(core.HidesPoint(b, floor + 1.5));                              // over it
+            }
+        }
+
         [Fact]
         public void EndsWhereSinkEnds()
         {

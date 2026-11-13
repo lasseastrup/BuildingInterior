@@ -54,8 +54,9 @@ namespace Triband.Storey.Unity
             public Site? site;
             public System.Threading.Tasks.Task<PlayWorld>? making;
             public PlayWorld? world; public OcclusionCore? occ;
-            // Sink's footprints: a mesh per building, storey and slot (it carries the slot's row), and the frame each was last shown
-            public readonly Dictionary<(string, int, int), (Mesh mesh, int used)> footprints = new Dictionary<(string, int, int), (Mesh, int)>();
+            // Sink's footprints: a mesh per building, storey, slot (it carries the slot's row) and Dissolve's outline (its thickness in
+            // millimetres, negative with a line round every storey; 0 for none), and the frame each was last shown
+            public readonly Dictionary<(string, int, int, int), (Mesh mesh, int used)> footprints = new Dictionary<(string, int, int, int), (Mesh, int)>();
             // one object per slot, kept: its mesh, layer and state are set only when they change (docs/PERFORMANCE.md §10.3)
             public readonly GameObject?[] slots = new GameObject?[OcclusionCore.Slots];
             public readonly MeshFilter?[] filters = new MeshFilter?[OcclusionCore.Slots];
@@ -295,8 +296,9 @@ namespace Triband.Storey.Unity
             var table = r.Table; var v = o.View; float lift = origin.y;
             // the view: heights in world space, the cutaway's x and z in the site's (the wall data in the vertices is)
             int active = v.active != null ? r.TableIndexOf(v.active.id) : -1;
-            // out on a terrace with what stands over it in the way, the active building is drawn as in the way above its floor
-            StoreyGlobals.SetActive(active, active >= 0 ? (float)v.clipY + lift : 1e9f, v.terraceY < 1e8 ? (float)v.terraceY + lift : (float?)null);
+            // out on a terrace with what stands over it in the way, the active building is drawn as in the way above its floor;
+            // one just left, as it is handed over to the buildings in the way, is drawn as in the way as well as cut away
+            StoreyGlobals.SetActive(active, active >= 0 ? (float)v.clipY + lift : 1e9f, v.terraceY < 1e8 ? (float)v.terraceY + lift : (float?)null, v.leaving);
             if (active >= 0 && v.cutOn)
             {
                 StoreyGlobals.SetCamera(new Vector3((float)v.cx, (float)v.cy + lift, (float)v.cz), new Vector3((float)v.fx, (float)v.fy + lift, (float)v.fz), new Vector2((float)v.dirX, (float)v.dirZ));
@@ -332,6 +334,8 @@ namespace Triband.Storey.Unity
                 _ => StoreyGlobals.OcclusionMode.SinkOrSlice,
             };
             StoreyGlobals.SetOcclusion(modeG, playerWorld + Vector3.up * 1.1f, (float)core.holeRadius);
+            StoreyGlobals.SetDissolve(core.dissolveLook, (float)core.dissolveKeeps, (float)core.hatchSpacing, (float)core.stub);
+            if (settings != null) StoreyGlobals.SetCap(settings.cutCapColour);
         }
 
         /// <summary>
@@ -362,7 +366,8 @@ namespace Triband.Storey.Unity
                 if (changed) table.MarkOccDirty(oc.slot);
                 // the footprint stands in once the building starts to go: Sink's at once, Dissolve's fading in as it fades out.
                 // None for a building hidden meanwhile (docs/PLAY.md §6): nothing of it is drawn while it comes back up
-                if (oc.k < oc.b.floors.Count && (core.mode == OccluderMode.Sink ? oc.t > 0 : core.mode == OccluderMode.Dissolve && oc.a > 0) && !r.IsHidden(oc.b.id))
+                // Dissolve's Stub has none: its storey stays
+                if (oc.k < oc.b.floors.Count && core.Footprint && (core.mode == OccluderMode.Sink ? oc.t > 0 : oc.a > 0) && !r.IsHidden(oc.b.id))
                 {
                     ShowFootprint(r, s, w, oc.b, oc.k, oc.slot);
                     table.SetLod(BuildingTable.FootprintRow(oc.slot), 0, 0, core.mode == OccluderMode.Dissolve ? (float)oc.a : 1);
@@ -417,12 +422,13 @@ namespace Triband.Storey.Unity
         // under the site the building is in (s)
         void ShowFootprint(SiteRenderer r, StoreySite s, Walked w, BuildingData b, int k, int slot)
         {
-            var key = (b.id, k, slot);
+            double cage = core.CageWidth; int mm = (int)Math.Round(cage * 1000);
+            var key = (b.id, k, slot, core.outlineStoreys ? -mm : mm);
             if (!w.footprints.TryGetValue(key, out var f))
             {
                 using (StoreyTimings.Time("occlusion: footprint", b.name))
                 {
-                    var gb = SinkFootprint.Build(r.Site!, b, k);
+                    var gb = SinkFootprint.Build(r.Site!, b, k, cage, core.outlineStoreys);
                     f = (r.UploadExtra(gb, b.name + " footprint " + k, BuildingTable.FootprintRow(slot)), 0);
                     gb.Recycle();   // uploaded: its lists go back for the next build
                 }
@@ -444,7 +450,7 @@ namespace Triband.Storey.Unity
         {
             while (w.footprints.Count >= FootprintsKept)
             {
-                (string, int, int)? oldest = null; int at = int.MaxValue;
+                (string, int, int, int)? oldest = null; int at = int.MaxValue;
                 foreach (var kv in w.footprints) if (kv.Value.used < at && kv.Value.used != Time.frameCount) { at = kv.Value.used; oldest = kv.Key; }
                 if (oldest == null) return;
                 var m = w.footprints[oldest.Value].mesh;

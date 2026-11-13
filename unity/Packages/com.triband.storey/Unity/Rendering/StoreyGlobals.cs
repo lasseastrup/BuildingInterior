@@ -29,12 +29,13 @@ namespace Triband.Storey.Unity
 
         static float activeIndex = -1;
         static float? terraceY;
+        static bool leaving;
 
         /// <summary>
         /// _StoreyActive: x the active building's row (-1: none), y its ceiling clip, z the floor of the terrace over which it is in
-        /// the way and w 1 while it is (<see cref="SetActive"/>; 0 and 0 otherwise).
+        /// the way and w 1 while it is, or w 2 while it is being left (<see cref="SetActive"/>; 0 and 0 otherwise).
         /// </summary>
-        static Vector4 ActiveRow(float clipY) => new Vector4(activeIndex, clipY, terraceY ?? 0, terraceY != null ? 1 : 0);
+        static Vector4 ActiveRow(float clipY) => new Vector4(activeIndex, clipY, terraceY ?? 0, leaving ? 2 : terraceY != null ? 1 : 0);
 
         /// <summary>The active building's row (-1: none), as last set: what the steady variant can't be given (SiteRenderer).</summary>
         public static int ActiveIndex => (int)activeIndex;
@@ -46,16 +47,31 @@ namespace Triband.Storey.Unity
         /// The building the player is in (or the one being edited); -1 = none. <paramref name="inWayAbove"/>: out on a terrace of it
         /// with what stands over the terrace in the way, the terrace's floor (world height): everything of it above that is
         /// drawn as a building in the way, by the occluder slot in its row, but the walls the wall table marks -1 (the
-        /// terrace's own); null for none (Occlusion.OcclusionView.terraceY).
+        /// terrace's own); null for none (Occlusion.OcclusionView.terraceY). <paramref name="leftBehind"/>: the player has just
+        /// left it, past its door, and it is being handed over to the buildings in the way: clipped and cut away as it was,
+        /// and in the way as well, by the occluder slot in its row (Occlusion.OcclusionView.leaving).
         /// </summary>
-        public static void SetActive(int buildingIndex, float clipY, float? inWayAbove = null)
+        public static void SetActive(int buildingIndex, float clipY, float? inWayAbove = null, bool leftBehind = false)
         {
-            activeIndex = buildingIndex; terraceY = buildingIndex >= 0 ? inWayAbove : null;
+            activeIndex = buildingIndex; terraceY = buildingIndex >= 0 ? inWayAbove : null; leaving = buildingIndex >= 0 && leftBehind;
             Shader.SetGlobalVector(StoreyShaderIds.Active, ActiveRow(clipY));
         }
 
-        /// <summary>Colour of the section cap drawn where a cut exposes a wall's inside.</summary>
+        /// <summary>
+        /// Colour of the section cap drawn where a cut exposes a wall's inside: the top face of a wall the cutaway, the ceiling
+        /// clip, Slice or Dissolve's Stub cut, lit as a face facing up (StoreyFragment.hlsl).
+        /// </summary>
         public static void SetCap(Color cap) => Shader.SetGlobalVector(StoreyShaderIds.Cap, new Vector4(cap.r, cap.g, cap.b, 1));
+
+        /// <summary>The section cap's colour without occlusion settings to say otherwise (the editor's cutaway): a light warm grey, as a plastered wall's top.</summary>
+        public static readonly Color DefaultCap = new Color(0.72f, 0.71f, 0.68f);
+
+        /// <summary>
+        /// Dissolve's look (<see cref="Occlusion.DissolveLook"/>): how much Ghost and Hatch keep (Ghost's share of the pixels,
+        /// Hatch's line's share of its spacing), Hatch's spacing and Stub's height, in metres.
+        /// </summary>
+        public static void SetDissolve(Occlusion.DissolveLook look, float keeps, float hatchSpacing, float stubHeight) =>
+            Shader.SetGlobalVector(StoreyShaderIds.Dissolve, new Vector4((float)look, keeps, hatchSpacing, stubHeight));
 
         /// <summary>Isolate a building: every other one fades to a screen-door ghost (0 = off, 1 = fully hidden).</summary>
         public static void SetIsolate(float amount, int buildingIndex)

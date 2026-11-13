@@ -113,14 +113,14 @@ namespace Triband.Storey.Tests
         [Fact]
         public void EveryDiscardIsOutsideTheSteadyVariant()
         {
-            // StoreyOcclude is the only function that discards, and its steady branch returns before any of it
+            // StoreyOccludeCut (which StoreyOcclude calls) is the only function that discards, and its steady branch returns before any of it
             foreach (var f in Directory.GetFiles(Shaders, "*.hlsl").Where(f => Path.GetFileName(f) != "StoreyOcclusion.hlsl" && Path.GetFileName(f) != "StoreyProp.hlsl"))
                 Assert.DoesNotMatch(new Regex(@"\b(clip|discard)\s*\("), Regex.Replace(File.ReadAllText(f), @"//[^\n]*", ""));
             // comments blanked, so a clip a comment names isn't counted
             var occ = Regex.Replace(File.ReadAllText(Path.Combine(Shaders, "StoreyOcclusion.hlsl")), @"//[^\n]*", m => new string(' ', m.Length));
-            int start = occ.IndexOf("float StoreyOcclude(", StringComparison.Ordinal), steady = occ.IndexOf("#ifdef STOREY_STEADY", start, StringComparison.Ordinal);
+            int start = occ.IndexOf("float StoreyOccludeCut(", StringComparison.Ordinal), steady = occ.IndexOf("#ifdef STOREY_STEADY", start, StringComparison.Ordinal);
             int other = occ.IndexOf("#else", steady, StringComparison.Ordinal), end = occ.IndexOf("\n}", start, StringComparison.Ordinal);
-            Assert.True(start > 0 && steady > start && other > steady && end > other, "StoreyOcclude opens with its steady branch");
+            Assert.True(start > 0 && steady > start && other > steady && end > other, "StoreyOccludeCut opens with its steady branch");
             Assert.DoesNotMatch(new Regex(@"\bclip\s*\("), occ.Substring(steady, other - steady));
             var clips = Regex.Matches(occ, @"\bclip\s*\(").Select(m => m.Index).ToList();
             Assert.NotEmpty(clips);

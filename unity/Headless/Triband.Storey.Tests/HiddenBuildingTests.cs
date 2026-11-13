@@ -265,7 +265,7 @@ namespace Triband.Storey.Tests
             // the sets have room for a few: hiding and showing them make no garbage
             Assert.Contains("readonly HashSet<string> hiddenIds = new HashSet<string>(16, StringComparer.Ordinal);", r);
             Assert.Contains("readonly HashSet<string> hiddenIds = new HashSet<string>(16, StringComparer.Ordinal);", site);
-            Assert.Contains("if (b == held || AtDoorOf(b, p) || (Hidden != null && Hidden.Count > 0 && Hidden.Contains(b.id))) continue;", Text("Runtime", "Occlusion", "OcclusionCore.cs"));
+            Assert.Contains("if ((b == held && !leaving) || AtDoorOf(b, p) || (Hidden != null && Hidden.Count > 0 && Hidden.Contains(b.id))) continue;", Text("Runtime", "Occlusion", "OcclusionCore.cs"));
             Assert.Contains("&& !r.IsHidden(oc.b.id))", Text("Unity", "Occlusion", "StoreyOcclusion.cs"));
             Assert.Contains("public bool IsHidden(string id) => hiddenIds.Count > 0 && hiddenIds.Contains(id);", r);
             // what a call does, as the renderer does it: no garbage

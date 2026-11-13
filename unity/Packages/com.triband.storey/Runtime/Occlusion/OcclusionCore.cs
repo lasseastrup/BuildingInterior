@@ -14,6 +14,25 @@ namespace Triband.Storey.Occlusion
     /// </summary>
     public enum OccluderMode { Off, Sink, Slice, Cutout, Fade, Dissolve }
 
+    /// <summary>
+    /// What Dissolve leaves of a building in the way once it has gone, on top of its footprint (docs/PLAY.md §4). Storey's own.
+    /// </summary>
+    public enum DissolveLook
+    {
+        /// <summary>Nothing: the footprint alone (a dark fill ringed by a low rim of the outer wall).</summary>
+        Plain,
+        /// <summary>A wire outline of the building: its corners, the top of each tier and, with <see cref="OcclusionSettings.outlineStoreys"/>, a line round every storey (<see cref="SinkFootprint.Cage"/>).</summary>
+        Outline,
+        /// <summary>A pale screen of the whole building, an x-ray, a share of its pixels (<see cref="OcclusionSettings.dissolveKeeps"/>).</summary>
+        Ghost,
+        /// <summary>Diagonal stripes across its faces, dark as an ink hatching (<see cref="OcclusionSettings.hatchSpacing"/>, <see cref="OcclusionSettings.dissolveKeeps"/>).</summary>
+        Hatch,
+        /// <summary>The storey at the player's height up to the cutaway's stub, its walls capped as the cutaway leaves them; no footprint.</summary>
+        Stub,
+        /// <summary>Ghost's pale screen with Outline's lines.</summary>
+        Blueprint,
+    }
+
     /// <summary>The designer's occlusion settings (SPEC §10 decision 8: per project, not per player).</summary>
     public sealed class OcclusionSettings
     {
@@ -38,8 +57,11 @@ namespace Triband.Storey.Occlusion
         public double wallMargin = 0.3;
         /// <summary>
         /// Once the player steps out of a building, it stays cut away (floors above clipped, walls down) while it still
-        /// stands between the camera and the player, so a camera that trails behind isn't buried in it. The prototype's
-        /// is off.
+        /// stands between the camera and the player and they are at its door, so a camera that trails behind isn't buried in
+        /// it. Past the door it is handed over to the buildings in the way, as one the player never entered is: it goes
+        /// (sinks, dissolves...) still cut away, and is let go once it has gone (<see cref="OcclusionView.leaving"/>). With
+        /// Cutout and Fade, which leave it standing round the camera, it is held while the camera is in it too, and with the
+        /// buildings in the way left alone (Off) while it is in the way at all. The prototype's is off.
         /// </summary>
         public bool holdAfterExit = true;
         /// <summary>
@@ -51,6 +73,21 @@ namespace Triband.Storey.Occlusion
         /// (<see cref="Generate.MeshBuilder.Partitions"/>). Storey's own; the prototype's is off.
         /// </summary>
         public bool wallsFacingCamera = false;
+        /// <summary>What Dissolve leaves of a building in the way (<see cref="DissolveLook"/>). Storey's own.</summary>
+        public DissolveLook dissolveLook = DissolveLook.Plain;
+        /// <summary>How much Ghost and Hatch keep: Ghost's (and Blueprint's) share of the building's pixels, Hatch's line's share of its spacing.</summary>
+        public double dissolveKeeps = 0.25;
+        /// <summary>Hatch: metres from one stripe to the next.</summary>
+        public double hatchSpacing = 0.45;
+        /// <summary>Outline and Blueprint: the lines' thickness, in metres.</summary>
+        public double outlineWidth = 0.06;
+        /// <summary>Outline and Blueprint: a line round every storey too, not only the corners and each tier's top.</summary>
+        public bool outlineStoreys = true;
+
+        /// <summary>The outline's thickness Dissolve's footprint is made with now (0: none; <see cref="SinkFootprint.Build"/>).</summary>
+        public double CageWidth => mode == OccluderMode.Dissolve && (dissolveLook == DissolveLook.Outline || dissolveLook == DissolveLook.Blueprint) ? Math.Max(0.01, outlineWidth) : 0;
+        /// <summary>Whether the building in the way has a footprint stand in for it: not under Dissolve's Stub, whose storey stays.</summary>
+        public bool Footprint => mode == OccluderMode.Sink || mode == OccluderMode.Dissolve && dissolveLook != DissolveLook.Stub;
     }
 
     /// <summary>The view's occlusion state for the shaders (SPEC §5): the building the player is in, cut and clipped.</summary>
@@ -74,6 +111,13 @@ namespace Triband.Storey.Occlusion
         /// under the terrace, which the player stands on, are drawn as before. 1e9 when not. Storey's own.
         /// </summary>
         public double terraceY;
+        /// <summary>
+        /// The active building is one the player has just left, past its door (<see cref="OcclusionSettings.holdAfterExit"/>),
+        /// being handed over to the buildings in the way: still clipped and cut away, and in the way as well, by its row in
+        /// <see cref="OcclusionCore.Active"/>. Once it has gone as far as the mode takes it, it is let go and drawn as in the way
+        /// alone, which then looks the same. Storey's own.
+        /// </summary>
+        public bool leaving;
     }
 
     /// <summary>A building in the way: how far it has faded or sunk, and the slot its row is in.</summary>
@@ -162,8 +206,9 @@ namespace Triband.Storey.Occlusion
         readonly List<Occluder> active = new List<Occluder>();
         readonly Dictionary<string, Occluder> records = new Dictionary<string, Occluder>(StringComparer.Ordinal);
         double hiddenFor;
-        // the building the view is on: the one the player is in, or the one just left while it is still in the way
-        BuildingData? held; int heldFloor;
+        // the building the view is on: the one the player is in, or the one just left while it is still in the way; and
+        // whether that one is being handed over to the buildings in the way (OcclusionView.leaving)
+        BuildingData? held; int heldFloor; bool leaving;
         // out on a terrace of the building the view is on (LookAtTerrace): that building and the terrace's storey, whether what
         // stands over the terrace is between the camera and the player, and whether they are at a walk-in setback's door
         BuildingData? terrace; int terraceK; bool terraceInWay, terraceAtDoor;
@@ -267,7 +312,7 @@ namespace Triband.Storey.Occlusion
         /// </summary>
         public void FrameOccluders(PlayerState p, (double x, double y, double z) cam, double dt)
         {
-            held = null; terrace = null; terraceInWay = terraceAtDoor = false;
+            held = null; leaving = false; terrace = null; terraceInWay = terraceAtDoor = false;
             View = new OcclusionView { clipY = 1e9, terraceY = 1e9 };
             UpdateOccluders(p, cam, dt);
             UpdateCutaway(dt);
@@ -277,7 +322,7 @@ namespace Triband.Storey.Occlusion
         public void Clear()
         {
             foreach (var r in active) { r.a = 0; r.t = 0; if (r.slot >= 0 && ReferenceEquals(slots[r.slot], r)) slots[r.slot] = null; r.slot = -1; }
-            active.Clear(); Walls.Clear(); wallStates.Clear(); down.Clear(); hiddenFor = 0; Assist = 0; held = null;
+            active.Clear(); Walls.Clear(); wallStates.Clear(); down.Clear(); hiddenFor = 0; Assist = 0; held = null; leaving = false;
             terrace = null; terraceInWay = terraceAtDoor = false;
             View = new OcclusionView { clipY = 1e9, terraceY = 1e9 };
         }
@@ -297,8 +342,13 @@ namespace Triband.Storey.Occlusion
             // taken a millimetre up, in the storey over it
             if (View.active != null && View.active.id == b.id)
             {
-                if (y < View.terraceY) return y > View.clipY;
-                y = Math.Max(y, View.terraceY + 0.001);
+                // just left and being handed over: clipped as it was, and in the way as well, by its row below
+                if (View.leaving) { if (y > View.clipY) return true; }
+                else
+                {
+                    if (y < View.terraceY) return y > View.clipY;
+                    y = Math.Max(y, View.terraceY + 0.001);
+                }
             }
             for (int i = 0; i < active.Count; i++)
             {
@@ -316,24 +366,80 @@ namespace Triband.Storey.Occlusion
                     return false;
                 }
                 if (y > Rows[o + 2]) return true;                         // Slice
-                return y >= Rows[o + 3] && Rows[o + 1] >= 0.5;           // Cutout, Fade, Dissolve: above the base, half gone
+                // Dissolve's Stub keeps the storey up to the stub
+                double from = Rows[o + 3] + (Settings.mode == OccluderMode.Dissolve && Settings.dissolveLook == DissolveLook.Stub ? Settings.stub : 0);
+                return y >= from && Rows[o + 1] >= 0.5;                  // Cutout, Fade, Dissolve: above the base, half gone
             }
             return false;
         }
 
         // ---- the view ----
 
-        /// <summary>The building the view is on this frame (<see cref="OcclusionSettings.holdAfterExit"/>).</summary>
+        /// <summary>
+        /// The building the view is on this frame (<see cref="OcclusionSettings.holdAfterExit"/>): the one the player is in, or
+        /// the one they just left while it is still in the way. That one is held as it was (clipped, cut away) while they are
+        /// at its door; past it, it is handed over to the buildings in the way (<see cref="OcclusionView.leaving"/>), as one
+        /// they never entered is, and let go once it has gone. Out of its back door, with the camera on its far side, it was
+        /// held as long as the player walked on, cut away where any other building would have gone.
+        /// </summary>
         void HoldView(PlayerState p, (double x, double y, double z) cam)
         {
+            leaving = false;
             var loc = World.Locate(p.x, p.y, p.z);
             if (loc != null) { held = loc.Value.b; heldFloor = loc.Value.floor; return; }
             if (held != null && Settings.holdAfterExit)
             {
                 var b = World.Site.ById(held.id);
-                if (b != null && heldFloor <= b.floors.Count && AnyHits(b, cam, Targets(p, cam))) { held = b; return; }
+                if (b != null && heldFloor <= b.floors.Count && AnyHits(b, cam, Targets(p, cam)))
+                {
+                    held = b;
+                    if (!Keeps(b, p, cam))
+                    {
+                        // gone as far as the mode takes it: let go, and drawn as in the way alone, which looks the same
+                        if (HandedOver(b)) { held = null; return; }
+                        leaving = true;
+                    }
+                    return;
+                }
             }
             held = null;
+        }
+
+        /// <summary>
+        /// The building just left is held as it is, not yet handed over to the buildings in the way: the player is at one of
+        /// its doors (where no building is in the way, <see cref="AtDoorOf"/>), the buildings in the way are left alone (Off:
+        /// nothing would take it over), or the mode leaves it standing round the camera (Cutout, Fade) and the camera is still
+        /// in it. Sink, Slice and Dissolve take away everything from the player's storey up, so nothing is left to bury the camera in.
+        /// </summary>
+        bool Keeps(BuildingData b, PlayerState p, (double x, double y, double z) cam)
+        {
+            var m = Settings.mode;
+            if (m == OccluderMode.Off || AtDoorOf(b, p)) return true;
+            return (m == OccluderMode.Cutout || m == OccluderMode.Fade) && Contains(b, cam);
+        }
+
+        /// <summary>b, in the way, has gone as far as the mode takes it: sunk, sliced, dissolved, or its hole or fade full.</summary>
+        bool HandedOver(BuildingData b)
+        {
+            if (!records.TryGetValue(b.id, out var r) || !InTheWay(b)) return false;
+            return Settings.mode == OccluderMode.Sink ? r.t >= r.plan.total - 1e-9 && r.plan.segs.Count > 0 : r.a >= 1;
+        }
+
+        /// <summary>The point is in b's volume, or within a wall's thickness of it: one prism per setback tier, and the roof's rise.</summary>
+        public bool Contains(BuildingData b, (double x, double y, double z) q)
+        {
+            int N = b.floors.Count; var shape = ShapeOf(b);
+            double lx = q.x - b.pos.x, lz = q.z - b.pos.z; var all = shape.box;
+            if (lx < all.x0 - Reach || lx > all.x1 + Reach || lz < all.z0 - Reach || lz > all.z1 + Reach) return false;
+            for (int ti = 0; ti < shape.tiers.Count; ti++)
+            {
+                var (k0, k1) = shape.tiers[ti];
+                double y0 = Derived.FloorBase(b, k0), y1 = Derived.FloorBase(b, k1) + (k1 == N ? shape.rise : 0);
+                if (q.y < y0 || q.y > y1) continue;
+                var fp = Derived.OutlineAt(b, k0);
+                if (Geo.Pip(fp, lx, lz) || DistToEdges(fp, lx, lz) < Dim.T_EXT) return true;
+            }
+            return false;
         }
 
         void ApplyView(PlayerState p, (double x, double y, double z) cam, (double x, double y, double z) target)
@@ -351,7 +457,7 @@ namespace Triband.Storey.Occlusion
             if (loc != null)
             {
                 var (b, floor) = loc.Value; int N = b.floors.Count;
-                v.active = b; v.floor = floor;
+                v.active = b; v.floor = floor; v.leaving = leaving;
                 v.clipY = floor < N ? Derived.FloorBase(b, floor) + Derived.FloorH(b, floor) - Dim.SLAB - 0.01 : 1e9;
                 v.cutOn = Settings.cutaway; v.cutBase = Derived.FloorBase(b, floor); v.cutTop = Derived.FloorBase(b, floor) + (floor < N ? Derived.FloorH(b, floor) : 3.3) + 0.02;
                 // out on a terrace the player is outdoors: the building is shown whole, every storey and the roof, and what
@@ -366,7 +472,7 @@ namespace Triband.Storey.Occlusion
                     else if (!terraceInWay) { v.clipY = 1e9; v.cutOn = false; }
                 }
             }
-            else { v.active = null; v.clipY = 1e9; v.cutOn = false; }
+            else { v.active = null; v.clipY = 1e9; v.cutOn = false; v.leaving = false; }
             View = v;
         }
 
@@ -710,7 +816,8 @@ namespace Triband.Storey.Occlusion
                     // a neighbouring district's building, a copy here for the party walls (Site.WithContext): never drawn by this
                     // site, so its own district's core takes it (docs/PLAY.md §7)
                     if (context && site.IndexOf(b) >= site.Own) continue;
-                    if (b == held || AtDoorOf(b, p) || (Hidden != null && Hidden.Count > 0 && Hidden.Contains(b.id))) continue;
+                    // the building the view is on is never in the way, but the one just left as it is handed over
+                    if ((b == held && !leaving) || AtDoorOf(b, p) || (Hidden != null && Hidden.Count > 0 && Hidden.Contains(b.id))) continue;
                     if (AnyHits(b, c, tg))
                     {
                         var r = Record(b); hits.Add(r);
@@ -751,8 +858,9 @@ namespace Triband.Storey.Occlusion
                     r.t = m == OccluderMode.Sink ? Math.Max(0, Math.Min(r.plan.total, r.t + (want ? dt : -dt * 1.25))) : 0;
                 }
                 bool done = !want && r.a <= 0 && !(r.t > 0);
-                // the building the view is on is never in the way, but for what stands over the terrace the player is out on
-                if (done || b == null || (b == held && !OutOn(b)))
+                // the building the view is on is never in the way, but for what stands over the terrace the player is out on,
+                // and the one just left as it is handed over
+                if (done || b == null || (b == held && !OutOn(b) && !leaving))
                 {
                     r.a = 0; r.t = 0; active.Remove(r);
                     if (r.slot >= 0) { if (ReferenceEquals(slots[r.slot], r)) slots[r.slot] = null; r.slot = -1; }

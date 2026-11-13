@@ -87,15 +87,20 @@ namespace Triband.Storey.Tests
 
         static PlayerState Spot(BuildingData b, double lx, double lz, double y) { var p = new PlayerState(); p.Spawn(b.pos.x + lx, y, b.pos.z + lz); return p; }
 
+        /// <summary>
+        /// Walking out of Linden Court's door with the camera trailing over the building: held as it was (clipped, cut away)
+        /// while the player is at the door, then handed over to the buildings in the way, still held as it sinks, and let go
+        /// once it has sunk, from then on in the way as any building is. Without the hold it is let go at once.
+        /// </summary>
         [Fact]
-        public void TheBuildingIsHeldWhileTheCameraIsStillBehindIt()
+        public void TheBuildingIsHeldAtItsDoorThenHandedOver()
         {
             var (world, b, x, z, nx, nz, y) = Door();
             foreach (bool hold in new[] { true, false })
             {
                 var core = new OcclusionCore(world, new OcclusionSettings { holdAfterExit = hold });
                 var p = new PlayerState();
-                bool heldOutside = false, released = false;
+                bool heldOutside = false, handing = false, released = false;
                 // walking out of the door, the camera trailing 7 m behind (over the building) and 5 m up
                 for (int i = 0; i <= 200; i++)
                 {
@@ -104,17 +109,74 @@ namespace Triband.Storey.Tests
                     p.Spawn(px, y, pz);
                     var cam = (px - nx * 7, y + 5.0, pz - nz * 7);
                     core.Frame(p, cam, (px, y + FollowCamera.Chest, pz), Dt);
-                    if (d > 0.5 && d < 1.5)
+                    if (d > 0.5 && d < 1.1)
                     {
-                        if (hold) Assert.True(core.View.active == b, $"{d:F2} m out: Linden Court let go with the camera over it");
+                        // at the door: held as it was, not in the way
+                        if (hold) Assert.True(core.View.active == b && !core.View.leaving, $"{d:F2} m out: Linden Court let go at its door");
                         else Assert.Null(core.View.active);
                     }
                     if (d > 0.2 && core.View.active == b) heldOutside = true;
-                    if (heldOutside && core.View.active == null) released = true;
-                    Assert.DoesNotContain(core.Active, r => r.b == core.View.active);   // never both held and in the way
+                    var way = core.Active.FirstOrDefault(r => r.b == b);
+                    if (core.View.leaving)
+                    {
+                        // handed over: still held, and in the way as well
+                        Assert.True(hold && d > 1.1, $"{d:F2} m out: handed over at the door");
+                        Assert.Same(b, core.View.active); Assert.NotNull(way);
+                        handing = true;
+                    }
+                    else Assert.DoesNotContain(core.Active, r => r.b == core.View.active);   // held and in the way only while handed over
+                    if (handing && !released && core.View.active == null)
+                    {
+                        // let go once it has sunk, and drawn as in the way alone from there
+                        released = true;
+                        Assert.True(way != null && way.t >= way.plan.total - 1e-9, $"{d:F2} m out: let go before it had sunk");
+                    }
                 }
                 Assert.Equal(hold, heldOutside);
-                if (hold) Assert.True(released, "Linden Court was never let go once the camera had passed it");
+                Assert.Equal(hold, handing);
+                if (hold) Assert.True(released, "Linden Court was never let go");
+            }
+        }
+
+        /// <summary>
+        /// Out of a building and away from it with the camera on its far side, it goes as a building the player never entered
+        /// goes: under Dissolve, dissolved down to the storey at the player's height and let go, its row the same frame for
+        /// frame once it has gone. It was held, cut away, for as long as the player walked on.
+        /// </summary>
+        [Fact]
+        public void LeftByADoorItGoesAsABuildingNeverEnteredDoes()
+        {
+            var (world, b, x, z, nx, nz, y) = Door();
+            foreach (var mode in new[] { OccluderMode.Dissolve, OccluderMode.Sink, OccluderMode.Slice })
+            {
+                var left = new OcclusionCore(world, new OcclusionSettings { mode = mode });
+                var never = new OcclusionCore(world, new OcclusionSettings { mode = mode });
+                var p = new PlayerState(); int same = 0;
+                for (int i = 0; i <= 120; i++)
+                {
+                    double d = -2 + i * 0.07;
+                    double px = x + nx * d, pz = z + nz * d;
+                    p.Spawn(px, y, pz);
+                    // the camera 9 m back over the building and 9 m up, as the play kit's
+                    var cam = (px - nx * 9, y + 9.0, pz - nz * 9);
+                    var target = (px, y + FollowCamera.Chest, pz);
+                    left.Frame(p, cam, target, Dt);
+                    if (d < 1.5) continue;
+                    never.Frame(p, cam, target, Dt);   // first seen out here, never having been in
+                    var a = never.Active.FirstOrDefault(r => r.b == b);
+                    Assert.True(a != null, $"{mode}, {d:F2} m out: Linden Court isn't in the way of the camera over it");
+                    var r = left.Active.FirstOrDefault(q => q.b == b);
+                    Assert.True(r != null, $"{mode}, {d:F2} m out: Linden Court left is not in the way");
+                    if (left.View.active != null) continue;   // still being handed over
+                    Assert.Equal(a!.k, r!.k);
+                    bool gone = mode == OccluderMode.Sink ? a.t >= a.plan.total - 1e-9 : a.a >= 1;
+                    if (!gone) continue;
+                    // both gone: the same row
+                    int o = r.slot * OcclusionCore.RowTexels * 4, q = a.slot * OcclusionCore.RowTexels * 4;
+                    for (int t = 0; t < OcclusionCore.RowTexels * 4; t++) Assert.Equal(never.Rows[q + t], left.Rows[o + t]);
+                    same++;
+                }
+                Assert.True(same > 20, $"{mode}: {same} frames alike");
             }
         }
 
